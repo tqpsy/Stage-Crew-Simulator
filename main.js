@@ -416,7 +416,7 @@ el('#run-btn').addEventListener('click', () => {
 const GAME_W = 1400, GAME_H = 800;
 const ORIGIN_X = 645, ORIGIN_Y = 130;
 const TILE_W = 110, TILE_H = 55;
-const ZOOM_MIN = 0.5, ZOOM_MAX = 2.2;
+const ZOOM_MIN = 0.5, ZOOM_MAX = 4;
 const PLATFORM_HEIGHT = 20; // px: altezza visiva della pedana rialzata
 
 const VENUE_W = 10, VENUE_H = 8;      // intera area di lavoro (locale)
