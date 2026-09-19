@@ -46,14 +46,12 @@
 
   <div id="stage-wrap">
     <div id="game-container"></div>
-    <div class="stage-hint">Per posizionare un pezzo: toccalo nella toolbar (si illumina) poi tocca la pedana — oppure trascinalo direttamente. Zoom: rotellina, pizzico o pulsanti. Muoviti: trascina sul vuoto (tasto sinistro o destro) o frecce/WASD. Clicca l'etichetta di un componente per spostarlo, un cavo per selezionarlo ed eliminarlo (✕ o Canc).</div>
-    <div class="layers-panel">
-      <div class="layers-title">Livelli</div>
-      <button class="layer-toggle active" data-signal="powercon"><span class="dot" style="background:var(--c-power);"></span>Potenza</button>
-      <button class="layer-toggle active" data-signal="xlr"><span class="dot" style="background:var(--c-xlr);"></span>Audio</button>
-      <button class="layer-toggle active" data-signal="speakon"><span class="dot" style="background:var(--c-speakon);"></span>Diffusori</button>
-      <button class="layer-toggle active" data-signal="dmx"><span class="dot" style="background:var(--c-dmx);"></span>DMX</button>
-    </div>
+        <div class="layers-panel">
+      <button class="layer-toggle active" data-signal="powercon" title="Potenza"><span class="dot" style="background:var(--c-power);"></span>POT</button>
+      <button class="layer-toggle active" data-signal="xlr" title="Audio"><span class="dot" style="background:var(--c-xlr);"></span>AUD</button>
+      <button class="layer-toggle active" data-signal="speakon" title="Diffusori"><span class="dot" style="background:var(--c-speakon);"></span>DIF</button>
+      <button class="layer-toggle active" data-signal="dmx" title="DMX"><span class="dot" style="background:var(--c-dmx);"></span>DMX</button>
+        </div>
     <div class="zoom-controls">
       <button id="zoom-in" title="Aumenta zoom">+</button>
       <button id="zoom-out" title="Riduci zoom">−</button>
