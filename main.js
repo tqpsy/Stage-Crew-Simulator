@@ -413,8 +413,8 @@ el('#run-btn').addEventListener('click', () => {
    4) GEOMETRIA DELLA VENUE: griglia isometrica estesa (palco + retropalco
       + regia + ali laterali), tutta all'interno della stessa area di lavoro
    --------------------------------------------------------------------- */
-const GAME_W = 1400, GAME_H = 800;
-const ORIGIN_X = 645, ORIGIN_Y = 130;
+const GAME_W = 1400, GAME_H = 1900;
+const ORIGIN_X = 645, ORIGIN_Y = 700;
 const TILE_W = 110, TILE_H = 55;
 const ZOOM_MIN = 0.5, ZOOM_MAX = 4;
 const PLATFORM_HEIGHT = 20; // px: altezza visiva della pedana rialzata
