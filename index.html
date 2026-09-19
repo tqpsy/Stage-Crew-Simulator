@@ -1,0 +1,126 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Stage Crew Simulator — Livello 1: Il Pub</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@600;700&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+<script src="https://cdn.jsdelivr.net/npm/phaser@3.70.0/dist/phaser.min.js"></script>
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<div id="app">
+
+  <header>
+    <div class="level-id">
+      <span class="tag">STAGE CREW SIMULATOR</span>
+      <h1>Livello 1: Il Pub</h1>
+    </div>
+
+    <div class="meters">
+      <div class="meter-power">
+        <div class="label">POTENZA <span class="val" id="power-val">0.00 / 3.0 kW</span></div>
+        <div class="gauge"><div class="gauge-fill" id="power-fill"></div></div>
+      </div>
+
+      <div class="circuit-status">
+        <div class="lamp" id="circuit-lamp"></div>
+        <div class="status-text">
+          <span class="label">IMPIANTO</span>
+          <span class="val" id="circuit-text">DA TESTARE</span>
+        </div>
+      </div>
+
+      <button class="reset-btn history-btn" id="undo-btn" title="Annulla ultima azione" disabled>↶</button>
+      <button class="reset-btn history-btn" id="redo-btn" title="Ripeti azione" disabled>↷</button>
+      <button class="reset-btn" id="reset-btn">Reset livello</button>
+    </div>
+  </header>
+
+  <div id="stage-wrap">
+    <div id="game-container"></div>
+    <div class="stage-hint">Zoom: rotellina, pizzico o pulsanti. Muoviti: trascina sul vuoto (tasto sinistro o destro) oppure frecce/WASD. Trascina un pezzo per posizionarlo, clicca l'etichetta di un componente per spostarlo, clicca un cavo per selezionarlo ed eliminarlo (✕ o Canc).</div>
+    <div class="layers-panel">
+      <div class="layers-title">Livelli</div>
+      <button class="layer-toggle active" data-signal="powercon"><span class="dot" style="background:var(--c-power);"></span>Potenza</button>
+      <button class="layer-toggle active" data-signal="xlr"><span class="dot" style="background:var(--c-xlr);"></span>Audio</button>
+      <button class="layer-toggle active" data-signal="speakon"><span class="dot" style="background:var(--c-speakon);"></span>Diffusori</button>
+      <button class="layer-toggle active" data-signal="dmx"><span class="dot" style="background:var(--c-dmx);"></span>DMX</button>
+    </div>
+    <div class="zoom-controls">
+      <button id="zoom-in" title="Aumenta zoom">+</button>
+      <button id="zoom-out" title="Riduci zoom">−</button>
+      <button id="zoom-reset" title="Adatta alla vista">⤢</button>
+    </div>
+    <div id="toast"></div>
+  </div>
+
+  <div id="toolbar">
+    <div class="tabs">
+      <button class="tab-btn active" data-tab="strutture">Strutture</button>
+      <button class="tab-btn" data-tab="audio">Audio</button>
+      <button class="tab-btn" data-tab="regia">Regia</button>
+      <button class="tab-btn" data-tab="luci">Luci</button>
+      <button class="tab-btn" data-tab="cavi">Cavi</button>
+    </div>
+
+    <div class="tab-panel active" data-panel="strutture">
+      <span class="panel-hint">Pedana 4×4 m rialzata rispetto al terreno. L'area di lavoro comprende anche retropalco, regia e le ali laterali del locale. Truss e coperture si sbloccano dai prossimi livelli.</span>
+    </div>
+
+    <div class="tab-panel" data-panel="audio">
+      <div class="piece" draggable="true" data-type="sub">
+        <div class="swatch" style="color:#9fb8d8;"><div class="stripe" style="background:#4a90e2;"></div>SUB</div>
+        <span class="count" id="count-sub">×2</span>
+      </div>
+      <div class="piece" draggable="true" data-type="top">
+        <div class="swatch" style="color:#9fb8d8;"><div class="stripe" style="background:#4a90e2;"></div>TOP</div>
+        <span class="count" id="count-top">×2</span>
+      </div>
+      <div class="piece" draggable="true" data-type="mixer">
+        <div class="swatch" style="color:#c9ccd3;"><div class="stripe" style="background:#8a8e98;"></div>MIX</div>
+        <span class="count" id="count-mixer">×1</span>
+      </div>
+      <span class="panel-hint">Il mixer resta sul palco. Sub e Teste si posizionano a terra: le Teste si agganciano automaticamente sopra un Sub libero.</span>
+    </div>
+
+    <div class="tab-panel" data-panel="regia">
+      <div class="piece" draggable="true" data-type="ampli">
+        <div class="swatch" style="color:#c9ccd3;"><div class="stripe" style="background:#8a8e98;"></div>FIN</div>
+        <span class="count" id="count-ampli">×1</span>
+      </div>
+      <span class="panel-hint">I finali di potenza si posizionano a terra, davanti al palco: qui passa il segnale dal mixer prima di arrivare ai sub.</span>
+    </div>
+
+    <div class="tab-panel" data-panel="luci">
+      <div class="piece" draggable="true" data-type="par">
+        <div class="swatch" style="color:#f2c53d;"><div class="stripe" style="background:#f2c53d;"></div>PAR</div>
+        <span class="count" id="count-par">×4</span>
+      </div>
+      <div class="piece" draggable="true" data-type="controller">
+        <div class="swatch" style="color:#c9ccd3;"><div class="stripe" style="background:#f2a541;"></div>CTRL</div>
+        <span class="count" id="count-controller">×1</span>
+      </div>
+      <span class="panel-hint">I PAR si numerano nell'ordine in cui li posizioni: ricordalo per la daisy chain DMX e potenza.</span>
+    </div>
+
+    <div class="tab-panel" data-panel="cavi">
+      <button class="cable-btn" data-cable="speakon"><span class="lead" style="background:var(--c-speakon);"></span>Speakon</button>
+      <button class="cable-btn" data-cable="powercon"><span class="lead" style="background:var(--c-power);"></span>PowerCON</button>
+      <button class="cable-btn" data-cable="dmx"><span class="lead" style="background:var(--c-dmx);"></span>DMX</button>
+      <button class="cable-btn" data-cable="xlr"><span class="lead" style="background:var(--c-xlr);"></span>XLR</button>
+      <span class="panel-hint">Scegli un cavo, poi clicca due porte dello stesso colore per collegarle.</span>
+    </div>
+
+    <div id="run-bar">
+      <button id="run-btn">▶ SOUNDCHECK</button>
+    </div>
+  </div>
+
+</div>
+
+<script src="main.js"></script>
+</body>
+</html>
