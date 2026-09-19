@@ -865,21 +865,31 @@ class StageScene extends Phaser.Scene {
     c.add(label);
 
     const compType = id.indexOf('_') >= 0 ? id.split('_')[0] : id;
-    const idLabel = this.add.text(0, def.body.h / 2 + 11, id.replace(/_/g, ' '), {
-      fontFamily: 'Inter, sans-serif', fontSize: '9.5px', color: '#8b8e98'
+    const idLabel = this.add.text(0, def.body.h / 2 + 12, id.replace(/_/g, ' '), {
+      fontFamily: 'Inter, sans-serif', fontSize: '11px', color: '#8b8e98'
     }).setOrigin(0.5);
+    c.add(idLabel);
+
+    // il bersaglio per "seleziona e sposta" è l'INTERO corpo del componente
+    // (con un margine extra), non la sola etichetta: molto più facile da
+    // toccare su schermi piccoli. Le porte, aggiunte dopo, restano sempre
+    // prioritarie nel punto esatto in cui si trovano.
     if (compType !== 'quadro' && compType !== 'top') {
-      idLabel.setInteractive({ useHandCursor: true });
-      idLabel.on('pointerdown', (pointer, lx, ly, event) => {
+      const pad = 8;
+      body.setInteractive({
+        hitArea: new Phaser.Geom.Rectangle(-def.body.w / 2 - pad, -def.body.h / 2 - pad, def.body.w + pad * 2, def.body.h + pad * 2),
+        hitAreaCallback: Phaser.Geom.Rectangle.Contains,
+        useHandCursor: true
+      });
+      body.on('pointerdown', (pointer, lx, ly, event) => {
         if (event && event.stopPropagation) event.stopPropagation();
         this.handleMoveSelect(id);
       });
     }
-    c.add(idLabel);
 
     const portDots = {};
     def.ports.forEach(p => {
-      const dot = this.add.circle(p.dx, p.dy, 7, SIGNAL_COLOR[p.signal], 1)
+      const dot = this.add.circle(p.dx, p.dy, 9, SIGNAL_COLOR[p.signal], 1)
         .setStrokeStyle(2, 0x141519)
         .setInteractive({ useHandCursor: true });
       dot.on('pointerdown', (pointer, lx, ly, event) => {
@@ -892,7 +902,6 @@ class StageScene extends Phaser.Scene {
 
     return { container: c, glow, portDots, idLabel, def };
   }
-
   setGlow (v, on, color) {
     v.glow.clear();
     if (!on) { v.glow.setAlpha(0); return; }
