@@ -414,10 +414,11 @@ el('#run-btn').addEventListener('click', () => {
       + regia + ali laterali), tutta all'interno della stessa area di lavoro
    --------------------------------------------------------------------- */
 const GAME_W = 1400, GAME_H = 1900;
-const ORIGIN_X = 630, ORIGIN_Y = 95;
-const TILE_W = 140, TILE_H = 190;
+const ORIGIN_X = 630, ORIGIN_Y = 523;
+const TILE_W = 140, TILE_H = 95;
 const ZOOM_MIN = 0.5, ZOOM_MAX = 4;
-const PLATFORM_HEIGHT = 40; // px: altezza visiva della pedana rialzata
+const DEFAULT_ZOOM = 1.05;
+const PLATFORM_HEIGHT = 34; // px: altezza visiva della pedana rialzata
 
 const VENUE_W = 10, VENUE_H = 8;      // intera area di lavoro (locale)
 const STAGE_W = 4, STAGE_H = 4;       // pedana 4x4 m
@@ -561,6 +562,7 @@ class StageScene extends Phaser.Scene {
     this.input.keyboard.on('keydown-Y', event => { if (event.ctrlKey || event.metaKey) this.redo(); });
 
     this.setupCameraControls();
+    this.cameras.main.setZoom(DEFAULT_ZOOM);
 
     this.history = [];
     this.historyIndex = -1;
@@ -644,19 +646,23 @@ class StageScene extends Phaser.Scene {
   }
 
   resetView () {
-    this.cameras.main.setZoom(1);
+    this.cameras.main.setZoom(DEFAULT_ZOOM);
     this.cameras.main.setScroll(0, 0);
   }
 
   /* ---------------- disegno venue: terreno, zone, pedana ---------------- */
   drawGround () {
     const g = this.add.graphics().setDepth(0);
-    g.fillStyle(0x1b1c22, 1);
+       g.fillStyle(0x383b45, 1);
     const p0 = gridToScreen(0, 0), p1 = gridToScreen(VENUE_W, 0),
           p2 = gridToScreen(VENUE_W, VENUE_H), p3 = gridToScreen(0, VENUE_H);
     g.beginPath();
     g.moveTo(p0.x, p0.y); g.lineTo(p1.x, p1.y); g.lineTo(p2.x, p2.y); g.lineTo(p3.x, p3.y);
     g.closePath(); g.fillPath();
+    g.lineStyle(2, 0x484c58, 0.9);
+    g.beginPath();
+    g.moveTo(p0.x, p0.y); g.lineTo(p1.x, p1.y); g.lineTo(p2.x, p2.y); g.lineTo(p3.x, p3.y);
+    g.closePath(); g.strokePath();
 
     g.setInteractive(new Phaser.Geom.Rectangle(0, 0, GAME_W, GAME_H), Phaser.Geom.Rectangle.Contains);
     g.on('pointerdown', pointer => {
@@ -684,7 +690,7 @@ class StageScene extends Phaser.Scene {
 
   drawZoneOutline (corners, label) {
     const g = this.add.graphics().setDepth(1);
-    g.lineStyle(1.5, 0x34363e, 0.85);
+    g.lineStyle(1.5, 0x565a68, 0.85);
     const pts = corners.map(c => gridToScreen(c[0], c[1]));
     g.beginPath();
     g.moveTo(pts[0].x, pts[0].y);
