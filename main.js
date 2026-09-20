@@ -208,7 +208,12 @@ function runValidation () {
   const usedW = totalPowerUsedW();
   const overBudget = usedW > POWER_LIMIT_KW * 1000;
 
-  return { pass: allFound && !overBudget, failedComponents, overBudget, usedW, madeCount, totalCount: expected.length };
+  // sicurezza: senza tutti i Sub e le Teste piazzati (2+2) le connessioni
+  // dinamiche corrispondenti non esistono nemmeno nell'elenco atteso, quindi
+  // senza questo controllo il livello potrebbe risultare "superato" a torto
+  const allSubsTopsPlaced = gameState.stock.sub === 0 && gameState.stock.top === 0;
+
+  return { pass: allFound && !overBudget && allSubsTopsPlaced, failedComponents, overBudget, usedW, madeCount, totalCount: expected.length };
 }
 
 function computeQuadroSpec (totalW) {
