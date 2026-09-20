@@ -291,13 +291,23 @@ document.querySelectorAll('.tab-btn').forEach(btn => {
 /* Cable selectors */
 document.querySelectorAll('.cable-btn').forEach(btn => {
   btn.addEventListener('click', () => {
+    gameState.pendingPort = null;
+    if (window.__scene) window.__scene.clearPendingHighlight();
+
+    if (gameState.selectedCable === btn.dataset.cable) {
+      // tocca di nuovo lo stesso cavo già attivo -> lo deseleziona,
+      // tornando alla modalità "sposta" per toccare i componenti
+      btn.classList.remove('active');
+      gameState.selectedCable = null;
+      showToast('Cavo deselezionato: ora toccando un componente lo sposti.');
+      return;
+    }
+
     document.querySelectorAll('.cable-btn').forEach(b => b.classList.remove('active'));
     btn.classList.add('active');
     gameState.selectedCable = btn.dataset.cable;
-    gameState.pendingPort = null;
     disarmPiece();
-    if (window.__scene) window.__scene.clearPendingHighlight();
-    showToast('Cavo selezionato: ' + btn.textContent.trim() + '. Clicca due porte compatibili per collegarle.');
+    showToast('Cavo selezionato: ' + btn.textContent.trim() + '. Tocca due componenti da collegare (o lo stesso cavo per deselezionarlo).');
   });
 });
 
