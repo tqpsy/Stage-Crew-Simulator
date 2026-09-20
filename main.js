@@ -908,23 +908,42 @@ class StageScene extends Phaser.Scene {
     }).setOrigin(0.5);
     c.add(idLabel);
 
-    // il bersaglio per "seleziona e sposta" è l'INTERO corpo del componente
-    // (con un margine extra), non la sola etichetta: molto più facile da
-    // toccare su schermi piccoli. Le porte, aggiunte dopo, restano sempre
-    // prioritarie nel punto esatto in cui si trovano.
-    if (compType !== 'quadro' && compType !== 'top') {
-      const pad = 8;
-      body.setInteractive({
-        hitArea: new Phaser.Geom.Rectangle(-def.body.w / 2 - pad, -def.body.h / 2 - pad, def.body.w + pad * 2, def.body.h + pad * 2),
-        hitAreaCallback: Phaser.Geom.Rectangle.Contains,
-        useHandCursor: true
-      });
-      body.on('pointerdown', (pointer, lx, ly, event) => {
-        if (event && event.stopPropagation) event.stopPropagation();
-        this.handleMoveSelect(id);
-      });
-    }
-
+    // Bersaglio per interagire col componente: l'INTERO corpo (con un margine
+    // extra), non la sola etichetta o le minuscole porte — molto più facile
+    // da toccare su schermi piccoli. Il comportamento dipende dalla modalità:
+    //  - un cavo è selezionato (modalità cablaggio) -> il tocco collega alla
+    //    porta più vicina al punto toccato, su QUALUNQUE componente (anche
+    //    Quadro e Testa, che non si spostano ma vanno comunque cablati);
+    //  - nessun cavo selezionato -> il tocco seleziona il componente per
+    //    spostarlo (solo per i tipi che si possono spostare).
+    // Così, mentre si cablano i cavi, toccare un componente non fa MAI
+    // scattare per sbaglio lo spostamento.
+    const movable = compType !== 'quadro' && compType !== 'top';
+    const pad = 8;
+    body.setInteractive({
+      hitArea: new Phaser.Geom.Rectangle(-def.body.w / 2 - pad, -def.body.h / 2 - pad, def.body.w + pad * 2, def.body.h + pad * 2),
+      hitAreaCallback: Phaser.Geom.Rectangle.Contains,
+      useHandCursor: true
+    });
+    body.on('pointerdown', (pointer, lx, ly, event) => {
+      if (event && event.stopPropagation) event.stopPropagation();
+      if (gameState.selectedCable) {
+        let nearest = null, nearestDist = Infinity;
+        def.ports.forEach(p => {
+          const d = Math.hypot(lx - p.dx, ly - p.dy);
+          if (d < nearestDist) { nearestDist = d; nearest = p; }
+        });
+        if (nearest) this.handlePortClick(id, nearest.id, nearest.signal);
+        return;
+      }
+      if (movable) { this.handleMoveSelect(id); return; }
+      // Quadro/Testa: non si spostano, ma un tocco qui non deve comunque
+      // "perdersi" — si comporta come un tocco sul pavimento sottostante.
+      if (gameState.selectedPieceType) { this.placeArmedPieceAt(pointer.worldX, pointer.worldY); return; }
+      this.clearEdgeSelection();
+      this.cancelPending();
+    });
+     
     const portDots = {};
     def.ports.forEach(p => {
       const dot = this.add.circle(p.dx, p.dy, 9, SIGNAL_COLOR[p.signal], 1)
