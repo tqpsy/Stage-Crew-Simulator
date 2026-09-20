@@ -413,17 +413,30 @@ el('#run-btn').addEventListener('click', () => {
    4) GEOMETRIA DELLA VENUE: griglia isometrica estesa (palco + retropalco
       + regia + ali laterali), tutta all'interno della stessa area di lavoro
    --------------------------------------------------------------------- */
-const GAME_W = 1400, GAME_H = 1900;
-const ORIGIN_X = 630, ORIGIN_Y = 523;
-const TILE_W = 140, TILE_H = 95;
+const GAME_W = 1400;
+// GAME_H non è più un numero fisso "indovinato": si misura la vera proporzione
+// del contenitore di gioco al caricamento della pagina, così il canvas
+// riempie sempre esattamente lo spazio disponibile su qualunque schermo,
+// senza bande vuote né ai lati né sopra/sotto.
+const __stageWrapEl = document.getElementById('stage-wrap');
+const __rawRatio = (__stageWrapEl && __stageWrapEl.clientWidth && __stageWrapEl.clientHeight)
+  ? __stageWrapEl.clientHeight / __stageWrapEl.clientWidth
+  : 1.3; // valore di riserva se la misura non fosse disponibile
+const __containerRatio = Math.min(2.2, Math.max(0.75, __rawRatio)); // limite di sicurezza
+const GAME_H = Math.round(GAME_W * __containerRatio);
+
+const ORIGIN_X = 626;
+const TILE_W = 147, TILE_H = 95;
+const VENUE_W = 10, VENUE_H = 8;      // intera area di lavoro (locale)
+// ORIGIN_Y centra la venue nel nuovo GAME_H, qualunque esso sia
+const ORIGIN_Y = Math.round((GAME_H - (VENUE_W + VENUE_H) * TILE_H / 2) / 2);
+
 const ZOOM_MIN = 0.5, ZOOM_MAX = 4;
 const DEFAULT_ZOOM = 1.05;
 const PLATFORM_HEIGHT = 34; // px: altezza visiva della pedana rialzata
 
-const VENUE_W = 10, VENUE_H = 8;      // intera area di lavoro (locale)
 const STAGE_W = 4, STAGE_H = 4;       // pedana 4x4 m
 const STAGE_ORIGIN_X = 3, STAGE_ORIGIN_Y = 2; // la pedana è centrata, con 2 righe di retropalco dietro e 2 di regia davanti
-
 function gridToScreen (gx, gy) {
   return {
     x: ORIGIN_X + (gx - gy) * (TILE_W / 2),
