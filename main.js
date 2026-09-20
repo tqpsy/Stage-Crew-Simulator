@@ -414,10 +414,10 @@ el('#run-btn').addEventListener('click', () => {
       + regia + ali laterali), tutta all'interno della stessa area di lavoro
    --------------------------------------------------------------------- */
 const GAME_W = 1400, GAME_H = 1900;
-const ORIGIN_X = 645, ORIGIN_Y = 700;
-const TILE_W = 110, TILE_H = 55;
+const ORIGIN_X = 630, ORIGIN_Y = 95;
+const TILE_W = 140, TILE_H = 190;
 const ZOOM_MIN = 0.5, ZOOM_MAX = 4;
-const PLATFORM_HEIGHT = 20; // px: altezza visiva della pedana rialzata
+const PLATFORM_HEIGHT = 40; // px: altezza visiva della pedana rialzata
 
 const VENUE_W = 10, VENUE_H = 8;      // intera area di lavoro (locale)
 const STAGE_W = 4, STAGE_H = 4;       // pedana 4x4 m
