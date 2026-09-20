@@ -1084,7 +1084,7 @@ class StageScene extends Phaser.Scene {
 
     const subVisual = this.compVisuals[bestSub.id];
     const subDef = COMPONENT_TYPES.sub, topDef = COMPONENT_TYPES.top;
-    const offY = -(subDef.body.h / 2 + topDef.body.h / 2 + 6);
+    const offY = -(subDef.body.h / 2 + topDef.body.h / 2 + 36);
     const pos = { x: subVisual.container.x, y: subVisual.container.y + offY };
 
     const visual = this.buildComponentVisual(id, topDef, pos.x, pos.y);
@@ -1310,7 +1310,7 @@ class StageScene extends Phaser.Scene {
     if (comp.type === 'sub' && comp.hasTop) {
       const topComp = gameState.placed[comp.hasTop];
       const subDef = COMPONENT_TYPES.sub, topDef = COMPONENT_TYPES.top;
-      const offY = -(subDef.body.h / 2 + topDef.body.h / 2 + 6);
+      const offY = -(subDef.body.h / 2 + topDef.body.h / 2 + 36);
       const topPos = { x: pos.x, y: pos.y + offY };
       topComp.screen = topPos;
       this.compVisuals[topComp.id].container.setPosition(topPos.x, topPos.y);
