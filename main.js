@@ -92,7 +92,7 @@ const TOP_ATTACH_RADIUS = 300; // px: quanto lontano può essere trascinata una 
    solo componente-componente), così i cavi devono rispettare L/R e la
    sequenza reale della catena (mixer -> finale -> sub -> top, daisy DMX/potenza). */
 function buildExpectedConnections () {
-  return [
+  const list = [
     { a: 'quadro', aPort: 'out', b: 'mixer_1',      bPort: 'power',    signal: 'powercon' },
     { a: 'quadro', aPort: 'out', b: 'controller_1', bPort: 'power',    signal: 'powercon' },
     { a: 'quadro', aPort: 'out', b: 'ampli_1',      bPort: 'power',    signal: 'powercon' },
@@ -106,18 +106,32 @@ function buildExpectedConnections () {
     { a: 'mixer_1', aPort: 'audio_L', b: 'ampli_1', bPort: 'in_L', signal: 'xlr' },
     { a: 'mixer_1', aPort: 'audio_R', b: 'ampli_1', bPort: 'in_R', signal: 'xlr' },
 
-    { a: 'ampli_1', aPort: 'out_L', b: 'sub_1', bPort: 'spk_in', signal: 'speakon' },
-    { a: 'ampli_1', aPort: 'out_R', b: 'sub_2', bPort: 'spk_in', signal: 'speakon' },
-    { a: 'sub_1', aPort: 'spk_thru', b: 'top_1', bPort: 'spk_in', signal: 'speakon' },
-    { a: 'sub_2', aPort: 'spk_thru', b: 'top_2', bPort: 'spk_in', signal: 'speakon' },
-
     { a: 'controller_1', aPort: 'dmx', b: 'par_1', bPort: 'dmx_in', signal: 'dmx' },
     { a: 'par_1', aPort: 'dmx_thru', b: 'par_2', bPort: 'dmx_in', signal: 'dmx' },
     { a: 'par_2', aPort: 'dmx_thru', b: 'par_3', bPort: 'dmx_in', signal: 'dmx' },
     { a: 'par_3', aPort: 'dmx_thru', b: 'par_4', bPort: 'dmx_in', signal: 'dmx' }
   ];
-}
 
+  // finale -> sub: L/R assegnati in base alla posizione FISICA sullo schermo
+  // (il Sub più a sinistra va con out_L), non all'ordine in cui sono stati
+  // piazzati — così il giocatore collega in base a quello che vede.
+  const subs = Object.values(gameState.placed)
+    .filter(c => c.type === 'sub')
+    .sort((a, b) => (a.screen ? a.screen.x : 0) - (b.screen ? b.screen.x : 0));
+  if (subs.length >= 1) list.push({ a: 'ampli_1', aPort: 'out_L', b: subs[0].id, bPort: 'spk_in', signal: 'speakon' });
+  if (subs.length >= 2) list.push({ a: 'ampli_1', aPort: 'out_R', b: subs[1].id, bPort: 'spk_in', signal: 'speakon' });
+
+  // sub -> testa: ogni Sub con una Testa agganciata deve avere il cavo verso
+  // QUELLA testa specifica (quella fisicamente sopra di lui), non verso una
+  // testa con un id particolare.
+  Object.values(gameState.placed).forEach(c => {
+    if (c.type === 'sub' && c.hasTop) {
+      list.push({ a: c.id, aPort: 'spk_thru', b: c.hasTop, bPort: 'spk_in', signal: 'speakon' });
+    }
+  });
+
+  return list;
+}
 /* ---------------------------------------------------------------------
    2) STATO DI GIOCO (agnostico dal motore grafico)
    --------------------------------------------------------------------- */
