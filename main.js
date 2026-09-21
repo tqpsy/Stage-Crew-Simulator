@@ -297,13 +297,33 @@ function updateStockUI () {
   });
 }
 
-/* Tabs */
+/* Tabs — sono anche l'interruttore tra fase di POSA e fase di CABLAGGIO:
+   sulla scheda "Cavi" toccare un componente lo collega; su ogni altra scheda
+   toccarlo lo sposta. Le due modalità non si mescolano mai. */
+function isWiringTabActive () {
+  const active = document.querySelector('.tab-btn.active');
+  return !!active && active.dataset.tab === 'cavi';
+}
+
 document.querySelectorAll('.tab-btn').forEach(btn => {
   btn.addEventListener('click', () => {
+    const enteringWiring = btn.dataset.tab === 'cavi';
     document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
     document.querySelectorAll('.tab-panel').forEach(p => p.classList.remove('active'));
     btn.classList.add('active');
     document.querySelector(`.tab-panel[data-panel="${btn.dataset.tab}"]`).classList.add('active');
+
+    if (window.__scene) {
+      if (enteringWiring) {
+        // si entra in modalità cablaggio: niente più spostamenti in sospeso
+        window.__scene.clearMoveSelection();
+        disarmPiece();
+      } else {
+        // si torna alla posa: niente più cavi/porte in sospeso
+        window.__scene.cancelPending();
+        window.__scene.clearEdgeSelection();
+      }
+    }
   });
 });
 
@@ -566,8 +586,8 @@ function computeRoutePoints (from, to, stageBox, margin) {
   return [from, { x: railX, y: from.y }, { x: railX, y: to.y }, to];
 }
 
-function strokeRoutedPath (g, pts, color, width, chamfer) {
-  g.lineStyle(width, color, 1);
+function strokeRoutedPath (g, pts, color, width, chamfer, alpha) {
+  g.lineStyle(width, color, alpha == null ? 1 : alpha);
   if (pts.length <= 2) { g.lineBetween(pts[0].x, pts[0].y, pts[1].x, pts[1].y); return; }
   g.beginPath();
   g.moveTo(pts[0].x, pts[0].y);
@@ -766,16 +786,23 @@ class StageScene extends Phaser.Scene {
       const moved = this.floorDown.moved;
       this.floorDown = null;
       if (moved) return;
-      if (gameState.selectedPieceType) { this.placeArmedPieceAt(pointer.worldX, pointer.worldY); return; }
-      if (this.moveSelected) { this.attemptMoveTo(pointer.worldX, pointer.worldY); return; }
-      const hitEdge = this.findEdgeAt(pointer.worldX, pointer.worldY);
-      if (hitEdge) {
-        if (this.selectedEdgeId === hitEdge.id) this.clearEdgeSelection();
-        else this.selectEdge(hitEdge);
+
+      if (isWiringTabActive()) {
+        const hitEdge = this.findEdgeAt(pointer.worldX, pointer.worldY);
+        if (hitEdge) {
+          if (this.selectedEdgeId === hitEdge.id) this.clearEdgeSelection();
+          else this.selectEdge(hitEdge);
+          return;
+        }
+        this.clearEdgeSelection();
+        this.cancelPending();
         return;
       }
-      this.clearEdgeSelection();
-      this.cancelPending();
+
+      // fase di posa
+      if (gameState.selectedPieceType) { this.placeArmedPieceAt(pointer.worldX, pointer.worldY); return; }
+      if (this.moveSelected) { this.attemptMoveTo(pointer.worldX, pointer.worldY); return; }
+      this.clearMoveSelection();
     });
     this.floorGraphics = g;
   }
@@ -1041,7 +1068,7 @@ class StageScene extends Phaser.Scene {
     });
     body.on('pointerdown', (pointer, lx, ly, event) => {
       if (event && event.stopPropagation) event.stopPropagation();
-      if (gameState.selectedCable) {
+      if (isWiringTabActive()) {
         let nearest = null, nearestDist = Infinity;
         def.ports.forEach(p => {
           const d = Math.hypot(lx - p.dx, ly - p.dy);
@@ -1065,7 +1092,8 @@ class StageScene extends Phaser.Scene {
         .setInteractive({ useHandCursor: true });
       dot.on('pointerdown', (pointer, lx, ly, event) => {
         if (event && event.stopPropagation) event.stopPropagation();
-        this.handlePortClick(id, p.id, p.signal);
+        if (isWiringTabActive()) { this.handlePortClick(id, p.id, p.signal); return; }
+        if (movable) { this.handleMoveSelect(id); return; }
       });
       c.add(dot);
       portDots[p.id] = dot;
@@ -1300,6 +1328,7 @@ class StageScene extends Phaser.Scene {
 
   redrawEdges () {
     this.edgeGraphics.clear();
+    const anySelected = this.selectedEdgeId != null;
     gameState.edges.forEach(e => {
       if (!gameState.visibleSignals[e.signal]) { e._pts = null; return; }
       const from = this.getPortScreenPos(e.a, e.aPort);
@@ -1310,14 +1339,17 @@ class StageScene extends Phaser.Scene {
       const isSelected = e.id === this.selectedEdgeId;
       const color = isSelected ? 0xf2a541 : SIGNAL_COLOR[e.signal];
       const width = isSelected ? 5 : 3;
+      // con un cavo selezionato, tutti gli altri si "spengono" per farlo
+      // risaltare nella matassa; senza selezione restano tutti a piena vista
+      const alpha = anySelected ? (isSelected ? 1 : 0.16) : 1;
       let pts;
       if (zoneA === 'stage' && zoneB === 'stage') {
         pts = [from, to];
-        this.edgeGraphics.lineStyle(width, color, 1);
+        this.edgeGraphics.lineStyle(width, color, alpha);
         this.edgeGraphics.lineBetween(from.x, from.y, to.x, to.y);
       } else {
         pts = computeRoutePoints(from, to, this.stageBox, 30);
-        strokeRoutedPath(this.edgeGraphics, pts, color, width, 18);
+        strokeRoutedPath(this.edgeGraphics, pts, color, width, 18, alpha);
       }
       e._pts = pts;
     });
