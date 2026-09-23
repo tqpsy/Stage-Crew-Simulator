@@ -307,8 +307,8 @@ const COMPONENT_TYPES = {
   // scheda audio USB: prende l'audio dal PC via USB-C (da cui è anche
   // alimentata, niente presa né interruttore) e lo manda al mixer su due
   // uscite di linea jack bilanciate (TRS), verso i CH 5-6 LINE IN
-  interface: {
-    label: 'SCHEDA', category: 'regia', powerW: 0, zone: 'foh', shape: 'interface',
+  scheda: {
+    label: 'SCHEDA', category: 'regia', powerW: 0, zone: 'foh', shape: 'scheda',
     body: { w: 46, h: 40, fill: 0x8e2a22, accent: 0x6fd08c },
     busPowered: true,
     ledPos: INTF_ISO(3, 30, 9),
@@ -351,7 +351,7 @@ const COMPONENT_TYPES = {
 
 // la DI resta nel catalogo per gli strumenti sul palco dei livelli successivi,
 // ma nel livello 1 non serve: il PC entra nel mixer dalla scheda audio
-const AVAILABLE_STOCK = { sub: 2, top: 2, mixer: 1, par: 4, controller: 1, ampli: 1, quadro: 1, ciabatta: 1, ciabatta_cee: 1, pc: 1, interface: 1, di: 0 };
+const AVAILABLE_STOCK = { sub: 2, top: 2, mixer: 1, par: 4, controller: 1, ampli: 1, quadro: 1, ciabatta: 1, ciabatta_cee: 1, pc: 1, scheda: 1, di: 0 };
 
 const POWER_LIMIT_KW = 3.0;
 const TOP_ATTACH_RADIUS = 300; // px: quanto lontano può essere trascinata una Testa da un Sub libero
@@ -397,9 +397,9 @@ function buildExpectedConnections () {
 
     // il PC suona dalla scheda audio: USB-C dal PC, poi le due uscite di linea
     // jack L/R nei due ingressi jack del mixer (CH 5 = L, CH 6 = R)
-    { a: 'pc_1', aPort: 'usb', b: 'interface_1', bPort: 'usb', signal: 'usbc' },
-    { a: 'interface_1', aPort: 'out_L', b: 'mixer_1', bPort: 'in_5', signal: 'jack' },
-    { a: 'interface_1', aPort: 'out_R', b: 'mixer_1', bPort: 'in_6', signal: 'jack' },
+    { a: 'pc_1', aPort: 'usb', b: 'scheda_1', bPort: 'usb', signal: 'usbc' },
+    { a: 'scheda_1', aPort: 'out_L', b: 'mixer_1', bPort: 'in_5', signal: 'jack' },
+    { a: 'scheda_1', aPort: 'out_R', b: 'mixer_1', bPort: 'in_6', signal: 'jack' },
 
     // l'universo DMX è a scelta (1 o 2), purché la catena parta dalla consolle
     { a: 'controller_1', aPort: null, b: 'par_1', bPort: 'dmx_in', signal: 'dmx' },
@@ -444,7 +444,7 @@ function buildExpectedConnections () {
 const gameState = {
   placed: {},
   stock: { ...AVAILABLE_STOCK },
-  nextIndex: { sub: 1, top: 1, mixer: 1, par: 1, controller: 1, ampli: 1, quadro: 1, ciabatta: 1, ciabatta_cee: 1, pc: 1, interface: 1, di: 1 },
+  nextIndex: { sub: 1, top: 1, mixer: 1, par: 1, controller: 1, ampli: 1, quadro: 1, ciabatta: 1, ciabatta_cee: 1, pc: 1, scheda: 1, di: 1 },
   edges: [],              // { id, a, aPort, b, bPort, signal }
   edgeSeq: 0,
   selectedCable: null,
@@ -1216,7 +1216,7 @@ const REAR_PANELS = {
     sections: [['SPINA', [['in', 'SPINA']]], ['PRESE', [['out_1', 'PRESA 1'], ['out_2', 'PRESA 2'], ['out_3', 'PRESA 3'], ['out_4', 'PRESA 4']]]] },
   pc: { style: 'laptop', power: true, serial: 'LAPTOP  ·  lato sinistro',
     sections: [['ALIMENTAZIONE', [['power', 'SPINA']]], ['USB', [['usb', 'USB-C']]]] },
-  interface: { style: 'interface', left: 'kensington', serial: 'USB AUDIO INTERFACE  ·  2 IN / 2 OUT  ·  24 bit / 192 kHz  ·  alimentata via USB',
+  scheda: { style: 'scheda', left: 'kensington', serial: 'USB AUDIO INTERFACE  ·  2 IN / 2 OUT  ·  24 bit / 192 kHz  ·  alimentata via USB',
     sections: [['USB', [['usb', 'USB-C']]], ['LINE OUTPUTS (bilanciate)', [['out_L', 'OUT L'], ['out_R', 'OUT R']]]] },
   di: { style: 'steel', right: 'lift', serial: 'PASSIVE DI BOX  ·  2 CANALI',
     sections: [['INPUT', [['in_1', 'CH1 IN'], ['in_2', 'CH2 IN']]], ['OUTPUT', [['out_1', 'CH1 OUT'], ['out_2', 'CH2 OUT']]]] }
@@ -1246,7 +1246,7 @@ const REAR_STYLES = {
   strip:   { bg: '#1c1d22', edge: '#3a3d45', ink: '#cfd2d6', sub: '#8b8e98' },
   laptop:  { bg: '#d7dadd', edge: '#9a9da3', ink: '#2a2c32', sub: '#5f646d' },
   steel:   { bg: '#39424f', edge: '#5b6676', ink: '#e1e6ee', sub: '#a4adba' },
-  interface: { bg: '#8e2a22', edge: '#b8463b', ink: '#f6e9e6', sub: '#e6bcb5' }
+  scheda: { bg: '#8e2a22', edge: '#b8463b', ink: '#f6e9e6', sub: '#e6bcb5' }
 };
 
 let rearPanelId = null;   // dispositivo il cui pannello è aperto
@@ -1659,7 +1659,7 @@ function renderRearPanel () {
       svg += `<path d="M 14 30 L ${W - 14} 30 Q ${W - 4} 30 ${W - 4} 44 L ${W - 4} ${H - 30} Q ${W - 4} ${H - 12} ${W - 22} ${H - 12} L 22 ${H - 12} Q 4 ${H - 12} 4 ${H - 30} L 4 44 Q 4 30 14 30 Z"
           fill="${st.bg}" stroke="${st.edge}" stroke-width="2"/>
         <rect x="10" y="30" width="${W - 20}" height="6" rx="3" fill="#ffffff" fill-opacity=".35"/>`;
-    } else if (panel.style === 'interface') {
+    } else if (panel.style === 'scheda') {
       // retro della scheda: guscio in alluminio anodizzato, bordi arrotondati
       svg += `<rect x="4" y="16" width="${W - 8}" height="${H - 32}" rx="22" fill="${st.bg}" stroke="${st.edge}" stroke-width="2"/>
         <rect x="16" y="24" width="${W - 32}" height="6" rx="3" fill="#ffffff" fill-opacity=".12"/>
@@ -2078,7 +2078,7 @@ const ZONE_PREDICATES = {
   // la DI segue il PC: accanto a lui in FOH oppure in Off Stage
   di: (cx, cy) => isFohCell(cx, cy) || isOffStageCell(cx, cy),
   // la scheda audio sta sul tavolo accanto al PC
-  interface: (cx, cy) => isFohCell(cx, cy) || isOffStageCell(cx, cy)
+  scheda: (cx, cy) => isFohCell(cx, cy) || isOffStageCell(cx, cy)
 };
 
 /* ---------------------------------------------------------------------
@@ -2743,7 +2743,7 @@ class StageScene extends Phaser.Scene {
         g.lineStyle(0.8, 0x8a8e98, 1); g.strokePoints(lid, true);
         break;
       }
-      case 'interface': {
+      case 'scheda': {
         // scheda audio USB da tavolo: guscio in alluminio anodizzato rosso,
         // sul fronte due ingressi combo XLR/jack con le manopole del gain e
         // l'anello luminoso, la grande manopola del volume monitor e la cuffia
@@ -3760,7 +3760,7 @@ class StageScene extends Phaser.Scene {
 
     gameState.placed = {};
     gameState.stock = { ...AVAILABLE_STOCK };
-    gameState.nextIndex = { sub: 1, top: 1, mixer: 1, par: 1, controller: 1, ampli: 1, quadro: 1, ciabatta: 1, ciabatta_cee: 1, pc: 1, interface: 1, di: 1 };
+    gameState.nextIndex = { sub: 1, top: 1, mixer: 1, par: 1, controller: 1, ampli: 1, quadro: 1, ciabatta: 1, ciabatta_cee: 1, pc: 1, scheda: 1, di: 1 };
     gameState.edges = [];
     gameState.edgeSeq = 0;
     gameState.selectedCable = null;
