@@ -672,10 +672,14 @@ function checkLiveCableChange (edge) {
   return true;
 }
 
+// ogni manovra entra nella cronologia, così annulla/ripeti restano coerenti
+function saveHistory () { if (window.__scene) window.__scene.pushHistory(); }
+
 function toggleDevicePower (compId) {
   const c = gameState.placed[compId];
   if (!c) return;
   applyPowerAction(() => { c.on = !c.on; });
+  saveHistory();
 }
 function toggleProtection (key) {
   const q = findQuadro();
@@ -685,6 +689,7 @@ function toggleProtection (key) {
     prot[key] = !prot[key];
     if (prot[key]) delete prot.tripped[key];
   });
+  saveHistory();
 }
 
 // indirizzi DMX dei PAR: nessuno deve sovrapporsi a un altro
@@ -1413,6 +1418,7 @@ function testRcd () {
   const prot = quadroProt(q);
   if (!prot.rcd) { showToast('Il salvavita è già abbassato: armalo prima di provarlo.'); return; }
   applyPowerAction(() => { prot.rcd = false; prot.tripped.rcd = true; });
+  saveHistory();
   showToast('Prova del salvavita: è scattato come deve. Riarmalo per ridare corrente.', 'ok');
 }
 
