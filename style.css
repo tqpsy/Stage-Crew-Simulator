@@ -258,6 +258,8 @@
   .rear-svg-wrap{ padding:14px 16px 4px; }
   .rear-svg{ width:100%; height:auto; display:block; max-height:58vh; }
   .rear-svg.round{ max-height:74vh; }
+  .rear-svg.tall{ max-height:70vh; }
+  .rear-svg .rp-btn:hover rect{ fill:#55585f; }
   .rear-svg .rp-port:hover > g:first-of-type{ filter:brightness(1.15); }
   .rear-detail:empty{ display:none; }
   .rear-detail{ margin:4px 16px 0; padding:10px 12px; border:1px solid var(--hairline); border-radius:8px; background:var(--bg-panel-raised); font-size:13px; }
