@@ -10,9 +10,9 @@
     --green:#49b06a;
     --red:#e0503f;
     --c-power:#f2954a;
-    --c-speakon:#dcdcdc;
+    --c-speakon:#f0619a;
     --c-dmx:#f2c53d;
-    --c-xlr:#4a90e2;
+    --c-xlr:#a3acb8;
     --c-schuko:#c77dff;
     --c-cee-mono:#2f6fd6;
     --c-cee-tri:#d6392f;
@@ -377,6 +377,9 @@
     line-height:1.3;
     opacity:.8;
   }
+
+  .port-legend .pl-in{ color:#49b06a; font-weight:600; }
+  .port-legend .pl-out{ color:#f2a541; font-weight:600; }
 
   .piece{
     display:flex;
