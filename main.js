@@ -291,7 +291,9 @@ const COMPONENT_TYPES = {
     labelPos: { x: 4, y: -8 },
     ledPos: PC_ISO(2, 30, 2),
     ports: [
-      { id: 'power',   signal: 'schuko', dir: 'in',  dx: 0,  dy: 22 },
+      // cavo di alimentazione già attaccato, con spina Schuko: come per le
+      // ciabatte si prende la spina dal pannello, senza scegliere un cavo
+      { id: 'power',   signal: 'schuko', dir: 'in',  lead: true, dx: 0,  dy: 22 },
       // uscita audio stereo (cavo mini-jack → 2 jack, non bilanciata): passa
       // da una DI doppia prima di entrare nel mixer, che vuole ingressi XLR.
       { id: 'audio_L', signal: 'jack',   dir: 'out', dx: 17, dy: 1 },
@@ -1174,7 +1176,7 @@ const REAR_PANELS = {
   ciabatta_cee: { style: 'strip', serial: 'CIABATTA 4 PRESE  ·  SPINA CEE 230V 16A',
     sections: [['SPINA', [['in', 'SPINA']]], ['PRESE', [['out_1', 'PRESA 1'], ['out_2', 'PRESA 2'], ['out_3', 'PRESA 3'], ['out_4', 'PRESA 4']]]] },
   pc: { style: 'laptop', power: true, serial: 'LAPTOP  ·  lato sinistro',
-    sections: [['ALIMENTAZIONE', [['power', 'POWER']]], ['AUDIO (cavo mini-jack → 2 jack)', [['audio_L', 'LINE OUT L'], ['audio_R', 'LINE OUT R']]]] },
+    sections: [['ALIMENTAZIONE', [['power', 'SPINA']]], ['AUDIO (cavo mini-jack → 2 jack)', [['audio_L', 'LINE OUT L'], ['audio_R', 'LINE OUT R']]]] },
   di: { style: 'steel', right: 'lift', serial: 'PASSIVE DI BOX  ·  2 CANALI',
     sections: [['INPUT', [['in_1', 'CH1 IN'], ['in_2', 'CH2 IN']]], ['OUTPUT', [['out_1', 'CH1 OUT'], ['out_2', 'CH2 OUT']]]] }
 };
@@ -1617,7 +1619,7 @@ function renderRearHand () {
   } else if (cable) {
     box.innerHTML = `Cavo selezionato: <b>${escapeHtml(cableName(cable))}</b> — scegli la presa da cui partire.`;
   } else {
-    box.innerHTML = `Nessun cavo selezionato: scegline uno nella scheda <b>Cavi</b> per collegare (le spine delle ciabatte si prendono direttamente dal pannello).`;
+    box.innerHTML = `Nessun cavo selezionato: scegline uno nella scheda <b>Cavi</b> per collegare (le spine di ciabatte e PC si prendono direttamente dal pannello).`;
   }
 }
 
