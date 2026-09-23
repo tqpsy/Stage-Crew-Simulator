@@ -16,7 +16,7 @@ const SIGNAL_COLOR = {
   powercon: 0xf2954a,
   speakon:  0xdcdcdc,
   dmx:      0xf2c53d,
-  xlr:      0x4a90e2,
+  xlr:      0xa3acb8, // argento: il guscio metallico dell'XLR (il blu è della CEE monofase)
   schuko:   0xc77dff,
   cee_mono: 0x2f6fd6,
   cee_tri:  0xd6392f,
@@ -77,7 +77,7 @@ const CABLE_TYPES = {
   schuko:          { endpoints: ['schuko'],               layer: 'schuko',   color: 0xc77dff },
   cee_tri:         { endpoints: ['cee_tri'],              layer: 'cee_tri',  color: 0xd6392f },
   cee_mono:        { endpoints: ['cee_mono'],             layer: 'cee_mono', color: 0x2f6fd6 },
-  xlr:             { endpoints: ['xlr'],                  layer: 'xlr',      color: 0x4a90e2 },
+  xlr:             { endpoints: ['xlr'],                  layer: 'xlr',      color: 0xa3acb8 },
   dmx:             { endpoints: ['dmx'],                  layer: 'dmx',      color: 0xf2c53d },
   speakon:         { endpoints: ['speakon'],              layer: 'speakon',  color: 0xdcdcdc },
   jack:            { endpoints: ['jack'],                  layer: 'jack',     color: 0x2ec4e0 },
@@ -1799,10 +1799,10 @@ class StageScene extends Phaser.Scene {
         break;
       }
       case 'dmx': {
-        // XLR 5 poli: quattro contatti sulla corona + uno centrale
+        // XLR 5 poli: tutti e cinque i contatti sulla corona, nessuno al
+        // centro — uno in basso e due ai lati della tacca del fermo in alto
         if (male) insert(5.8);
-        onCircle(4, 3.7, 200 * deg, 47 * deg);
-        contact(0, 1.4);
+        onCircle(5, 3.8, 90 * deg, 72 * deg);
         g.fillStyle(male ? PIN : HOLE, 1); g.fillRect(-1, -PORT_R + 0.5, 2, 2);
         break;
       }
