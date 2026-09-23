@@ -88,6 +88,41 @@ function isoFrame (A, B, Z) {
   P.A = A; P.B = B; P.Z = Z;
   return P;
 }
+/* stesso solido ruotato di k quarti di giro sul pavimento (per i dispositivi
+   che cambiano verso a seconda di dove stanno, vedi orientK). Le coordinate
+   locali (a, b, z) restano quelle del disegno: cambia solo dove finiscono. */
+function rotDir (k, da, db) {
+  switch (((k % 4) + 4) % 4) {
+    case 1: return [-db, da];      // +b -> -a
+    case 2: return [-da, -db];
+    case 3: return [db, -da];      // -a -> +b
+    default: return [da, db];
+  }
+}
+function rotFrame (base, k) {
+  if (!k) return base;
+  const { A, B, Z } = base;
+  const odd = k % 2 === 1;
+  const W = isoFrame(odd ? B : A, odd ? A : B, Z);
+  const P = (a, b, z = 0) => {
+    const [ra, rb] = rotDir(k, a - A / 2, b - B / 2);
+    return W(ra + (odd ? B : A) / 2, rb + (odd ? A : B) / 2, z);
+  };
+  P.A = A; P.B = B; P.Z = Z; P.k = k;
+  return P;
+}
+/* verso del dispositivo: tutti guardano come il mixer (fronte verso +b, il
+   tecnico in quinta), tranne quelli in Regia di sala (FOH), che hanno il
+   retro verso il palco e il fronte verso il fonico (-a). def.front dice
+   dove guarda il fronte nel disegno. */
+function orientK (def, x, y) {
+  if (!def.front) return 0;
+  const { cx, cy } = screenToCell(x, y);
+  const want = isFohCell(cx, cy) ? '-a' : '+b';
+  if (def.front === want) return 0;
+  return def.front === '+b' ? 1 : 3;
+}
+
 // posizione di una porta ancorata a un punto del solido
 function isoPort (P, a, b, z) {
   const p = P(a, b, z);
@@ -295,13 +330,16 @@ const COMPONENT_TYPES = {
     // generico — vedi drawComponentBody per lo schermo/trackpad/notch.
     body: { w: 34, h: 44, fill: 0xd7dadd, accent: 0x9a9da3 },
     labelPos: { x: 4, y: -8 },
-    ledPos: PC_ISO(2, 30, 2),
+    // nel disegno lo schermo guarda verso -a (il fonico in FOH); in quinta si
+    // gira verso +b come il mixer (vedi orientK)
+    frame: PC_ISO, front: '-a',
+    ledIso: [2, 30, 2],
     ports: [
       // cavo di alimentazione già attaccato, con spina Schuko: come per le
       // ciabatte si prende la spina dal pannello, senza scegliere un cavo
-      { id: 'power',   signal: 'schuko', dir: 'in',  lead: true, dx: 0,  dy: 22 },
+      { id: 'power',   signal: 'schuko', dir: 'in',  lead: true, iso: [18, 32, 2] },
       // l'audio esce in digitale dalla porta USB-C verso la scheda audio
-      { id: 'usb',     signal: 'usbc',   dir: 'out', dx: 17, dy: 4 }
+      { id: 'usb',     signal: 'usbc',   dir: 'out', iso: [18, 25, 2] }
     ]
   },
   // scheda audio USB: prende l'audio dal PC via USB-C (da cui è anche
@@ -311,13 +349,15 @@ const COMPONENT_TYPES = {
     label: 'SCHEDA', category: 'regia', powerW: 0, zone: 'foh', shape: 'scheda',
     body: { w: 46, h: 40, fill: 0x8e2a22, accent: 0x6fd08c },
     busPowered: true,
-    ledPos: INTF_ISO(3, 30, 9),
+    // il fronte coi comandi guarda +b come il mixer; in FOH si gira verso il fonico
+    frame: INTF_ISO, front: '+b',
+    ledIso: [6, 30, 9],
     ports: [
       // cavo USB-C già attaccato alla scheda: la spina si prende dal suo
       // pannello e si infila nella porta USB-C del PC
-      { id: 'usb',   signal: 'usbc', dir: 'in',  lead: true, ...isoPort(INTF_ISO, 40, 3, 12) },
-      { id: 'out_L', signal: 'jack', dir: 'out', ...isoPort(INTF_ISO, 26, 3, 12) },
-      { id: 'out_R', signal: 'jack', dir: 'out', ...isoPort(INTF_ISO, 16, 3, 12) }
+      { id: 'usb',   signal: 'usbc', dir: 'in',  lead: true, iso: [40, 3, 12] },
+      { id: 'out_L', signal: 'jack', dir: 'out', iso: [26, 3, 12] },
+      { id: 'out_R', signal: 'jack', dir: 'out', iso: [16, 3, 12] }
     ]
   },
   // DI passiva doppia: converte le due uscite jack del PC (sbilanciate) in
@@ -516,6 +556,9 @@ function computePhaseLoads () {
        delle fasi e corrente di spunto all'accensione. Si cabla a impianto
        spento, poi si accende dal pannello di ogni dispositivo.
    --------------------------------------------------------------------- */
+// pressione lunga su un dispositivo per entrare in montaggio
+const LONG_PRESS_MS = 450;
+
 // dispositivi con l'interruttore di accensione sul pannello (i PAR si
 // accendono appena arriva corrente, Testa e DI non si alimentano)
 const SWITCHABLE = new Set(['sub', 'mixer', 'ampli', 'controller', 'pc', 'ciabatta', 'ciabatta_cee']);
@@ -681,18 +724,30 @@ function checkOverloads () {
   if (window.__scene) window.__scene.sparkQuadro(tripped);
 }
 
-// cavo di corrente collegato o scollegato con la presa a monte sotto
-// tensione: fa l'arco e il salvavita scatta, spegnendo tutto l'impianto
+// c'è un utilizzatore acceso (che assorbe corrente) a valle di un dispositivo?
+function loadRunningDownstream (compId, visited) {
+  visited = visited || new Set();
+  if (visited.has(compId)) return false;
+  visited.add(compId);
+  const c = gameState.placed[compId];
+  if (!c) return false;
+  if ((COMPONENT_TYPES[c.type].powerW || 0) > 0 && isRunning(compId)) return true;
+  return gameState.edges.some(e => e.a === compId && POWER_CABLE_IDS.has(e.signal) && loadRunningDownstream(e.b, visited));
+}
+
+// cavo di corrente collegato o scollegato SOTTO CARICO (presa a monte in
+// tensione e un utilizzatore acceso a valle): fa l'arco e il salvavita
+// scatta, spegnendo tutto l'impianto. Una presa viva senza carico no.
 function checkLiveCableChange (edge) {
   if (!POWER_CABLE_IDS.has(edge.signal) || edge.a === 'allaccio') return false;
-  if (!portEnergized(edge.a, edge.aPort)) return false;
+  if (!portEnergized(edge.a, edge.aPort) || !loadRunningDownstream(edge.b)) return false;
   const q = findQuadro();
   if (!q) return false;
   const prot = quadroProt(q);
   prot.rcd = false;
   prot.tripped.rcd = true;
   gameState.rcdTrips = (gameState.rcdTrips || 0) + 1;
-  showToast('Salvavita scattato: hai collegato o scollegato un cavo di corrente sotto tensione. Si cabla a impianto spento: riarma il salvavita dal Quadro.');
+  showToast('Salvavita scattato: hai collegato o scollegato un cavo di corrente sotto carico, con un apparecchio acceso. Spegni prima di staccare o attaccare, poi riarma il salvavita dal Quadro.');
   if (window.__scene) {
     window.__scene.sparkAtPort(edge.a, edge.aPort);
     window.__scene.sparkQuadro([]);
@@ -2368,6 +2423,7 @@ class StageScene extends Phaser.Scene {
 
     this.input.on('pointermove', pointer => {
       const cam = this.cameras.main;
+      if (this.onScenePointerMove(pointer)) return;
 
       if (this.isPanning && pointer.rightButtonDown() && this.panStart) {
         cam.scrollX = this.panStart.scrollX - (pointer.x - this.panStart.x) / cam.zoom;
@@ -2399,7 +2455,8 @@ class StageScene extends Phaser.Scene {
       }
     });
 
-    this.input.on('pointerup', () => {
+    this.input.on('pointerup', pointer => {
+      this.onScenePointerUp(pointer);
       this.isPanning = false;
       this.panStart = null;
       this.floorDown = null;
@@ -2459,22 +2516,18 @@ class StageScene extends Phaser.Scene {
       this.floorDown = null;
       if (moved) return;
 
-      if (isWiringTabActive()) {
-        const hitEdge = this.findEdgeAt(pointer.worldX, pointer.worldY);
-        if (hitEdge) {
-          if (this.selectedEdgeId === hitEdge.id) this.clearEdgeSelection();
-          else this.selectEdge(hitEdge);
-          return;
-        }
-        this.clearEdgeSelection();
-        this.cancelPending();
+      // un pezzo armato si posa; altrimenti un tocco su un cavo lo seleziona,
+      // e un tocco sul pavimento vuoto chiude montaggio e cavo in attesa
+      if (gameState.selectedPieceType) { this.placeArmedPieceAt(pointer.worldX, pointer.worldY); return; }
+      if (this.assemblyId) { this.exitAssembly(); return; }
+      const hitEdge = this.findEdgeAt(pointer.worldX, pointer.worldY);
+      if (hitEdge) {
+        if (this.selectedEdgeId === hitEdge.id) this.clearEdgeSelection();
+        else this.selectEdge(hitEdge);
         return;
       }
-
-      // fase di posa
-      if (gameState.selectedPieceType) { this.placeArmedPieceAt(pointer.worldX, pointer.worldY); return; }
-      if (this.moveSelected) { this.attemptMoveTo(pointer.worldX, pointer.worldY); return; }
-      this.clearMoveSelection();
+      this.clearEdgeSelection();
+      this.cancelPending();
     });
     this.floorGraphics = g;
   }
@@ -2736,6 +2789,27 @@ class StageScene extends Phaser.Scene {
       poly,
       // solido: faccia a=a0 (sinistra), faccia b=b1 (destra), piano z=z1
       box: (a0, a1, b0, b1, z0, z1, c) => {
+        if (P.k) {
+          // solido ruotato: si disegnano solo le facce laterali che ora
+          // guardano verso chi osserva (-a a sinistra, +b a destra)
+          const faces = [
+            [[-1, 0], [P(a0, b0, z0), P(a0, b1, z0), P(a0, b1, z1), P(a0, b0, z1)]],
+            [[1, 0], [P(a1, b0, z0), P(a1, b1, z0), P(a1, b1, z1), P(a1, b0, z1)]],
+            [[0, -1], [P(a0, b0, z0), P(a1, b0, z0), P(a1, b0, z1), P(a0, b0, z1)]],
+            [[0, 1], [P(a0, b1, z0), P(a1, b1, z0), P(a1, b1, z1), P(a0, b1, z1)]]
+          ];
+          faces.forEach(([n, pts]) => {
+            const [wa, wb] = rotDir(P.k, n[0], n[1]);
+            if (wa === -1) poly(pts, c.left);
+            else if (wb === 1) poly(pts, c.right);
+            else return;
+            g.lineStyle(0.8, 0x0c0d10, 0.7); g.strokePoints(pts, true);
+          });
+          const top = [P(a0, b0, z1), P(a0, b1, z1), P(a1, b1, z1), P(a1, b0, z1)];
+          poly(top, c.top);
+          g.lineStyle(0.8, 0x0c0d10, 0.7); g.strokePoints(top, true);
+          return;
+        }
         poly([P(a0, b0, z0), P(a0, b1, z0), P(a0, b1, z1), P(a0, b0, z1)], c.left);
         poly([P(a0, b1, z0), P(a1, b1, z0), P(a1, b1, z1), P(a0, b1, z1)], c.right);
         poly([P(a0, b0, z1), P(a0, b1, z1), P(a1, b1, z1), P(a1, b0, z1)], c.top);
@@ -2757,7 +2831,7 @@ class StageScene extends Phaser.Scene {
   }
 
   /* ---------------- disegno di un componente: forma dedicata per tipo ---------------- */
-  drawComponentBody (g, def) {
+  drawComponentBody (g, def, rot) {
     const w = def.body.w, h = def.body.h;
     switch (def.shape) {
       case 'sub': {
@@ -2896,7 +2970,7 @@ class StageScene extends Phaser.Scene {
       case 'pc': {
         // laptop aperto: base in alluminio con tastiera e trackpad, schermo
         // inclinato all'indietro rivolto verso l'operatore
-        const P = PC_ISO, k = this.isoKit(g, P);
+        const P = rotFrame(PC_ISO, rot), k = this.isoKit(g, P);
         const { B } = P;
         const alu = { top: 0xe4e6e9, left: 0xc9ccd0, right: 0xb4b7bc };
         k.box(0, 22, 0, B, 0, 2, alu);
@@ -2917,7 +2991,7 @@ class StageScene extends Phaser.Scene {
         // scheda audio USB da tavolo: guscio in alluminio anodizzato rosso,
         // sul fronte due ingressi combo XLR/jack con le manopole del gain e
         // l'anello luminoso, la grande manopola del volume monitor e la cuffia
-        const P = INTF_ISO, k = this.isoKit(g, P);
+        const P = rotFrame(INTF_ISO, rot), k = this.isoKit(g, P);
         const { A, B, Z } = P;
         k.box(0, A, 0, B, 0, Z, { top: 0xb23a2e, left: 0x8e2a22, right: 0x6f1f19 });
         k.quadZ(Z, 3, A - 3, 3, B - 3, 0xc0453a);
@@ -3138,12 +3212,22 @@ class StageScene extends Phaser.Scene {
     const c = this.add.container(x, y).setDepth(isoDepth(y));
 
     const body = this.add.graphics();
-    this.drawComponentBody(body, def);
+    const rot = orientK(def, x, y);
+    this.drawComponentBody(body, def, rot);
+    // punti di aggancio dei cavi e LED, ruotati insieme al dispositivo
+    const frame = def.frame ? rotFrame(def.frame, rot) : null;
+    const portPos = {};
+    def.ports.forEach(p => {
+      const q = (frame && p.iso) ? frame(...p.iso) : { x: p.dx, y: p.dy };
+      portPos[p.id] = { dx: Math.round(q.x), dy: Math.round(q.y) };
+    });
+    const ledPos = (frame && def.ledIso) ? frame(...def.ledIso) : def.ledPos;
     // punti di aggancio dei cavi: piccole prese appena accennate sul corpo,
     // la presa vera si sceglie nel pannello posteriore
     def.ports.forEach(p => {
-      body.fillStyle(0x0c0d10, 1); body.fillCircle(p.dx, p.dy, 3);
-      body.lineStyle(1.2, SIGNAL_COLOR[p.signal], 0.9); body.strokeCircle(p.dx, p.dy, 3);
+      const q = portPos[p.id];
+      body.fillStyle(0x0c0d10, 1); body.fillCircle(q.dx, q.dy, 3);
+      body.lineStyle(1.2, SIGNAL_COLOR[p.signal], 0.9); body.strokeCircle(q.dx, q.dy, 3);
     });
     c.add(body);
 
@@ -3163,7 +3247,7 @@ class StageScene extends Phaser.Scene {
     if (compType !== 'allaccio') {
       led = this.add.graphics();
       c.add(led);
-      this.drawLed(led, def, false);
+      this.drawLed(led, def, false, ledPos);
     }
 
     const labelX = def.labelPos ? def.labelPos.x : 0;
@@ -3188,23 +3272,20 @@ class StageScene extends Phaser.Scene {
     //    spostarlo (solo per i tipi che si possono spostare).
     // Così, mentre si cablano i cavi, toccare un componente non fa MAI
     // scattare per sbaglio lo spostamento.
-    const movable = compType !== 'allaccio' && compType !== 'top';
     const pad = 8;
     body.setInteractive({
       hitArea: new Phaser.Geom.Rectangle(-def.body.w / 2 - pad, -def.body.h / 2 - pad, def.body.w + pad * 2, def.body.h + pad * 2),
       hitAreaCallback: Phaser.Geom.Rectangle.Contains,
       useHandCursor: true
     });
+    // tocco breve = pannello posteriore; pressione lunga = montaggio
+    // (vedi onDevicePress / onScenePointerMove / onScenePointerUp)
     body.on('pointerdown', (pointer, lx, ly, event) => {
       if (event && event.stopPropagation) event.stopPropagation();
-      // in cablaggio si apre il pannello posteriore: la presa si sceglie lì
-      if (isWiringTabActive()) { openRearPanel(id); return; }
-      if (movable) { this.handleMoveSelect(id); return; }
-      // Quadro/Testa: non si spostano, ma un tocco qui non deve comunque
-      // "perdersi" — si comporta come un tocco sul pavimento sottostante.
+      if (pointer.rightButtonDown()) return;
+      // un pezzo "armato" dalla barra si posa anche toccando sopra un dispositivo
       if (gameState.selectedPieceType) { this.placeArmedPieceAt(pointer.worldX, pointer.worldY); return; }
-      this.clearEdgeSelection();
-      this.cancelPending();
+      this.onDevicePress(id, pointer);
     });
 
     let phaseBars = null;
@@ -3238,7 +3319,7 @@ class StageScene extends Phaser.Scene {
       c.add(badgeBg); c.add(badgeIcon);
     }
 
-    return { container: c, glow, idLabel, def, phaseBars, led };
+    return { container: c, glow, idLabel, def, phaseBars, led, portPos, ledPos, rot };
   }
 
   setGlow (v, on, color) {
@@ -3257,9 +3338,10 @@ class StageScene extends Phaser.Scene {
   /* piccolo LED nell'angolo in alto a sinistra di ogni dispositivo (tranne
      l'Allaccio): spento/grigio scuro di default, verde acceso quando
      runSystemTest verifica che corrente/segnale arrivano davvero. */
-  drawLed (g, def, on) {
-    const x = def.ledPos ? def.ledPos.x : -def.body.w / 2 + 7;
-    const y = def.ledPos ? def.ledPos.y : -def.body.h / 2 + 9;
+  drawLed (g, def, on, pos) {
+    pos = pos || def.ledPos;
+    const x = pos ? pos.x : -def.body.w / 2 + 7;
+    const y = pos ? pos.y : -def.body.h / 2 + 9;
     g.clear();
     g.lineStyle(1, 0x0c0d10, 1);
     g.fillStyle(on ? 0x49b06a : 0x3a1414, 1);
@@ -3273,7 +3355,7 @@ class StageScene extends Phaser.Scene {
 
   setLed (v, on) {
     if (!v.led) return;
-    this.drawLed(v.led, v.def, on);
+    this.drawLed(v.led, v.def, on, v.ledPos);
   }
 
   /* ---------------- conversioni coordinate ---------------- */
@@ -3301,8 +3383,10 @@ class StageScene extends Phaser.Scene {
 
   /* ---------------- anteprima durante il trascinamento dalla toolbar ---------------- */
   previewDropCell (clientX, clientY) {
-    const type = window.__draggedType;
-    const world = this.clientToWorld(clientX, clientY);
+    this.previewCellAt(window.__draggedType, this.clientToWorld(clientX, clientY));
+  }
+
+  previewCellAt (type, world) {
     this.previewGraphics.clear();
 
     if (type === 'top') {
@@ -3386,6 +3470,11 @@ class StageScene extends Phaser.Scene {
     setCircuitStatus('untested');
     gameState.tested = false;
     this.pushHistory();
+    // la prima volta si spiega come si usa un dispositivo posato
+    if (!this.gestureHintShown) {
+      this.gestureHintShown = true;
+      showToast('Tocca un dispositivo per aprire il suo pannello · tienilo premuto per spostarlo o toglierlo.', 'ok');
+    }
   }
 
   /* piazza il pezzo attualmente "armato" dalla toolbar nel punto toccato sulla
@@ -3661,7 +3750,7 @@ class StageScene extends Phaser.Scene {
   getPortScreenPos (componentId, portId) {
     const v = this.compVisuals[componentId];
     if (!v) return null;
-    const p = v.def.ports.find(q => q.id === portId);
+    const p = v.portPos && v.portPos[portId];
     if (!p) return null;
     return { x: v.container.x + p.dx * v.container.scaleX, y: v.container.y + p.dy * v.container.scaleY };
   }
@@ -3681,15 +3770,137 @@ class StageScene extends Phaser.Scene {
   clearPendingHighlight () { this.cancelPending(); }
 
   /* ---------------- riposizionamento componenti già piazzati ---------------- */
-  handleMoveSelect (id) {
+  /* ---------------- tocco / pressione lunga su un dispositivo ---------------- */
+  onDevicePress (id, pointer) {
+    if (this.press && this.press.timer) clearTimeout(this.press.timer);
+    const inAssembly = this.assemblyId === id;
+    this.press = { id, x: pointer.x, y: pointer.y, moved: false, long: inAssembly, timer: null };
+    if (!inAssembly) {
+      // timer del browser: non dipende dal ritmo dei fotogrammi del gioco
+      this.press.timer = setTimeout(() => {
+        if (!this.press || this.press.id !== id || this.press.moved) return;
+        this.press.long = true;
+        this.enterAssembly(id);
+      }, LONG_PRESS_MS);
+    }
+  }
+
+  // trascinamento di un dispositivo in montaggio: anteprima della cella
+  onScenePointerMove (pointer) {
+    const pr = this.press;
+    if (!pr || !pointer.isDown) return false;
+    if (!pr.moved && Phaser.Math.Distance.Between(pointer.x, pointer.y, pr.x, pr.y) > 8) {
+      pr.moved = true;
+      if (!pr.long && pr.timer) { clearTimeout(pr.timer); pr.timer = null; }
+    }
+    if (pr.moved && pr.long && this.assemblyId === pr.id) {
+      const comp = gameState.placed[pr.id];
+      if (comp && comp.type !== 'top' && comp.type !== 'allaccio') {
+        this.previewCellAt(comp.type, { x: pointer.worldX, y: pointer.worldY });
+      }
+      return true;
+    }
+    return false;
+  }
+
+  onScenePointerUp (pointer) {
+    const pr = this.press;
+    if (!pr) return;
+    this.press = null;
+    if (pr.timer) clearTimeout(pr.timer);
+    if (pr.long) {
+      // lasciato dopo averlo trascinato: si sposta nella nuova cella
+      if (pr.moved && this.assemblyId === pr.id) {
+        this.clearDropPreview();
+        const comp = gameState.placed[pr.id];
+        if (comp && comp.type !== 'top' && comp.type !== 'allaccio') {
+          this.moveSelected = pr.id;
+          this.attemptMoveTo(pointer.worldX, pointer.worldY);
+          this.enterAssembly(pr.id, true);   // resta in montaggio nella nuova posizione
+        }
+      }
+      return;
+    }
+    if (pr.moved) return;
+    // tocco breve: pannello posteriore
+    if (this.assemblyId) this.exitAssembly();
+    openRearPanel(pr.id);
+  }
+
+  /* modalità montaggio: il dispositivo ondeggia e mostra la ✕ per toglierlo;
+     trascinandolo si sposta. Allaccio e Testa non si spostano (la Testa si
+     può solo togliere). */
+  enterAssembly (id, quiet) {
+    const comp = gameState.placed[id];
+    const v = this.compVisuals[id];
+    if (!comp || !v) return;
+    if (comp.type === 'allaccio') { showToast('L\'allaccio della venue è fisso: non si sposta e non si toglie.'); return; }
+    this.exitAssembly();
     this.cancelPending();
     this.clearEdgeSelection();
     disarmPiece();
-    if (this.moveSelected === id) { this.clearMoveSelection(); showToast('Spostamento annullato.'); return; }
-    this.clearMoveSelection();
-    this.moveSelected = id;
-    this.setGlow(this.compVisuals[id], true, 0xf2a541);
-    showToast('Componente selezionato: clicca una cella libera per spostarlo.');
+    this.assemblyId = id;
+    this.moveSelected = null;
+    this.setGlow(v, true, 0xf2a541);
+    this.assemblyTween = this.tweens.add({ targets: v.container, angle: { from: -1.6, to: 1.6 }, duration: 110, yoyo: true, repeat: -1 });
+    if (navigator.vibrate) navigator.vibrate(25);
+    const hx = v.container.x + (-v.def.body.w / 2 - 4) * v.container.scaleX;
+    const hy = v.container.y + (-v.def.body.h / 2 - 4) * v.container.scaleY;
+    const handle = this.add.container(hx, hy).setDepth(70);
+    const bg = this.add.circle(0, 0, 12, 0xe0503f, 1).setStrokeStyle(2, 0xffffff, 0.9).setInteractive({ useHandCursor: true });
+    handle.add(bg);
+    handle.add(this.add.text(0, 0, '✕', { fontFamily: 'Inter, sans-serif', fontSize: '13px', fontStyle: 'bold', color: '#ffffff' }).setOrigin(0.5));
+    bg.on('pointerdown', (pointer, lx, ly, event) => {
+      if (event && event.stopPropagation) event.stopPropagation();
+      this.deleteComponent(id);
+    });
+    this.assemblyHandle = handle;
+    if (!quiet) showToast(comp.type === 'top'
+      ? 'Montaggio: tocca la ✕ per togliere la testa dal palo. Tocca il pavimento per finire.'
+      : 'Montaggio: trascina per spostare, tocca la ✕ per togliere. Tocca il pavimento per finire.');
+  }
+
+  exitAssembly () {
+    if (this.assemblyTween) { this.assemblyTween.stop(); this.assemblyTween = null; }
+    if (this.assemblyHandle) { this.assemblyHandle.destroy(); this.assemblyHandle = null; }
+    const v = this.assemblyId && this.compVisuals[this.assemblyId];
+    if (v) { v.container.setAngle(0); this.setGlow(v, false); }
+    this.assemblyId = null;
+    this.moveSelected = null;
+    this.clearDropPreview();
+  }
+
+  /* toglie un dispositivo: spariscono anche i suoi cavi (senza far scattare
+     nulla) e il pezzo torna nella barra; un Sub si porta via la sua Testa */
+  deleteComponent (id) {
+    const comp = gameState.placed[id];
+    if (!comp) return;
+    this.exitAssembly();
+    const ids = [id];
+    if (comp.type === 'sub' && comp.hasTop) ids.push(comp.hasTop);
+    if (comp.type === 'top' && comp.parentSubId && gameState.placed[comp.parentSubId]) gameState.placed[comp.parentSubId].hasTop = null;
+    const lost = gameState.edges.filter(e => ids.includes(e.a) || ids.includes(e.b)).length;
+    const name = COMPONENT_TYPES[comp.type].label;
+    applyPowerAction(() => {
+      gameState.edges = gameState.edges.filter(e => !ids.includes(e.a) && !ids.includes(e.b));
+      ids.forEach(did => {
+        const c = gameState.placed[did];
+        if (c.gx != null) delete this.occupied[c.gx + ',' + c.gy];
+        const v = this.compVisuals[did];
+        if (v) v.container.destroy();
+        delete this.compVisuals[did];
+        delete gameState.placed[did];
+        gameState.stock[c.type]++;
+      });
+    });
+    updateStockUI();
+    updatePowerMeter();
+    this.updateQuadroVisual();
+    this.redrawEdges();
+    setCircuitStatus('untested');
+    gameState.tested = false;
+    showToast(name + ' tolto e rimesso tra i pezzi' + (lost ? ', insieme ai suoi ' + lost + ' cavi' : '') + '.', 'ok');
+    this.pushHistory();
   }
 
   clearMoveSelection () {
@@ -3715,6 +3926,12 @@ class StageScene extends Phaser.Scene {
     const pos = gridToScreen(cx + 0.5, cy + 0.5);
     comp.screen = pos;
     this.compVisuals[id].container.setPosition(pos.x, pos.y).setDepth(isoDepth(pos.y));
+    // PC e scheda audio cambiano verso tra quinta e FOH: si ridisegnano
+    const def = COMPONENT_TYPES[comp.type];
+    if (def.front && orientK(def, pos.x, pos.y) !== this.compVisuals[id].rot) {
+      this.compVisuals[id].container.destroy();
+      this.compVisuals[id] = this.buildComponentVisual(id, def, pos.x, pos.y);
+    }
 
     if (comp.type === 'sub' && comp.hasTop) {
       const topComp = gameState.placed[comp.hasTop];
