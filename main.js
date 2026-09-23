@@ -938,7 +938,7 @@ const REAR_PANELS = {
     sections: [['INPUT', [['in_pc', 'LINE IN (PC)']]], ['MAIN OUT', [['audio_L', 'MAIN L'], ['audio_R', 'MAIN R']]], ['POWER', [['power', 'POWER']]]] },
   ampli: { style: 'rack', left: 'fan', right: 'fuse', serial: 'CLASS-D POWER AMPLIFIER  ·  2 × 500 W @ 4 Ω',
     sections: [['INPUT', [['in_L', 'IN A (L)'], ['in_R', 'IN B (R)']]], ['OUTPUT', [['out_L', 'OUT CH1'], ['out_R', 'OUT CH2']]], ['POWER ~230V', [['power', 'MAINS IN']]]] },
-  par: { style: 'fixture', left: 'fins', right: 'display', serial: 'LED PAR 7 × 10 W RGBW',
+  par: { style: 'round', serial: 'LED PAR 7 × 10 W RGBW',
     sections: [['POWER', [['power_in', 'POWER IN'], ['power_thru', 'POWER OUT']]], ['DMX 512', [['dmx_in', 'DMX IN'], ['dmx_thru', 'DMX THRU']]]] },
   controller: { style: 'desk', serial: 'DMX CONTROLLER  ·  192 CH',
     sections: [['DMX', [['dmx', 'DMX OUT']]], ['POWER', [['power', 'POWER']]]] },
@@ -960,7 +960,7 @@ const REAR_STYLES = {
   rack:    { bg: '#2e3037', edge: '#4a4d56', ink: '#cfd2d6', sub: '#8b8e98' },
   cabinet: { bg: '#1b1c20', edge: '#33363d', ink: '#cfd2d6', sub: '#8b8e98', plate: '#2a2c33' },
   desk:    { bg: '#26282e', edge: '#3a3d45', ink: '#cfd2d6', sub: '#8b8e98' },
-  fixture: { bg: '#1c1d22', edge: '#3a3d45', ink: '#cfd2d6', sub: '#8b8e98' },
+  round:   { bg: '#1c1d22', edge: '#3a3d45', ink: '#cfd2d6', sub: '#8b8e98' },
   white:   { bg: '#e9eaed', edge: '#b9bcc1', ink: '#2a2c32', sub: '#5f646d' },
   green:   { bg: '#2c3a2c', edge: '#49b06a', ink: '#e6efe6', sub: '#9fb89f' },
   strip:   { bg: '#1c1d22', edge: '#3a3d45', ink: '#cfd2d6', sub: '#8b8e98' },
@@ -1002,8 +1002,6 @@ function rearDeco (kind, x, h, st) {
     }
     case 'vents':
       return Array.from({ length: 6 }, (_, i) => `<rect x="${x + 20 + i * 18}" y="${h / 2 - 70}" width="8" height="140" rx="4" fill="#0e0f12"/>`).join('');
-    case 'fins':
-      return Array.from({ length: 6 }, (_, i) => `<rect x="${x + 20 + i * 18}" y="${h / 2 - 90}" width="9" height="180" rx="4" fill="#121317"/>`).join('');
     case 'switch':
       return `<rect x="${x + 30}" y="${h / 2 - 32}" width="60" height="64" rx="8" fill="#0e0f12"/>
         <rect x="${x + 38}" y="${h / 2 - 24}" width="44" height="48" rx="5" fill="#d6392f"/>
@@ -1013,17 +1011,75 @@ function rearDeco (kind, x, h, st) {
       return `<rect x="${x + 25}" y="${h / 2 - 22}" width="50" height="44" rx="6" fill="#0e0f12"/>
         <rect x="${x + 36}" y="${h / 2 - 5}" width="28" height="10" fill="#8a8e98"/>
         <text x="${x + 50}" y="${h / 2 + 42}" font-size="12" fill="${st.sub}" text-anchor="middle">FUSE T6.3A</text>`;
-    case 'display':
-      return `<rect x="${x + 15}" y="${h / 2 - 60}" width="110" height="50" rx="6" fill="#0e0f12"/>
-        <text x="${x + 70}" y="${h / 2 - 25}" font-size="28" font-weight="700" fill="#e0503f" text-anchor="middle" font-family="monospace">d001</text>
-        ${['MENU', 'ENTER'].map((l, i) => `<rect x="${x + 15 + i * 58}" y="${h / 2 + 5}" width="52" height="24" rx="6" fill="#3a3d45"/>
-          <text x="${x + 41 + i * 58}" y="${h / 2 + 21}" font-size="11" font-weight="700" fill="#cfd2d6" text-anchor="middle">${l}</text>`).join('')}`;
     case 'lift':
       return `<rect x="${x + 35}" y="${h / 2 - 30}" width="30" height="60" rx="6" fill="#0e0f12"/>
         <rect x="${x + 42}" y="${h / 2 - 24}" width="16" height="24" rx="3" fill="#c9ccd1"/>
         <text x="${x + 50}" y="${h / 2 + 48}" font-size="12" fill="${st.sub}" text-anchor="middle">GND LIFT</text>`;
     default: return '';
   }
+}
+
+// una sezione serigrafata (riquadro con titolo) con le sue prese; y0 = bordo
+// superiore del riquadro. Restituisce l'SVG della sezione.
+const REAR_SLOT = 150, REAR_PADX = 18, REAR_FRAME_H = 234;
+function rearSection (ctx, x, y0, title, ports) {
+  const { id, def, st, pending, loads, bottom, plugOnly } = ctx;
+  const w = ports.length * REAR_SLOT + REAR_PADX * 2;
+  const yb = y0 + REAR_FRAME_H;
+  let svg = `<rect x="${x}" y="${y0}" width="${w}" height="${REAR_FRAME_H}" rx="4" fill="none" stroke="${st.ink}" stroke-opacity=".45" stroke-width="1.5"/>
+    <rect x="${x + 12}" y="${y0 - 10}" width="${title.length * 10 + 18}" height="22" fill="${st.bg}"/>
+    <text x="${x + 21}" y="${y0 + 6}" font-size="15" font-weight="700" fill="${st.ink}">${escapeHtml(title)}</text>`;
+  ports.forEach(([pid, label], pi) => {
+    const p = def.ports.find(q => q.id === pid);
+    if (!p) return;
+    const cx = x + REAR_PADX + pi * REAR_SLOT + REAR_SLOT / 2;
+    const cTop = y0 + 56;                               // riquadro 120×120 del connettore
+    const gender = (CONNECTOR_GENDER[p.signal] || {})[p.dir] === 'male' ? 'maschio' : 'femmina';
+    const busy = edgesOnPort(id, pid);
+    const inHand = pending && pending.componentId === id && pending.portId === pid;
+    const sigColor = '#' + SIGNAL_COLOR[p.signal].toString(16).padStart(6, '0');
+    const phaseLoad = loads && p.phase;
+    svg += `<g class="rp-port" data-port="${pid}" style="cursor:pointer">
+      <rect x="${cx - REAR_SLOT / 2 + 4}" y="${y0 + 14}" width="${REAR_SLOT - 8}" height="${REAR_FRAME_H - 28}" fill="transparent"/>
+      <text x="${cx}" y="${y0 + 32}" font-size="16" font-weight="700" fill="${st.ink}" text-anchor="middle">${escapeHtml(label)}</text>
+      <text x="${cx}" y="${y0 + 50}" font-size="11.5" fill="${st.sub}" text-anchor="middle">${escapeHtml(SIGNAL_LABEL[p.signal] || p.signal)} · ${gender}</text>
+      <g transform="translate(${cx - 60} ${cTop})">${connectorSVG(p.signal, p.dir)}</g>
+      <g transform="translate(${cx + 46} ${cTop + 14})">
+        <rect x="-15" y="-9" width="30" height="18" rx="4" fill="${p.dir === 'in' ? '#1f5a33' : '#6b4413'}"/>
+        <text x="0" y="4.5" font-size="11" font-weight="700" fill="${p.dir === 'in' ? '#7fe0a0' : '#ffc27a'}" text-anchor="middle">${p.dir === 'in' ? 'IN' : 'OUT'}</text></g>`;
+    if (busy.length) {
+      // spina inserita: cavo in neoprene nero col filetto del tipo di cavo
+      // (sulle prese del Quadro sotto c'è la barra del carico, sul retro tondo
+      // le sezioni sono impilate: lì solo la spina, senza il cavo che scende)
+      const cable = '#' + CABLE_TYPES[busy[0].signal].color.toString(16).padStart(6, '0');
+      svg += `<rect x="${cx - 14}" y="${cTop + 100}" width="28" height="26" rx="6" fill="#17181b" stroke="#55585f"/>` + (phaseLoad || plugOnly ? '' : `
+        <line x1="${cx}" y1="${cTop + 126}" x2="${cx}" y2="${bottom}" stroke="#17181b" stroke-width="11"/>
+        <line x1="${cx}" y1="${cTop + 126}" x2="${cx}" y2="${bottom}" stroke="${cable}" stroke-width="3"/>`);
+    }
+    if (inHand) svg += `<circle cx="${cx}" cy="${cTop + CONN_CY}" r="46" fill="none" stroke="#f2a541" stroke-width="4" stroke-dasharray="8 5"/>`;
+    let status;
+    if (inHand) status = 'cavo in mano da qui';
+    else if (busy.length === 1) {
+      const e = busy[0];
+      const otherId = e.a === id ? e.b : e.a, otherPort = e.a === id ? e.bPort : e.aPort;
+      status = '→ ' + compLabel(otherId) + ' · ' + portLabel(otherId, otherPort);
+    } else if (busy.length > 1) status = busy.length + ' cavi collegati';
+    else status = 'libera';
+    if (status.length > 24) status = status.slice(0, 23) + '…';   // deve stare nella targhetta
+    svg += `<rect x="${cx - REAR_SLOT / 2 + 8}" y="${yb - 24}" width="${REAR_SLOT - 16}" height="22" rx="11"
+        fill="${busy.length ? '#1c1d22' : 'transparent'}" stroke="${busy.length ? sigColor : 'none'}"/>
+      <text x="${cx}" y="${yb - 9}" font-size="11.5" fill="${busy.length ? '#eee9df' : st.sub}" text-anchor="middle">${escapeHtml(status)}</text>`;
+    if (phaseLoad) {
+      // carico della fase, subito sotto la presa
+      const frac = Math.min(1, loads[p.phase] / PHASE_BUDGET_W);
+      const col = frac >= 1 ? '#e0503f' : (frac >= 0.75 ? '#f2a541' : '#49b06a');
+      svg += `<rect x="${cx - 50}" y="${cTop + 128}" width="100" height="7" rx="3" fill="#00000033"/>
+        <rect x="${cx - 50}" y="${cTop + 128}" width="${100 * frac}" height="7" rx="3" fill="${col}"/>
+        <text x="${cx}" y="${cTop + 150}" font-size="11.5" font-weight="600" fill="${st.sub}" text-anchor="middle">${(loads[p.phase] / 1000).toFixed(2)} / ${(PHASE_BUDGET_W / 1000).toFixed(1)} kW</text>`;
+    }
+    svg += `</g>`;
+  });
+  return { svg, w };
 }
 
 function renderRearPanel () {
@@ -1034,100 +1090,80 @@ function renderRearPanel () {
   const panel = REAR_PANELS[comp.type];
   const st = REAR_STYLES[panel.style];
   const pending = gameState.pendingPort;
+  const loads = comp.type === 'quadro' ? computePhaseLoads() : null;
 
   el('#rear-title').textContent = def.label + '  ·  ' + id.replace(/_/g, ' ') + '  —  pannello posteriore';
 
-  const SLOT = 150, PADX = 18, GAP = 26, MARGIN = 36, H = 330;
-  const leftW = panel.left ? 140 : 0, rightW = panel.right ? 140 : 0;
-  const secW = panel.sections.map(([, ports]) => ports.length * SLOT + PADX * 2);
-  const W = MARGIN * 2 + leftW + rightW + secW.reduce((s, w) => s + w, 0) + GAP * (secW.length - 1);
+  const secW = panel.sections.map(([, ports]) => ports.length * REAR_SLOT + REAR_PADX * 2);
+  let svg, W, H;
 
-  let svg = `<svg class="rear-svg" viewBox="0 0 ${W} ${H}" xmlns="http://www.w3.org/2000/svg" font-family="Inter,sans-serif">`;
-  // telaio del pannello secondo lo stile del dispositivo
-  if (panel.style === 'rack') {
-    svg += `<rect x="30" y="8" width="${W - 60}" height="${H - 16}" fill="${st.bg}" stroke="${st.edge}" stroke-width="2"/>
-      <rect x="30" y="8" width="${W - 60}" height="10" fill="#3a3d45"/><rect x="30" y="${H - 18}" width="${W - 60}" height="10" fill="#3a3d45"/>
-      ${[2, W - 32].map(x => `<rect x="${x}" y="8" width="30" height="${H - 16}" fill="#4a4d56"/>
-        <rect x="${x + 9}" y="40" width="12" height="28" rx="6" fill="#0e0f12"/><rect x="${x + 9}" y="${H - 68}" width="12" height="28" rx="6" fill="#0e0f12"/>`).join('')}`;
-  } else if (panel.style === 'fixture') {
-    svg += `<rect x="6" y="6" width="${W - 12}" height="${H - 12}" rx="46" fill="${st.bg}" stroke="${st.edge}" stroke-width="2"/>`;
-  } else if (panel.style === 'cabinet') {
-    svg += `<rect x="4" y="4" width="${W - 8}" height="${H - 8}" rx="6" fill="${st.bg}" stroke="${st.edge}" stroke-width="2"/>
-      <rect x="22" y="22" width="${W - 44}" height="${H - 44}" rx="8" fill="${st.plate}" stroke="#44474f" stroke-width="1.5"/>
-      ${[[32, 32], [W - 32, 32], [32, H - 32], [W - 32, H - 32]].map(([x, y]) => `<circle cx="${x}" cy="${y}" r="4" fill="#55585f"/>`).join('')}`;
-  } else if (panel.style === 'white') {
-    svg += `<rect x="4" y="4" width="${W - 8}" height="${H - 8}" rx="10" fill="${st.bg}" stroke="${st.edge}" stroke-width="2"/>
-      <rect x="4" y="4" width="${W - 8}" height="14" rx="6" fill="#f2c53d"/>
-      ${Array.from({ length: Math.floor(W / 16) }, (_, i) => `<line x1="${8 + i * 16}" y1="18" x2="${18 + i * 16}" y2="4" stroke="#1c1d22" stroke-width="3"/>`).join('')}`;
-  } else if (panel.style === 'strip') {
-    svg += `<rect x="4" y="30" width="${W - 8}" height="${H - 60}" rx="24" fill="${st.bg}" stroke="${st.edge}" stroke-width="2"/>
-      <rect x="20" y="${H - 44}" width="${W - 40}" height="6" rx="3" fill="${'#' + def.body.accent.toString(16).padStart(6, '0')}"/>`;
-  } else {
-    svg += `<rect x="4" y="4" width="${W - 8}" height="${H - 8}" rx="16" fill="${st.bg}" stroke="${st.edge}" stroke-width="2"/>`;
-  }
-
-  let x = MARGIN;
-  if (panel.left) { svg += rearDeco(panel.left, x, H, st); x += leftW; }
-  const loads = comp.type === 'quadro' ? computePhaseLoads() : null;
-
-  panel.sections.forEach(([title, ports], si) => {
-    const w = secW[si];
-    svg += `<rect x="${x}" y="48" width="${w}" height="${H - 96}" rx="4" fill="none" stroke="${st.ink}" stroke-opacity=".45" stroke-width="1.5"/>
-      <rect x="${x + 12}" y="38" width="${title.length * 10 + 18}" height="22" fill="${st.bg}"/>
-      <text x="${x + 21}" y="54" font-size="15" font-weight="700" fill="${st.ink}">${escapeHtml(title)}</text>`;
-    ports.forEach(([pid, label], pi) => {
-      const p = def.ports.find(q => q.id === pid);
-      if (!p) return;
-      const cx = x + PADX + pi * SLOT + SLOT / 2;
-      const gender = (CONNECTOR_GENDER[p.signal] || {})[p.dir] === 'male' ? 'maschio' : 'femmina';
-      const busy = edgesOnPort(id, pid);
-      const inHand = pending && pending.componentId === id && pending.portId === pid;
-      const sigColor = '#' + SIGNAL_COLOR[p.signal].toString(16).padStart(6, '0');
-      svg += `<g class="rp-port" data-port="${pid}" style="cursor:pointer">
-        <rect x="${cx - SLOT / 2 + 4}" y="62" width="${SLOT - 8}" height="${H - 124}" fill="transparent"/>
-        <text x="${cx}" y="80" font-size="16" font-weight="700" fill="${st.ink}" text-anchor="middle">${escapeHtml(label)}</text>
-        <text x="${cx}" y="98" font-size="11.5" fill="${st.sub}" text-anchor="middle">${escapeHtml(SIGNAL_LABEL[p.signal] || p.signal)} · ${gender}</text>
-        <g transform="translate(${cx - 60} 104)">${connectorSVG(p.signal, p.dir)}</g>`;
-      // verso del segnale, come una serigrafia a fianco della presa
-      svg += `<g transform="translate(${cx + 46} 118)">
-        <rect x="-15" y="-9" width="30" height="18" rx="4" fill="${p.dir === 'in' ? '#1f5a33' : '#6b4413'}"/>
-        <text x="0" y="4.5" font-size="11" font-weight="700" fill="${p.dir === 'in' ? '#7fe0a0' : '#ffc27a'}" text-anchor="middle">${p.dir === 'in' ? 'IN' : 'OUT'}</text></g>`;
-      if (busy.length) {
-        // spina inserita: cavo in neoprene nero col filetto del tipo di cavo
-        const cable = '#' + CABLE_TYPES[busy[0].signal].color.toString(16).padStart(6, '0');
-        // (sulle prese del Quadro sotto c'è la barra del carico: solo la spina)
-        svg += `<rect x="${cx - 14}" y="204" width="28" height="26" rx="6" fill="#17181b" stroke="#55585f"/>` + (loads && p.phase ? '' : `
-          <line x1="${cx}" y1="230" x2="${cx}" y2="${H - 8}" stroke="#17181b" stroke-width="11"/>
-          <line x1="${cx}" y1="230" x2="${cx}" y2="${H - 8}" stroke="${cable}" stroke-width="3"/>`);
-      }
-      if (inHand) svg += `<circle cx="${cx}" cy="${104 + CONN_CY}" r="46" fill="none" stroke="#f2a541" stroke-width="4" stroke-dasharray="8 5"/>`;
-      // stato della presa
-      let status;
-      if (inHand) status = 'cavo in mano da qui';
-      else if (busy.length === 1) {
-        const e = busy[0];
-        const otherId = e.a === id ? e.b : e.a, otherPort = e.a === id ? e.bPort : e.aPort;
-        status = '→ ' + compLabel(otherId) + ' · ' + portLabel(otherId, otherPort);
-      } else if (busy.length > 1) status = busy.length + ' cavi collegati';
-      else status = 'libera';
-      svg += `<rect x="${cx - SLOT / 2 + 8}" y="${H - 72}" width="${SLOT - 16}" height="22" rx="11"
-          fill="${busy.length ? '#1c1d22' : 'transparent'}" stroke="${busy.length ? sigColor : 'none'}"/>
-        <text x="${cx}" y="${H - 57}" font-size="11.5" fill="${busy.length ? '#eee9df' : st.sub}" text-anchor="middle">${escapeHtml(status)}</text>`;
-      if (loads && p.phase) {
-        const frac = Math.min(1, loads[p.phase] / PHASE_BUDGET_W);
-        const col = frac >= 1 ? '#e0503f' : (frac >= 0.75 ? '#f2a541' : '#49b06a');
-        // carico della fase, subito sotto la presa
-        svg += `<rect x="${cx - 50}" y="232" width="100" height="7" rx="3" fill="#00000033"/>
-          <rect x="${cx - 50}" y="232" width="${100 * frac}" height="7" rx="3" fill="${col}"/>
-          <text x="${cx}" y="254" font-size="11.5" font-weight="600" fill="${st.sub}" text-anchor="middle">${(loads[p.phase] / 1000).toFixed(2)} / ${(PHASE_BUDGET_W / 1000).toFixed(1)} kW</text>`;
-      }
-      svg += `</g>`;
+  if (panel.style === 'round') {
+    // retro TONDO (faro PAR): le sezioni una sotto l'altra dentro il disco,
+    // display in alto, forcella con le manopole ai lati
+    const D = 680, R = D / 2, ARM = 70;
+    W = D + ARM * 2; H = D + 20;
+    const cx = W / 2, cy = R + 10;
+    const ctx = { id, def, st, pending, loads, bottom: cy + R - 20, plugOnly: true };
+    svg = `<svg class="rear-svg round" viewBox="0 0 ${W} ${H}" xmlns="http://www.w3.org/2000/svg" font-family="Inter,sans-serif">
+      ${[[6, 1], [W - 6 - 44, -1]].map(([x]) => `<rect x="${x}" y="${cy - 40}" width="44" height="${R + 60}" rx="8" fill="#6a6e78" stroke="#4a4d56" stroke-width="2"/>
+        <circle cx="${x + 22}" cy="${cy}" r="26" fill="#2a2c32" stroke="#8a8e98" stroke-width="3"/>
+        ${[0, 60, 120, 180, 240, 300].map(d => { const a = d * Math.PI / 180; return `<circle cx="${x + 22 + Math.cos(a) * 17}" cy="${cy + Math.sin(a) * 17}" r="4" fill="#8a8e98"/>`; }).join('')}`).join('')}
+      <circle cx="${cx}" cy="${cy}" r="${R}" fill="${st.bg}" stroke="${st.edge}" stroke-width="3"/>
+      <circle cx="${cx}" cy="${cy}" r="${R - 14}" fill="none" stroke="#0e0f12" stroke-width="10" stroke-dasharray="3 9"/>
+      <circle cx="${cx}" cy="${cy}" r="${R - 30}" fill="none" stroke="${st.edge}" stroke-width="1.5"/>
+      <rect x="${cx - 55}" y="${cy - R + 48}" width="110" height="44" rx="6" fill="#0e0f12"/>
+      <text x="${cx}" y="${cy - R + 80}" font-size="26" font-weight="700" fill="#e0503f" text-anchor="middle" font-family="monospace">d001</text>
+      ${['MENU', 'ENTER'].map((l, i) => `<rect x="${cx + 70 + i * 60}" y="${cy - R + 58}" width="52" height="24" rx="6" fill="#3a3d45"/>
+        <text x="${cx + 96 + i * 60}" y="${cy - R + 74}" font-size="11" font-weight="700" fill="#cfd2d6" text-anchor="middle">${l}</text>`).join('')}`;
+    if (panel.serial) svg += `<text x="${cx}" y="${cy - R + 118}" font-size="12" fill="${st.sub}" text-anchor="middle" letter-spacing="1">${escapeHtml(panel.serial)}</text>`;
+    let y0 = cy - R + 146;
+    panel.sections.forEach(([title, ports], si) => {
+      const sec = rearSection(ctx, cx - secW[si] / 2, y0, title, ports);
+      svg += sec.svg;
+      y0 += REAR_FRAME_H + 24;
     });
-    x += w + GAP;
-  });
-  x -= GAP;
-  if (panel.right) svg += rearDeco(panel.right, x + 10, H, st);
-  if (panel.serial) svg += `<text x="${W / 2}" y="${H - (panel.style === 'strip' ? 8 : 20)}" font-size="12" fill="${st.sub}" text-anchor="middle" letter-spacing="1">${escapeHtml(panel.serial)}</text>`;
+  } else {
+    const GAP = 26, MARGIN = 36;
+    H = 330;
+    const leftW = panel.left ? 140 : 0, rightW = panel.right ? 140 : 0;
+    W = MARGIN * 2 + leftW + rightW + secW.reduce((s, w) => s + w, 0) + GAP * (secW.length - 1);
+    const ctx = { id, def, st, pending, loads, bottom: H - 8 };
+    svg = `<svg class="rear-svg" viewBox="0 0 ${W} ${H}" xmlns="http://www.w3.org/2000/svg" font-family="Inter,sans-serif">`;
+    // telaio del pannello con la forma del dispositivo
+    if (panel.style === 'rack') {
+      svg += `<rect x="30" y="8" width="${W - 60}" height="${H - 16}" fill="${st.bg}" stroke="${st.edge}" stroke-width="2"/>
+        <rect x="30" y="8" width="${W - 60}" height="10" fill="#3a3d45"/><rect x="30" y="${H - 18}" width="${W - 60}" height="10" fill="#3a3d45"/>
+        ${[2, W - 32].map(x => `<rect x="${x}" y="8" width="30" height="${H - 16}" fill="#4a4d56"/>
+          <rect x="${x + 9}" y="40" width="12" height="28" rx="6" fill="#0e0f12"/><rect x="${x + 9}" y="${H - 68}" width="12" height="28" rx="6" fill="#0e0f12"/>`).join('')}`;
+    } else if (panel.style === 'cabinet') {
+      svg += `<rect x="4" y="4" width="${W - 8}" height="${H - 8}" rx="6" fill="${st.bg}" stroke="${st.edge}" stroke-width="2"/>
+        <rect x="22" y="22" width="${W - 44}" height="${H - 44}" rx="8" fill="${st.plate}" stroke="#44474f" stroke-width="1.5"/>
+        ${[[32, 32], [W - 32, 32], [32, H - 32], [W - 32, H - 32]].map(([x, y]) => `<circle cx="${x}" cy="${y}" r="4" fill="#55585f"/>`).join('')}`;
+    } else if (panel.style === 'white') {
+      svg += `<rect x="4" y="4" width="${W - 8}" height="${H - 8}" rx="10" fill="${st.bg}" stroke="${st.edge}" stroke-width="2"/>
+        <rect x="4" y="4" width="${W - 8}" height="14" rx="6" fill="#f2c53d"/>
+        ${Array.from({ length: Math.floor(W / 16) }, (_, i) => `<line x1="${8 + i * 16}" y1="18" x2="${18 + i * 16}" y2="4" stroke="#1c1d22" stroke-width="3"/>`).join('')}`;
+    } else if (panel.style === 'strip') {
+      svg += `<rect x="4" y="30" width="${W - 8}" height="${H - 60}" rx="24" fill="${st.bg}" stroke="${st.edge}" stroke-width="2"/>
+        <rect x="20" y="${H - 44}" width="${W - 40}" height="6" rx="3" fill="${'#' + def.body.accent.toString(16).padStart(6, '0')}"/>`;
+    } else if (panel.style === 'laptop') {
+      // fianco del laptop: lastra in alluminio con lo spigolo smussato
+      svg += `<path d="M 14 30 L ${W - 14} 30 Q ${W - 4} 30 ${W - 4} 44 L ${W - 4} ${H - 30} Q ${W - 4} ${H - 12} ${W - 22} ${H - 12} L 22 ${H - 12} Q 4 ${H - 12} 4 ${H - 30} L 4 44 Q 4 30 14 30 Z"
+          fill="${st.bg}" stroke="${st.edge}" stroke-width="2"/>
+        <rect x="10" y="30" width="${W - 20}" height="6" rx="3" fill="#ffffff" fill-opacity=".35"/>`;
+    } else {
+      svg += `<rect x="4" y="4" width="${W - 8}" height="${H - 8}" rx="16" fill="${st.bg}" stroke="${st.edge}" stroke-width="2"/>`;
+    }
+    let x = MARGIN;
+    if (panel.left) { svg += rearDeco(panel.left, x, H, st); x += leftW; }
+    panel.sections.forEach(([title, ports], si) => {
+      svg += rearSection(ctx, x, 48, title, ports).svg;
+      x += secW[si] + GAP;
+    });
+    x -= GAP;
+    if (panel.right) svg += rearDeco(panel.right, x + 10, H, st);
+    if (panel.serial) svg += `<text x="${W / 2}" y="${H - (panel.style === 'strip' ? 8 : 20)}" font-size="12" fill="${st.sub}" text-anchor="middle" letter-spacing="1">${escapeHtml(panel.serial)}</text>`;
+  }
   svg += `</svg>`;
 
   el('#rear-svg').innerHTML = svg;
