@@ -54,7 +54,21 @@
     </div>
   </div>
 
+  <div class="modal-overlay" id="rear-modal">
+    <div class="modal-box rear-box">
+      <div class="modal-header">
+        <h2 id="rear-title">Pannello posteriore</h2>
+        <button class="modal-close" id="rear-close">✕</button>
+      </div>
+      <div class="rear-hand" id="rear-hand"></div>
+      <div class="rear-svg-wrap" id="rear-svg"></div>
+      <div class="rear-detail" id="rear-detail"></div>
+      <div class="modal-hint rear-hint">Tocca una presa per collegare il cavo · tocca una presa occupata per vedere o scollegare i cavi.</div>
+    </div>
+  </div>
+
   <div id="stage-wrap">
+    <div id="cable-banner"><span id="cable-banner-text"></span><button id="cable-banner-cancel">Annulla</button></div>
     <div id="game-container"></div>
     <div class="layers-panel">
       <button class="layer-toggle active" data-signal="powercon" title="Potenza"><span class="dot" style="background:var(--c-power);"></span>POT</button>
@@ -180,8 +194,8 @@
           </div>
         </div>
       </div>
-      <span class="panel-hint port-legend">Ogni porta mostra la faccia del connettore reale (XLR 3 poli, DMX 5 poli, CEE, Schuko…): pin chiari su fondo scuro = maschio, fori neri = femmina. Freccetta <span class="pl-in">verde</span> che entra = IN, <span class="pl-out">arancione</span> che esce = OUT. Passa sopra (o tocca) una porta per vederne il nome. I cavi sono in neoprene nero: il filetto colorato ne indica il tipo, la freccia va da OUT a IN.</span>
-      <span class="panel-hint">Scegli un cavo, poi tocca due componenti da collegare. Ogni porta accetta un solo cavo (le prese del Quadro fanno eccezione). Gli adattatori (es. CEE / PowerCON) collegano due connettori diversi: servono quando i due lati non coincidono, come tra Quadro (CEE) e utenze a valle (PowerCON). CEE/PowerCON e CEE/Schuko sono comunque cavi monofase.</span>
+      <span class="panel-hint">Scegli un cavo, poi tocca un dispositivo: si apre il suo pannello posteriore con i connettori reali (maschio/femmina, IN/OUT). Scegli la presa, poi tocca il secondo dispositivo e scegli l'altra presa. Sotto ogni dispositivo vedi quante prese sono collegate.</span>
+      <span class="panel-hint">Ogni presa accetta un solo cavo (le prese del Quadro fanno eccezione). Gli adattatori (es. CEE / PowerCON) collegano due connettori diversi: servono quando i due lati non coincidono, come tra Quadro (CEE) e utenze a valle (PowerCON). CEE/PowerCON e CEE/Schuko sono comunque cavi monofase.</span>
     </div>
 
     <div id="run-bar">

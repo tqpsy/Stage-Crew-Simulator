@@ -23,11 +23,6 @@ const SIGNAL_COLOR = {
   jack:     0x2ec4e0
 };
 
-// raggio (px) del corpo tondo di ogni porta
-const PORT_R = 8.5;
-// zoom da cui in su si disegnano i contatti dei connettori (pin/fori): più
-// lontano sarebbero puntini illeggibili, restano colore, anello e freccia
-const PORT_DETAIL_ZOOM = 1.6;
 
 /* genere del connettore montato sull'apparecchio, come nella realtà:
    - XLR audio: gli ingressi sono femmina, le uscite maschio;
@@ -47,27 +42,10 @@ const CONNECTOR_GENDER = {
   jack:     { in: 'female', out: 'female' }
 };
 
-/* colore REALE del corpo del connettore da pannello (guscio metallico
-   dell'XLR, plastica nera di Speakon/PowerCON/Schuko, blu e rosso delle CEE).
-   Il colore del segnale resta sull'anello esterno della porta, così la porta
-   si abbina sempre al cavo giusto. */
-const CONNECTOR_BODY = {
-  xlr:      0xb4bac3,
-  dmx:      0xb4bac3,
-  speakon:  0x1c1d22,
-  powercon: 0x1c1d22,
-  schuko:   0x2a2c32,
-  cee_mono: 0x2f6fd6,
-  cee_tri:  0xd6392f,
-  jack:     0x1c1d22
-};
-// corpi scuri: i fori di una femmina non si vedrebbero, serve un inserto grigio
-const DARK_BODY = new Set(['speakon', 'powercon', 'schuko', 'jack']);
-
-// nomi leggibili per l'etichetta che compare sopra una porta
+// nomi leggibili dei connettori (pannello posteriore)
 const SIGNAL_LABEL = {
   xlr: 'XLR 3 poli', dmx: 'DMX 5 poli', speakon: 'Speakon', powercon: 'PowerCON',
-  schuko: 'Schuko', cee_mono: 'CEE 16A monofase', cee_tri: 'CEE 16A trifase', jack: 'Jack 6,35'
+  schuko: 'Schuko', cee_mono: 'CEE 230V', cee_tri: 'CEE 400V', jack: 'Jack 6,35'
 };
 
 /* Geometria del mixer in "unità banco" (a = lungo i canali, b = dal retro
@@ -783,6 +761,486 @@ el('#quadro-modal').addEventListener('click', ev => {
   if (ev.target.id === 'quadro-modal') el('#quadro-modal').classList.remove('show');
 });
 
+/* ---------------------------------------------------------------------
+   3b) CONNETTORI REALI (SVG) — la faccia del connettore da pannello così
+      com'è nella realtà, disegnata in un riquadro 120×120. Usati dal popup
+      del pannello posteriore (vedi openRearPanel).
+   --------------------------------------------------------------------- */
+const CONN_CX = 60, CONN_CY = 62;   // centro della presa nel riquadro
+
+// flangia Neutrik "D" (26×31 mm): nera, con due fori di fissaggio in diagonale
+function svgDFlange () {
+  return `
+    <rect x="21" y="13" width="78" height="96" rx="9" fill="#1b1c20" stroke="#3a3d45" stroke-width="1.5"/>
+    <rect x="23" y="15" width="74" height="92" rx="8" fill="none" stroke="#000" stroke-opacity=".35"/>
+    <circle cx="31" cy="23" r="4.2" fill="#0a0a0c" stroke="#55585f" stroke-width="1.2"/>
+    <circle cx="89" cy="99" r="4.2" fill="#0a0a0c" stroke="#55585f" stroke-width="1.2"/>`;
+}
+// contatto: pin (maschio) in ottone nichelato, o foro (femmina) nell'inserto
+function svgPin (x, y, r) {
+  return `<circle cx="${x}" cy="${y}" r="${r}" fill="#e8e2d0" stroke="#8a8578" stroke-width=".8"/>
+          <circle cx="${x - r * 0.3}" cy="${y - r * 0.3}" r="${r * 0.35}" fill="#fff" fill-opacity=".7"/>`;
+}
+function svgHole (x, y, r) {
+  return `<circle cx="${x}" cy="${y}" r="${r + 1.2}" fill="#2a2c33"/>
+          <circle cx="${x}" cy="${y}" r="${r}" fill="#030304"/>`;
+}
+function svgNum (x, y, n) {
+  return `<text x="${x}" y="${y}" font-size="6.5" fill="#8b8e98" text-anchor="middle" font-family="Inter,sans-serif">${n}</text>`;
+}
+
+// XLR (3 poli audio, 5 poli DMX) — femmina NC3FD-L con tasto PUSH, maschio NC3MD-L
+function svgXlr (n, male) {
+  let s = svgDFlange();
+  // anello metallico del guscio
+  s += `<circle cx="${CONN_CX}" cy="${CONN_CY}" r="26" fill="#c9ccd1" stroke="#7d828c" stroke-width="1.2"/>
+        <circle cx="${CONN_CX}" cy="${CONN_CY}" r="23.5" fill="#9aa0aa"/>`;
+  const pts = n === 3
+    ? (male ? [[-10, -5, 1], [10, -5, 2], [0, 11, 3]] : [[10, -5, 1], [-10, -5, 2], [0, 11, 3]])
+    : [0, 1, 2, 3, 4].map(i => {
+        const a = (180 - i * 45) * Math.PI / 180;
+        const x = Math.cos(a) * 13 * (male ? 1 : -1), y = Math.sin(a) * 13 - 2;
+        return [x, y, i + 1];
+      });
+  if (male) {
+    // incavo del guscio con la scanalatura di guida in alto, isolante e pin
+    s += `<circle cx="${CONN_CX}" cy="${CONN_CY}" r="21.5" fill="#0e0f12"/>
+          <rect x="${CONN_CX - 3}" y="${CONN_CY - 24}" width="6" height="6" fill="#0e0f12"/>
+          <circle cx="${CONN_CX}" cy="${CONN_CY}" r="18.5" fill="#23252b"/>`;
+    pts.forEach(([x, y, k]) => { s += svgPin(CONN_CX + x, CONN_CY + y, n === 3 ? 3.6 : 3) + svgNum(CONN_CX + x, CONN_CY + y + (y > 0 ? 10 : -6), k); });
+  } else {
+    // inserto nero pieno con i fori, e il fermo metallico in alto
+    s += `<circle cx="${CONN_CX}" cy="${CONN_CY}" r="21.5" fill="#141519"/>`;
+    pts.forEach(([x, y, k]) => { s += svgHole(CONN_CX + x, CONN_CY + y, n === 3 ? 3.4 : 2.9) + svgNum(CONN_CX + x, CONN_CY + y + (y > 0 ? 10 : -6), k); });
+    s += `<rect x="${CONN_CX - 5}" y="${CONN_CY - 26}" width="10" height="7" rx="1.5" fill="#dcdfe4" stroke="#7d828c"/>
+          <text x="${CONN_CX}" y="${CONN_CY - 30}" font-size="7" font-weight="700" fill="#cfd2d6" text-anchor="middle" font-family="Inter,sans-serif">PUSH</text>`;
+  }
+  return s;
+}
+
+// Speakon da pannello NL4MP: presa nera con anello, perno centrale e chiavi
+function svgSpeakon () {
+  return svgDFlange() + `
+    <circle cx="${CONN_CX}" cy="${CONN_CY}" r="27" fill="#26282e" stroke="#4a4d56" stroke-width="1.5"/>
+    <circle cx="${CONN_CX}" cy="${CONN_CY}" r="22" fill="#0e0f12"/>
+    <rect x="${CONN_CX - 4}" y="${CONN_CY - 24}" width="8" height="6" fill="#26282e"/>
+    <rect x="${CONN_CX - 4}" y="${CONN_CY + 18}" width="8" height="6" fill="#26282e"/>
+    <circle cx="${CONN_CX}" cy="${CONN_CY}" r="10" fill="#33363d" stroke="#55585f"/>
+    <rect x="${CONN_CX - 1.5}" y="${CONN_CY - 10}" width="3" height="20" fill="#17181c"/>
+    <text x="${CONN_CX - 16}" y="${CONN_CY - 13}" font-size="6.5" fill="#cfd2d6" text-anchor="middle" font-family="Inter,sans-serif">1+</text>
+    <text x="${CONN_CX + 16}" y="${CONN_CY - 13}" font-size="6.5" fill="#cfd2d6" text-anchor="middle" font-family="Inter,sans-serif">1−</text>`;
+}
+
+// PowerCON: NAC3MPA blu = power IN, NAC3MPB grigio chiaro = power OUT
+function svgPowercon (isIn) {
+  const body = isIn ? '#2f6fd6' : '#cfd2d6', dark = isIn ? '#1d4a9a' : '#9aa0aa';
+  return svgDFlange() + `
+    <circle cx="${CONN_CX}" cy="${CONN_CY}" r="27" fill="${body}" stroke="${dark}" stroke-width="1.5"/>
+    <circle cx="${CONN_CX}" cy="${CONN_CY}" r="21" fill="#141519"/>
+    <circle cx="${CONN_CX}" cy="${CONN_CY}" r="11" fill="${dark}"/>
+    <circle cx="${CONN_CX}" cy="${CONN_CY}" r="7" fill="#23252b"/>
+    ${[0, 120, 240].map(d => {
+      const a = (d - 90) * Math.PI / 180;
+      return `<rect x="${CONN_CX + Math.cos(a) * 15.5 - 2}" y="${CONN_CY + Math.sin(a) * 15.5 - 4}" width="4" height="8" rx="1"
+        fill="#e8e2d0" transform="rotate(${d} ${CONN_CX + Math.cos(a) * 15.5} ${CONN_CY + Math.sin(a) * 15.5})"/>`;
+    }).join('')}
+    <rect x="${CONN_CX + 18}" y="${CONN_CY - 6}" width="7" height="12" rx="2" fill="${dark}"/>
+    <text x="${CONN_CX}" y="${CONN_CY + 36}" font-size="7" font-weight="700" fill="${isIn ? '#9cc0ff' : '#e6e8eb'}" text-anchor="middle" font-family="Inter,sans-serif">${isIn ? 'POWER IN' : 'POWER OUT'}</text>`;
+}
+
+// jack 6,35 da pannello: ghiera esagonale e boccola filettata
+function svgJack () {
+  const hex = [0, 1, 2, 3, 4, 5].map(i => {
+    const a = (i * 60 + 30) * Math.PI / 180;
+    return `${CONN_CX + Math.cos(a) * 20},${CONN_CY + Math.sin(a) * 20}`;
+  }).join(' ');
+  return svgDFlange() + `
+    <polygon points="${hex}" fill="#9aa0aa" stroke="#6a6e78" stroke-width="1.2"/>
+    <circle cx="${CONN_CX}" cy="${CONN_CY}" r="14" fill="#c9ccd1" stroke="#7d828c"/>
+    ${[11.5, 9.5].map(r => `<circle cx="${CONN_CX}" cy="${CONN_CY}" r="${r}" fill="none" stroke="#8a8e98" stroke-width="1"/>`).join('')}
+    <circle cx="${CONN_CX}" cy="${CONN_CY}" r="6" fill="#030304"/>`;
+}
+
+// Schuko: placca quadrata nera, invaso tondo, due poli e lamelle di terra
+function svgSchuko (male) {
+  let s = `<rect x="12" y="12" width="96" height="96" rx="10" fill="#1c1d22" stroke="#3a3d45" stroke-width="1.5"/>
+           <circle cx="${CONN_CX}" cy="${CONN_CY - 2}" r="36" fill="#141519" stroke="#2e3037"/>
+           <circle cx="${CONN_CX}" cy="${CONN_CY - 2}" r="33" fill="#191a1f"/>
+           <rect x="${CONN_CX - 7}" y="${CONN_CY - 36}" width="14" height="6" rx="1" fill="#c9ccd1"/>
+           <rect x="${CONN_CX - 7}" y="${CONN_CY + 26}" width="14" height="6" rx="1" fill="#c9ccd1"/>`;
+  s += male ? svgPin(CONN_CX - 16, CONN_CY - 2, 4.6) + svgPin(CONN_CX + 16, CONN_CY - 2, 4.6)
+            : svgHole(CONN_CX - 16, CONN_CY - 2, 5) + svgHole(CONN_CX + 16, CONN_CY - 2, 5);
+  return s;
+}
+
+// CEE (IEC 60309): presa da quadro (femmina) con coperchio a molla aperto,
+// oppure spina fissa da apparecchio (maschio) con il manicotto e i pin.
+// Blu = 230V monofase 2P+T, rosso = 400V trifase 3P+N+T; la terra è il
+// contatto più grosso, in basso (posizione "6 h").
+function svgCee (tri, male) {
+  const body = tri ? '#d6392f' : '#2f6fd6', dark = tri ? '#9e2820' : '#1d4a9a', light = tri ? '#ee6a60' : '#5d8fe6';
+  const poles = tri
+    ? [[-20, 6], [-15, -14], [15, -14], [20, 6]]
+    : [[-17, -6], [17, -6]];
+  let s = '';
+  if (!male) {
+    // coperchio incernierato, aperto verso l'alto
+    s += `<path d="M 26 20 L 94 20 L 88 6 L 32 6 Z" fill="${light}" stroke="${dark}" stroke-width="1.2"/>
+          <rect x="30" y="18" width="60" height="5" rx="2" fill="${dark}"/>`;
+  }
+  s += `<rect x="16" y="20" width="88" height="90" rx="10" fill="${body}" stroke="${dark}" stroke-width="1.5"/>
+        <circle cx="${CONN_CX}" cy="${CONN_CY + 4}" r="34" fill="${dark}"/>`;
+  if (male) {
+    s += `<circle cx="${CONN_CX}" cy="${CONN_CY + 4}" r="31" fill="#0e0f12"/>
+          <circle cx="${CONN_CX}" cy="${CONN_CY + 4}" r="27" fill="${body}" fill-opacity=".35"/>
+          <rect x="${CONN_CX - 4}" y="${CONN_CY - 30}" width="8" height="7" fill="${dark}"/>`;
+    poles.forEach(([x, y]) => { s += svgPin(CONN_CX + x, CONN_CY + 4 + y, 4); });
+    s += svgPin(CONN_CX, CONN_CY + 4 + 20, 5.4);
+  } else {
+    s += `<circle cx="${CONN_CX}" cy="${CONN_CY + 4}" r="30" fill="${body}"/>
+          <circle cx="${CONN_CX}" cy="${CONN_CY + 4}" r="30" fill="#000" fill-opacity=".12"/>
+          <rect x="${CONN_CX - 4}" y="${CONN_CY - 27}" width="8" height="7" fill="${dark}"/>`;
+    poles.forEach(([x, y]) => { s += svgHole(CONN_CX + x, CONN_CY + 4 + y, 4.2); });
+    s += svgHole(CONN_CX, CONN_CY + 4 + 20, 5.6);
+  }
+  s += `<text x="${CONN_CX}" y="${CONN_CY + 44}" font-size="7" font-weight="700" fill="#fff" fill-opacity=".85" text-anchor="middle" font-family="Inter,sans-serif">${tri ? '400V 16A' : '230V 16A'}</text>`;
+  return s;
+}
+
+function connectorSVG (signal, dir) {
+  const male = (CONNECTOR_GENDER[signal] || {})[dir] === 'male';
+  switch (signal) {
+    case 'xlr':      return svgXlr(3, male);
+    case 'dmx':      return svgXlr(5, male);
+    case 'speakon':  return svgSpeakon();
+    case 'powercon': return svgPowercon(dir === 'in');
+    case 'jack':     return svgJack();
+    case 'schuko':   return svgSchuko(male);
+    case 'cee_mono': return svgCee(false, male);
+    case 'cee_tri':  return svgCee(true, male);
+    default:         return `<circle cx="${CONN_CX}" cy="${CONN_CY}" r="20" fill="#555"/>`;
+  }
+}
+
+/* ---------------------------------------------------------------------
+   3c) PANNELLO POSTERIORE — in modalità cablaggio, toccando un dispositivo
+      si apre il suo retro con i connettori reali: si sceglie lì la presa.
+      Nella scena non ci sono più porte da centrare col dito.
+   --------------------------------------------------------------------- */
+/* per ogni dispositivo: stile del pannello, sezioni serigrafate con le prese
+   (id porta + scritta), decorazioni a sinistra/destra e targhetta */
+const REAR_PANELS = {
+  sub: { style: 'cabinet', left: 'vents', serial: 'ACTIVE SUBWOOFER 18"  ·  1200 W',
+    sections: [['SPEAKER', [['spk_in', 'INPUT'], ['spk_thru', 'LINK']]], ['POWER', [['power', 'MAINS IN']]]] },
+  top: { style: 'cabinet', serial: '2-WAY 12" + 1"  ·  8 Ω',
+    sections: [['SPEAKER', [['spk_in', 'INPUT']]]] },
+  mixer: { style: 'desk', serial: 'DIGITAL MIXER  ·  6 CH',
+    sections: [['INPUT', [['in_pc', 'LINE IN (PC)']]], ['MAIN OUT', [['audio_L', 'MAIN L'], ['audio_R', 'MAIN R']]], ['POWER', [['power', 'POWER']]]] },
+  ampli: { style: 'rack', left: 'fan', right: 'fuse', serial: 'CLASS-D POWER AMPLIFIER  ·  2 × 500 W @ 4 Ω',
+    sections: [['INPUT', [['in_L', 'IN A (L)'], ['in_R', 'IN B (R)']]], ['OUTPUT', [['out_L', 'OUT CH1'], ['out_R', 'OUT CH2']]], ['POWER ~230V', [['power', 'MAINS IN']]]] },
+  par: { style: 'fixture', left: 'fins', right: 'display', serial: 'LED PAR 7 × 10 W RGBW',
+    sections: [['POWER', [['power_in', 'POWER IN'], ['power_thru', 'POWER OUT']]], ['DMX 512', [['dmx_in', 'DMX IN'], ['dmx_thru', 'DMX THRU']]]] },
+  controller: { style: 'desk', serial: 'DMX CONTROLLER  ·  192 CH',
+    sections: [['DMX', [['dmx', 'DMX OUT']]], ['POWER', [['power', 'POWER']]]] },
+  quadro: { style: 'white', serial: 'QUADRO DI DISTRIBUZIONE  ·  3F+N 16A  ·  IP44',
+    sections: [['INGRESSO', [['in', '400V TRIFASE']]], ['USCITE 230V', [['out_1', 'L1'], ['out_2', 'L2'], ['out_3', 'L3']]]] },
+  allaccio: { style: 'green', serial: 'ALLACCIO VENUE  ·  400V 16A',
+    sections: [['USCITA', [['out', '400V TRIFASE']]]] },
+  ciabatta: { style: 'strip', left: 'switch', serial: 'CIABATTA 3 PRESE SCHUKO  ·  16A',
+    sections: [['INGRESSO', [['in', 'POWER IN']]], ['PRESE', [['out_1', 'PRESA 1'], ['out_2', 'PRESA 2'], ['out_3', 'PRESA 3']]]] },
+  ciabatta_cee: { style: 'strip', left: 'switch', serial: 'DISTRIBUTORE CEE  ·  230V 16A',
+    sections: [['INGRESSO', [['in', 'INGRESSO']]], ['USCITE', [['out_1', 'USCITA 1'], ['out_2', 'USCITA 2'], ['out_3', 'USCITA 3']]]] },
+  pc: { style: 'laptop', serial: 'LAPTOP  ·  lato sinistro',
+    sections: [['ALIMENTAZIONE', [['power', 'POWER']]], ['AUDIO', [['audio_out', 'LINE OUT']]]] },
+  di: { style: 'steel', right: 'lift', serial: 'PASSIVE DI BOX',
+    sections: [['INPUT', [['in', 'INST / LINE']]], ['OUTPUT', [['out', 'MIC OUT']]]] }
+};
+
+const REAR_STYLES = {
+  rack:    { bg: '#2e3037', edge: '#4a4d56', ink: '#cfd2d6', sub: '#8b8e98' },
+  cabinet: { bg: '#1b1c20', edge: '#33363d', ink: '#cfd2d6', sub: '#8b8e98', plate: '#2a2c33' },
+  desk:    { bg: '#26282e', edge: '#3a3d45', ink: '#cfd2d6', sub: '#8b8e98' },
+  fixture: { bg: '#1c1d22', edge: '#3a3d45', ink: '#cfd2d6', sub: '#8b8e98' },
+  white:   { bg: '#e9eaed', edge: '#b9bcc1', ink: '#2a2c32', sub: '#5f646d' },
+  green:   { bg: '#2c3a2c', edge: '#49b06a', ink: '#e6efe6', sub: '#9fb89f' },
+  strip:   { bg: '#1c1d22', edge: '#3a3d45', ink: '#cfd2d6', sub: '#8b8e98' },
+  laptop:  { bg: '#d7dadd', edge: '#9a9da3', ink: '#2a2c32', sub: '#5f646d' },
+  steel:   { bg: '#39424f', edge: '#5b6676', ink: '#e1e6ee', sub: '#a4adba' }
+};
+
+let rearPanelId = null;   // dispositivo il cui pannello è aperto
+
+function compLabel (id) {
+  const c = gameState.placed[id];
+  return c ? COMPONENT_TYPES[c.type].label + ' ' + id.replace(/^.*_/, '') : id;
+}
+function portLabel (compId, portId) {
+  const c = gameState.placed[compId];
+  const panel = c && REAR_PANELS[c.type];
+  if (panel) {
+    for (const [, ports] of panel.sections) {
+      const hit = ports.find(([pid]) => pid === portId);
+      if (hit) return hit[1];
+    }
+  }
+  return portId;
+}
+function edgesOnPort (compId, portId) {
+  return gameState.edges.filter(e => (e.a === compId && e.aPort === portId) || (e.b === compId && e.bPort === portId));
+}
+function escapeHtml (s) { return String(s).replace(/[&<>"]/g, ch => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[ch])); }
+
+function rearDeco (kind, x, h, st) {
+  switch (kind) {
+    case 'fan': {
+      const cx = x + 70, cy = h / 2;
+      return `<circle cx="${cx}" cy="${cy}" r="58" fill="#17181c" stroke="#4a4d56" stroke-width="2"/>
+        ${[18, 34, 50].map(r => `<circle cx="${cx}" cy="${cy}" r="${r}" fill="none" stroke="#4a4d56" stroke-width="2"/>`).join('')}
+        <line x1="${cx - 58}" y1="${cy}" x2="${cx + 58}" y2="${cy}" stroke="#4a4d56" stroke-width="2"/>
+        <line x1="${cx}" y1="${cy - 58}" x2="${cx}" y2="${cy + 58}" stroke="#4a4d56" stroke-width="2"/>
+        <circle cx="${cx}" cy="${cy}" r="9" fill="#2e3037"/>`;
+    }
+    case 'vents':
+      return Array.from({ length: 6 }, (_, i) => `<rect x="${x + 20 + i * 18}" y="${h / 2 - 70}" width="8" height="140" rx="4" fill="#0e0f12"/>`).join('');
+    case 'fins':
+      return Array.from({ length: 6 }, (_, i) => `<rect x="${x + 20 + i * 18}" y="${h / 2 - 90}" width="9" height="180" rx="4" fill="#121317"/>`).join('');
+    case 'switch':
+      return `<rect x="${x + 30}" y="${h / 2 - 32}" width="60" height="64" rx="8" fill="#0e0f12"/>
+        <rect x="${x + 38}" y="${h / 2 - 24}" width="44" height="48" rx="5" fill="#d6392f"/>
+        <rect x="${x + 38}" y="${h / 2 - 24}" width="44" height="22" rx="5" fill="#ee6a60"/>
+        <text x="${x + 60}" y="${h / 2 + 52}" font-size="12" fill="${st.sub}" text-anchor="middle">I / O</text>`;
+    case 'fuse':
+      return `<rect x="${x + 25}" y="${h / 2 - 22}" width="50" height="44" rx="6" fill="#0e0f12"/>
+        <rect x="${x + 36}" y="${h / 2 - 5}" width="28" height="10" fill="#8a8e98"/>
+        <text x="${x + 50}" y="${h / 2 + 42}" font-size="12" fill="${st.sub}" text-anchor="middle">FUSE T6.3A</text>`;
+    case 'display':
+      return `<rect x="${x + 15}" y="${h / 2 - 60}" width="110" height="50" rx="6" fill="#0e0f12"/>
+        <text x="${x + 70}" y="${h / 2 - 25}" font-size="28" font-weight="700" fill="#e0503f" text-anchor="middle" font-family="monospace">d001</text>
+        ${['MENU', 'ENTER'].map((l, i) => `<rect x="${x + 15 + i * 58}" y="${h / 2 + 5}" width="52" height="24" rx="6" fill="#3a3d45"/>
+          <text x="${x + 41 + i * 58}" y="${h / 2 + 21}" font-size="11" font-weight="700" fill="#cfd2d6" text-anchor="middle">${l}</text>`).join('')}`;
+    case 'lift':
+      return `<rect x="${x + 35}" y="${h / 2 - 30}" width="30" height="60" rx="6" fill="#0e0f12"/>
+        <rect x="${x + 42}" y="${h / 2 - 24}" width="16" height="24" rx="3" fill="#c9ccd1"/>
+        <text x="${x + 50}" y="${h / 2 + 48}" font-size="12" fill="${st.sub}" text-anchor="middle">GND LIFT</text>`;
+    default: return '';
+  }
+}
+
+function renderRearPanel () {
+  const id = rearPanelId;
+  const comp = gameState.placed[id];
+  if (!comp) { closeRearPanel(); return; }
+  const def = COMPONENT_TYPES[comp.type];
+  const panel = REAR_PANELS[comp.type];
+  const st = REAR_STYLES[panel.style];
+  const pending = gameState.pendingPort;
+
+  el('#rear-title').textContent = def.label + '  ·  ' + id.replace(/_/g, ' ') + '  —  pannello posteriore';
+
+  const SLOT = 150, PADX = 18, GAP = 26, MARGIN = 36, H = 330;
+  const leftW = panel.left ? 140 : 0, rightW = panel.right ? 140 : 0;
+  const secW = panel.sections.map(([, ports]) => ports.length * SLOT + PADX * 2);
+  const W = MARGIN * 2 + leftW + rightW + secW.reduce((s, w) => s + w, 0) + GAP * (secW.length - 1);
+
+  let svg = `<svg class="rear-svg" viewBox="0 0 ${W} ${H}" xmlns="http://www.w3.org/2000/svg" font-family="Inter,sans-serif">`;
+  // telaio del pannello secondo lo stile del dispositivo
+  if (panel.style === 'rack') {
+    svg += `<rect x="30" y="8" width="${W - 60}" height="${H - 16}" fill="${st.bg}" stroke="${st.edge}" stroke-width="2"/>
+      <rect x="30" y="8" width="${W - 60}" height="10" fill="#3a3d45"/><rect x="30" y="${H - 18}" width="${W - 60}" height="10" fill="#3a3d45"/>
+      ${[2, W - 32].map(x => `<rect x="${x}" y="8" width="30" height="${H - 16}" fill="#4a4d56"/>
+        <rect x="${x + 9}" y="40" width="12" height="28" rx="6" fill="#0e0f12"/><rect x="${x + 9}" y="${H - 68}" width="12" height="28" rx="6" fill="#0e0f12"/>`).join('')}`;
+  } else if (panel.style === 'fixture') {
+    svg += `<rect x="6" y="6" width="${W - 12}" height="${H - 12}" rx="46" fill="${st.bg}" stroke="${st.edge}" stroke-width="2"/>`;
+  } else if (panel.style === 'cabinet') {
+    svg += `<rect x="4" y="4" width="${W - 8}" height="${H - 8}" rx="6" fill="${st.bg}" stroke="${st.edge}" stroke-width="2"/>
+      <rect x="22" y="22" width="${W - 44}" height="${H - 44}" rx="8" fill="${st.plate}" stroke="#44474f" stroke-width="1.5"/>
+      ${[[32, 32], [W - 32, 32], [32, H - 32], [W - 32, H - 32]].map(([x, y]) => `<circle cx="${x}" cy="${y}" r="4" fill="#55585f"/>`).join('')}`;
+  } else if (panel.style === 'white') {
+    svg += `<rect x="4" y="4" width="${W - 8}" height="${H - 8}" rx="10" fill="${st.bg}" stroke="${st.edge}" stroke-width="2"/>
+      <rect x="4" y="4" width="${W - 8}" height="14" rx="6" fill="#f2c53d"/>
+      ${Array.from({ length: Math.floor(W / 16) }, (_, i) => `<line x1="${8 + i * 16}" y1="18" x2="${18 + i * 16}" y2="4" stroke="#1c1d22" stroke-width="3"/>`).join('')}`;
+  } else if (panel.style === 'strip') {
+    svg += `<rect x="4" y="30" width="${W - 8}" height="${H - 60}" rx="24" fill="${st.bg}" stroke="${st.edge}" stroke-width="2"/>
+      <rect x="20" y="${H - 44}" width="${W - 40}" height="6" rx="3" fill="${'#' + def.body.accent.toString(16).padStart(6, '0')}"/>`;
+  } else {
+    svg += `<rect x="4" y="4" width="${W - 8}" height="${H - 8}" rx="16" fill="${st.bg}" stroke="${st.edge}" stroke-width="2"/>`;
+  }
+
+  let x = MARGIN;
+  if (panel.left) { svg += rearDeco(panel.left, x, H, st); x += leftW; }
+  const loads = comp.type === 'quadro' ? computePhaseLoads() : null;
+
+  panel.sections.forEach(([title, ports], si) => {
+    const w = secW[si];
+    svg += `<rect x="${x}" y="48" width="${w}" height="${H - 96}" rx="4" fill="none" stroke="${st.ink}" stroke-opacity=".45" stroke-width="1.5"/>
+      <rect x="${x + 12}" y="38" width="${title.length * 10 + 18}" height="22" fill="${st.bg}"/>
+      <text x="${x + 21}" y="54" font-size="15" font-weight="700" fill="${st.ink}">${escapeHtml(title)}</text>`;
+    ports.forEach(([pid, label], pi) => {
+      const p = def.ports.find(q => q.id === pid);
+      if (!p) return;
+      const cx = x + PADX + pi * SLOT + SLOT / 2;
+      const gender = (CONNECTOR_GENDER[p.signal] || {})[p.dir] === 'male' ? 'maschio' : 'femmina';
+      const busy = edgesOnPort(id, pid);
+      const inHand = pending && pending.componentId === id && pending.portId === pid;
+      const sigColor = '#' + SIGNAL_COLOR[p.signal].toString(16).padStart(6, '0');
+      svg += `<g class="rp-port" data-port="${pid}" style="cursor:pointer">
+        <rect x="${cx - SLOT / 2 + 4}" y="62" width="${SLOT - 8}" height="${H - 124}" fill="transparent"/>
+        <text x="${cx}" y="80" font-size="16" font-weight="700" fill="${st.ink}" text-anchor="middle">${escapeHtml(label)}</text>
+        <text x="${cx}" y="98" font-size="11.5" fill="${st.sub}" text-anchor="middle">${escapeHtml(SIGNAL_LABEL[p.signal] || p.signal)} · ${gender}</text>
+        <g transform="translate(${cx - 60} 104)">${connectorSVG(p.signal, p.dir)}</g>`;
+      // verso del segnale, come una serigrafia a fianco della presa
+      svg += `<g transform="translate(${cx + 46} 118)">
+        <rect x="-15" y="-9" width="30" height="18" rx="4" fill="${p.dir === 'in' ? '#1f5a33' : '#6b4413'}"/>
+        <text x="0" y="4.5" font-size="11" font-weight="700" fill="${p.dir === 'in' ? '#7fe0a0' : '#ffc27a'}" text-anchor="middle">${p.dir === 'in' ? 'IN' : 'OUT'}</text></g>`;
+      if (busy.length) {
+        // spina inserita: cavo in neoprene nero col filetto del tipo di cavo
+        const cable = '#' + CABLE_TYPES[busy[0].signal].color.toString(16).padStart(6, '0');
+        // (sulle prese del Quadro sotto c'è la barra del carico: solo la spina)
+        svg += `<rect x="${cx - 14}" y="204" width="28" height="26" rx="6" fill="#17181b" stroke="#55585f"/>` + (loads && p.phase ? '' : `
+          <line x1="${cx}" y1="230" x2="${cx}" y2="${H - 8}" stroke="#17181b" stroke-width="11"/>
+          <line x1="${cx}" y1="230" x2="${cx}" y2="${H - 8}" stroke="${cable}" stroke-width="3"/>`);
+      }
+      if (inHand) svg += `<circle cx="${cx}" cy="${104 + CONN_CY}" r="46" fill="none" stroke="#f2a541" stroke-width="4" stroke-dasharray="8 5"/>`;
+      // stato della presa
+      let status;
+      if (inHand) status = 'cavo in mano da qui';
+      else if (busy.length === 1) {
+        const e = busy[0];
+        const otherId = e.a === id ? e.b : e.a, otherPort = e.a === id ? e.bPort : e.aPort;
+        status = '→ ' + compLabel(otherId) + ' · ' + portLabel(otherId, otherPort);
+      } else if (busy.length > 1) status = busy.length + ' cavi collegati';
+      else status = 'libera';
+      svg += `<rect x="${cx - SLOT / 2 + 8}" y="${H - 72}" width="${SLOT - 16}" height="22" rx="11"
+          fill="${busy.length ? '#1c1d22' : 'transparent'}" stroke="${busy.length ? sigColor : 'none'}"/>
+        <text x="${cx}" y="${H - 57}" font-size="11.5" fill="${busy.length ? '#eee9df' : st.sub}" text-anchor="middle">${escapeHtml(status)}</text>`;
+      if (loads && p.phase) {
+        const frac = Math.min(1, loads[p.phase] / PHASE_BUDGET_W);
+        const col = frac >= 1 ? '#e0503f' : (frac >= 0.75 ? '#f2a541' : '#49b06a');
+        // carico della fase, subito sotto la presa
+        svg += `<rect x="${cx - 50}" y="232" width="100" height="7" rx="3" fill="#00000033"/>
+          <rect x="${cx - 50}" y="232" width="${100 * frac}" height="7" rx="3" fill="${col}"/>
+          <text x="${cx}" y="254" font-size="11.5" font-weight="600" fill="${st.sub}" text-anchor="middle">${(loads[p.phase] / 1000).toFixed(2)} / ${(PHASE_BUDGET_W / 1000).toFixed(1)} kW</text>`;
+      }
+      svg += `</g>`;
+    });
+    x += w + GAP;
+  });
+  x -= GAP;
+  if (panel.right) svg += rearDeco(panel.right, x + 10, H, st);
+  if (panel.serial) svg += `<text x="${W / 2}" y="${H - (panel.style === 'strip' ? 8 : 20)}" font-size="12" fill="${st.sub}" text-anchor="middle" letter-spacing="1">${escapeHtml(panel.serial)}</text>`;
+  svg += `</svg>`;
+
+  el('#rear-svg').innerHTML = svg;
+  el('#rear-svg').querySelectorAll('.rp-port').forEach(node => {
+    node.addEventListener('click', () => onRearPortClick(id, node.dataset.port));
+  });
+  renderRearHand();
+}
+
+// riga "cavo in mano" in testa al popup
+function renderRearHand () {
+  const box = el('#rear-hand');
+  const pending = gameState.pendingPort;
+  const cable = gameState.selectedCable;
+  if (pending) {
+    box.innerHTML = `Cavo <b>${escapeHtml(cableName(cable))}</b> in mano da <b>${escapeHtml(compLabel(pending.componentId))} · ${escapeHtml(portLabel(pending.componentId, pending.portId))}</b> — scegli la presa dove collegarlo.`;
+  } else if (cable) {
+    box.innerHTML = `Cavo selezionato: <b>${escapeHtml(cableName(cable))}</b> — scegli la presa da cui partire.`;
+  } else {
+    box.innerHTML = `Nessun cavo selezionato: scegline uno nella scheda <b>Cavi</b> per collegare.`;
+  }
+}
+
+function cableName (cableId) {
+  const btn = document.querySelector('.cable-btn[data-cable="' + cableId + '"]');
+  return btn ? btn.textContent.trim() : String(cableId || '');
+}
+
+function showRearDetail (compId, portId) {
+  const box = el('#rear-detail');
+  const busy = edgesOnPort(compId, portId);
+  if (!busy.length) { box.innerHTML = ''; return; }
+  box.innerHTML = `<div class="rear-detail-head">${escapeHtml(portLabel(compId, portId))} — cavi collegati</div>` + busy.map(e => {
+    const otherId = e.a === compId ? e.b : e.a, otherPort = e.a === compId ? e.bPort : e.aPort;
+    return `<div class="rear-detail-row"><span>${escapeHtml(cableName(e.signal))} → ${escapeHtml(compLabel(otherId))} · ${escapeHtml(portLabel(otherId, otherPort))}</span>
+      <button class="rear-unplug" data-edge="${e.id}">Scollega</button></div>`;
+  }).join('');
+  box.querySelectorAll('.rear-unplug').forEach(b => b.addEventListener('click', () => {
+    const scene = window.__scene;
+    if (!scene) return;
+    scene.selectedEdgeId = Number(b.dataset.edge);
+    scene.deleteSelectedEdge();
+    box.innerHTML = '';
+    renderRearPanel();
+  }));
+}
+
+function onRearPortClick (compId, portId) {
+  const scene = window.__scene;
+  if (!scene) return;
+  const p = getPortDef(compId, portId);
+  const busy = edgesOnPort(compId, portId);
+  const pending = gameState.pendingPort;
+  const isPendingPort = pending && pending.componentId === compId && pending.portId === portId;
+  // presa occupata (e non è una presa multipla del Quadro con un cavo in
+  // mano): si mostrano i cavi collegati, con la possibilità di scollegarli
+  if (busy.length && !isPendingPort && !(p.multi && gameState.selectedCable)) {
+    showRearDetail(compId, portId);
+    return;
+  }
+  el('#rear-detail').innerHTML = '';
+  const edgesBefore = gameState.edges.length;
+  scene.handlePortClick(compId, portId, p.signal);
+  const connected = gameState.edges.length > edgesBefore;
+  const picked = !pending && gameState.pendingPort;
+  if (connected || picked) {
+    // cavo collegato, o primo capo scelto: si torna alla scena
+    closeRearPanel();
+    if (picked) showToast('Cavo in mano: ora tocca il dispositivo da collegare.', 'ok');
+    else showToast('Collegato: ' + compLabel(compId) + ' · ' + portLabel(compId, portId) + '.', 'ok');
+    return;
+  }
+  renderRearPanel();
+}
+
+// mentre il popup è aperto la scena non deve ricevere i tocchi: Phaser
+// ascolta il puntatore anche fuori dal canvas, e un tocco sul popup verrebbe
+// letto come un tocco sul pavimento (che annulla il cavo in mano)
+function setSceneInput (on) {
+  const scene = window.__scene;
+  if (scene && scene.input) scene.input.enabled = on;
+}
+function openRearPanel (compId) {
+  if (!REAR_PANELS[(gameState.placed[compId] || {}).type]) return;
+  rearPanelId = compId;
+  el('#rear-detail').innerHTML = '';
+  renderRearPanel();
+  el('#rear-modal').classList.add('show');
+  setSceneInput(false);
+}
+function closeRearPanel () {
+  rearPanelId = null;
+  el('#rear-modal').classList.remove('show');
+  // riattivato al giro successivo: il rilascio del tocco che ha chiuso il
+  // popup non deve arrivare alla scena
+  setTimeout(() => { if (!rearPanelId) setSceneInput(true); }, 0);
+}
+el('#rear-close').addEventListener('click', closeRearPanel);
+el('#rear-modal').addEventListener('click', ev => { if (ev.target.id === 'rear-modal') closeRearPanel(); });
+
+// barra "cavo in mano" sopra la scena, finché il secondo capo non è collegato
+function updateCableBanner () {
+  const bar = el('#cable-banner');
+  const pending = gameState.pendingPort;
+  if (!pending) { bar.classList.remove('show'); return; }
+  el('#cable-banner-text').innerHTML = `Cavo <b>${escapeHtml(cableName(gameState.selectedCable))}</b> in mano da <b>${escapeHtml(compLabel(pending.componentId))} · ${escapeHtml(portLabel(pending.componentId, pending.portId))}</b> → tocca il dispositivo da collegare`;
+  bar.classList.add('show');
+}
+el('#cable-banner-cancel').addEventListener('click', () => {
+  if (window.__scene) window.__scene.cancelPending();
+});
+
+
 /* Livelli: filtri di visibilità per tipo di cavo */
 document.querySelectorAll('.layer-toggle').forEach(btn => {
   btn.addEventListener('click', () => {
@@ -1177,16 +1635,10 @@ class StageScene extends Phaser.Scene {
 
   update (time, delta) {
     const cam = this.cameras.main;
-    // i contatti dei connettori si vedono solo da vicino: si accendono o
-    // spengono tutti insieme quando lo zoom attraversa la soglia
-    const showDetail = cam.zoom >= PORT_DETAIL_ZOOM;
-    if (showDetail !== this.portDetailShown) {
-      this.portDetailShown = showDetail;
-      Object.values(this.compVisuals).forEach(v => {
-        Object.values(v.portMarkers || {}).forEach(m => { if (m.faceDetail) m.faceDetail.setVisible(showDetail); });
-      });
-    }
-    const speed = (420 * (delta / 1000)) / cam.zoom;
+    // barra "cavo in mano": si aggiorna solo quando cambia il capo in attesa
+    const pend = gameState.pendingPort;
+    const pendKey = pend ? pend.componentId + '/' + pend.portId + '/' + gameState.selectedCable : '';
+    if (pendKey !== this.pendingKey) { this.pendingKey = pendKey; updateCableBanner(); }
     let dx = 0, dy = 0;
     if (this.cursors.left.isDown || this.wasd.left.isDown) dx -= speed;
     if (this.cursors.right.isDown || this.wasd.right.isDown) dx += speed;
@@ -1465,7 +1917,7 @@ class StageScene extends Phaser.Scene {
     // barra subito sotto ogni presa di fase
     const barW = 14, barH = 4;
     def.ports.filter(p => p.phase).forEach(p => {
-      const barY = p.dy + PORT_R + 4;
+      const barY = p.dy + 7;
       const frac = Math.min(1, loads[p.phase] / PHASE_BUDGET_W);
       const color = frac >= 1 ? 0xe0503f : (frac >= 0.75 ? 0xf2a541 : 0x49b06a);
       g.fillStyle(0x000000, 0.6);
@@ -1605,7 +2057,11 @@ class StageScene extends Phaser.Scene {
           k.quadB(B, a - 6, a + 6, 25, 31, 0x2a2c32);
           k.quadB(B, a - 3, a + 3, 26.5, 29, 0x49b06a);
         });
+        QUADRO_PHASE_A.forEach(a => {                                  // prese CEE blu
+          k.discB(B, a, 12, 7.5, 0x1d4a9a); k.discB(B, a, 12, 6, 0x2f6fd6);
+        });
         k.quadA(0, 5, 29, 4, 36, 0xcfd2d6);                             // sportello laterale
+        k.discA(0, 17, 14, 7.5, 0x9e2820); k.discA(0, 17, 14, 6, 0xd6392f); // ingresso CEE rosso
         k.box(0, 0.1, 25, 28, 28, 34, ISO_GREY);                        // maniglia
         k.quadZ(Z, 6, A - 6, 4, B - 4, 0xe6e8eb);
         break;
@@ -1856,6 +2312,12 @@ class StageScene extends Phaser.Scene {
 
     const body = this.add.graphics();
     this.drawComponentBody(body, def);
+    // punti di aggancio dei cavi: piccole prese appena accennate sul corpo,
+    // la presa vera si sceglie nel pannello posteriore
+    def.ports.forEach(p => {
+      body.fillStyle(0x0c0d10, 1); body.fillCircle(p.dx, p.dy, 3);
+      body.lineStyle(1.2, SIGNAL_COLOR[p.signal], 0.9); body.strokeCircle(p.dx, p.dy, 3);
+    });
     c.add(body);
 
     const glow = this.add.graphics();
@@ -1892,9 +2354,9 @@ class StageScene extends Phaser.Scene {
     // Bersaglio per interagire col componente: l'INTERO corpo (con un margine
     // extra), non la sola etichetta o le minuscole porte — molto più facile
     // da toccare su schermi piccoli. Il comportamento dipende dalla modalità:
-    //  - un cavo è selezionato (modalità cablaggio) -> il tocco collega alla
-    //    porta più vicina al punto toccato, su QUALUNQUE componente (anche
-    //    Quadro e Testa, che non si spostano ma vanno comunque cablati);
+    //  - modalità cablaggio -> il tocco apre il pannello posteriore del
+    //    dispositivo, dove si sceglie la presa (vale per QUALUNQUE componente,
+    //    anche Quadro e Testa, che non si spostano ma vanno comunque cablati);
     //  - nessun cavo selezionato -> il tocco seleziona il componente per
     //    spostarlo (solo per i tipi che si possono spostare).
     // Così, mentre si cablano i cavi, toccare un componente non fa MAI
@@ -1908,46 +2370,14 @@ class StageScene extends Phaser.Scene {
     });
     body.on('pointerdown', (pointer, lx, ly, event) => {
       if (event && event.stopPropagation) event.stopPropagation();
-      if (isWiringTabActive()) {
-        let nearest = null, nearestDist = Infinity;
-        def.ports.forEach(p => {
-          const d = Math.hypot(lx - p.dx, ly - p.dy);
-          if (d < nearestDist) { nearestDist = d; nearest = p; }
-        });
-        if (nearest) this.handlePortClick(id, nearest.id, nearest.signal);
-        return;
-      }
+      // in cablaggio si apre il pannello posteriore: la presa si sceglie lì
+      if (isWiringTabActive()) { openRearPanel(id); return; }
       if (movable) { this.handleMoveSelect(id); return; }
       // Quadro/Testa: non si spostano, ma un tocco qui non deve comunque
       // "perdersi" — si comporta come un tocco sul pavimento sottostante.
       if (gameState.selectedPieceType) { this.placeArmedPieceAt(pointer.worldX, pointer.worldY); return; }
       this.clearEdgeSelection();
       this.cancelPending();
-    });
-
-    const portDots = {};
-    const portMarkers = {};
-    def.ports.forEach(p => {
-      // ogni porta è la FACCIA del connettore reale (vedi drawPortGlyph):
-      // corpo del colore vero del connettore, anello esterno del colore del
-      // cavo che ci va, contatti disegnati sopra.
-      const dot = this.add.circle(p.dx, p.dy, PORT_R, CONNECTOR_BODY[p.signal] || SIGNAL_COLOR[p.signal], 1)
-        .setStrokeStyle(2.4, SIGNAL_COLOR[p.signal])
-        .setInteractive({ useHandCursor: true });
-      dot.on('pointerover', () => this.showPortLabel(id, p));
-      dot.on('pointerout', () => this.hidePortLabel());
-      dot.on('pointerdown', (pointer, lx, ly, event) => {
-        if (event && event.stopPropagation) event.stopPropagation();
-        // su touch non c'è il passaggio del mouse: l'etichetta compare al tocco
-        if (pointer && pointer.wasTouch) this.showPortLabel(id, p, 1800);
-        if (isWiringTabActive()) { this.handlePortClick(id, p.id, p.signal); return; }
-        if (movable) { this.handleMoveSelect(id); return; }
-      });
-      c.add(dot);
-      portDots[p.id] = dot;
-      const marker = this.drawPortGlyph(p);
-      c.add(marker);
-      portMarkers[p.id] = marker;
     });
 
     let phaseBars = null;
@@ -1981,166 +2411,7 @@ class StageScene extends Phaser.Scene {
       c.add(badgeBg); c.add(badgeIcon);
     }
 
-    return { container: c, glow, portDots, portMarkers, idLabel, def, phaseBars, led };
-  }
-
-  /* faccia del connettore reale, disegnata sopra il corpo tondo della porta:
-     numero e disposizione dei contatti come nella realtà, e il genere
-     (vedi CONNECTOR_GENDER): MASCHIO = inserto scuro con pin metallici
-     chiari, FEMMINA = fori neri (su un inserto grigio se il corpo è scuro).
-     In più una freccetta sul bordo dice il verso del segnale:
-     verde che ENTRA nella presa = IN, arancione che ESCE = OUT.
-     I contatti compaiono solo da vicino (zoom >= PORT_DETAIL_ZOOM): da
-     lontano restano corpo, anello colorato e freccia — vedi update(). */
-  drawPortGlyph (p) {
-    const box = this.add.container(p.dx, p.dy);
-    const g = this.add.graphics();       // faccia: contatti, inserti, ghiere
-    const ga = this.add.graphics();      // contorno + freccia IN/OUT, sempre visibili
-    box.add(g); box.add(ga);
-    box.faceDetail = g;
-    g.setVisible(this.cameras.main.zoom >= PORT_DETAIL_ZOOM);
-    const gender = (CONNECTOR_GENDER[p.signal] || {})[p.dir] || 'female';
-    const male = gender === 'male';
-    const PIN = 0xe4dfd2, HOLE = 0x0b0c0e;
-    const insert = (r, color) => { g.fillStyle(color || 0x141519, 1); g.fillCircle(0, 0, r); };
-    // fondo della faccia: inserto scuro per i pin, grigio per i fori su un
-    // corpo scuro, nessuno (si vede il corpo) per i fori su un corpo chiaro
-    const face = (r) => {
-      if (male) insert(r);
-      else if (DARK_BODY.has(p.signal)) insert(r, 0x6a6e77);
-    };
-    // un contatto: pin metallico (maschio) o foro (femmina)
-    const contact = (x, y, r) => {
-      g.fillStyle(male ? PIN : HOLE, 1);
-      g.fillCircle(x, y, r || 1.25);
-    };
-    const latch = () => { g.fillStyle(male ? PIN : HOLE, 1); g.fillRect(-1, -PORT_R + 0.6, 2, 2); };
-    const deg = Math.PI / 180;
-
-    // contorno scuro sottile attorno all'anello colorato, stacca dal fondo
-    ga.lineStyle(1, 0x0c0d10, 1);
-    ga.strokeCircle(0, 0, PORT_R + 1.7);
-
-    switch (p.signal) {
-      case 'xlr': {
-        // XLR 3 poli: due contatti affiancati in alto, il terzo in basso
-        // leggermente spostato; tacca del fermo sul bordo superiore
-        face(5.8);
-        contact(-2.6, -1.6); contact(2.6, -1.6); contact(0.9, 2.8);
-        latch();
-        break;
-      }
-      case 'dmx': {
-        // XLR 5 poli: i cinque contatti su un SEMICERCHIO (arco di 180°),
-        // aperto verso la tacca del fermo — nessun contatto al centro
-        face(5.8);
-        for (let i = 0; i < 5; i++) {
-          const a = (180 - i * 45) * deg;
-          contact(Math.cos(a) * 3.7, Math.sin(a) * 3.7 - 1.2, 1.1);
-        }
-        latch();
-        break;
-      }
-      case 'speakon': {
-        // Speakon da pannello: corpo nero, anello bianco, perno centrale e
-        // due chiavi di bloccaggio — il genere non cambia tra ingresso e link
-        g.lineStyle(1.3, 0xeeeeee, 1); g.strokeCircle(0, 0, 5.6);
-        g.fillStyle(0x3a3d44, 1); g.fillCircle(0, 0, 2.6);
-        g.fillStyle(0xeeeeee, 1);
-        g.fillRect(-0.9, -6.4, 1.8, 2); g.fillRect(-0.9, 4.4, 1.8, 2);
-        break;
-      }
-      case 'powercon': {
-        // PowerCON: corpo nero, anello interno del colore reale del
-        // connettore da pannello — BLU = power in, GRIGIO = power out
-        g.lineStyle(1.6, p.dir === 'in' ? 0x3d7fe0 : 0xcfd2d6, 1);
-        g.strokeCircle(0, 0, 5.1);
-        g.fillStyle(PIN, 1);
-        [0, 120, 240].forEach(d => {
-          const a = (d - 90) * deg;
-          g.fillCircle(Math.cos(a) * 2.6, Math.sin(a) * 2.6, 1.1);
-        });
-        break;
-      }
-      case 'schuko': {
-        // Schuko: due poli affiancati + contatti di terra laterali (sopra e
-        // sotto); la presa (femmina) ha i fori, la spina (maschio) i pin
-        face(6.2);
-        contact(-2.9, 0, 1.5); contact(2.9, 0, 1.5);
-        g.fillStyle(PIN, 1);
-        g.fillRect(-1.6, -6.4, 3.2, 1.6); g.fillRect(-1.6, 4.8, 3.2, 1.6);
-        break;
-      }
-      case 'cee_mono': {
-        // CEE 2P+T (blu): due poli + terra più grossa in basso
-        face(5.8);
-        contact(-3.3, -1.2); contact(3.3, -1.2); contact(0, 3.3, 1.8);
-        latch();
-        break;
-      }
-      case 'cee_tri': {
-        // CEE 3P+N+T (rossa): quattro contatti sulla corona + terra più grossa
-        face(5.8);
-        for (let i = 0; i < 4; i++) {
-          const a = (150 + i * 80) * deg;
-          contact(Math.cos(a) * 3.9, Math.sin(a) * 3.9);
-        }
-        contact(0, 3.9, 1.7);
-        latch();
-        break;
-      }
-      case 'jack': {
-        // presa jack: ghiera metallica filettata con il foro al centro
-        g.fillStyle(0xb8bcc4, 1); g.fillCircle(0, 0, 5.4);
-        g.lineStyle(1, 0x7d828c, 1); g.strokeCircle(0, 0, 4.2);
-        g.fillStyle(HOLE, 1); g.fillCircle(0, 0, 2.2);
-        break;
-      }
-      default:
-        contact(0, 0, 2);
-    }
-
-    // freccia di direzione sul bordo in alto a destra
-    const bx = PORT_R * 0.8, by = -PORT_R * 0.8;
-    const isIn = p.dir === 'in';
-    const tip = isIn ? { x: bx - 2.6, y: by + 2.6 } : { x: bx + 3.4, y: by - 3.4 };
-    const ux = isIn ? -0.7071 : 0.7071, uy = isIn ? 0.7071 : -0.7071; // verso della freccia
-    const back = { x: tip.x - ux * 5.5, y: tip.y - uy * 5.5 };
-    const px = -uy * 3.2, py = ux * 3.2;
-    ga.fillStyle(isIn ? 0x49b06a : 0xf2a541, 1);
-    ga.lineStyle(1.2, 0x141519, 1);
-    ga.fillTriangle(tip.x, tip.y, back.x + px, back.y + py, back.x - px, back.y - py);
-    ga.strokeTriangle(tip.x, tip.y, back.x + px, back.y + py, back.x - px, back.y - py);
-    return box;
-  }
-
-  /* etichetta sopra una porta: tipo di connettore, verso e genere
-     (es. "DMX 5 poli · OUT · femmina"), più la fase per le prese del Quadro.
-     Dimensione costante sullo schermo, qualunque sia lo zoom. */
-  showPortLabel (componentId, p, autoHideMs) {
-    const pos = this.getPortScreenPos(componentId, p.id);
-    if (!pos) return;
-    const gender = (CONNECTOR_GENDER[p.signal] || {})[p.dir] === 'male' ? 'maschio' : 'femmina';
-    const parts = [SIGNAL_LABEL[p.signal] || p.signal, p.dir === 'in' ? 'IN' : 'OUT', gender];
-    if (p.phase) parts.push(p.phase);
-    if (!this.portLabel) {
-      this.portLabel = this.add.text(0, 0, '', {
-        fontFamily: 'Inter, sans-serif', fontSize: '15px', fontStyle: 'bold', color: '#eee9df',
-        backgroundColor: '#1c1d22', padding: { x: 8, y: 4 }, resolution: 2
-      }).setOrigin(0.5, 1).setDepth(80);
-    }
-    const z = this.cameras.main.zoom;
-    this.portLabel.setText(parts.join(' · '))
-      .setScale(1 / z)
-      .setPosition(pos.x, pos.y - PORT_R - 6 / z)
-      .setVisible(true);
-    if (this.portLabelTimer) { this.portLabelTimer.remove(); this.portLabelTimer = null; }
-    if (autoHideMs) this.portLabelTimer = this.time.delayedCall(autoHideMs, () => this.hidePortLabel());
-  }
-
-  hidePortLabel () {
-    if (this.portLabelTimer) { this.portLabelTimer.remove(); this.portLabelTimer = null; }
-    if (this.portLabel) this.portLabel.setVisible(false);
+    return { container: c, glow, idLabel, def, phaseBars, led };
   }
 
   setGlow (v, on, color) {
@@ -2443,6 +2714,7 @@ class StageScene extends Phaser.Scene {
       if (!isSelected) this.drawFlowArrow(pts, color, alpha);
     });
     this.refreshEdgeDeleteButton();
+    this.updateConnectionBadges();
     updateConnectionCounter();
     this.updateQuadroVisual();
     const modal = el('#quadro-modal');
@@ -2463,6 +2735,18 @@ class StageScene extends Phaser.Scene {
     g.lineStyle(1.5, 0x141519, alpha);
     g.fillTriangle(tri[0].x, tri[0].y, tri[1].x, tri[1].y, tri[2].x, tri[2].y);
     g.strokeTriangle(tri[0].x, tri[0].y, tri[1].x, tri[1].y, tri[2].x, tri[2].y);
+  }
+
+  // sotto ogni dispositivo: quante delle sue prese sono collegate (es. "2/4")
+  updateConnectionBadges () {
+    Object.values(gameState.placed).forEach(c => {
+      const v = this.compVisuals[c.id];
+      if (!v || !v.idLabel) return;
+      const ports = v.def.ports;
+      const used = ports.filter(p => edgesOnPort(c.id, p.id).length > 0).length;
+      v.idLabel.setText(c.id.replace(/_/g, ' ') + '  ·  ' + used + '/' + ports.length);
+      v.idLabel.setColor(used === ports.length ? '#49b06a' : '#8b8e98');
+    });
   }
 
   /* ---------------- selezione ed eliminazione di un cavo ---------------- */
@@ -2526,36 +2810,22 @@ class StageScene extends Phaser.Scene {
   applyLayerVisibility () {
     this.selectedEdgeId = null;
     this.redrawEdges();
-    Object.values(gameState.placed).forEach(c => {
-      const def = COMPONENT_TYPES[c.type];
-      const v = this.compVisuals[c.id];
-      if (!v || !def) return;
-      def.ports.forEach(p => {
-        const dot = v.portDots[p.id];
-        const marker = v.portMarkers[p.id];
-        const a = gameState.visibleSignals[p.signal] ? 1 : 0.22;
-        if (dot) dot.setAlpha(a);
-        if (marker) marker.setAlpha(a);
-      });
-    });
   }
 
+  // punto di aggancio del cavo: la posizione della porta sul corpo isometrico
+  // (non disegnata: le prese si vedono solo nel pannello posteriore)
   getPortScreenPos (componentId, portId) {
     const v = this.compVisuals[componentId];
     if (!v) return null;
-    const dot = v.portDots[portId];
-    if (!dot) return null;
-    return { x: v.container.x + dot.x * v.container.scaleX, y: v.container.y + dot.y * v.container.scaleY };
+    const p = v.def.ports.find(q => q.id === portId);
+    if (!p) return null;
+    return { x: v.container.x + p.dx * v.container.scaleX, y: v.container.y + p.dy * v.container.scaleY };
   }
 
+  // il dispositivo da cui parte il cavo in mano resta cerchiato in arancione
   highlightPending (componentId, portId, on) {
     const v = this.compVisuals[componentId];
-    const dot = v.portDots[portId];
-    const portDef = getPortDef(componentId, portId);
-    dot.setStrokeStyle(on ? 3 : 2.4, on ? 0xf2a541 : SIGNAL_COLOR[portDef.signal]);
-    dot.setScale(on ? 1.3 : 1);
-    const marker = v.portMarkers[portId];
-    if (marker) marker.setScale(on ? 1.3 : 1);
+    if (v) this.setGlow(v, on, 0xf2a541);
   }
 
   cancelPending () {
@@ -2805,7 +3075,7 @@ class StageScene extends Phaser.Scene {
     gameState.edgeSeq = 0;
     gameState.selectedCable = null;
     gameState.pendingPort = null;
-    this.hidePortLabel();
+    closeRearPanel();
     gameState.tested = false;
 
     document.querySelectorAll('.cable-btn').forEach(b => b.classList.remove('active'));

@@ -243,10 +243,46 @@
     opacity:0;
     pointer-events:none;
     transition:opacity .2s ease, transform .2s ease;
-    z-index:20;
+    z-index:150;
   }
   #toast.show{ opacity:1; transform:translate(-50%,0); }
   #toast.ok{ border-left-color:var(--green); }
+
+  /* ---------- PANNELLO POSTERIORE: popup di cablaggio ---------- */
+  .modal-box.rear-box{ width:min(1180px, 96vw); }
+  .rear-hand{
+    padding:10px 16px; font-size:13.5px; color:var(--text-main);
+    border-bottom:1px solid var(--hairline); background:var(--bg-panel-raised);
+  }
+  .rear-hand b{ color:var(--amber); }
+  .rear-svg-wrap{ padding:14px 16px 4px; }
+  .rear-svg{ width:100%; height:auto; display:block; max-height:58vh; }
+  .rear-svg .rp-port:hover > g:first-of-type{ filter:brightness(1.15); }
+  .rear-detail:empty{ display:none; }
+  .rear-detail{ margin:4px 16px 0; padding:10px 12px; border:1px solid var(--hairline); border-radius:8px; background:var(--bg-panel-raised); font-size:13px; }
+  .rear-detail-head{ font-weight:700; margin-bottom:6px; }
+  .rear-detail-row{ display:flex; align-items:center; justify-content:space-between; gap:10px; padding:4px 0; }
+  .rear-unplug{
+    background:none; border:1px solid var(--red); color:var(--red); border-radius:5px;
+    padding:4px 10px; cursor:pointer; font-size:12.5px; font-weight:600;
+  }
+  .rear-unplug:hover{ background:var(--red); color:#fff; }
+  .rear-hint{ padding:8px 16px 14px; }
+
+  /* barra "cavo in mano" sopra la scena */
+  #cable-banner{
+    position:absolute; bottom:12px; left:50%; transform:translateX(-50%);
+    display:none; align-items:center; gap:12px;
+    background:#1c1d22; border:1px solid var(--amber); border-radius:6px;
+    padding:7px 8px 7px 14px; font-size:13px; max-width:92%;
+    z-index:15; box-shadow:0 4px 16px rgba(0,0,0,.4);
+  }
+  #cable-banner.show{ display:flex; }
+  #cable-banner b{ color:var(--amber); }
+  #cable-banner button{
+    background:none; border:1px solid var(--hairline); color:var(--text-main);
+    border-radius:5px; padding:4px 10px; cursor:pointer; font-size:12.5px; white-space:nowrap;
+  }
 
   /* ---------- QUADRO: finestra pop-up diagnostica ---------- */
   .modal-overlay{
