@@ -398,18 +398,27 @@ const FORCE_TRIFASE = true;
 // budget per fase: 3kW ciascuna (coerente con un 16A monofase per fase su un
 // quadro trifase, 16A×230V≈3680W con un margine di sicurezza tondo a 3000W).
 const PHASE_BUDGET_W = 3000;
+// i picchi di accensione (finali e sub) durano meno di un secondo: un
+// magnetotermico da 16A li regge, a meno che più apparecchi pesanti partano
+// insieme sulla stessa fase. Acceso uno alla volta, il livello non scatta mai.
+const PHASE_PEAK_W = 4600;
 
-/* Cosa deve essere cablato nel livello: 26 "posti" fissi. Non c'è un unico
-   schema giusto: conta che funzioni come nella realtà.
-   - corrente: ogni utenza arriva al Quadro, da una sua presa qualunque, da
-     una ciabatta o dal passante di un altro PAR (il bilanciamento delle fasi
-     è controllato a parte, vedi runValidation);
-   - DMX: ogni PAR arriva alla consolle luci (universo e ordine della catena
-     a scelta);
-   - audio: porta per porta, perché L/R e i canali contano.
+/* Cosa deve essere cablato nel livello: 24 collegamenti che servono,
+   fissi. Non c'è un unico schema giusto: conta che l'impianto funzioni come
+   nella realtà, qualunque strada si scelga.
+   - corrente (11): il Quadro dall'allaccio, e ogni utenza che arriva al
+     Quadro da una sua presa qualunque, da una ciabatta o dal passante di un
+     altro PAR. Le ciabatte sono un mezzo, non un obbligo: il PC può anche
+     andare al Quadro con l'adattatore CEE/Schuko;
+   - audio (9): PC -> scheda, le due uscite della scheda nei due ingressi
+     jack del mixer, MAIN L/R nei due ingressi del finale, un'uscita del
+     finale per Sub, ogni Sub alla SUA testa. Se L/R vengono scambiati due
+     volte il suono arriva giusto e va bene; se no lo dice stereoCheck;
+   - DMX (4): ogni PAR arriva alla consolle, in qualunque ordine e su
+     qualunque dei due universi.
    I dispositivi si cercano per tipo e non per id, così un pezzo tolto e
    rimesso (che prende un id nuovo) conta come prima. */
-const REQUIRED_POWER = { mixer: 1, controller: 1, ampli: 1, sub: 2, par: 4, ciabatta_cee: 1, ciabatta: 1, pc: 1 };
+const REQUIRED_POWER = { mixer: 1, controller: 1, ampli: 1, sub: 2, par: 4, pc: 1 };
 
 function placedOfType (type) {
   return Object.values(gameState.placed)
@@ -426,61 +435,94 @@ function wiredToQuadro (compId, visited) {
   if (!src) return false;
   return src.type === 'quadro' || wiredToQuadro(src.id, visited);
 }
-// l'ingresso DMX del PAR risale la catena fino alla consolle luci?
-function dmxToController (parId, visited) {
+// universo DMX (1 o 2) da cui arriva il PAR risalendo la catena, o null
+function dmxUniverse (parId, visited) {
   visited = visited || new Set();
-  if (visited.has(parId)) return false;
+  if (visited.has(parId)) return null;
   visited.add(parId);
   const e = gameState.edges.find(x => x.b === parId && x.bPort === 'dmx_in' && x.signal === 'dmx');
   const src = e && gameState.placed[e.a];
-  if (!src) return false;
-  return src.type === 'controller' || (src.type === 'par' && dmxToController(src.id, visited));
+  if (!src) return null;
+  if (src.type === 'controller') return e.aPort === 'dmx_2' ? 2 : 1;
+  return src.type === 'par' ? dmxUniverse(src.id, visited) : null;
+}
+// cavo che entra in una porta (o null)
+function edgeInto (compId, portId, signal) {
+  return gameState.edges.find(e => e.b === compId && e.bPort === portId && (!signal || e.signal === signal)) || null;
+}
+// i due Sub ordinati da sinistra a destra per chi guarda il palco dalla
+// platea (asse X della griglia; a parità, la posizione sullo schermo)
+function subsLeftToRight () {
+  const key = c => (c.gx != null ? c.gx : 0) * 1000 + (c.screen ? c.screen.x : 0) / 1000;
+  return placedOfType('sub').sort((a, b) => key(a) - key(b));
 }
 
 function buildExpectedConnections () {
   const one = t => placedOfType(t)[0] || null;
-  const edge = (a, aPort, b, bPort, signal) => ({ ok: !!a && !!b && portEdgeExists(a.id, aPort, b.id, bPort, signal), ids: [a && a.id, b && b.id].filter(Boolean) });
+  const slot = (ok, ...cs) => ({ ok: !!ok, ids: cs.filter(Boolean).map(c => c.id) });
   const list = [];
+  const mixer = one('mixer'), ampli = one('ampli'), pc = one('pc'), scheda = one('scheda');
 
-  // allaccio -> Quadro con il CEE 400V
+  // corrente
   const allaccio = one('allaccio'), quadro = one('quadro');
-  list.push(edge(allaccio, 'out', quadro, 'in', 'cee_tri'));
-
-  // una alimentazione per ogni utenza
+  list.push(slot(allaccio && quadro && portEdgeExists(allaccio.id, 'out', quadro.id, 'in', 'cee_tri'), quadro));
   Object.entries(REQUIRED_POWER).forEach(([t, n]) => {
     const cs = placedOfType(t);
-    for (let i = 0; i < n; i++) {
-      const c = cs[i];
-      list.push({ ok: !!c && wiredToQuadro(c.id), ids: c ? [c.id] : [] });
-    }
+    for (let i = 0; i < n; i++) list.push(slot(cs[i] && wiredToQuadro(cs[i].id), cs[i]));
   });
 
-  // audio: mixer -> finale L/R, PC -> scheda (USB-C), scheda -> mixer CH5/CH6
-  const mixer = one('mixer'), ampli = one('ampli'), pc = one('pc'), scheda = one('scheda');
-  list.push(edge(mixer, 'main_L', ampli, 'in_L', 'xlr'));
-  list.push(edge(mixer, 'main_R', ampli, 'in_R', 'xlr'));
-  list.push(edge(pc, 'usb', scheda, 'usb', 'usbc'));
-  list.push(edge(scheda, 'out_L', mixer, 'in_5', 'jack'));
-  list.push(edge(scheda, 'out_R', mixer, 'in_6', 'jack'));
+  // audio: PC -> scheda
+  list.push(slot(pc && scheda && portEdgeExists(pc.id, 'usb', scheda.id, 'usb', 'usbc'), pc, scheda));
+  // scheda out L/R -> un ingresso jack del mixer ciascuna
+  ['out_L', 'out_R'].forEach(out => {
+    const e = scheda && gameState.edges.find(x => x.a === scheda.id && x.aPort === out && x.signal === 'jack');
+    list.push(slot(e && mixer && e.b === mixer.id, scheda, mixer));
+  });
+  // MAIN L/R -> un ingresso del finale ciascuna
+  ['main_L', 'main_R'].forEach(out => {
+    const e = mixer && gameState.edges.find(x => x.a === mixer.id && x.aPort === out && x.signal === 'xlr');
+    list.push(slot(e && ampli && e.b === ampli.id, mixer, ampli));
+  });
 
   // DMX: ogni PAR in catena dalla consolle
   const pars = placedOfType('par');
-  for (let i = 0; i < 4; i++) {
-    const c = pars[i];
-    list.push({ ok: !!c && dmxToController(c.id), ids: c ? [c.id] : [] });
+  for (let i = 0; i < 4; i++) list.push(slot(pars[i] && dmxUniverse(pars[i].id) != null, pars[i]));
+
+  // finale -> ogni Sub, ogni Sub -> la testa agganciata sopra
+  const subs = subsLeftToRight();
+  for (let i = 0; i < 2; i++) {
+    const sub = subs[i];
+    const e = sub && edgeInto(sub.id, 'spk_in', 'speakon');
+    list.push(slot(e && ampli && e.a === ampli.id, ampli, sub));
+    const top = sub && sub.hasTop ? gameState.placed[sub.hasTop] : null;
+    list.push(slot(sub && top && portEdgeExists(sub.id, 'spk_thru', top.id, 'spk_in', 'speakon'), sub, top));
   }
 
-  // finale -> sub: L/R in base alla posizione FISICA sullo schermo (il Sub
-  // più a sinistra va con out_L), così il giocatore collega quello che vede;
-  // sub -> la testa realmente agganciata a quel Sub
-  const subs = placedOfType('sub').sort((a, b) => (a.screen ? a.screen.x : 0) - (b.screen ? b.screen.x : 0));
-  [['out_L', subs[0]], ['out_R', subs[1]]].forEach(([out, sub]) => {
-    list.push(edge(ampli, out, sub, 'spk_in', 'speakon'));
-    const top = sub && sub.hasTop ? gameState.placed[sub.hasTop] : null;
-    list.push(edge(sub, 'spk_thru', top, 'spk_in', 'speakon'));
-  });
-
   return list;
+}
+
+/* Stereo: seguendo i cavi all'indietro, la cassa di sinistra deve suonare il
+   canale sinistro del PC e quella di destra il destro. Il mixer manda il CH5
+   a sinistra e il CH6 a destra; il finale manda IN L su OUT L e IN R su OUT R.
+   Restituisce null se è giusto, altrimenti il lato che risulta invertito. */
+function stereoCheck () {
+  const mixer = placedOfType('mixer')[0], ampli = placedOfType('ampli')[0], scheda = placedOfType('scheda')[0];
+  if (!mixer || !ampli || !scheda) return null;
+  const chSide = { in_5: 'L', in_6: 'R' };
+  const wrong = [];
+  subsLeftToRight().forEach((sub, i) => {
+    const want = i === 0 ? 'L' : 'R';
+    const e1 = edgeInto(sub.id, 'spk_in', 'speakon');                    // finale OUT x -> sub
+    if (!e1 || e1.a !== ampli.id) return;
+    const e2 = edgeInto(ampli.id, e1.aPort === 'out_L' ? 'in_L' : 'in_R', 'xlr'); // mixer MAIN y -> finale IN x
+    if (!e2 || e2.a !== mixer.id) return;
+    const bus = e2.aPort === 'main_L' ? 'L' : 'R';
+    const e3 = gameState.edges.find(x => x.a === scheda.id && x.b === mixer.id && chSide[x.bPort] === bus && x.signal === 'jack');
+    if (!e3) return;
+    const got = e3.aPort === 'out_L' ? 'L' : 'R';
+    if (got !== want) wrong.push(sub.id);
+  });
+  return wrong.length ? wrong : null;
 }
 
 /* ---------------------------------------------------------------------
@@ -786,7 +828,9 @@ function livePhaseLoads (withInrush) {
   });
   if (withInrush) {
     const now = Date.now();
-    gameState.inrush = (gameState.inrush || []).filter(s => s.until > now);
+    // il picco dura finché l'apparecchio sta davvero partendo: se nel
+    // frattempo è rimasto senza corrente o è stato spento, non conta più
+    gameState.inrush = (gameState.inrush || []).filter(s => s.until > now && (!s.id || isRunning(s.id)));
     gameState.inrush.forEach(s => { loads[s.phase] += s.w; });
   }
   return loads;
@@ -811,7 +855,7 @@ function applyPowerAction (action) {
     const ph = phaseOf(id);
     if (k && ph) {
       gameState.inrush = gameState.inrush || [];
-      gameState.inrush.push({ phase: ph, w: COMPONENT_TYPES[c.type].powerW * (k - 1), until: now + INRUSH_MS });
+      gameState.inrush.push({ id, phase: ph, w: COMPONENT_TYPES[c.type].powerW * (k - 1), until: now + INRUSH_MS });
     }
   });
   // il mixer si accende o si spegne mentre i finali sono già accesi: il
@@ -843,14 +887,18 @@ function checkOverloads () {
   const q = findQuadro();
   if (!q) return;
   const prot = quadroProt(q);
+  const steady = livePhaseLoads(false);
   const loads = livePhaseLoads(true);
-  const tripped = ['L1', 'L2', 'L3'].filter(ph => prot[ph] && loads[ph] > PHASE_BUDGET_W);
+  const tripped = ['L1', 'L2', 'L3'].filter(ph => prot[ph] && (steady[ph] > PHASE_BUDGET_W || loads[ph] > PHASE_PEAK_W));
   if (!tripped.length) return;
+  const byPeak = tripped.every(ph => steady[ph] <= PHASE_BUDGET_W);
   tripped.forEach(ph => { prot[ph] = false; prot.tripped[ph] = true; });
   gameState.trips = (gameState.trips || 0) + tripped.length;
   SFX.trip();
   const kw = tripped.map(ph => ph + ' ' + fmtKW(loads[ph], 1) + ' kW').join(', ');
-  showToast('Magnetotermico scattato (' + kw + ' su ' + fmtKW(PHASE_BUDGET_W, 1) + ' kW): la fase è spenta. Togli carico o spostalo su un\'altra fase, spegni finali e sub, poi riarma dal Quadro e riaccendili uno alla volta.');
+  showToast(byPeak
+    ? 'Magnetotermico scattato per il picco di accensione (' + kw + '): sono partiti insieme più apparecchi pesanti sulla stessa fase (anche accendendo la ciabatta a cui sono attaccati). Spegni finali e sub, riarma dal Quadro e riaccendili uno alla volta.'
+    : 'Magnetotermico scattato (' + kw + ' su ' + fmtKW(PHASE_BUDGET_W, 1) + ' kW): la fase è spenta. Togli carico o spostalo su un\'altra fase, spegni finali e sub, poi riarma dal Quadro e riaccendili uno alla volta.');
   if (window.__scene) window.__scene.sparkQuadro(tripped);
 }
 
@@ -908,18 +956,23 @@ function toggleProtection (key) {
   saveHistory();
 }
 
-// indirizzi DMX dei PAR: nessuno deve sovrapporsi a un altro
+// indirizzi DMX dei PAR sullo stesso universo: non devono accavallarsi.
+// Due PAR con lo stesso indirizzo E la stessa modalità vanno bene (si
+// comandano insieme, in gruppo, come si fa spesso); una sovrapposizione
+// parziale invece fa fare cose sbagliate ai fari.
 function dmxOverlaps () {
-  const pars = Object.values(gameState.placed).filter(c => c.type === 'par');
-  const ranges = pars.map(c => {
+  const ranges = placedOfType('par').map(c => {
     const d = parDmx(c);
     const n = parseInt(PAR_MODES[d.mode].id, 10);
-    return { id: c.id, from: d.addr, to: d.addr + n - 1 };
-  });
+    return { id: c.id, u: dmxUniverse(c.id), mode: d.mode, from: d.addr, to: d.addr + n - 1 };
+  }).filter(r => r.u != null);
   const clashes = [];
   for (let i = 0; i < ranges.length; i++) {
     for (let j = i + 1; j < ranges.length; j++) {
-      if (ranges[i].from <= ranges[j].to && ranges[j].from <= ranges[i].to) clashes.push([ranges[i].id, ranges[j].id]);
+      const r = ranges[i], q = ranges[j];
+      if (r.u !== q.u) continue;
+      if (r.from === q.from && r.mode === q.mode) continue;
+      if (r.from <= q.to && q.from <= r.to) clashes.push([r.id, q.id]);
     }
   }
   return clashes;
@@ -928,13 +981,22 @@ function dmxOverlaps () {
 /* Un cavo appena creato collegherebbe fromId (lato OUT) -> toId (lato IN).
    Se da toId, seguendo i cavi già esistenti (sempre in verso OUT->IN), si può
    già raggiungere fromId, quel nuovo cavo richiuderebbe un anello: rifiutato. */
-function wouldCreateCycle (fromId, toId) {
+// famiglia di un cavo: la corrente, il DMX e l'audio sono reti separate, un
+// anello conta solo dentro la stessa rete (la catena DMX dei PAR può andare
+// nel verso opposto a quella della corrente)
+function cableFamily (signal) {
+  if (POWER_CABLE_IDS.has(signal)) return 'power';
+  return signal === 'dmx' ? 'dmx' : 'audio';
+}
+function wouldCreateCycle (fromId, toId, signal) {
   if (fromId === toId) return true;
+  const fam = signal ? cableFamily(signal) : null;
   const visited = new Set([toId]);
   const queue = [toId];
   while (queue.length) {
     const cur = queue.shift();
     for (const e of gameState.edges) {
+      if (fam && cableFamily(e.signal) !== fam) continue;
       if (e.a === cur && !visited.has(e.b)) {
         if (e.b === fromId) return true;
         visited.add(e.b);
@@ -1881,8 +1943,10 @@ function onParButton (comp, act) {
   if (act === 'menu') parMenuField = parMenuField === 'addr' ? 'mode' : 'addr';
   else if (act === 'up' || act === 'down') {
     const d = act === 'up' ? 1 : -1;
-    if (parMenuField === 'addr') dmx.addr = Math.min(512, Math.max(1, dmx.addr + d));
+    if (parMenuField === 'addr') dmx.addr += d;
     else dmx.mode = (dmx.mode + d + PAR_MODES.length) % PAR_MODES.length;
+    // come sui fari veri, i canali devono stare dentro i 512 dell'universo
+    dmx.addr = Math.min(513 - parseInt(PAR_MODES[dmx.mode].id, 10), Math.max(1, dmx.addr));
   } else if (act === 'enter') {
     showToast(compLabel(comp.id) + ': indirizzo ' + String(dmx.addr).padStart(3, '0') + ', modalità ' + PAR_MODES[dmx.mode].id + '.', 'ok');
     if (window.__scene) window.__scene.pushHistory();
@@ -1945,22 +2009,39 @@ function onRearPortClick (compId, portId) {
   const pending = gameState.pendingPort;
   const isPendingPort = pending && pending.componentId === compId && pending.portId === portId;
 
-  // spina della ciabatta: il cavo è già suo, non si sceglie nella scheda Cavi
+  // spine già attaccate (ciabatte, PC, scheda): il cavo è il loro. Con un
+  // adattatore in mano (es. CEE / Schuko) la spina si infila nella sua presa
+  // e l'adattatore va nella presa di tipo diverso, come dal vero.
+  const held = gameState.selectedCable && CABLE_TYPES[gameState.selectedCable];
+  const isAdapter = c => !!c && c.endpoints.length === 2;
+  const pendDef0 = pending && getPortDef(pending.componentId, pending.portId);
   if (p.lead && !busy.length && !isPendingPort) {
     if (pending) {
-      const pendDef = getPortDef(pending.componentId, pending.portId);
-      if (!pendDef || pendDef.signal !== p.signal || pendDef.dir === p.dir) {
-        showToast('La spina ' + SIGNAL_LABEL[p.signal] + ' va infilata in una presa ' + SIGNAL_LABEL[p.signal] + ' libera.');
-        return;
+      const bridges = isAdapter(held) && !!pendDef0 && pendDef0.signal !== p.signal &&
+        held.endpoints.includes(p.signal) && held.endpoints.includes(pendDef0.signal);
+      if (!bridges) {
+        if (!pendDef0 || pendDef0.signal !== p.signal || pendDef0.dir === p.dir) {
+          showToast('La spina ' + SIGNAL_LABEL[p.signal] + ' va infilata in una presa ' + SIGNAL_LABEL[p.signal] + ' libera.');
+          return;
+        }
+        selectCable(p.signal);
       }
+    } else if (!(isAdapter(held) && held.endpoints.includes(p.signal))) {
+      selectCable(p.signal);
     }
-    selectCable(p.signal);
   }
-  // spina di una ciabatta in mano: va solo in una presa del suo tipo
-  const pendLead = pending && getPortDef(pending.componentId, pending.portId);
-  if (pendLead && pendLead.lead && !isPendingPort && !busy.length && p.signal !== pendLead.signal) {
-    showToast('La spina ' + SIGNAL_LABEL[pendLead.signal] + ' di ' + compLabel(pending.componentId) + ' va in una presa ' + SIGNAL_LABEL[pendLead.signal] + '.');
-    return;
+  // spina in mano: nella presa del suo tipo col suo cavo, in una di tipo
+  // diverso solo con l'adattatore giusto
+  const pendLead = pendDef0;
+  if (pendLead && pendLead.lead && !isPendingPort && (!busy.length || p.multi)) {
+    if (p.signal === pendLead.signal) {
+      if (gameState.selectedCable !== pendLead.signal) selectCable(pendLead.signal);
+    } else if (!(isAdapter(held) && held.endpoints.includes(p.signal) && held.endpoints.includes(pendLead.signal))) {
+      const adapter = Object.keys(CABLE_TYPES).find(k => isAdapter(CABLE_TYPES[k]) && CABLE_TYPES[k].endpoints.includes(p.signal) && CABLE_TYPES[k].endpoints.includes(pendLead.signal));
+      showToast('La spina ' + SIGNAL_LABEL[pendLead.signal] + ' di ' + compLabel(pending.componentId) + ' va in una presa ' + SIGNAL_LABEL[pendLead.signal] + '.' +
+        (adapter ? ' Qui serve l\'adattatore ' + cableName(adapter) + ': prendilo dal baule e riprova.' : ''));
+      return;
+    }
   }
 
   // presa occupata (e non è una presa multipla del Quadro con un cavo in
@@ -3735,7 +3816,7 @@ class StageScene extends Phaser.Scene {
       return;
     }
 
-    if (wouldCreateCycle(outSide.componentId, inSide.componentId)) {
+    if (wouldCreateCycle(outSide.componentId, inSide.componentId, gameState.selectedCable)) {
       showToast('Questo collegamento richiuderebbe un anello nel circuito: non è consentito.');
       return;
     }
@@ -4128,11 +4209,17 @@ class StageScene extends Phaser.Scene {
 
     const q = findQuadro();
     const prot = q ? quadroProt(q) : null;
-    const armed = !!prot && PROTECTIONS.every(k => prot[k]);
-    // tutto ciò che si alimenta deve essere acceso e ricevere corrente
+    // deve funzionare tutto ciò che serve: le utenze del livello, la scheda
+    // (alimentata dal PC) e le ciabatte solo se ci è attaccato qualcosa
+    const inUse = c => !/^ciabatta/.test(c.type) || gameState.edges.some(e => e.a === c.id && POWER_CABLE_IDS.has(e.signal));
     const notRunning = Object.values(gameState.placed)
-      .filter(c => c.type !== 'allaccio' && (powerInPort(COMPONENT_TYPES[c.type]) || COMPONENT_TYPES[c.type].busPowered) && !isRunning(c.id))
+      .filter(c => c.type !== 'allaccio' && (powerInPort(COMPONENT_TYPES[c.type]) || COMPONENT_TYPES[c.type].busPowered) && inUse(c) && !isRunning(c.id))
       .map(c => c.id);
+    // protezioni che servono davvero: generale, salvavita e le sole fasi usate
+    const usedPhases = new Set(Object.keys(gameState.placed).map(id => phaseOf(id)).filter(Boolean));
+    const needed = ['main', 'rcd', ...['L1', 'L2', 'L3'].filter(ph => usedPhases.has(ph))];
+    const armed = !!prot && needed.every(k => prot[k]);
+    const stereo = result.pass ? stereoCheck() : null;
     const clashes = dmxOverlaps();
     const glow = ids => ids.forEach(id => {
       const v = this.compVisuals[id];
@@ -4154,10 +4241,17 @@ class StageScene extends Phaser.Scene {
       }
       return;
     }
+    if (stereo) {
+      setCircuitStatus('error');
+      SFX.fail();
+      showToast('Stereo invertito: la cassa di sinistra suona il canale destro e viceversa. Controlla L e R dalla scheda audio al mixer, al finale e alle casse.');
+      glow(stereo);
+      return;
+    }
     if (!armed) {
       setCircuitStatus('error');
       SFX.fail();
-      showToast('Il Quadro non è armato: dal suo pannello alza l\'interruttore generale, il salvavita e le tre fasi.');
+      showToast('Il Quadro non è armato: dal suo pannello alza l\'interruttore generale, il salvavita e le fasi che usi (' + needed.filter(k => /^L/.test(k)).join(', ') + ').');
       if (q) glow([q.id]);
       return;
     }
