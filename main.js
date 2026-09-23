@@ -32,11 +32,13 @@ const MIXER_GEO = {
   Bd: 10, bt: 4,         // dove la plancia incontra il ponte, profondità del cappello del ponte
   zF: 5, zR: 10, Hb: 24, // altezza bordo anteriore, posteriore e del ponte meter/schermo
   cx: 0.5, cy: 0.343,
-  offX: 17.5, offY: 14.4 // centra il bounding box sull'origine del container
+  offX: 38.5, offY: -24 // centra il bounding box sull'origine del container
 };
+// banco ruotato di -90° sul pavimento: i canali corrono verso il fondo
+// (in alto a destra) e il fronte operatore guarda in basso a destra
 function mixerIso (a, b, z) {
   const m = MIXER_GEO;
-  return { x: (a - b) * m.cx - m.offX, y: (a + b) * m.cy - z - m.offY };
+  return { x: (a + b) * m.cx - m.offX, y: (b - a) * m.cy - z - m.offY };
 }
 // le porte stanno sul pannello posteriore, appena dietro al ponte: da lì
 // escono davvero i cavi di un banco reale
@@ -93,9 +95,9 @@ const COMPONENT_TYPES = {
   mixer: {
     label: 'MIX', category: 'audio', powerW: 50, zone: 'offstage', shape: 'mixer',
     body: { w: 77, h: 77, fill: 0x2a2c32, accent: 0x8a8e98 },
-    // etichetta nell'angolo libero in alto a destra (al centro coprirebbe i
+    // etichetta nell'angolo libero in basso a destra (al centro coprirebbe i
     // fader) e LED di alimentazione sul ponte, come su un banco vero
-    labelPos: { x: 30, y: -34 },
+    labelPos: { x: 30, y: 26 },
     ledPos: mixerIso(3.5, 7, 17),
     ports: [
       { id: 'power',   signal: 'powercon', dir: 'in',  ...mixerRearPort(14) },
@@ -1467,10 +1469,10 @@ class StageScene extends Phaser.Scene {
         const quad = (a0, a1, b0, b1, dz, color, alpha) =>
           fill([T(a0, b0, dz), T(a1, b0, dz), T(a1, b1, dz), T(a0, b1, dz)], color, alpha);
 
-        // --- corpo: fronte, fianco destro, plancia, ponte ---
+        // --- corpo: fronte, fianco sinistro, plancia, ponte ---
         fill([P(0, m.Lb, 0), P(m.La, m.Lb, 0), P(m.La, m.Lb, m.zF), P(0, m.Lb, m.zF)], 0x17181c);
-        fill([P(m.La, 0, 0), P(m.La, m.Lb, 0), P(m.La, m.Lb, m.zF), P(m.La, m.Bd, m.zR),
-              P(m.La, m.bt, m.Hb), P(m.La, 0, m.Hb)], 0x24262c);
+        fill([P(0, 0, 0), P(0, m.Lb, 0), P(0, m.Lb, m.zF), P(0, m.Bd, m.zR),
+              P(0, m.bt, m.Hb), P(0, 0, m.Hb)], 0x24262c);
         fill([P(0, m.Bd, m.zR), P(m.La, m.Bd, m.zR), P(m.La, m.Lb, m.zF), P(0, m.Lb, m.zF)], 0x3a3d45);
         fill([P(0, m.Bd, m.zR), P(m.La, m.Bd, m.zR), F(m.La, 1), F(0, 1)], 0x2a2c33);
         fill([P(0, 0, m.Hb), P(m.La, 0, m.Hb), P(m.La, m.bt, m.Hb), P(0, m.bt, m.Hb)], 0x4a4d56);
@@ -1573,8 +1575,8 @@ class StageScene extends Phaser.Scene {
 
         // contorno complessivo
         g.lineStyle(1, 0x0c0d10, 0.85);
-        g.strokePoints([P(0, 0, m.Hb), P(m.La, 0, m.Hb), P(m.La, 0, 0), P(m.La, m.Lb, 0),
-          P(0, m.Lb, 0), P(0, m.Lb, m.zF), P(0, m.Bd, m.zR), F(0, 1)], true);
+        g.strokePoints([P(m.La, 0, m.Hb), P(0, 0, m.Hb), P(0, 0, 0), P(0, m.Lb, 0),
+          P(m.La, m.Lb, 0), P(m.La, m.Lb, m.zF), P(m.La, m.Bd, m.zR), F(m.La, 1)], true);
         break;
       }
       case 'controller': {
