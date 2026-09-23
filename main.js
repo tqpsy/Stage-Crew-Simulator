@@ -23,6 +23,28 @@ const SIGNAL_COLOR = {
   jack:     0x2ec4e0
 };
 
+/* Geometria del mixer in "unità banco" (a = lungo i canali, b = dal retro
+   al fronte operatore, z = altezza), proiettata con la stessa inclinazione
+   della griglia di gioco (TILE_H/TILE_W = 70/102). Usata sia dal disegno
+   sia per ancorare le porte sul retro, così restano sempre allineate. */
+const MIXER_GEO = {
+  La: 112, Lb: 42,       // lunghezza (canali) e profondità del banco
+  Bd: 10, bt: 4,         // dove la plancia incontra il ponte, profondità del cappello del ponte
+  zF: 5, zR: 10, Hb: 24, // altezza bordo anteriore, posteriore e del ponte meter/schermo
+  cx: 0.5, cy: 0.343,
+  offX: 17.5, offY: 14.4 // centra il bounding box sull'origine del container
+};
+function mixerIso (a, b, z) {
+  const m = MIXER_GEO;
+  return { x: (a - b) * m.cx - m.offX, y: (a + b) * m.cy - z - m.offY };
+}
+// le porte stanno sul pannello posteriore, appena dietro al ponte: da lì
+// escono davvero i cavi di un banco reale
+function mixerRearPort (a) {
+  const p = mixerIso(a, -6, MIXER_GEO.Hb + 3);
+  return { dx: Math.round(p.x), dy: Math.round(p.y) };
+}
+
 /* Catalogo dei CAVI selezionabili (scheda "Cavi") — diverso dal catalogo delle
    PORTE (SIGNAL_COLOR): una porta ha sempre un solo segnale nativo, ma un
    cavo può essere un ADATTATORE tra due segnali diversi (endpoints con 2
@@ -70,12 +92,16 @@ const COMPONENT_TYPES = {
   },
   mixer: {
     label: 'MIX', category: 'audio', powerW: 50, zone: 'offstage', shape: 'mixer',
-    body: { w: 68, h: 44, fill: 0x2a2c32, accent: 0x8a8e98 },
+    body: { w: 77, h: 77, fill: 0x2a2c32, accent: 0x8a8e98 },
+    // etichetta nell'angolo libero in alto a destra (al centro coprirebbe i
+    // fader) e LED di alimentazione sul ponte, come su un banco vero
+    labelPos: { x: 30, y: -34 },
+    ledPos: mixerIso(3.5, 7, 17),
     ports: [
-      { id: 'power',   signal: 'powercon', dir: 'in',  dx: -27, dy: -19 },
-      { id: 'in_pc',   signal: 'xlr',      dir: 'in',  dx: 27,  dy: -19 },
-      { id: 'audio_L', signal: 'xlr',      dir: 'out', dx: -14, dy: 21 },
-      { id: 'audio_R', signal: 'xlr',      dir: 'out', dx: 14,  dy: 21 }
+      { id: 'power',   signal: 'powercon', dir: 'in',  ...mixerRearPort(14) },
+      { id: 'in_pc',   signal: 'xlr',      dir: 'in',  ...mixerRearPort(44) },
+      { id: 'audio_L', signal: 'xlr',      dir: 'out', ...mixerRearPort(74) },
+      { id: 'audio_R', signal: 'xlr',      dir: 'out', ...mixerRearPort(104) }
     ]
   },
   ampli: {
@@ -1416,62 +1442,139 @@ class StageScene extends Phaser.Scene {
         break;
       }
       case 'mixer': {
-        // slab isometrico, stessa inclinazione della griglia di gioco: il
-        // piano superiore (la plancia canali, vista dall'alto come sul
-        // palco) in piena luce, due facce laterali in ombra sotto — non più
-        // un pannello frontale piatto.
-        const skew = h * 0.22, boxDepth = h * 0.56;
-        const y0 = -h / 2 + skew;
-        const pTop = { x: 0, y: -h / 2 };
-        const pRight = { x: w / 2, y: y0 };
-        const pBottom = { x: 0, y: -h / 2 + skew * 2 };
-        const pLeft = { x: -w / 2, y: y0 };
-        const dLeft = { x: pLeft.x, y: pLeft.y + boxDepth };
-        const dBottom = { x: pBottom.x, y: pBottom.y + boxDepth };
-        const dRight = { x: pRight.x, y: pRight.y + boxDepth };
+        // banco compatto in vera prospettiva isometrica (vedi MIXER_GEO):
+        // plancia leggermente inclinata verso l'operatore, ponte posteriore
+        // rialzato con meter LED e schermo, e per ogni canale la striscia
+        // reale dal fondo al fronte: ingresso XLR, gain, EQ, pan, mute, fader.
+        const m = MIXER_GEO, P = mixerIso;
+        const zTop = b => m.zR - (m.zR - m.zF) * (b - m.Bd) / (m.Lb - m.Bd);
+        const T = (a, b, dz = 0) => P(a, b, zTop(b) + dz);
+        // punto sulla faccia inclinata del ponte: t=0 base, t=1 cima
+        const F = (a, t) => P(a, m.Bd + (m.bt - m.Bd) * t, m.zR + (m.Hb - m.zR) * t);
+        const fill = (pts, color, alpha = 1) => { g.fillStyle(color, alpha); g.fillPoints(pts, true); };
+        // cerchio disteso sulla plancia -> ellisse isometrica
+        const isoDisc = (a, b, r, color, dz = 0) => {
+          const c = T(a, b, dz);
+          g.fillStyle(color, 1);
+          g.fillEllipse(c.x, c.y, r * 1.414, r * 0.97);
+        };
+        const knob = (a, b, cap) => {
+          isoDisc(a, b, 2.4, 0x0c0d10);
+          isoDisc(a, b, 2.0, cap, 1.3);
+          const c = T(a, b, 1.3), tip = T(a - 0.6, b - 1.6, 1.3);
+          g.lineStyle(0.8, 0xf4f1ea, 0.9); g.lineBetween(c.x, c.y, tip.x, tip.y);
+        };
+        const quad = (a0, a1, b0, b1, dz, color, alpha) =>
+          fill([T(a0, b0, dz), T(a1, b0, dz), T(a1, b1, dz), T(a0, b1, dz)], color, alpha);
 
-        g.fillStyle(0x1c1d22, 1);
-        g.beginPath();
-        g.moveTo(pLeft.x, pLeft.y); g.lineTo(pBottom.x, pBottom.y);
-        g.lineTo(dBottom.x, dBottom.y); g.lineTo(dLeft.x, dLeft.y);
-        g.closePath(); g.fillPath();
+        // --- corpo: fronte, fianco destro, plancia, ponte ---
+        fill([P(0, m.Lb, 0), P(m.La, m.Lb, 0), P(m.La, m.Lb, m.zF), P(0, m.Lb, m.zF)], 0x17181c);
+        fill([P(m.La, 0, 0), P(m.La, m.Lb, 0), P(m.La, m.Lb, m.zF), P(m.La, m.Bd, m.zR),
+              P(m.La, m.bt, m.Hb), P(m.La, 0, m.Hb)], 0x24262c);
+        fill([P(0, m.Bd, m.zR), P(m.La, m.Bd, m.zR), P(m.La, m.Lb, m.zF), P(0, m.Lb, m.zF)], 0x3a3d45);
+        fill([P(0, m.Bd, m.zR), P(m.La, m.Bd, m.zR), F(m.La, 1), F(0, 1)], 0x2a2c33);
+        fill([P(0, 0, m.Hb), P(m.La, 0, m.Hb), P(m.La, m.bt, m.Hb), P(0, m.bt, m.Hb)], 0x4a4d56);
 
-        g.fillStyle(0x26282e, 1);
-        g.beginPath();
-        g.moveTo(pRight.x, pRight.y); g.lineTo(pBottom.x, pBottom.y);
-        g.lineTo(dBottom.x, dBottom.y); g.lineTo(dRight.x, dRight.y);
-        g.closePath(); g.fillPath();
+        // spigoli illuminati (luce dall'alto a sinistra)
+        g.lineStyle(1, 0x6a6e78, 0.9);
+        let e0 = P(0, m.Lb, m.zF), e1 = P(m.La, m.Lb, m.zF); g.lineBetween(e0.x, e0.y, e1.x, e1.y);
+        e0 = F(0, 1); e1 = F(m.La, 1); g.lineBetween(e0.x, e0.y, e1.x, e1.y);
+        g.lineStyle(1, 0x0c0d10, 0.7);
+        e0 = P(0, m.Bd, m.zR); e1 = P(m.La, m.Bd, m.zR); g.lineBetween(e0.x, e0.y, e1.x, e1.y);
 
-        g.fillStyle(0x35373f, 1);
-        g.beginPath();
-        g.moveTo(pTop.x, pTop.y); g.lineTo(pRight.x, pRight.y);
-        g.lineTo(pBottom.x, pBottom.y); g.lineTo(pLeft.x, pLeft.y);
-        g.closePath(); g.fillPath();
-        g.lineStyle(1.5, def.body.accent, 0.9);
-        g.beginPath();
-        g.moveTo(pTop.x, pTop.y); g.lineTo(pRight.x, pRight.y);
-        g.lineTo(pBottom.x, pBottom.y); g.lineTo(pLeft.x, pLeft.y);
-        g.closePath(); g.strokePath();
-        g.lineStyle(1, 0x141519, 0.5);
-        g.lineBetween(pLeft.x, pLeft.y, dLeft.x, dLeft.y);
-        g.lineBetween(pRight.x, pRight.y, dRight.x, dRight.y);
-        g.lineBetween(pBottom.x, pBottom.y, dBottom.x, dBottom.y);
+        // porte frontali: cuffie + USB
+        [[92, 0xa0a4ad], [101, 0x5a5e68]].forEach(([a, col]) => {
+          const c = P(a, m.Lb, m.zF / 2);
+          g.fillStyle(0x0c0d10, 1); g.fillCircle(c.x, c.y, 1.4);
+          g.fillStyle(col, 1); g.fillCircle(c.x, c.y, 0.6);
+        });
 
-        // 5 canali sulla plancia: knob EQ verso il fondo, cursore fader
-        // verso il bordo anteriore, posizionati lungo il rombo del piano.
-        const isoP = (u, v) => ({ x: u * (w / 2), y: y0 - v * skew });
-        const n = 5;
-        for (let i = 0; i < n; i++) {
-          const u = -0.6 + (1.2 / (n - 1)) * i;
-          const knob = isoP(u, -0.42);
-          const fader = isoP(u, 0.3);
-          g.lineStyle(1.1, def.body.accent, 0.9);
-          g.strokeCircle(knob.x, knob.y, 2.1);
-          g.fillStyle(0x141519, 1);
-          g.fillCircle(fader.x, fader.y, 2.6);
-          g.fillStyle(def.body.accent, 1);
-          g.fillCircle(fader.x, fader.y, 1.1);
+        // --- 6 canali mono ---
+        const nCh = 6, chW = 12, chStart = 7;
+        const faderPos = [0.35, 0.55, 0.2, 0.6, 0.45, 0.7];
+        const meterLvl = [4, 3, 5, 2, 3, 1];
+        const meterCols = [0x49b06a, 0x49b06a, 0x49b06a, 0xf2c53d, 0xe0503f];
+        g.lineStyle(0.6, 0x0c0d10, 0.35);
+        for (let i = 0; i <= nCh; i++) {
+          const a = chStart + chW * i;
+          const s0 = T(a, m.Bd + 1), s1 = T(a, m.Lb - 1);
+          g.lineBetween(s0.x, s0.y, s1.x, s1.y);
         }
+        for (let i = 0; i < nCh; i++) {
+          const a = chStart + chW * (i + 0.5);
+
+          // meter LED sul ponte
+          for (let s = 0; s < 5; s++) {
+            const t0 = 0.14 + s * 0.14, t1 = t0 + 0.1;
+            const lit = s < meterLvl[i];
+            fill([F(a - 1.6, t0), F(a + 1.6, t0), F(a + 1.6, t1), F(a - 1.6, t1)],
+              lit ? meterCols[s] : 0x15161a, lit ? 1 : 1);
+          }
+
+          // ingresso XLR (anello metallico + foro)
+          isoDisc(a, 13.5, 3.6, 0x9aa0aa);
+          isoDisc(a, 13.5, 2.7, 0x0c0d10);
+          // gain, EQ, pan
+          knob(a, 19, 0xc8483c);
+          knob(a, 23.5, 0x4a90e2);
+          knob(a, 27.5, 0xcfd2d8);
+          // mute (il canale 3 è in mute: tasto acceso)
+          quad(a - 2.4, a + 2.4, 30.3, 31.8, 0.6, i === 2 ? 0xe0503f : 0x1c1d22);
+
+          // fader: guida + cursore in rilievo
+          const f0 = T(a, 33), f1 = T(a, 40.5);
+          g.lineStyle(1.2, 0x0c0d10, 1); g.lineBetween(f0.x, f0.y, f1.x, f1.y);
+          const fb = 33 + 7.5 * faderPos[i];
+          fill([T(a - 2.8, fb + 1.2, 0), T(a + 2.8, fb + 1.2, 0), T(a + 2.8, fb + 1.2, 2), T(a - 2.8, fb + 1.2, 2)], 0x6a6e78);
+          quad(a - 2.8, a + 2.8, fb - 1.2, fb + 1.2, 2, 0xdcdfe4);
+          const l0 = T(a - 2.8, fb, 2), l1 = T(a + 2.8, fb, 2);
+          g.lineStyle(0.6, 0x1c1d22, 1); g.lineBetween(l0.x, l0.y, l1.x, l1.y);
+        }
+
+        // --- sezione master ---
+        const mA = chStart + chW * nCh + 3;
+        g.lineStyle(0.8, 0x0c0d10, 0.6);
+        e0 = T(mA - 2, m.Bd + 1); e1 = T(mA - 2, m.Lb - 1); g.lineBetween(e0.x, e0.y, e1.x, e1.y);
+        // encoder grande + tasti funzione retroilluminati
+        isoDisc(mA + 9, 15.5, 5.2, 0x0c0d10);
+        isoDisc(mA + 9, 15.5, 4.4, 0x5a5e68, 1.5);
+        isoDisc(mA + 9, 15.5, 2.0, 0x8a8e98, 1.8);
+        const keyCols = [0x49b06a, 0x1c1d22, 0xf2a541, 0x1c1d22, 0x2ec4e0, 0x1c1d22];
+        keyCols.forEach((col, k) => {
+          const ka = mA + 17 + (k % 3) * 5, kb = 13 + Math.floor(k / 3) * 3.6;
+          quad(ka - 1.8, ka + 1.8, kb - 1.2, kb + 1.2, 0.6, col);
+        });
+        knob(mA + 5, 24.5, 0xcfd2d8);
+        knob(mA + 13, 24.5, 0xcfd2d8);
+        knob(mA + 21, 24.5, 0xf2a541);
+        // due fader master (L/R) con cursore rosso
+        [mA + 7, mA + 15].forEach(a => {
+          const f0 = T(a, 30.5), f1 = T(a, 40.5);
+          g.lineStyle(1.2, 0x0c0d10, 1); g.lineBetween(f0.x, f0.y, f1.x, f1.y);
+          const fb = 33;
+          fill([T(a - 3, fb + 1.2, 0), T(a + 3, fb + 1.2, 0), T(a + 3, fb + 1.2, 2), T(a - 3, fb + 1.2, 2)], 0x7a2a22);
+          quad(a - 3, a + 3, fb - 1.2, fb + 1.2, 2, 0xd6392f);
+        });
+
+        // --- schermo sul ponte, sopra la sezione master ---
+        const sA0 = mA - 4, sA1 = m.La - 4;
+        fill([F(sA0, 0.1), F(sA1, 0.1), F(sA1, 0.9), F(sA0, 0.9)], 0x0c0d10);
+        fill([F(sA0 + 1.5, 0.2), F(sA1 - 1.5, 0.2), F(sA1 - 1.5, 0.8), F(sA0 + 1.5, 0.8)], 0x1d4f86);
+        // barra di stato + mini meter a colonne + riga di testo sullo schermo
+        fill([F(sA0 + 1.5, 0.7), F(sA1 - 1.5, 0.7), F(sA1 - 1.5, 0.8), F(sA0 + 1.5, 0.8)], 0x7fb8f0);
+        for (let k = 0; k < 8; k++) {
+          const ba = sA0 + 4 + k * 3, top = 0.28 + ((k * 37) % 5) * 0.07;
+          fill([F(ba, 0.26), F(ba + 1.6, 0.26), F(ba + 1.6, top), F(ba, top)], k < 6 ? 0x6fe39a : 0xf2c53d);
+        }
+        e0 = F(sA0 + 4, 0.6); e1 = F(sA1 - 5, 0.6);
+        g.lineStyle(0.7, 0xcfe4ff, 0.8); g.lineBetween(e0.x, e0.y, e1.x, e1.y);
+        // riflesso sul vetro
+        fill([F(sA0 + 1.5, 0.8), F(sA0 + 9, 0.8), F(sA0 + 5, 0.2), F(sA0 + 1.5, 0.2)], 0xffffff, 0.08);
+
+        // contorno complessivo
+        g.lineStyle(1, 0x0c0d10, 0.85);
+        g.strokePoints([P(0, 0, m.Hb), P(m.La, 0, m.Hb), P(m.La, 0, 0), P(m.La, m.Lb, 0),
+          P(0, m.Lb, 0), P(0, m.Lb, m.zF), P(0, m.Bd, m.zR), F(0, 1)], true);
         break;
       }
       case 'controller': {
@@ -1533,7 +1636,10 @@ class StageScene extends Phaser.Scene {
       this.drawLed(led, def, false);
     }
 
-    const label = this.add.text(0, (def.shape === 'par' || def.shape === 'top' || def.shape === 'ciabatta' || def.shape === 'di' || isRealQuadro) ? -def.body.h / 2 - 8 : 0, def.label, {
+    const labelX = def.labelPos ? def.labelPos.x : 0;
+    const labelY = def.labelPos ? def.labelPos.y
+      : ((def.shape === 'par' || def.shape === 'top' || def.shape === 'ciabatta' || def.shape === 'di' || isRealQuadro) ? -def.body.h / 2 - 8 : 0);
+    const label = this.add.text(labelX, labelY, def.label, {
       fontFamily: 'Barlow Condensed, sans-serif', fontSize: '12px', fontStyle: 'bold', color: '#eee9df'
     }).setOrigin(0.5);
     c.add(label);
@@ -1654,7 +1760,8 @@ class StageScene extends Phaser.Scene {
      l'Allaccio): spento/grigio scuro di default, verde acceso quando
      runSystemTest verifica che corrente/segnale arrivano davvero. */
   drawLed (g, def, on) {
-    const x = -def.body.w / 2 + 7, y = -def.body.h / 2 + 9;
+    const x = def.ledPos ? def.ledPos.x : -def.body.w / 2 + 7;
+    const y = def.ledPos ? def.ledPos.y : -def.body.h / 2 + 9;
     g.clear();
     g.lineStyle(1, 0x0c0d10, 1);
     g.fillStyle(on ? 0x49b06a : 0x3a1414, 1);
