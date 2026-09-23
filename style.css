@@ -268,6 +268,11 @@
   .cable-hand.has{ border-style:solid; border-color:var(--amber); background:#2c2620; color:var(--text-main); }
   .cable-hand .ch-svg{ width:170px; height:34px; flex:none; }
   .cable-hand .ch-name{ display:flex; flex-direction:column; font-weight:700; }
+  .tape-fluo{
+    align-self:flex-start; color:#111; padding:1px 10px; transform:rotate(-2deg);
+    font-family:'Permanent Marker','Marker Felt','Comic Sans MS',cursive; font-weight:400; font-size:16px;
+    clip-path:polygon(0 0,100% 0,97% 25%,100% 50%,97% 75%,100% 100%,0 100%,3% 75%,0 50%,3% 25%);
+  }
   .cable-hand .ch-name small{ font-weight:400; color:var(--text-muted); font-size:11px; }
   .cable-hand .ch-drop{
     margin-left:auto; background:none; border:1px solid var(--hairline); color:var(--text-muted);
@@ -276,6 +281,10 @@
   .modal-box.case-box{ width:min(900px, 96vw); }
   .case-svg-wrap{ padding:14px 16px 4px; }
   .case-svg{ width:100%; height:auto; display:block; max-height:66vh; }
+  @media (max-width:699px){
+    .case-svg-wrap{ padding:8px 6px 2px; }
+    .case-svg{ max-height:none; }
+  }
   .case-svg .cc-coil:hover > rect:first-child{ stroke:#f2a54188; stroke-width:2; }
 
   /* ---------- PANNELLO POSTERIORE: popup di cablaggio ---------- */

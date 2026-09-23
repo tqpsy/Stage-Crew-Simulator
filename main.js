@@ -2022,7 +2022,7 @@ el('#cable-banner-cancel').addEventListener('click', () => {
    3d) BAULI DEI CAVI — i cavi si prendono dai due flight case, come in un
        service: SEGNALE (XLR, DMX, jack, Speakon) e CORRENTE (PowerCON,
        Schuko, CEE e adattatori). Ogni cavo è una matassa col velcro, i due
-       connettori veri ai capi e l'etichetta di nastro carta.
+       connettori veri ai capi e l'etichetta di nastro fluo.
    --------------------------------------------------------------------- */
 const CABLE_CASES = {
   segnale: {
@@ -2097,12 +2097,31 @@ function cableHead (kind, x, y, tape) {
   return '';
 }
 
-// matassa arrotolata col velcro, i due capi che escono a destra, nastro carta
-function cableCoil (cx, cy, it, selected) {
+// nastro fluo strappato a mano, scritto col pennarello nero: si legge anche
+// sullo schermo di un telefono
+const FLUO_TAPES = ['#eaff2b', '#ff4fb4', '#4dff73', '#ff9b21'];
+function fluoTape (cx, cy, w, h, color, text, rot) {
+  const x0 = cx - w / 2, x1 = cx + w / 2, y0 = cy - h / 2, y1 = cy + h / 2;
+  // bordi corti seghettati come uno strappo
+  const pts = [[x0, y0], [x1, y0]];
+  for (let i = 1; i < 6; i++) pts.push([x1 - (i % 2 ? 3.5 : 0), y0 + h * i / 6]);
+  pts.push([x1, y1], [x0, y1]);
+  for (let i = 5; i > 0; i--) pts.push([x0 + (i % 2 ? 3.5 : 0), y0 + h * i / 6]);
+  const fs = text.length <= 5 ? h * 0.78 : text.length <= 7 ? h * 0.66 : h * 0.56;
+  return `<g transform="rotate(${rot} ${cx} ${cy})">
+    <polygon points="${pts.map(p => p.join(',')).join(' ')}" fill="${color}" stroke="#000" stroke-opacity=".25"/>
+    <rect x="${x0 + 3}" y="${y0 + 2}" width="${w - 6}" height="${h * 0.18}" fill="#fff" fill-opacity=".22"/>
+    <text x="${cx}" y="${cy + fs * 0.36}" font-size="${fs.toFixed(1)}" fill="#111" text-anchor="middle"
+      font-family="'Permanent Marker','Marker Felt','Comic Sans MS',cursive">${escapeHtml(text)}</text></g>`;
+}
+
+// matassa arrotolata col velcro, i due capi che escono a destra, nastro fluo
+function cableCoil (cx, cy, it, selected, tapeColor) {
   const cab = hex(CABLE_TYPES[it.cable].color);
+  const [len, ends] = it.info.split(' · ');
   let s = `<g class="cc-coil" data-cable="${it.cable}" style="cursor:pointer">
-    <rect x="${cx - 92}" y="${cy - 76}" width="184" height="152" rx="8" fill="${selected ? '#f2a54124' : 'transparent'}" stroke="${selected ? '#f2a541' : 'none'}" stroke-width="3"/>
-    <g transform="translate(0 ${selected ? -6 : 0})">
+    <rect x="${cx - 92}" y="${cy - 90}" width="184" height="180" rx="8" fill="${selected ? '#f2a54124' : 'transparent'}" stroke="${selected ? '#f2a541' : 'none'}" stroke-width="3"/>
+    <g transform="translate(0 ${selected ? -6 : 0})"><g transform="translate(0 4)">
     <ellipse cx="${cx - 18}" cy="${cy + 6}" rx="52" ry="44" fill="#000" fill-opacity=".35"/>`;
   for (let i = 0; i < 5; i++) {
     const r = 40 - i * 2.2, o = i * 1.6;
@@ -2113,10 +2132,10 @@ function cableCoil (cx, cy, it, selected) {
     <rect x="${cx - 70}" y="${cy - 8}" width="20" height="16" rx="3" fill="#8b2530" transform="rotate(-10 ${cx - 60} ${cy})"/>
     <path d="M ${cx + 12} ${cy - 16} C ${cx + 26} ${cy - 18}, ${cx + 26} ${cy - 24}, ${cx + 32} ${cy - 24}" fill="none" stroke="#17181b" stroke-width="7"/>
     <path d="M ${cx + 14} ${cy + 12} C ${cx + 26} ${cy + 14}, ${cx + 26} ${cy + 20}, ${cx + 32} ${cy + 20}" fill="none" stroke="#17181b" stroke-width="7"/>
-    ${cableHead(it.ends[0], cx + 30, cy - 24, cab)}${cableHead(it.ends[1], cx + 30, cy + 20, cab)}
-    <g transform="rotate(-4 ${cx - 22} ${cy - 50})"><rect x="${cx - 64}" y="${cy - 60}" width="88" height="20" rx="2" fill="#e9dcb8" stroke="#c9b98f"/>
-      <text x="${cx - 20}" y="${cy - 45}" font-size="12.5" font-weight="700" fill="#2a2c32" text-anchor="middle" font-family="'Comic Sans MS','Segoe Print',cursive">${it.tape}</text></g>
-    <text x="${cx}" y="${cy + 66}" font-size="11" fill="#cfd2d6" text-anchor="middle">${escapeHtml(it.info)}</text>
+    ${cableHead(it.ends[0], cx + 30, cy - 24, cab)}${cableHead(it.ends[1], cx + 30, cy + 20, cab)}</g>
+    ${fluoTape(cx - 4, cy - 62, 164, 36, tapeColor, it.tape, -3)}
+    <text x="${cx}" y="${cy + 64}" font-size="15" font-weight="700" fill="#e6e8eb" text-anchor="middle">${escapeHtml(len)}</text>
+    <text x="${cx}" y="${cy + 82}" font-size="13" fill="#b4b8c0" text-anchor="middle">${escapeHtml(ends || '')}</text>
     </g></g>`;
   return s;
 }
@@ -2125,7 +2144,8 @@ function cableCoil (cx, cy, it, selected) {
 // profili, angolari e chiusure a farfalla, interno in gommapiuma a scomparti
 function renderCase (name) {
   const box = CABLE_CASES[name];
-  const cols = 4, cw = 196, ch = 170;
+  // su telefono due colonne, così nastri e scritte restano grandi
+  const cols = window.innerWidth < 700 ? 2 : 4, cw = 196, ch = 196;
   const rows = Math.ceil(box.items.length / cols);
   const W = cols * cw + 80, H = rows * ch + 150;
   let s = `<svg class="case-svg" viewBox="0 0 ${W} ${H}" xmlns="http://www.w3.org/2000/svg" font-family="Inter,sans-serif">
@@ -2138,7 +2158,7 @@ function renderCase (name) {
   box.items.forEach((it, i) => {
     const cx = 50 + (i % cols) * cw + cw / 2, cy = 88 + Math.floor(i / cols) * ch + ch / 2;
     s += `<rect x="${cx - cw / 2 + 6}" y="${cy - ch / 2 + 6}" width="${cw - 12}" height="${ch - 12}" rx="6" fill="#1a1b1f" stroke="#26272c" stroke-width="2"/>`;
-    s += cableCoil(cx, cy, it, gameState.selectedCable === it.cable);
+    s += cableCoil(cx, cy, it, gameState.selectedCable === it.cable, FLUO_TAPES[i % FLUO_TAPES.length]);
   });
   return s + `</svg>`;
 }
@@ -2184,6 +2204,13 @@ function pickCable (cableId) {
 }
 
 // nella scheda Cavi: il cavo che si ha in mano, coi suoi due connettori
+function tapeColorOf (cableId) {
+  for (const box of Object.values(CABLE_CASES)) {
+    const i = box.items.findIndex(it => it.cable === cableId);
+    if (i >= 0) return FLUO_TAPES[i % FLUO_TAPES.length];
+  }
+  return FLUO_TAPES[0];
+}
 function updateCableHand () {
   const box = el('#cable-hand');
   if (!box) return;
@@ -2199,7 +2226,7 @@ function updateCableHand () {
       <g transform="translate(60 25) scale(-1 1) translate(-60 -25)">${cableHead(it.ends[0], 60, 25, cab)}</g>
       <line x1="60" y1="25" x2="190" y2="25" stroke="#17181b" stroke-width="7"/><line x1="60" y1="25" x2="190" y2="25" stroke="${cab}" stroke-width="2"/>
       ${cableHead(it.ends[1], 190, 25, cab)}</svg>
-    <span class="ch-name">${escapeHtml(it.name)}<small>${escapeHtml(it.info)}</small></span>
+    <span class="ch-name"><span class="tape-fluo" style="background:${tapeColorOf(it.cable)}">${escapeHtml(it.tape)}</span><small>${escapeHtml(it.info)}</small></span>
     <button class="ch-drop" title="Rimetti nel baule">✕</button>`;
   box.querySelector('.ch-drop').addEventListener('click', () => pickCable(it.cable));
 }
