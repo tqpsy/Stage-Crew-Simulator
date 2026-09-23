@@ -200,7 +200,6 @@ const COMPONENT_TYPES = {
   sub: {
     label: 'SUB', category: 'audio', powerW: 600, zone: 'pit', shape: 'sub',
     body: { w: 52, h: 82, fill: 0x232830, accent: 0x4a90e2 },
-    labelPos: { x: -12, y: 26 },
     ledPos: SUB_ISO(4, 56, 43),
     // pannello connettori sul fianco (faccia b=B): Speakon in/link in alto,
     // PowerCON in basso
@@ -221,9 +220,7 @@ const COMPONENT_TYPES = {
   mixer: {
     label: 'MIX', category: 'audio', powerW: 50, zone: 'offstage', shape: 'mixer',
     body: { w: 77, h: 77, fill: 0x2a2c32, accent: 0x8a8e98 },
-    // etichetta nell'angolo libero in basso a destra (al centro coprirebbe i
-    // fader) e LED di alimentazione sul ponte, come su un banco vero
-    labelPos: { x: 30, y: 26 },
+    // LED di alimentazione sul ponte, come su un banco vero
     ledPos: mixerIso(3.5, 7, 17),
     // retro del ponte (livello 1): 4 ingressi microfonici XLR, 2 ingressi di
     // linea jack, uscite MAIN L/R, 2 mandate AUX per i monitor e
@@ -241,7 +238,6 @@ const COMPONENT_TYPES = {
   ampli: {
     label: 'FINALE', category: 'regia', powerW: 300, zone: 'offstage', shape: 'ampli',
     body: { w: 64, h: 60, fill: 0x2a2c32, accent: 0x8a8e98 },
-    labelPos: { x: -26, y: 16 },
     ledPos: AMP_ISO(6, 46, 12),
     // connettori sul coperchio, su due file come sul pannello posteriore:
     // dietro alimentazione e ingressi XLR, davanti le uscite Speakon
@@ -269,7 +265,6 @@ const COMPONENT_TYPES = {
   controller: {
     label: 'CTRL', category: 'luci', powerW: 20, zone: 'offstage', shape: 'controller',
     body: { w: 62, h: 42, fill: 0x2a2c32, accent: 0xf2a541 },
-    labelPos: { x: -14, y: 10 },
     ledPos: CTRL_ISO(52, 30, 10),
     // alimentazione PowerCON e due universi DMX in uscita
     ports: [
@@ -283,7 +278,6 @@ const COMPONENT_TYPES = {
     // cabinet bianco/metallo, come un vero armadio elettrico da evento —
     // non più una scatola tinta a caso (vedi drawComponentBody per i dettagli).
     body: { w: 76, h: 94, fill: 0xe9eaed, accent: 0x4a4f5a },
-    labelPos: { x: -14, y: -40 },
     ledPos: QUADRO_ISO(4, 34, 43),
     // 3 prese, una per fase (L1/L2/L3): a differenza degli altri componenti,
     // ogni presa può ricevere PIÙ cavi (multi:true) — non è il singolo cavo a
@@ -304,7 +298,6 @@ const COMPONENT_TYPES = {
   allaccio: {
     label: 'ALLACCIO', category: 'power', powerW: 0, zone: 'fixed', shape: 'allaccio',
     body: { w: 30, h: 50, fill: 0x2c3a2c, accent: 0x49b06a },
-    labelPos: { x: 0, y: -34 },
     ports: [
       { id: 'out', signal: 'cee_tri', dir: 'out', ...isoPort(ALL_ISO, 13, 26, 14) }
     ]
@@ -329,7 +322,6 @@ const COMPONENT_TYPES = {
     // stile "Mac": scocca in alluminio chiaro, non più il rackbox scuro
     // generico — vedi drawComponentBody per lo schermo/trackpad/notch.
     body: { w: 34, h: 44, fill: 0xd7dadd, accent: 0x9a9da3 },
-    labelPos: { x: 4, y: -8 },
     // nel disegno lo schermo guarda verso -a (il fonico in FOH); in quinta si
     // gira verso +b come il mixer (vedi orientK)
     frame: PC_ISO, front: '-a',
@@ -568,6 +560,9 @@ const INRUSH_FACTOR = { ampli: 5, sub: 4 };
 const INRUSH_MS = 700;
 const PROTECTIONS = ['main', 'rcd', 'L1', 'L2', 'L3'];
 
+// kW con la virgola decimale, all'italiana
+function fmtKW (w, digits) { return (w / 1000).toFixed(digits).replace('.', ','); }
+
 function findQuadro () { return Object.values(gameState.placed).find(c => c.type === 'quadro'); }
 // stato delle protezioni del Quadro: tutte abbassate finché non le si arma
 function quadroProt (q) {
@@ -719,8 +714,8 @@ function checkOverloads () {
   if (!tripped.length) return;
   tripped.forEach(ph => { prot[ph] = false; prot.tripped[ph] = true; });
   gameState.trips = (gameState.trips || 0) + tripped.length;
-  const kw = tripped.map(ph => ph + ' ' + (loads[ph] / 1000).toFixed(1) + ' kW').join(', ');
-  showToast('Magnetotermico scattato (' + kw + ' su 3.0 kW): la fase è spenta. Togli carico o spostalo su un\'altra fase, spegni finali e sub, poi riarma dal Quadro e riaccendili uno alla volta.');
+  const kw = tripped.map(ph => ph + ' ' + fmtKW(loads[ph], 1) + ' kW').join(', ');
+  showToast('Magnetotermico scattato (' + kw + ' su ' + fmtKW(PHASE_BUDGET_W, 1) + ' kW): la fase è spenta. Togli carico o spostalo su un\'altra fase, spegni finali e sub, poi riarma dal Quadro e riaccendili uno alla volta.');
   if (window.__scene) window.__scene.sparkQuadro(tripped);
 }
 
@@ -881,7 +876,7 @@ const el = sel => document.querySelector(sel);
 function updatePowerMeter () {
   const usedW = totalPowerUsedW();
   const usedKw = usedW / 1000;
-  el('#power-val').textContent = `${usedKw.toFixed(2)} / ${POWER_LIMIT_KW.toFixed(1)} kW`;
+  el('#power-val').textContent = `${usedKw.toFixed(2).replace('.', ',')} / ${POWER_LIMIT_KW.toFixed(1).replace('.', ',')} kW`;
   const pct = Math.min(100, (usedKw / POWER_LIMIT_KW) * 100);
   const fill = el('#power-fill');
   fill.style.width = pct + '%';
@@ -998,7 +993,7 @@ function renderQuadroModal () {
 
     const devicesHtml = gameState.edges
       .filter(e => e.a === quadroEntry.id && e.aPort === portDef.id)
-      .map(e => `<li>${e.b.replace(/_/g, ' ')} — ${downstreamPowerLoad(e.b, new Set([quadroEntry.id]))} W</li>`)
+      .map(e => `<li>${compLabel(e.b)} — ${downstreamPowerLoad(e.b, new Set([quadroEntry.id]))} W</li>`)
       .join('') || '<li class="modal-empty">Nessun dispositivo collegato</li>';
 
     return `
@@ -1468,7 +1463,7 @@ function rearSlot (ctx, cx, y0, pid, label) {
     const col = frac >= 1 ? '#e0503f' : (frac >= 0.75 ? '#f2a541' : '#49b06a');
     svg += `<rect x="${cx - 50}" y="${cTop + 130}" width="100" height="7" rx="3" fill="#00000033"/>
       <rect x="${cx - 50}" y="${cTop + 130}" width="${100 * frac}" height="7" rx="3" fill="${col}"/>
-      <text x="${cx}" y="${cTop + 150}" font-size="10.5" font-weight="600" fill="${st.sub}" text-anchor="middle">${(loads[p.phase] / 1000).toFixed(2)} kW (a regime ${(planned[p.phase] / 1000).toFixed(2)})</text>`;
+      <text x="${cx}" y="${cTop + 150}" font-size="10.5" font-weight="600" fill="${st.sub}" text-anchor="middle">${fmtKW(loads[p.phase], 2)} kW (a regime ${fmtKW(planned[p.phase], 2)})</text>`;
   }
   return svg + `</g>`;
 }
@@ -2039,7 +2034,7 @@ function pickCable (cableId) {
   if (gameState.selectedCable === cableId) {
     gameState.selectedCable = null;
     updateCableHand();
-    showToast('Cavo rimesso nel baule: ora toccando un componente lo sposti.');
+    showToast('Cavo rimesso nel baule.');
     return;
   }
   gameState.selectedCable = cableId;
@@ -2113,7 +2108,7 @@ function armPiece (type, pieceEl) {
   if (window.__scene) { window.__scene.clearMoveSelection(); window.__scene.clearEdgeSelection(); window.__scene.cancelPending(); }
   gameState.selectedPieceType = type;
   document.querySelectorAll('.piece').forEach(p => p.classList.toggle('armed', p === pieceEl));
-  showToast('Componente selezionato: tocca la pedana per posizionarlo (o toccalo di nuovo per annullare).');
+  showToast('Pezzo selezionato: tocca il pavimento per posarlo (toccalo di nuovo per annullare).');
 }
 
 document.querySelectorAll('.piece').forEach(piece => {
@@ -2164,7 +2159,7 @@ document.addEventListener('pointerup', ev => {
     if (window.__scene) window.__scene.clearDropPreview();
     const { over } = stagePointFromClient(ev.clientX, ev.clientY);
     if (over && window.__scene) {
-      if (gameState.stock[type] <= 0) showToast(type.toUpperCase() + ' esaurito per questo livello.');
+      if (gameState.stock[type] <= 0) showToast('Esaurito in questo livello: ' + COMPONENT_TYPES[type].label + '.');
       else window.__scene.handleExternalDrop(type, ev.clientX, ev.clientY);
     }
     window.__draggedType = null;
@@ -2744,7 +2739,6 @@ class StageScene extends Phaser.Scene {
     if (!qv) return;
     const spec = computeQuadroSpec(totalPowerUsedW());
     qv.container.setScale(spec.scale);
-    if (qv.specLabel) qv.specLabel.setText(spec.phaseLabel + '\n' + spec.ampsLabel);
     this.updateQuadroPhaseBars(quadroEntry.id);
   }
 
@@ -3250,14 +3244,9 @@ class StageScene extends Phaser.Scene {
       this.drawLed(led, def, false, ledPos);
     }
 
-    const labelX = def.labelPos ? def.labelPos.x : 0;
-    const labelY = def.labelPos ? def.labelPos.y
-      : ((def.shape === 'par' || def.shape === 'top' || def.shape === 'ciabatta' || def.shape === 'di' || isRealQuadro) ? -def.body.h / 2 - 8 : 0);
-    const label = this.add.text(labelX, labelY, def.label, {
-      fontFamily: 'Barlow Condensed, sans-serif', fontSize: '12px', fontStyle: 'bold', color: '#eee9df'
-    }).setOrigin(0.5);
-    c.add(label);
-    const idLabel = this.add.text(0, def.body.h / 2 + 12, id.replace(/_/g, ' '), {
+    // sotto il dispositivo solo il conteggio delle prese collegate (es. "2/4"):
+    // il nome si legge nel pannello, in scena sarebbe una scritta in più
+    const idLabel = this.add.text(0, def.body.h / 2 + 12, '', {
       fontFamily: 'Inter, sans-serif', fontSize: '11px', color: '#8b8e98'
     }).setOrigin(0.5);
     c.add(idLabel);
@@ -3438,7 +3427,7 @@ class StageScene extends Phaser.Scene {
 
     const { cx, cy } = this.nearestAllowedCell(type, worldX, worldY);
     const key = cx + ',' + cy;
-    if (this.occupied[key]) { showToast('Cella occupata: scegli un altro punto.'); return; }
+    if (this.occupied[key]) { showToast('Cella occupata: scegli una cella libera.'); return; }
 
     const idx = gameState.nextIndex[type]++;
     const id = `${type}_${idx}`;
@@ -3451,13 +3440,6 @@ class StageScene extends Phaser.Scene {
     this.compVisuals[id] = visual;
     this.occupied[key] = id;
 
-    if (type === 'quadro') {
-      const specLabel = this.add.text(0, def.body.h / 2 + 24, '', {
-        fontFamily: 'Inter, sans-serif', fontSize: '9.5px', color: '#8b8e98', align: 'center'
-      }).setOrigin(0.5);
-      visual.container.add(specLabel);
-      visual.specLabel = specLabel;
-    }
 
     // "sul palco" (instradamento cavi diretto) vale per QUALSIASI cella del
     // complesso palco, non solo la pedana spettacolo — include quindi anche
@@ -3496,7 +3478,7 @@ class StageScene extends Phaser.Scene {
       }
     });
     if (!bestSub || bestDist > TOP_ATTACH_RADIUS) {
-      showToast('Trascina la Testa sopra un Sub libero per agganciarla.');
+      showToast('Posa la testa sopra un sub libero per montarla sul palo.');
       return;
     }
 
@@ -3521,7 +3503,7 @@ class StageScene extends Phaser.Scene {
     this.updateQuadroVisual();
     setCircuitStatus('untested');
     gameState.tested = false;
-    showToast('Testa agganciata sopra ' + bestSub.id.replace('_', ' ') + '.', 'ok');
+    showToast('Testa montata sul palo di ' + compLabel(bestSub.id) + '.', 'ok');
     this.pushHistory();
   }
 
@@ -3530,9 +3512,9 @@ class StageScene extends Phaser.Scene {
     this.clearMoveSelection();
     this.clearEdgeSelection();
     disarmPiece();
-    if (!gameState.selectedCable) { showToast('Seleziona prima un tipo di cavo nella scheda "Cavi".'); return; }
+    if (!gameState.selectedCable) { showToast('Prendi prima un cavo da un baule (scheda Cavi).'); return; }
     const cableKind = CABLE_TYPES[gameState.selectedCable];
-    if (!cableKind.endpoints.includes(signal)) { showToast('Questo cavo non è compatibile con questa porta.'); return; }
+    if (!cableKind.endpoints.includes(signal)) { showToast('Questo cavo non entra in questa presa.'); return; }
 
     if (!gameState.pendingPort) {
       gameState.pendingPort = { componentId, portId };
@@ -3541,7 +3523,7 @@ class StageScene extends Phaser.Scene {
     }
     const pending = gameState.pendingPort;
     if (pending.componentId === componentId && pending.portId === portId) { this.cancelPending(); return; }
-    if (pending.componentId === componentId) { showToast('Non puoi collegare un componente a se stesso.'); return; }
+    if (pending.componentId === componentId) { showToast('Non puoi collegare un dispositivo a se stesso.'); return; }
 
     const pendingDef = getPortDef(pending.componentId, pending.portId);
     const currentDef = getPortDef(componentId, portId);
@@ -3550,14 +3532,14 @@ class StageScene extends Phaser.Scene {
     // un adattatore (2 endpoint diversi, es. CEE/PowerCON) collega solo
     // connettori DIVERSI tra loro: due porte uguali vogliono il cavo semplice.
     if (cableKind.endpoints.length === 2 && pendingDef.signal === currentDef.signal) {
-      showToast('Questo è un adattatore: collega due connettori diversi. Per due porte uguali serve il cavo semplice.');
+      showToast('Questo è un adattatore: collega due connettori diversi. Per due prese uguali serve il cavo semplice.');
       return;
     }
 
     if (pendingDef.dir === currentDef.dir) {
       showToast(pendingDef.dir === 'out'
-        ? 'Due uscite non si collegano tra loro: serve una porta IN.'
-        : 'Due ingressi non si collegano tra loro: serve una porta OUT.');
+        ? 'Due uscite non si collegano tra loro: serve una presa IN.'
+        : 'Due ingressi non si collegano tra loro: serve una presa OUT.');
       return;
     }
 
@@ -3570,7 +3552,7 @@ class StageScene extends Phaser.Scene {
     // "una porta, un cavo" ma il carico per fase, controllato al Test Impianto.
     if ((!outDef.multi && portHasConnection(outSide.componentId, outSide.portId)) ||
         (!inDef.multi && portHasConnection(inSide.componentId, inSide.portId))) {
-      showToast('Questa porta è già impegnata da un altro cavo: scegline una libera.');
+      showToast('Questa presa è già occupata da un altro cavo: scegline una libera.');
       return;
     }
 
@@ -3672,7 +3654,7 @@ class StageScene extends Phaser.Scene {
       if (!v || !v.idLabel) return;
       const ports = v.def.ports;
       const used = ports.filter(p => edgesOnPort(c.id, p.id).length > 0).length;
-      v.idLabel.setText(c.id.replace(/_/g, ' ') + '  ·  ' + used + '/' + ports.length);
+      v.idLabel.setText(used + '/' + ports.length);
       v.idLabel.setColor(used === ports.length ? '#49b06a' : '#8b8e98');
     });
   }
@@ -3695,7 +3677,7 @@ class StageScene extends Phaser.Scene {
     this.cancelPending();
     this.selectedEdgeId = edge.id;
     this.redrawEdges();
-    showToast('Cavo selezionato: clicca la ✕ per eliminarlo (o Canc), clicca altrove per deselezionare.');
+    showToast('Cavo selezionato: tocca la ✕ per toglierlo (o premi Canc), tocca altrove per deselezionarlo.');
   }
 
   clearEdgeSelection () {
@@ -3918,7 +3900,7 @@ class StageScene extends Phaser.Scene {
     const { cx, cy } = this.nearestAllowedCell(comp.type, worldX, worldY);
     const key = cx + ',' + cy;
     const oldKey = comp.gx + ',' + comp.gy;
-    if (key !== oldKey && this.occupied[key]) { showToast('Cella occupata: scegli un punto libero.'); return; }
+    if (key !== oldKey && this.occupied[key]) { showToast('Cella occupata: scegli una cella libera.'); return; }
 
     delete this.occupied[oldKey];
     this.occupied[key] = id;
@@ -3946,7 +3928,7 @@ class StageScene extends Phaser.Scene {
     this.redrawEdges();
     setCircuitStatus('untested');
     gameState.tested = false;
-    showToast('Componente riposizionato.', 'ok');
+    showToast('Dispositivo spostato.', 'ok');
     this.pushHistory();
   }
 
@@ -3977,11 +3959,11 @@ class StageScene extends Phaser.Scene {
     if (!result.pass) {
       setCircuitStatus('error');
       if (result.overPhase) {
-        showToast('Fasi sbilanciate: con tutto acceso la fase ' + result.overloadedPhases.join(', ') + ' supererebbe 3 kW. Sposta qualche utenza su un\'altra fase.');
+        showToast('Fasi sbilanciate: con tutto acceso la fase ' + result.overloadedPhases.join(', ') + ' supererebbe i 3 kW. Sposta qualche utenza su un\'altra fase.');
       } else {
         showToast(result.overBudget
           ? 'Potenza richiesta oltre il limite disponibile.'
-          : 'Cablaggio incompleto: i componenti evidenziati in rosso non sono collegati come serve.');
+          : 'Cablaggio incompleto: i dispositivi evidenziati in rosso non sono collegati come serve.');
         glow([...result.failedComponents]);
       }
       return;
@@ -4223,13 +4205,6 @@ class StageScene extends Phaser.Scene {
       }
       this.compVisuals[c.id] = visual;
       if (c.gx != null && c.gy != null) this.occupied[c.gx + ',' + c.gy] = c.id;
-      if (c.type === 'quadro') {
-        const specLabel = this.add.text(0, def.body.h / 2 + 24, '', {
-          fontFamily: 'Inter, sans-serif', fontSize: '9.5px', color: '#8b8e98', align: 'center'
-        }).setOrigin(0.5);
-        visual.container.add(specLabel);
-        visual.specLabel = specLabel;
-      }
     });
 
     this.updateQuadroVisual();

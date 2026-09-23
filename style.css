@@ -88,6 +88,7 @@
     color:var(--text-muted);
     display:flex;
     justify-content:space-between;
+    gap:6px;
   }
   .meter-power .label .val{
     color:var(--text-main);
