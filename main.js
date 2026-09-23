@@ -185,7 +185,7 @@ const COMPONENT_TYPES = {
   },
   // DI passiva: converte l'uscita jack del PC (sbilanciata) in un segnale
   // XLR bilanciato adatto a un ingresso mixer — nessuna alimentazione
-  // richiesta, resta in Regia accanto al PC.
+  // richiesta, sta accanto al PC (Regia di sala o Off Stage).
   di: {
     label: 'DI', category: 'regia', powerW: 0, zone: 'foh', shape: 'di',
     body: { w: 30, h: 24, fill: 0x232830, accent: 0x8a8e98 },
@@ -865,7 +865,8 @@ const ZONE_PREDICATES = {
   // il PC può stare sia in Regia di sala (FOH) sia in Regia di palco
   // (Off Stage, accanto al mixer di palco) — due postazioni plausibili.
   pc: (cx, cy) => isFohCell(cx, cy) || isOffStageCell(cx, cy),
-  di: isFohCell
+  // la DI segue il PC: accanto a lui in FOH oppure in Off Stage
+  di: (cx, cy) => isFohCell(cx, cy) || isOffStageCell(cx, cy)
 };
 
 /* ---------------------------------------------------------------------
