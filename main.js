@@ -313,7 +313,9 @@ const COMPONENT_TYPES = {
     busPowered: true,
     ledPos: INTF_ISO(3, 30, 9),
     ports: [
-      { id: 'usb',   signal: 'usbc', dir: 'in',  ...isoPort(INTF_ISO, 40, 3, 12) },
+      // cavo USB-C già attaccato alla scheda: la spina si prende dal suo
+      // pannello e si infila nella porta USB-C del PC
+      { id: 'usb',   signal: 'usbc', dir: 'in',  lead: true, ...isoPort(INTF_ISO, 40, 3, 12) },
       { id: 'out_L', signal: 'jack', dir: 'out', ...isoPort(INTF_ISO, 26, 3, 12) },
       { id: 'out_R', signal: 'jack', dir: 'out', ...isoPort(INTF_ISO, 16, 3, 12) }
     ]
@@ -899,46 +901,6 @@ document.querySelectorAll('.tab-btn').forEach(btn => {
   });
 });
 
-/* Gruppi di cavi "a tendina" (Trifase/Monofase/Segnale): un solo gruppo
-   aperto alla volta, per tenere la scheda Cavi il più compatta possibile. */
-document.querySelectorAll('.cable-group-toggle').forEach(btn => {
-  btn.addEventListener('click', () => {
-    const group = btn.closest('.cable-group');
-    const wasOpen = group.classList.contains('open');
-    document.querySelectorAll('.cable-group').forEach(g => g.classList.remove('open'));
-    if (!wasOpen) group.classList.add('open');
-  });
-});
-
-/* Cable selectors */
-document.querySelectorAll('.cable-btn').forEach(btn => {
-  btn.addEventListener('click', () => {
-    // prima si spegne l'evidenziazione (e la lente) della porta in attesa,
-    // poi si azzera: nell'ordine inverso cancelPending non la troverebbe più
-    if (window.__scene) window.__scene.clearPendingHighlight();
-    gameState.pendingPort = null;
-
-    if (gameState.selectedCable === btn.dataset.cable) {
-      // tocca di nuovo lo stesso cavo già attivo -> lo deseleziona,
-      // tornando alla modalità "sposta" per toccare i componenti
-      btn.classList.remove('active');
-      gameState.selectedCable = null;
-      showToast('Cavo deselezionato: ora toccando un componente lo sposti.');
-      return;
-    }
-
-    document.querySelectorAll('.cable-btn').forEach(b => b.classList.remove('active'));
-    btn.classList.add('active');
-    gameState.selectedCable = btn.dataset.cable;
-    disarmPiece();
-    showToast('Cavo selezionato: ' + btn.textContent.trim() + '. Tocca un dispositivo per aprire il suo pannello e scegliere la presa.');
-    // il gruppo si richiude da solo una volta scelto il cavo: da qui in poi
-    // si tocca il palco, non serve più tenere aperta la lista dei cavi
-    const group = btn.closest('.cable-group');
-    if (group) group.classList.remove('open');
-  });
-});
-
 /* Reset */
 el('#reset-btn').addEventListener('click', () => {
   if (window.__scene) window.__scene.resetLevel();
@@ -1217,7 +1179,7 @@ const REAR_PANELS = {
   pc: { style: 'laptop', power: true, serial: 'LAPTOP  ·  lato sinistro',
     sections: [['ALIMENTAZIONE', [['power', 'SPINA']]], ['USB', [['usb', 'USB-C']]]] },
   scheda: { style: 'scheda', left: 'kensington', serial: 'USB AUDIO INTERFACE  ·  2 IN / 2 OUT  ·  24 bit / 192 kHz  ·  alimentata via USB',
-    sections: [['USB', [['usb', 'USB-C']]], ['LINE OUTPUTS (bilanciate)', [['out_L', 'OUT L'], ['out_R', 'OUT R']]]] },
+    sections: [['USB', [['usb', 'CAVO USB-C']]], ['LINE OUTPUTS (bilanciate)', [['out_L', 'OUT L'], ['out_R', 'OUT R']]]] },
   di: { style: 'steel', right: 'lift', serial: 'PASSIVE DI BOX  ·  2 CANALI',
     sections: [['INPUT', [['in_1', 'CH1 IN'], ['in_2', 'CH2 IN']]], ['OUTPUT', [['out_1', 'CH1 OUT'], ['out_2', 'CH2 OUT']]]] }
 };
@@ -1310,6 +1272,13 @@ function svgPlug (signal) {
     const a = i / n * Math.PI * 2;
     return `<line x1="${CONN_CX + Math.cos(a) * 34}" y1="${CONN_CY + Math.sin(a) * 34}" x2="${CONN_CX + Math.cos(a) * 40}" y2="${CONN_CY + Math.sin(a) * 40}" stroke="#000" stroke-opacity=".35" stroke-width="2"/>`;
   }).join('');
+  if (signal === 'usbc') {
+    // spina USB-C: guscio nero sovrastampato e la linguetta metallica
+    return `<rect x="${CONN_CX - 30}" y="${CONN_CY - 20}" width="60" height="40" rx="12" fill="#1c1d22" stroke="#3a3d45" stroke-width="2"/>
+      <rect x="${CONN_CX - 20}" y="${CONN_CY - 7}" width="40" height="14" rx="7" fill="#c9ccd1" stroke="#7d828c"/>
+      <rect x="${CONN_CX - 15}" y="${CONN_CY - 3}" width="30" height="6" rx="3" fill="#0e0f12"/>
+      <text x="${CONN_CX}" y="${CONN_CY + 34}" font-size="7" font-weight="700" fill="#8b8e98" text-anchor="middle" font-family="Inter,sans-serif">USB-C</text>`;
+  }
   if (signal === 'cee_mono') {
     return `<circle cx="${CONN_CX}" cy="${CONN_CY}" r="42" fill="#2f6fd6" stroke="#1d4a9a" stroke-width="2"/>${ribs(28)}
       <circle cx="${CONN_CX}" cy="${CONN_CY}" r="31" fill="#1d4a9a"/>
@@ -1398,7 +1367,9 @@ function rearSlot (ctx, cx, y0, pid, label) {
   const inHand = pending && pending.componentId === id && pending.portId === pid;
   const sigColor = '#' + SIGNAL_COLOR[p.signal].toString(16).padStart(6, '0');
   const phaseLoad = loads && p.phase;
-  const face = p.lead ? svgPlug(p.signal) : connectorSVG(p.signal, p.dir);
+  // spina volante già infilata: al suo posto si disegna la presa con la spina
+  // dentro (più sotto), non la faccia della spina libera
+  const face = p.lead ? (busy.length ? '' : svgPlug(p.signal)) : connectorSVG(p.signal, p.dir);
   const rot = tilt && p.dir === 'out' ? ` rotate(45 ${CONN_CX} ${CONN_CY})` : '';
   let svg = `<g class="rp-port" data-port="${pid}" style="cursor:pointer">
     <rect x="${cx - REAR_SLOT / 2 + 4}" y="${y0 + 14}" width="${REAR_SLOT - 8}" height="${REAR_FRAME_H - 28}" fill="transparent"/>
@@ -1735,13 +1706,13 @@ function renderRearHand () {
   } else if (cable) {
     box.innerHTML = `Cavo selezionato: <b>${escapeHtml(cableName(cable))}</b> — scegli la presa da cui partire.`;
   } else {
-    box.innerHTML = `Nessun cavo selezionato: scegline uno nella scheda <b>Cavi</b> per collegare (le spine di ciabatte e PC si prendono direttamente dal pannello).`;
+    box.innerHTML = `Nessun cavo selezionato: prendine uno da un baule nella scheda <b>Cavi</b> per collegare (le spine di ciabatte, PC e scheda audio si prendono direttamente dal pannello).`;
   }
 }
 
 function cableName (cableId) {
-  const btn = document.querySelector('.cable-btn[data-cable="' + cableId + '"]');
-  return btn ? btn.textContent.trim() : String(cableId || '');
+  const it = cableItem(cableId);
+  return it ? it.name : (SIGNAL_LABEL[cableId] || String(cableId || ''));
 }
 
 function showRearDetail (compId, portId) {
@@ -1766,7 +1737,7 @@ function showRearDetail (compId, portId) {
 // seleziona un cavo come farebbe il suo pulsante nella scheda Cavi
 function selectCable (cableId) {
   gameState.selectedCable = cableId;
-  document.querySelectorAll('.cable-btn').forEach(b => b.classList.toggle('active', b.dataset.cable === cableId));
+  updateCableHand();
 }
 
 function onRearPortClick (compId, portId) {
@@ -1839,7 +1810,7 @@ function closeRearPanel () {
   el('#rear-modal').classList.remove('show');
   // riattivato al giro successivo: il rilascio del tocco che ha chiuso il
   // popup non deve arrivare alla scena
-  setTimeout(() => { if (!rearPanelId) setSceneInput(true); }, 0);
+  setTimeout(() => { if (!rearPanelId && !openCaseName) setSceneInput(true); }, 0);
 }
 el('#rear-close').addEventListener('click', closeRearPanel);
 el('#rear-modal').addEventListener('click', ev => { if (ev.target.id === 'rear-modal') closeRearPanel(); });
@@ -1858,6 +1829,191 @@ function updateCableBanner () {
 el('#cable-banner-cancel').addEventListener('click', () => {
   if (window.__scene) window.__scene.cancelPending();
 });
+
+/* ---------------------------------------------------------------------
+   3d) BAULI DEI CAVI — i cavi si prendono dai due flight case, come in un
+       service: SEGNALE (XLR, DMX, jack, Speakon) e CORRENTE (PowerCON,
+       Schuko, CEE e adattatori). Ogni cavo è una matassa col velcro, i due
+       connettori veri ai capi e l'etichetta di nastro carta.
+   --------------------------------------------------------------------- */
+const CABLE_CASES = {
+  segnale: {
+    title: 'SEGNALE',
+    items: [
+      { cable: 'xlr',     tape: 'XLR',     name: 'XLR',     info: '10 m · XLR F ↔ XLR M',       ends: ['xlr_f', 'xlr_m'] },
+      { cable: 'dmx',     tape: 'DMX',     name: 'DMX',     info: '10 m · XLR5 F ↔ XLR5 M',     ends: ['dmx_f', 'dmx_m'] },
+      { cable: 'jack',    tape: 'JACK',    name: 'Jack',    info: '3 m · jack ↔ jack',          ends: ['jack', 'jack'] },
+      { cable: 'speakon', tape: 'SPEAKON', name: 'Speakon', info: '15 m · NL4 ↔ NL4',           ends: ['speakon', 'speakon'] }
+    ]
+  },
+  corrente: {
+    title: 'CORRENTE',
+    items: [
+      { cable: 'powercon',        tape: 'POWERCON', name: 'PowerCON',          info: '5 m · link blu ↔ grigio',         ends: ['pc_blue', 'pc_grey'] },
+      { cable: 'schuko',          tape: 'PROLUNGA', name: 'Schuko',            info: '10 m · Schuko M ↔ F',             ends: ['schuko_m', 'schuko_f'] },
+      { cable: 'cee_mono',        tape: 'CEE 16A',  name: 'CEE Monofase',      info: '10 m · CEE blu M ↔ F',            ends: ['cee_m', 'cee_f'] },
+      { cable: 'cee_tri',         tape: 'CEE 400V', name: 'CEE Trifase',       info: '10 m · CEE rossa 5 poli M ↔ F',   ends: ['cee_m_red', 'cee_f_red'] },
+      { cable: 'cee_powercon',    tape: 'CEE>PCON', name: 'CEE / PowerCON',    info: 'adattatore · CEE M ↔ PowerCON',   ends: ['cee_m', 'pc_blue'] },
+      { cable: 'cee_schuko',      tape: 'CEE>SCH',  name: 'CEE / Schuko',      info: 'adattatore · CEE M ↔ Schuko F',   ends: ['cee_m', 'schuko_f'] },
+      { cable: 'schuko_powercon', tape: 'SCH>PCON', name: 'Schuko / PowerCON', info: 'adattatore · Schuko M ↔ PowerCON', ends: ['schuko_m', 'pc_blue'] }
+    ]
+  }
+};
+function cableItem (cableId) {
+  for (const c of Object.values(CABLE_CASES)) {
+    const it = c.items.find(i => i.cable === cableId);
+    if (it) return it;
+  }
+  return null;
+}
+const hex = n => '#' + n.toString(16).padStart(6, '0');
+
+// connettore del cavo visto di lato, puntato a destra; (x, y) = attacco col cavo
+function cableHead (kind, x, y, tape) {
+  const boot = (w, h) => `<path d="M ${x} ${y - h * 0.35} L ${x + w} ${y - h / 2} L ${x + w} ${y + h / 2} L ${x} ${y + h * 0.35} Z" fill="#26282e" stroke="#0c0d10"/>`;
+  const grooves = (gx, w, h, n, c) => Array.from({ length: n }, (_, i) => `<line x1="${gx + (i + 1) * w / (n + 1)}" y1="${y - h / 2 + 1}" x2="${gx + (i + 1) * w / (n + 1)}" y2="${y + h / 2 - 1}" stroke="${c}" stroke-width="1.2"/>`).join('');
+  switch (kind) {
+    case 'xlr_m': case 'xlr_f': case 'dmx_m': case 'dmx_f': {
+      let s = boot(12, 14) + `<rect x="${x + 12}" y="${y - 9}" width="26" height="18" rx="3" fill="#c3c7ce" stroke="#7d828c"/>` + grooves(x + 12, 12, 18, 3, '#8a8e98')
+        + `<rect x="${x + 12}" y="${y - 9}" width="4" height="18" fill="${tape}"/>`;
+      if (kind.endsWith('_m')) s += `<rect x="${x + 38}" y="${y - 7.5}" width="7" height="15" rx="1" fill="#9aa0aa" stroke="#7d828c"/>` + [-3.5, 0, 3.5].map(d => `<line x1="${x + 40}" y1="${y + d}" x2="${x + 46}" y2="${y + d}" stroke="#e8e2d0" stroke-width="1.4"/>`).join('');
+      else s += `<rect x="${x + 22}" y="${y - 12}" width="8" height="4" rx="1" fill="#dcdfe4" stroke="#7d828c"/>`;
+      return s;
+    }
+    case 'jack':
+      return boot(10, 12) + `<rect x="${x + 10}" y="${y - 6}" width="22" height="12" rx="3" fill="#34363d" stroke="#0c0d10"/><rect x="${x + 10}" y="${y - 6}" width="4" height="12" fill="${tape}"/>
+        <rect x="${x + 32}" y="${y - 3}" width="18" height="6" fill="#c9ccd1" stroke="#7d828c" stroke-width=".8"/><line x1="${x + 40}" y1="${y - 3}" x2="${x + 40}" y2="${y + 3}" stroke="#1c1d22" stroke-width="1.5"/>
+        <path d="M ${x + 50} ${y - 3} L ${x + 54} ${y} L ${x + 50} ${y + 3} Z" fill="#c9ccd1"/>`;
+    case 'speakon':
+      return boot(12, 16) + `<rect x="${x + 12}" y="${y - 11}" width="28" height="22" rx="4" fill="#2a2c32" stroke="#55585f"/>` + grooves(x + 20, 20, 22, 6, '#55585f')
+        + `<rect x="${x + 12}" y="${y - 11}" width="4" height="22" fill="${tape}"/><rect x="${x + 40}" y="${y - 8}" width="6" height="16" rx="2" fill="#3a3d45"/>`;
+    case 'pc_blue': case 'pc_grey': {
+      const b = kind === 'pc_blue' ? '#2f6fd6' : '#cfd2d6', d = kind === 'pc_blue' ? '#1d4a9a' : '#9aa0aa';
+      return boot(12, 16) + `<rect x="${x + 12}" y="${y - 11}" width="28" height="22" rx="4" fill="${b}" stroke="${d}"/>` + grooves(x + 16, 22, 22, 6, d)
+        + `<rect x="${x + 22}" y="${y - 15}" width="10" height="5" rx="1.5" fill="${d}"/><rect x="${x + 40}" y="${y - 8}" width="6" height="16" rx="2" fill="#2a2c32"/>`;
+    }
+    case 'schuko_m':
+      return boot(8, 12) + `<path d="M ${x + 8} ${y - 8} L ${x + 26} ${y - 13} L ${x + 26} ${y + 13} L ${x + 8} ${y + 8} Z" fill="#34363d" stroke="#6a6e78"/>
+        <rect x="${x + 26}" y="${y - 6}" width="12" height="3.5" rx="1.5" fill="#e8e2d0"/><rect x="${x + 26}" y="${y + 2.5}" width="12" height="3.5" rx="1.5" fill="#e8e2d0"/>`;
+    case 'schuko_f':
+      return boot(8, 12) + `<rect x="${x + 8}" y="${y - 13}" width="30" height="26" rx="5" fill="#34363d" stroke="#6a6e78"/><rect x="${x + 36}" y="${y - 11}" width="4" height="22" rx="1.5" fill="#55585f"/>`;
+    case 'cee_m': case 'cee_f': case 'cee_m_red': case 'cee_f_red': {
+      const red = kind.includes('red');
+      const b = red ? '#d6392f' : '#2f6fd6', d = red ? '#9e2820' : '#1d4a9a';
+      let s = boot(12, 18) + `<rect x="${x + 12}" y="${y - 14}" width="30" height="28" rx="5" fill="${b}" stroke="${d}"/>` + grooves(x + 14, 18, 28, 5, d);
+      if (kind.startsWith('cee_m')) s += `<rect x="${x + 42}" y="${y - 11}" width="8" height="22" rx="2" fill="${d}"/>` + [-6, 0, 6].map(dd => `<line x1="${x + 45}" y1="${y + dd}" x2="${x + 52}" y2="${y + dd}" stroke="#e8e2d0" stroke-width="2"/>`).join('');
+      else s += `<path d="M ${x + 42} ${y - 14} L ${x + 50} ${y - 20} L ${x + 52} ${y - 16} L ${x + 44} ${y - 10} Z" fill="${b}" stroke="${d}"/><rect x="${x + 42}" y="${y - 12}" width="5" height="24" rx="1.5" fill="${d}"/>`;
+      return s;
+    }
+  }
+  return '';
+}
+
+// matassa arrotolata col velcro, i due capi che escono a destra, nastro carta
+function cableCoil (cx, cy, it, selected) {
+  const cab = hex(CABLE_TYPES[it.cable].color);
+  let s = `<g class="cc-coil" data-cable="${it.cable}" style="cursor:pointer">
+    <rect x="${cx - 92}" y="${cy - 76}" width="184" height="152" rx="8" fill="${selected ? '#f2a54124' : 'transparent'}" stroke="${selected ? '#f2a541' : 'none'}" stroke-width="3"/>
+    <g transform="translate(0 ${selected ? -6 : 0})">
+    <ellipse cx="${cx - 18}" cy="${cy + 6}" rx="52" ry="44" fill="#000" fill-opacity=".35"/>`;
+  for (let i = 0; i < 5; i++) {
+    const r = 40 - i * 2.2, o = i * 1.6;
+    s += `<ellipse cx="${cx - 22 + o}" cy="${cy + o * 0.6}" rx="${r}" ry="${r * 0.82}" fill="none" stroke="#17181b" stroke-width="8"/>
+      <ellipse cx="${cx - 22 + o}" cy="${cy + o * 0.6}" rx="${r}" ry="${r * 0.82}" fill="none" stroke="#2e3037" stroke-width="1.2" stroke-dasharray="3 5"/>`;
+  }
+  s += `<ellipse cx="${cx - 22}" cy="${cy}" rx="40" ry="33" fill="none" stroke="${cab}" stroke-width="1.8" stroke-dasharray="14 10"/>
+    <rect x="${cx - 70}" y="${cy - 8}" width="20" height="16" rx="3" fill="#8b2530" transform="rotate(-10 ${cx - 60} ${cy})"/>
+    <path d="M ${cx + 12} ${cy - 16} C ${cx + 26} ${cy - 18}, ${cx + 26} ${cy - 24}, ${cx + 32} ${cy - 24}" fill="none" stroke="#17181b" stroke-width="7"/>
+    <path d="M ${cx + 14} ${cy + 12} C ${cx + 26} ${cy + 14}, ${cx + 26} ${cy + 20}, ${cx + 32} ${cy + 20}" fill="none" stroke="#17181b" stroke-width="7"/>
+    ${cableHead(it.ends[0], cx + 30, cy - 24, cab)}${cableHead(it.ends[1], cx + 30, cy + 20, cab)}
+    <g transform="rotate(-4 ${cx - 22} ${cy - 50})"><rect x="${cx - 64}" y="${cy - 60}" width="88" height="20" rx="2" fill="#e9dcb8" stroke="#c9b98f"/>
+      <text x="${cx - 20}" y="${cy - 45}" font-size="12.5" font-weight="700" fill="#2a2c32" text-anchor="middle" font-family="'Comic Sans MS','Segoe Print',cursive">${it.tape}</text></g>
+    <text x="${cx}" y="${cy + 66}" font-size="11" fill="#cfd2d6" text-anchor="middle">${escapeHtml(it.info)}</text>
+    </g></g>`;
+  return s;
+}
+
+// il baule aperto visto dall'alto: coperchio con lo stencil, guscio nero con
+// profili, angolari e chiusure a farfalla, interno in gommapiuma a scomparti
+function renderCase (name) {
+  const box = CABLE_CASES[name];
+  const cols = 4, cw = 196, ch = 170;
+  const rows = Math.ceil(box.items.length / cols);
+  const W = cols * cw + 80, H = rows * ch + 150;
+  let s = `<svg class="case-svg" viewBox="0 0 ${W} ${H}" xmlns="http://www.w3.org/2000/svg" font-family="Inter,sans-serif">
+    <rect x="30" y="4" width="${W - 60}" height="40" rx="6" fill="#1b1c20" stroke="#8a8e98" stroke-width="3"/>
+    <text x="${W / 2}" y="31" font-size="18" font-weight="800" fill="#e6e8eb" text-anchor="middle" letter-spacing="5" font-family="'Barlow Condensed',Impact,sans-serif">${box.title}</text>
+    <rect x="10" y="50" width="${W - 20}" height="${H - 60}" rx="8" fill="#232428" stroke="#b9bcc1" stroke-width="6"/>
+    ${[[10, 50], [W - 34, 50], [10, H - 34], [W - 34, H - 34]].map(([x, y]) => `<rect x="${x}" y="${y}" width="24" height="24" rx="5" fill="#d7dadd" stroke="#7d828c"/><circle cx="${x + 12}" cy="${y + 12}" r="4" fill="#9aa0aa"/>`).join('')}
+    ${[W * 0.3, W * 0.7].map(x => `<rect x="${x - 18}" y="44" width="36" height="16" rx="3" fill="#c9ccd1" stroke="#6a6e78"/><circle cx="${x}" cy="52" r="5" fill="#9aa0aa" stroke="#6a6e78"/>`).join('')}
+    <rect x="28" y="70" width="${W - 56}" height="${H - 96}" rx="4" fill="#111215"/>`;
+  box.items.forEach((it, i) => {
+    const cx = 50 + (i % cols) * cw + cw / 2, cy = 88 + Math.floor(i / cols) * ch + ch / 2;
+    s += `<rect x="${cx - cw / 2 + 6}" y="${cy - ch / 2 + 6}" width="${cw - 12}" height="${ch - 12}" rx="6" fill="#1a1b1f" stroke="#26272c" stroke-width="2"/>`;
+    s += cableCoil(cx, cy, it, gameState.selectedCable === it.cable);
+  });
+  return s + `</svg>`;
+}
+
+let openCaseName = null;
+function openCase (name) {
+  openCaseName = name;
+  el('#case-title').textContent = 'Baule ' + CABLE_CASES[name].title;
+  el('#case-svg').innerHTML = renderCase(name);
+  el('#case-svg').querySelectorAll('.cc-coil').forEach(node => {
+    node.addEventListener('click', () => pickCable(node.dataset.cable));
+  });
+  el('#case-modal').classList.add('show');
+  setSceneInput(false);
+}
+function closeCase () {
+  openCaseName = null;
+  el('#case-modal').classList.remove('show');
+  setTimeout(() => { if (!openCaseName && !rearPanelId) setSceneInput(true); }, 0);
+}
+el('#case-close').addEventListener('click', closeCase);
+el('#case-modal').addEventListener('click', ev => { if (ev.target.id === 'case-modal') closeCase(); });
+document.querySelectorAll('.case-btn').forEach(btn => btn.addEventListener('click', () => openCase(btn.dataset.case)));
+
+// prende (o rimette nel baule) un cavo
+function pickCable (cableId) {
+  // prima si spegne l'evidenziazione del capo in attesa, poi si azzera
+  if (window.__scene) window.__scene.clearPendingHighlight();
+  gameState.pendingPort = null;
+  closeCase();
+  if (gameState.selectedCable === cableId) {
+    gameState.selectedCable = null;
+    updateCableHand();
+    showToast('Cavo rimesso nel baule: ora toccando un componente lo sposti.');
+    return;
+  }
+  gameState.selectedCable = cableId;
+  disarmPiece();
+  updateCableHand();
+  showToast('Cavo preso: ' + cableName(cableId) + '. Tocca un dispositivo per aprire il suo pannello e scegliere la presa.');
+}
+
+// nella scheda Cavi: il cavo che si ha in mano, coi suoi due connettori
+function updateCableHand () {
+  const box = el('#cable-hand');
+  if (!box) return;
+  const it = cableItem(gameState.selectedCable);
+  if (!it) {
+    box.classList.remove('has');
+    box.innerHTML = '<span class="ch-empty">Nessun cavo in mano: apri un baule e prendine uno</span>';
+    return;
+  }
+  const cab = hex(CABLE_TYPES[it.cable].color);
+  box.classList.add('has');
+  box.innerHTML = `<svg viewBox="0 0 250 50" class="ch-svg" xmlns="http://www.w3.org/2000/svg">
+      <g transform="translate(60 25) scale(-1 1) translate(-60 -25)">${cableHead(it.ends[0], 60, 25, cab)}</g>
+      <line x1="60" y1="25" x2="190" y2="25" stroke="#17181b" stroke-width="7"/><line x1="60" y1="25" x2="190" y2="25" stroke="${cab}" stroke-width="2"/>
+      ${cableHead(it.ends[1], 190, 25, cab)}</svg>
+    <span class="ch-name">${escapeHtml(it.name)}<small>${escapeHtml(it.info)}</small></span>
+    <button class="ch-drop" title="Rimetti nel baule">✕</button>`;
+  box.querySelector('.ch-drop').addEventListener('click', () => pickCable(it.cable));
+}
+
 
 
 /* Livelli: filtri di visibilità per tipo di cavo */
@@ -2395,8 +2551,9 @@ class StageScene extends Phaser.Scene {
     g.fillStyle(0x3c4451, 0.9);
     g.fillRoundedRect(cabX + 3, van.y - vh * 0.08, vw * 0.15, vh * 0.26, 2);
 
-    const caseSpots = [[6.2, 1.3], [6.9, 1.6], [6.4, 0.7]];
-    caseSpots.forEach(([gx, gy]) => {
+    // i primi due case sono i bauli dei cavi: toccandoli si aprono
+    const caseSpots = [[6.2, 1.3, 'segnale'], [6.9, 1.6, 'corrente'], [6.4, 0.7, null]];
+    caseSpots.forEach(([gx, gy, caseName]) => {
       const p = gridToScreen(gx, gy);
       const cw = 34, ch = 24, corner = 5;
       g.fillStyle(0x232428, 1);
@@ -2416,6 +2573,19 @@ class StageScene extends Phaser.Scene {
       // maniglia incassata
       g.fillStyle(0x0c0d10, 1);
       g.fillRoundedRect(p.x - 7, p.y - 2, 14, 4, 1.5);
+      if (!caseName) return;
+      this.add.text(p.x, p.y - ch / 2 - 7, CABLE_CASES[caseName].title, {
+        fontFamily: 'Barlow Condensed, sans-serif', fontSize: '10px', fontStyle: 'bold', color: '#e6e8eb'
+      }).setOrigin(0.5).setDepth(2);
+      const hit = this.add.rectangle(p.x, p.y, cw + 8, ch + 14, 0xffffff, 0.001).setDepth(2)
+        .setInteractive({ useHandCursor: true });
+      hit.on('pointerdown', (pointer, lx, ly, event) => {
+        if (event && event.stopPropagation) event.stopPropagation();
+        // aprire un baule porta anche nella scheda Cavi
+        const tab = document.querySelector('.tab-btn[data-tab="cavi"]');
+        if (tab && !isWiringTabActive()) tab.click();
+        openCase(caseName);
+      });
     });
   }
 
@@ -3769,7 +3939,7 @@ class StageScene extends Phaser.Scene {
     gameState.tested = false;
     gameState.trips = 0; gameState.rcdTrips = 0; gameState.procErrors = []; gameState.inrush = [];
 
-    document.querySelectorAll('.cable-btn').forEach(b => b.classList.remove('active'));
+    updateCableHand();
     updateStockUI();
     updatePowerMeter();
     updateConnectionCounter();
@@ -3876,4 +4046,5 @@ new Phaser.Game(config);
 updateStockUI();
 updatePowerMeter();
 updateConnectionCounter();
+updateCableHand();
 setCircuitStatus('untested');

@@ -54,6 +54,17 @@
     </div>
   </div>
 
+  <div class="modal-overlay" id="case-modal">
+    <div class="modal-box case-box">
+      <div class="modal-header">
+        <h2 id="case-title">Baule</h2>
+        <button class="modal-close" id="case-close">✕</button>
+      </div>
+      <div class="case-svg-wrap" id="case-svg"></div>
+      <div class="modal-hint rear-hint">Tocca una matassa per prendere il cavo · toccala di nuovo per rimetterla nel baule.</div>
+    </div>
+  </div>
+
   <div class="modal-overlay" id="rear-modal">
     <div class="modal-box rear-box">
       <div class="modal-header">
@@ -167,36 +178,12 @@
     </div>
 
     <div class="tab-panel" data-panel="cavi">
-      <div class="panel-items cable-groups">
-        <div class="cable-group" data-group="trifase">
-          <button class="cable-group-toggle">Trifase<span class="chev">▸</span></button>
-          <div class="cable-group-body">
-            <button class="cable-btn" data-cable="cee_tri"><span class="lead" style="background:var(--c-cee-tri);"></span>CEE Trifase</button>
-          </div>
-        </div>
-        <div class="cable-group" data-group="monofase">
-          <button class="cable-group-toggle">Monofase<span class="chev">▸</span></button>
-          <div class="cable-group-body">
-            <button class="cable-btn" data-cable="powercon"><span class="lead" style="background:var(--c-power);"></span>PowerCON</button>
-            <button class="cable-btn" data-cable="schuko"><span class="lead" style="background:var(--c-schuko);"></span>Schuko</button>
-            <button class="cable-btn" data-cable="cee_mono"><span class="lead" style="background:var(--c-cee-mono);"></span>CEE Monofase</button>
-            <button class="cable-btn" data-cable="cee_powercon"><span class="lead" style="background:linear-gradient(90deg,var(--c-cee-mono) 50%,var(--c-power) 50%);"></span>CEE / PowerCON</button>
-            <button class="cable-btn" data-cable="cee_schuko"><span class="lead" style="background:linear-gradient(90deg,var(--c-cee-mono) 50%,var(--c-schuko) 50%);"></span>CEE / Schuko</button>
-            <button class="cable-btn" data-cable="schuko_powercon"><span class="lead" style="background:linear-gradient(90deg,var(--c-schuko) 50%,var(--c-power) 50%);"></span>Schuko / PowerCON</button>
-          </div>
-        </div>
-        <div class="cable-group" data-group="segnale">
-          <button class="cable-group-toggle">Segnale<span class="chev">▸</span></button>
-          <div class="cable-group-body">
-            <button class="cable-btn" data-cable="speakon"><span class="lead" style="background:var(--c-speakon);"></span>Speakon</button>
-            <button class="cable-btn" data-cable="dmx"><span class="lead" style="background:var(--c-dmx);"></span>DMX</button>
-            <button class="cable-btn" data-cable="xlr"><span class="lead" style="background:var(--c-xlr);"></span>XLR</button>
-            <button class="cable-btn" data-cable="jack"><span class="lead" style="background:var(--c-jack);"></span>Jack</button>
-            <button class="cable-btn" data-cable="usbc"><span class="lead" style="background:var(--c-usb);"></span>USB-C</button>
-          </div>
-        </div>
+      <div class="panel-items case-bar">
+        <button class="case-btn" data-case="segnale"><svg viewBox="0 0 64 44" class="case-ico"><rect x="3" y="6" width="58" height="34" rx="4" fill="#232428" stroke="#b9bcc1" stroke-width="3"/><rect x="3" y="6" width="9" height="9" rx="2" fill="#d7dadd"/><rect x="52" y="6" width="9" height="9" rx="2" fill="#d7dadd"/><rect x="3" y="31" width="9" height="9" rx="2" fill="#d7dadd"/><rect x="52" y="31" width="9" height="9" rx="2" fill="#d7dadd"/><rect x="18" y="2" width="10" height="7" rx="2" fill="#c9ccd1"/><rect x="36" y="2" width="10" height="7" rx="2" fill="#c9ccd1"/><rect x="24" y="21" width="16" height="4" rx="2" fill="#0c0d10"/></svg><span>SEGNALE</span></button>
+        <button class="case-btn" data-case="corrente"><svg viewBox="0 0 64 44" class="case-ico"><rect x="3" y="6" width="58" height="34" rx="4" fill="#232428" stroke="#b9bcc1" stroke-width="3"/><rect x="3" y="6" width="9" height="9" rx="2" fill="#d7dadd"/><rect x="52" y="6" width="9" height="9" rx="2" fill="#d7dadd"/><rect x="3" y="31" width="9" height="9" rx="2" fill="#d7dadd"/><rect x="52" y="31" width="9" height="9" rx="2" fill="#d7dadd"/><rect x="18" y="2" width="10" height="7" rx="2" fill="#c9ccd1"/><rect x="36" y="2" width="10" height="7" rx="2" fill="#c9ccd1"/><rect x="24" y="21" width="16" height="4" rx="2" fill="#0c0d10"/></svg><span>CORRENTE</span></button>
+        <div class="cable-hand" id="cable-hand"></div>
       </div>
-      <span class="panel-hint">Scegli un cavo, poi tocca un dispositivo: si apre il suo pannello posteriore con i connettori reali (maschio/femmina, IN/OUT). Scegli la presa, poi tocca il secondo dispositivo e scegli l'altra presa. Ciabatte e PC hanno già il loro cavo: prendi la spina dal loro pannello. Sotto ogni dispositivo vedi quante prese sono collegate. Si cabla a impianto spento: collegare o scollegare un cavo di corrente sotto tensione fa scattare il salvavita. Poi si arma il Quadro (generale, salvavita, L1–L3) e si accende ogni dispositivo dal suo pannello: finali e sub per ultimi, uno alla volta.</span>
+      <span class="panel-hint">Apri un baule (qui o toccando i case vicino al furgone) e prendi un cavo, poi tocca un dispositivo: si apre il suo pannello posteriore con i connettori reali (maschio/femmina, IN/OUT). Scegli la presa, poi tocca il secondo dispositivo e scegli l'altra presa. Ciabatte, PC e scheda audio hanno già il loro cavo: prendi la spina dal loro pannello. Sotto ogni dispositivo vedi quante prese sono collegate. Si cabla a impianto spento: collegare o scollegare un cavo di corrente sotto tensione fa scattare il salvavita. Poi si arma il Quadro (generale, salvavita, L1–L3) e si accende ogni dispositivo dal suo pannello: finali e sub per ultimi, uno alla volta.</span>
       <span class="panel-hint">Ogni presa accetta un solo cavo (le prese del Quadro fanno eccezione). Gli adattatori (es. CEE / PowerCON) collegano due connettori diversi: servono quando i due lati non coincidono, come tra Quadro (CEE) e utenze a valle (PowerCON). CEE/PowerCON e CEE/Schuko sono comunque cavi monofase.</span>
     </div>
 

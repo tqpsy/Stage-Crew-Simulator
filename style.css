@@ -249,6 +249,34 @@
   #toast.show{ opacity:1; transform:translate(-50%,0); }
   #toast.ok{ border-left-color:var(--green); }
 
+  /* ---------- BAULI DEI CAVI ---------- */
+  .case-bar{ align-items:center; gap:12px; flex-wrap:wrap; }
+  .case-btn{
+    display:flex; flex-direction:column; align-items:center; gap:3px;
+    background:var(--bg-panel-raised); border:1px solid var(--hairline); border-radius:8px;
+    color:var(--text-main); padding:6px 10px 5px; cursor:pointer;
+    font-family:var(--font-display); font-size:13px; letter-spacing:.08em;
+  }
+  .case-btn:hover{ border-color:var(--amber); }
+  .case-ico{ width:54px; height:37px; display:block; }
+  .cable-hand{
+    display:flex; align-items:center; gap:10px; min-height:52px;
+    border:1px dashed var(--hairline); border-radius:8px; padding:4px 10px;
+    font-size:12.5px; color:var(--text-muted); flex:1; min-width:220px;
+  }
+  .cable-hand.has{ border-style:solid; border-color:var(--amber); background:#2c2620; color:var(--text-main); }
+  .cable-hand .ch-svg{ width:170px; height:34px; flex:none; }
+  .cable-hand .ch-name{ display:flex; flex-direction:column; font-weight:700; }
+  .cable-hand .ch-name small{ font-weight:400; color:var(--text-muted); font-size:11px; }
+  .cable-hand .ch-drop{
+    margin-left:auto; background:none; border:1px solid var(--hairline); color:var(--text-muted);
+    border-radius:5px; width:26px; height:26px; cursor:pointer;
+  }
+  .modal-box.case-box{ width:min(900px, 96vw); }
+  .case-svg-wrap{ padding:14px 16px 4px; }
+  .case-svg{ width:100%; height:auto; display:block; max-height:66vh; }
+  .case-svg .cc-coil:hover > rect:first-child{ stroke:#f2a54188; stroke-width:2; }
+
   /* ---------- PANNELLO POSTERIORE: popup di cablaggio ---------- */
   .modal-box.rear-box{ width:min(1180px, 96vw); }
   .rear-hand{
