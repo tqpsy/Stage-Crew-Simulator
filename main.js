@@ -14,7 +14,7 @@
 // compatibilità dei cavi li tratta come due tipi distinti.
 const SIGNAL_COLOR = {
   powercon: 0xf2954a,
-  speakon:  0xdcdcdc,
+  speakon:  0xf0619a, // rosa: il bianco/argento ormai è dell'XLR
   dmx:      0xf2c53d,
   xlr:      0xa3acb8, // argento: il guscio metallico dell'XLR (il blu è della CEE monofase)
   schuko:   0xc77dff,
@@ -42,6 +42,29 @@ const CONNECTOR_GENDER = {
   speakon:  { in: 'female', out: 'female' },
   powercon: { in: 'male',   out: 'male' },
   jack:     { in: 'female', out: 'female' }
+};
+
+/* colore REALE del corpo del connettore da pannello (guscio metallico
+   dell'XLR, plastica nera di Speakon/PowerCON/Schuko, blu e rosso delle CEE).
+   Il colore del segnale resta sull'anello esterno della porta, così la porta
+   si abbina sempre al cavo giusto. */
+const CONNECTOR_BODY = {
+  xlr:      0xb4bac3,
+  dmx:      0xb4bac3,
+  speakon:  0x1c1d22,
+  powercon: 0x1c1d22,
+  schuko:   0x2a2c32,
+  cee_mono: 0x2f6fd6,
+  cee_tri:  0xd6392f,
+  jack:     0x1c1d22
+};
+// corpi scuri: i fori di una femmina non si vedrebbero, serve un inserto grigio
+const DARK_BODY = new Set(['speakon', 'powercon', 'schuko', 'jack']);
+
+// nomi leggibili per l'etichetta che compare sopra una porta
+const SIGNAL_LABEL = {
+  xlr: 'XLR 3 poli', dmx: 'DMX 5 poli', speakon: 'Speakon', powercon: 'PowerCON',
+  schuko: 'Schuko', cee_mono: 'CEE 16A monofase', cee_tri: 'CEE 16A trifase', jack: 'Jack 6,35'
 };
 
 /* Geometria del mixer in "unità banco" (a = lungo i canali, b = dal retro
@@ -79,7 +102,7 @@ const CABLE_TYPES = {
   cee_mono:        { endpoints: ['cee_mono'],             layer: 'cee_mono', color: 0x2f6fd6 },
   xlr:             { endpoints: ['xlr'],                  layer: 'xlr',      color: 0xa3acb8 },
   dmx:             { endpoints: ['dmx'],                  layer: 'dmx',      color: 0xf2c53d },
-  speakon:         { endpoints: ['speakon'],              layer: 'speakon',  color: 0xdcdcdc },
+  speakon:         { endpoints: ['speakon'],              layer: 'speakon',  color: 0xf0619a },
   jack:            { endpoints: ['jack'],                  layer: 'jack',     color: 0x2ec4e0 },
   // adattatori: il lato CEE è sempre monofase (mai trifase — si adatta un
   // singolo ramo di fase, non l'intero allaccio a monte del Quadro).
@@ -1715,12 +1738,17 @@ class StageScene extends Phaser.Scene {
     const portMarkers = {};
     def.ports.forEach(p => {
       // ogni porta è la FACCIA del connettore reale (vedi drawPortGlyph):
-      // corpo tondo nel colore del segnale, contatti disegnati sopra.
-      const dot = this.add.circle(p.dx, p.dy, PORT_R, SIGNAL_COLOR[p.signal], 1)
-        .setStrokeStyle(2, 0x141519)
+      // corpo del colore vero del connettore, anello esterno del colore del
+      // cavo che ci va, contatti disegnati sopra.
+      const dot = this.add.circle(p.dx, p.dy, PORT_R, CONNECTOR_BODY[p.signal] || SIGNAL_COLOR[p.signal], 1)
+        .setStrokeStyle(2.4, SIGNAL_COLOR[p.signal])
         .setInteractive({ useHandCursor: true });
+      dot.on('pointerover', () => this.showPortLabel(id, p));
+      dot.on('pointerout', () => this.hidePortLabel());
       dot.on('pointerdown', (pointer, lx, ly, event) => {
         if (event && event.stopPropagation) event.stopPropagation();
+        // su touch non c'è il passaggio del mouse: l'etichetta compare al tocco
+        if (pointer && pointer.wasTouch) this.showPortLabel(id, p, 1800);
         if (isWiringTabActive()) { this.handlePortClick(id, p.id, p.signal); return; }
         if (movable) { this.handleMoveSelect(id); return; }
       });
@@ -1767,57 +1795,65 @@ class StageScene extends Phaser.Scene {
   /* faccia del connettore reale, disegnata sopra il corpo tondo della porta:
      numero e disposizione dei contatti come nella realtà, e il genere
      (vedi CONNECTOR_GENDER): MASCHIO = inserto scuro con pin metallici
-     chiari, FEMMINA = fori neri direttamente sul corpo colorato.
+     chiari, FEMMINA = fori neri (su un inserto grigio se il corpo è scuro).
      In più una freccetta sul bordo dice il verso del segnale:
      verde che ENTRA nella presa = IN, arancione che ESCE = OUT. */
   drawPortGlyph (p) {
     const g = this.add.graphics({ x: p.dx, y: p.dy });
     const gender = (CONNECTOR_GENDER[p.signal] || {})[p.dir] || 'female';
     const male = gender === 'male';
-    const PIN = 0xe4dfd2, HOLE = 0x0b0c0e, INSERT = 0x1c1d22;
-    const insert = (r) => { g.fillStyle(INSERT, 1); g.fillCircle(0, 0, r); };
+    const PIN = 0xe4dfd2, HOLE = 0x0b0c0e;
+    const insert = (r, color) => { g.fillStyle(color || 0x141519, 1); g.fillCircle(0, 0, r); };
+    // fondo della faccia: inserto scuro per i pin, grigio per i fori su un
+    // corpo scuro, nessuno (si vede il corpo) per i fori su un corpo chiaro
+    const face = (r) => {
+      if (male) insert(r);
+      else if (DARK_BODY.has(p.signal)) insert(r, 0x6a6e77);
+    };
     // un contatto: pin metallico (maschio) o foro (femmina)
     const contact = (x, y, r) => {
       g.fillStyle(male ? PIN : HOLE, 1);
       g.fillCircle(x, y, r || 1.25);
     };
-    const onCircle = (n, rad, start, step) => {
-      for (let i = 0; i < n; i++) {
-        const a = start + i * step;
-        contact(Math.cos(a) * rad, Math.sin(a) * rad);
-      }
-    };
+    const latch = () => { g.fillStyle(male ? PIN : HOLE, 1); g.fillRect(-1, -PORT_R + 0.6, 2, 2); };
     const deg = Math.PI / 180;
+
+    // contorno scuro sottile attorno all'anello colorato, stacca dal fondo
+    g.lineStyle(1, 0x0c0d10, 1);
+    g.strokeCircle(0, 0, PORT_R + 1.7);
 
     switch (p.signal) {
       case 'xlr': {
         // XLR 3 poli: due contatti affiancati in alto, il terzo in basso
         // leggermente spostato; tacca del fermo sul bordo superiore
-        if (male) insert(5.8);
+        face(5.8);
         contact(-2.6, -1.6); contact(2.6, -1.6); contact(0.9, 2.8);
-        g.fillStyle(male ? PIN : HOLE, 1); g.fillRect(-1, -PORT_R + 0.5, 2, 2);
+        latch();
         break;
       }
       case 'dmx': {
-        // XLR 5 poli: tutti e cinque i contatti sulla corona, nessuno al
-        // centro — uno in basso e due ai lati della tacca del fermo in alto
-        if (male) insert(5.8);
-        onCircle(5, 3.8, 90 * deg, 72 * deg);
-        g.fillStyle(male ? PIN : HOLE, 1); g.fillRect(-1, -PORT_R + 0.5, 2, 2);
+        // XLR 5 poli: i cinque contatti su un SEMICERCHIO (arco di 180°),
+        // aperto verso la tacca del fermo — nessun contatto al centro
+        face(5.8);
+        for (let i = 0; i < 5; i++) {
+          const a = (180 - i * 45) * deg;
+          contact(Math.cos(a) * 3.7, Math.sin(a) * 3.7 - 1.2, 1.1);
+        }
+        latch();
         break;
       }
       case 'speakon': {
-        // presa Speakon da pannello: anello scuro con perno centrale e due
-        // chiavi di bloccaggio — il genere non cambia tra ingresso e link
-        insert(6.4);
-        g.fillStyle(SIGNAL_COLOR.speakon, 1); g.fillCircle(0, 0, 2.4);
-        g.fillRect(-1, -6.4, 2, 2.2); g.fillRect(-1, 4.2, 2, 2.2);
+        // Speakon da pannello: corpo nero, anello bianco, perno centrale e
+        // due chiavi di bloccaggio — il genere non cambia tra ingresso e link
+        g.lineStyle(1.3, 0xeeeeee, 1); g.strokeCircle(0, 0, 5.6);
+        g.fillStyle(0x3a3d44, 1); g.fillCircle(0, 0, 2.6);
+        g.fillStyle(0xeeeeee, 1);
+        g.fillRect(-0.9, -6.4, 1.8, 2); g.fillRect(-0.9, 4.4, 1.8, 2);
         break;
       }
       case 'powercon': {
-        // PowerCON: inserto scuro con 3 lamelle e anello interno del colore
-        // reale del connettore da pannello — BLU = power in, GRIGIO = power out
-        insert(6.4);
+        // PowerCON: corpo nero, anello interno del colore reale del
+        // connettore da pannello — BLU = power in, GRIGIO = power out
         g.lineStyle(1.6, p.dir === 'in' ? 0x3d7fe0 : 0xcfd2d6, 1);
         g.strokeCircle(0, 0, 5.1);
         g.fillStyle(PIN, 1);
@@ -1830,7 +1866,7 @@ class StageScene extends Phaser.Scene {
       case 'schuko': {
         // Schuko: due poli affiancati + contatti di terra laterali (sopra e
         // sotto); la presa (femmina) ha i fori, la spina (maschio) i pin
-        if (male) insert(5.8);
+        face(6.2);
         contact(-2.9, 0, 1.5); contact(2.9, 0, 1.5);
         g.fillStyle(PIN, 1);
         g.fillRect(-1.6, -6.4, 3.2, 1.6); g.fillRect(-1.6, 4.8, 3.2, 1.6);
@@ -1838,17 +1874,20 @@ class StageScene extends Phaser.Scene {
       }
       case 'cee_mono': {
         // CEE 2P+T (blu): due poli + terra più grossa in basso
-        if (male) insert(5.8);
+        face(5.8);
         contact(-3.3, -1.2); contact(3.3, -1.2); contact(0, 3.3, 1.8);
-        g.fillStyle(male ? PIN : HOLE, 1); g.fillRect(-1, -PORT_R + 0.5, 2, 2);
+        latch();
         break;
       }
       case 'cee_tri': {
         // CEE 3P+N+T (rossa): quattro contatti sulla corona + terra più grossa
-        if (male) insert(5.8);
-        onCircle(4, 3.9, 150 * deg, 80 * deg);
+        face(5.8);
+        for (let i = 0; i < 4; i++) {
+          const a = (150 + i * 80) * deg;
+          contact(Math.cos(a) * 3.9, Math.sin(a) * 3.9);
+        }
         contact(0, 3.9, 1.7);
-        g.fillStyle(male ? PIN : HOLE, 1); g.fillRect(-1, -PORT_R + 0.5, 2, 2);
+        latch();
         break;
       }
       case 'jack': {
@@ -1874,6 +1913,34 @@ class StageScene extends Phaser.Scene {
     g.fillTriangle(tip.x, tip.y, back.x + px, back.y + py, back.x - px, back.y - py);
     g.strokeTriangle(tip.x, tip.y, back.x + px, back.y + py, back.x - px, back.y - py);
     return g;
+  }
+
+  /* etichetta sopra una porta: tipo di connettore, verso e genere
+     (es. "DMX 5 poli · IN · maschio"), più la fase per le prese del Quadro */
+  showPortLabel (componentId, p, autoHideMs) {
+    const v = this.compVisuals[componentId];
+    if (!v) return;
+    const gender = (CONNECTOR_GENDER[p.signal] || {})[p.dir] === 'male' ? 'maschio' : 'femmina';
+    const parts = [SIGNAL_LABEL[p.signal] || p.signal, p.dir === 'in' ? 'IN' : 'OUT', gender];
+    if (p.phase) parts.push(p.phase);
+    const pos = this.getPortScreenPos(componentId, p.id);
+    if (!this.portLabel) {
+      this.portLabel = this.add.text(0, 0, '', {
+        fontFamily: 'Inter, sans-serif', fontSize: '17px', fontStyle: 'bold', color: '#eee9df',
+        backgroundColor: '#1c1d22', padding: { x: 8, y: 4 }, resolution: 2
+      }).setOrigin(0.5, 1).setDepth(80);
+    }
+    this.portLabel.setText(parts.join(' · '));
+    this.portLabel.setPosition(pos.x, pos.y - PORT_R - 6);
+    // sempre leggibile, qualunque sia lo zoom della camera
+    this.portLabel.setScale(1 / this.cameras.main.zoom);
+    this.portLabel.setVisible(true);
+    if (this.portLabelTimer) { this.portLabelTimer.remove(); this.portLabelTimer = null; }
+    if (autoHideMs) this.portLabelTimer = this.time.delayedCall(autoHideMs, () => this.hidePortLabel());
+  }
+
+  hidePortLabel () {
+    if (this.portLabel) this.portLabel.setVisible(false);
   }
 
   setGlow (v, on, color) {
@@ -2158,13 +2225,18 @@ class StageScene extends Phaser.Scene {
       // risaltare nella matassa; senza selezione restano tutti a piena vista
       const alpha = anySelected ? (isSelected ? 1 : 0.16) : 1;
       let pts;
-      if (zoneA === 'stage' && zoneB === 'stage') {
-        pts = [from, to];
-        this.edgeGraphics.lineStyle(width, color, alpha);
-        this.edgeGraphics.lineBetween(from.x, from.y, to.x, to.y);
-      } else {
-        pts = computeRoutePoints(from, to, this.stageBox, 30);
+      pts = (zoneA === 'stage' && zoneB === 'stage')
+        ? [from, to]
+        : computeRoutePoints(from, to, this.stageBox, 30);
+      // cavo in neoprene nero (come quelli veri), con un bordo appena più
+      // chiaro per staccarlo dal pavimento e un filetto centrale del colore
+      // del tipo di cavo per riconoscerlo. Il cavo selezionato resta arancione.
+      if (isSelected) {
         strokeRoutedPath(this.edgeGraphics, pts, color, width, 18, alpha);
+      } else {
+        strokeRoutedPath(this.edgeGraphics, pts, 0x55585f, 5.5, 18, alpha);
+        strokeRoutedPath(this.edgeGraphics, pts, 0x17181b, 4, 18, alpha);
+        strokeRoutedPath(this.edgeGraphics, pts, color, 1.4, 18, alpha);
       }
       e._pts = pts;
       // verso del cavo: freccia a metà percorso, dall'OUT (a) all'IN (b).
@@ -2280,7 +2352,8 @@ class StageScene extends Phaser.Scene {
   highlightPending (componentId, portId, on) {
     const v = this.compVisuals[componentId];
     const dot = v.portDots[portId];
-    dot.setStrokeStyle(on ? 3 : 2, on ? 0xf2a541 : 0x141519);
+    const portDef = getPortDef(componentId, portId);
+    dot.setStrokeStyle(on ? 3 : 2.4, on ? 0xf2a541 : SIGNAL_COLOR[portDef.signal]);
     dot.setScale(on ? 1.3 : 1);
     const marker = v.portMarkers[portId];
     if (marker) marker.setScale(on ? 1.3 : 1);
