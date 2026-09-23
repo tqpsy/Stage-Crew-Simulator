@@ -186,10 +186,12 @@ const COMPONENT_TYPES = {
     // fader) e LED di alimentazione sul ponte, come su un banco vero
     labelPos: { x: 30, y: 26 },
     ledPos: mixerIso(3.5, 7, 17),
-    // retro del ponte: 6 ingressi microfonici XLR, uscite MAIN L/R, 2 mandate
-    // AUX per i monitor e l'alimentazione (i canali cresceranno coi livelli)
+    // retro del ponte (livello 1): 4 ingressi microfonici XLR, 2 ingressi di
+    // linea jack, uscite MAIN L/R, 2 mandate AUX per i monitor e
+    // l'alimentazione (i canali cresceranno coi livelli)
     ports: [
-      ...[1, 2, 3, 4, 5, 6].map(n => ({ id: 'in_' + n, signal: 'xlr', dir: 'in', ...mixerRearPort(-2 + n * 10) })),
+      ...[1, 2, 3, 4].map(n => ({ id: 'in_' + n, signal: 'xlr', dir: 'in', ...mixerRearPort(-2 + n * 10) })),
+      ...[5, 6].map(n => ({ id: 'in_' + n, signal: 'jack', dir: 'in', ...mixerRearPort(-2 + n * 10) })),
       { id: 'main_L', signal: 'xlr',      dir: 'out', ...mixerRearPort(68) },
       { id: 'main_R', signal: 'xlr',      dir: 'out', ...mixerRearPort(78) },
       { id: 'aux_1',  signal: 'xlr',      dir: 'out', ...mixerRearPort(88) },
@@ -1151,9 +1153,9 @@ const REAR_PANELS = {
   top: { style: 'cabinet', serial: '2-WAY 12" + 1"  ·  8 Ω',
     sections: [['SPEAKER', [['spk_in', 'INPUT']]]] },
   // retro del ponte del mixer: su due file, sopra i 6 ingressi, sotto uscite e corrente
-  mixer: { style: 'desk', power: true, serial: 'DIGITAL MIXER  ·  6 CH  ·  2 AUX',
+  mixer: { style: 'desk', power: true, serial: 'DIGITAL MIXER  ·  4 MIC + 2 LINE  ·  2 AUX',
     rows: [
-      [['INPUT', [1, 2, 3, 4, 5, 6].map(n => ['in_' + n, 'CH ' + n])]],
+      [['MIC IN', [1, 2, 3, 4].map(n => ['in_' + n, 'CH ' + n])], ['LINE IN', [5, 6].map(n => ['in_' + n, 'CH ' + n])]],
       [['MAIN OUT', [['main_L', 'MAIN L'], ['main_R', 'MAIN R']]], ['AUX · MONITOR', [['aux_1', 'AUX 1'], ['aux_2', 'AUX 2']]], ['POWER', [['power', 'POWER']]]]
     ] },
   ampli: { style: 'rack', left: 'fan', right: 'fuse', power: true, serial: 'CLASS-D POWER AMPLIFIER  ·  2 × 500 W @ 4 Ω',
