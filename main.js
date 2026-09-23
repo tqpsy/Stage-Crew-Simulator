@@ -94,6 +94,62 @@ function mixerRearPort (a) {
   return { dx: Math.round(p.x), dy: Math.round(p.y) };
 }
 
+/* Proiezione isometrica comune a TUTTI gli apparecchi (la stessa del mixer e
+   della griglia di gioco, TILE_H/TILE_W = 70/102): a = asse che sale verso il
+   fondo a destra, b = asse che scende verso destra, z = altezza. Delle facce
+   di un solido se ne vedono tre: il piano superiore, la faccia a=0 (guarda in
+   basso a sinistra, verso il pubblico) e la faccia b=B (in basso a destra).
+   isoFrame centra il solido A×B×Z sull'origine del container. */
+const ISO_K = 0.343;
+function isoFrame (A, B, Z) {
+  const ox = -(A + B) / 4;
+  const oy = -((B - A) * ISO_K - Z) / 2;
+  const P = (a, b, z = 0) => ({ x: (a + b) * 0.5 + ox, y: (b - a) * ISO_K - z + oy });
+  P.A = A; P.B = B; P.Z = Z;
+  return P;
+}
+// posizione di una porta ancorata a un punto del solido
+function isoPort (P, a, b, z) {
+  const p = P(a, b, z);
+  return { dx: Math.round(p.x), dy: Math.round(p.y) };
+}
+
+// tinte delle tre facce visibili (piano, fianco sinistro, fianco destro)
+const ISO_BLACK = { top: 0x3a3d45, left: 0x26282e, right: 0x17181c };
+const ISO_GREY  = { top: 0x9aa0aa, left: 0x7d828c, right: 0x5f646d };
+
+// inviluppo convesso (monotone chain) — per la sagoma di un cilindro
+function convexHull (pts) {
+  const p = pts.slice().sort((u, v) => u.x - v.x || u.y - v.y);
+  const cross = (o, a, b) => (a.x - o.x) * (b.y - o.y) - (a.y - o.y) * (b.x - o.x);
+  const lower = [], upper = [];
+  p.forEach(q => { while (lower.length >= 2 && cross(lower[lower.length - 2], lower[lower.length - 1], q) <= 0) lower.pop(); lower.push(q); });
+  p.slice().reverse().forEach(q => { while (upper.length >= 2 && cross(upper[upper.length - 2], upper[upper.length - 1], q) <= 0) upper.pop(); upper.push(q); });
+  return lower.slice(0, -1).concat(upper.slice(0, -1));
+}
+
+const SUB_ISO   = isoFrame(48, 56, 46);   // cassa sub: baffle con il woofer sulla faccia a=0
+const TOP_ISO   = isoFrame(32, 36, 48);   // testa a due vie, su palo sopra il sub
+const TOP_POLE  = 18;                     // px: palo tra sub e testa
+const PAR_ISO   = isoFrame(38, 34, 42);   // PAR LED su staffa, puntato verso il pubblico
+const AMP_ISO   = isoFrame(80, 46, 16);   // finale a rack, pannello frontale sulla faccia b=B
+const CTRL_ISO  = isoFrame(56, 34, 10);   // consolle luci da tavolo, piano inclinato
+const QUADRO_ISO = isoFrame(112, 34, 46); // armadio di distribuzione, prese sul fronte b=B
+const QUADRO_PHASE_A = [22, 56, 90];      // posizione lungo il fronte di prese/interruttori L1-L3
+const ALL_ISO   = isoFrame(26, 26, 30);   // cassetta dell'allaccio della venue
+const CIAB_ISO  = isoFrame(104, 16, 8);   // ciabatta: barra lunga e bassa, prese sul piano
+const PC_ISO    = isoFrame(26, 34, 22);   // laptop aperto
+const DI_ISO    = isoFrame(24, 20, 12);   // DI passiva, scatolina d'acciaio
+
+// la testa sta sul sub: il fondo del suo palo tocca il centro del piano del sub
+function isoDepth (screenY) { return 10 + screenY / 10000; }
+
+function topOffsetY () {
+  const subTop = SUB_ISO(SUB_ISO.A / 2, SUB_ISO.B / 2, SUB_ISO.Z);
+  const topBottom = TOP_ISO(TOP_ISO.A / 2, TOP_ISO.B / 2, 0);
+  return subTop.y - topBottom.y - TOP_POLE;
+}
+
 /* Catalogo dei CAVI selezionabili (scheda "Cavi") — diverso dal catalogo delle
    PORTE (SIGNAL_COLOR): una porta ha sempre un solo segnale nativo, ma un
    cavo può essere un ADATTATORE tra due segnali diversi (endpoints con 2
@@ -125,18 +181,23 @@ const POWER_CABLE_IDS = new Set(['powercon', 'schuko', 'cee_tri', 'cee_mono', 'c
 const COMPONENT_TYPES = {
   sub: {
     label: 'SUB', category: 'audio', powerW: 600, zone: 'pit', shape: 'sub',
-    body: { w: 60, h: 46, fill: 0x232830, accent: 0x4a90e2 },
+    body: { w: 52, h: 82, fill: 0x232830, accent: 0x4a90e2 },
+    labelPos: { x: -12, y: 26 },
+    ledPos: SUB_ISO(4, 56, 43),
+    // pannello connettori sul fianco (faccia b=B): Speakon in/link in alto,
+    // PowerCON in basso
     ports: [
-      { id: 'power',    signal: 'powercon', dir: 'in',  dx: 0,   dy: 27 },
-      { id: 'spk_in',   signal: 'speakon',  dir: 'in',  dx: -27, dy: 2 },
-      { id: 'spk_thru', signal: 'speakon',  dir: 'out', dx: 0,   dy: -27 }
+      { id: 'power',    signal: 'powercon', dir: 'in',  ...isoPort(SUB_ISO, 24, 56, 8) },
+      { id: 'spk_in',   signal: 'speakon',  dir: 'in',  ...isoPort(SUB_ISO, 9, 56, 33) },
+      { id: 'spk_thru', signal: 'speakon',  dir: 'out', ...isoPort(SUB_ISO, 41, 56, 33) }
     ]
   },
   top: {
     label: 'TOP', category: 'audio', powerW: 0, zone: 'pit', shape: 'top',
-    body: { w: 46, h: 40, fill: 0x232830, accent: 0x4a90e2 },
+    body: { w: 34, h: 72, fill: 0x232830, accent: 0x4a90e2 },
+    ledPos: TOP_ISO(3, 36, 45),
     ports: [
-      { id: 'spk_in', signal: 'speakon', dir: 'in', dx: 0, dy: 22 }
+      { id: 'spk_in', signal: 'speakon', dir: 'in', ...isoPort(TOP_ISO, 16, 36, 12) }
     ]
   },
   mixer: {
@@ -155,28 +216,37 @@ const COMPONENT_TYPES = {
   },
   ampli: {
     label: 'FINALE', category: 'regia', powerW: 300, zone: 'offstage', shape: 'ampli',
-    body: { w: 80, h: 44, fill: 0x2a2c32, accent: 0x8a8e98 },
+    body: { w: 64, h: 60, fill: 0x2a2c32, accent: 0x8a8e98 },
+    labelPos: { x: -26, y: 16 },
+    ledPos: AMP_ISO(6, 46, 12),
+    // connettori sul coperchio, su due file come sul pannello posteriore:
+    // dietro alimentazione e ingressi XLR, davanti le uscite Speakon
     ports: [
-      { id: 'power', signal: 'powercon', dir: 'in',  dx: -32, dy: -18 },
-      { id: 'in_L',  signal: 'xlr',      dir: 'in',  dx: -30, dy: 18 },
-      { id: 'in_R',  signal: 'xlr',      dir: 'in',  dx: -10, dy: 18 },
-      { id: 'out_L', signal: 'speakon',  dir: 'out', dx: 12,  dy: 18 },
-      { id: 'out_R', signal: 'speakon',  dir: 'out', dx: 32,  dy: 18 }
+      { id: 'power', signal: 'powercon', dir: 'in',  ...isoPort(AMP_ISO, 68, 8, 16) },
+      { id: 'in_L',  signal: 'xlr',      dir: 'in',  ...isoPort(AMP_ISO, 14, 8, 16) },
+      { id: 'in_R',  signal: 'xlr',      dir: 'in',  ...isoPort(AMP_ISO, 41, 8, 16) },
+      { id: 'out_L', signal: 'speakon',  dir: 'out', ...isoPort(AMP_ISO, 26, 38, 16) },
+      { id: 'out_R', signal: 'speakon',  dir: 'out', ...isoPort(AMP_ISO, 53, 38, 16) }
     ]
   },
   par: {
     label: 'PAR', category: 'luci', powerW: 40, zone: 'stagecore', shape: 'par',
-    body: { w: 40, h: 44, fill: 0x2a2620, accent: 0xf2c53d },
+    body: { w: 60, h: 54, fill: 0x1c1d22, accent: 0xf2c53d },
+    ledPos: PAR_ISO(22, 31, 3),
+    // connettori sul retro, a destra del fusto: la lente resta libera.
+    // Colonna sinistra ingressi, destra uscite (thru); sopra DMX, sotto corrente
     ports: [
-      { id: 'power_in',   signal: 'powercon', dir: 'in',  dx: -16, dy: 20 },
-      { id: 'power_thru', signal: 'powercon', dir: 'out', dx: 16,  dy: 20 },
-      { id: 'dmx_in',     signal: 'dmx',      dir: 'in',  dx: -16, dy: -16 },
-      { id: 'dmx_thru',   signal: 'dmx',      dir: 'out', dx: 16,  dy: -16 }
+      { id: 'power_in',   signal: 'powercon', dir: 'in',  dx: 8,  dy: 14 },
+      { id: 'power_thru', signal: 'powercon', dir: 'out', dx: 27, dy: 14 },
+      { id: 'dmx_in',     signal: 'dmx',      dir: 'in',  dx: 8,  dy: -7 },
+      { id: 'dmx_thru',   signal: 'dmx',      dir: 'out', dx: 27, dy: -7 }
     ]
   },
   controller: {
     label: 'CTRL', category: 'luci', powerW: 20, zone: 'offstage', shape: 'controller',
     body: { w: 62, h: 42, fill: 0x2a2c32, accent: 0xf2a541 },
+    labelPos: { x: -14, y: 10 },
+    ledPos: CTRL_ISO(52, 30, 10),
     ports: [
       { id: 'power', signal: 'powercon', dir: 'in',  dx: -24, dy: 22 },
       { id: 'dmx',   signal: 'dmx',      dir: 'out', dx: 24,  dy: 22 }
@@ -186,7 +256,9 @@ const COMPONENT_TYPES = {
     label: 'QUADRO', category: 'power', powerW: 0, zone: 'backstage', shape: 'quadro',
     // cabinet bianco/metallo, come un vero armadio elettrico da evento —
     // non più una scatola tinta a caso (vedi drawComponentBody per i dettagli).
-    body: { w: 92, h: 54, fill: 0xe9eaed, accent: 0x4a4f5a },
+    body: { w: 76, h: 94, fill: 0xe9eaed, accent: 0x4a4f5a },
+    labelPos: { x: -14, y: -40 },
+    ledPos: QUADRO_ISO(4, 34, 43),
     // 3 prese, una per fase (L1/L2/L3): a differenza degli altri componenti,
     // ogni presa può ricevere PIÙ cavi (multi:true) — non è il singolo cavo a
     // contare, ma il carico totale che finisce su quella fase (vedi
@@ -195,34 +267,41 @@ const COMPONENT_TYPES = {
       // sia l'ingresso (dall'Allaccio) sia le 3 uscite sono CEE industriale:
       // un quadro trifase non ha prese PowerCON incorporate. Ogni utenza a
       // valle (PowerCON o Schuko) richiede l'adattatore giusto in scheda Cavi.
-      { id: 'in',    signal: 'cee_tri',  dir: 'in',  dx: 0,   dy: 25 },
-      { id: 'out_1', signal: 'cee_mono', dir: 'out', dx: -27, dy: -25, phase: 'L1', multi: true },
-      { id: 'out_2', signal: 'cee_mono', dir: 'out', dx: 0,   dy: -25, phase: 'L2', multi: true },
-      { id: 'out_3', signal: 'cee_mono', dir: 'out', dx: 27,  dy: -25, phase: 'L3', multi: true }
+      // ingresso trifase sul fianco (faccia a=0), le 3 prese in fila sul
+      // fronte (faccia b=B), ognuna sotto il proprio interruttore
+      { id: 'in',    signal: 'cee_tri',  dir: 'in',  ...isoPort(QUADRO_ISO, 0, 17, 14) },
+      { id: 'out_1', signal: 'cee_mono', dir: 'out', ...isoPort(QUADRO_ISO, QUADRO_PHASE_A[0], 34, 12), phase: 'L1', multi: true },
+      { id: 'out_2', signal: 'cee_mono', dir: 'out', ...isoPort(QUADRO_ISO, QUADRO_PHASE_A[1], 34, 12), phase: 'L2', multi: true },
+      { id: 'out_3', signal: 'cee_mono', dir: 'out', ...isoPort(QUADRO_ISO, QUADRO_PHASE_A[2], 34, 12), phase: 'L3', multi: true }
     ]
   },
   allaccio: {
-    label: 'ALLACCIO', category: 'power', powerW: 0, zone: 'fixed', shape: 'quadro',
-    body: { w: 50, h: 44, fill: 0x1f2a1f, accent: 0x49b06a },
+    label: 'ALLACCIO', category: 'power', powerW: 0, zone: 'fixed', shape: 'allaccio',
+    body: { w: 30, h: 50, fill: 0x2c3a2c, accent: 0x49b06a },
+    labelPos: { x: 0, y: -34 },
     ports: [
-      { id: 'out', signal: 'cee_tri', dir: 'out', dx: 0, dy: -27 }
+      { id: 'out', signal: 'cee_tri', dir: 'out', ...isoPort(ALL_ISO, 13, 26, 14) }
     ]
   },
   ciabatta: {
     label: 'CIABATTA', category: 'regia', powerW: 0, zone: 'foh', shape: 'ciabatta',
-    body: { w: 74, h: 24, fill: 0x2a2c32, accent: 0xc77dff },
+    body: { w: 64, h: 50, fill: 0x2a2c32, accent: 0xc77dff },
+    ledPos: CIAB_ISO(16, 3, 8),
+    // ingresso in testa alla barra (faccia a=0), prese in fila sul piano
     ports: [
-      { id: 'in',    signal: 'powercon', dir: 'in',  dx: -30, dy: 0 },
-      { id: 'out_1', signal: 'schuko',   dir: 'out', dx: -8,  dy: 0 },
-      { id: 'out_2', signal: 'schuko',   dir: 'out', dx: 11,  dy: 0 },
-      { id: 'out_3', signal: 'schuko',   dir: 'out', dx: 30,  dy: 0 }
+      { id: 'in',    signal: 'powercon', dir: 'in',  ...isoPort(CIAB_ISO, 0, 8, 4) },
+      { id: 'out_1', signal: 'schuko',   dir: 'out', ...isoPort(CIAB_ISO, 32, 8, 8) },
+      { id: 'out_2', signal: 'schuko',   dir: 'out', ...isoPort(CIAB_ISO, 62, 8, 8) },
+      { id: 'out_3', signal: 'schuko',   dir: 'out', ...isoPort(CIAB_ISO, 92, 8, 8) }
     ]
   },
   pc: {
     label: 'PC', category: 'regia', powerW: 150, zone: 'foh', shape: 'pc',
     // stile "Mac": scocca in alluminio chiaro, non più il rackbox scuro
     // generico — vedi drawComponentBody per lo schermo/trackpad/notch.
-    body: { w: 40, h: 34, fill: 0xd7dadd, accent: 0x9a9da3 },
+    body: { w: 34, h: 44, fill: 0xd7dadd, accent: 0x9a9da3 },
+    labelPos: { x: 4, y: -8 },
+    ledPos: PC_ISO(2, 30, 2),
     ports: [
       { id: 'power',     signal: 'schuko', dir: 'in',  dx: 0,  dy: 22 },
       // uscita audio (jack, non bilanciata): va in una DI prima di entrare
@@ -235,7 +314,8 @@ const COMPONENT_TYPES = {
   // richiesta, sta accanto al PC (Regia di sala o Off Stage).
   di: {
     label: 'DI', category: 'regia', powerW: 0, zone: 'foh', shape: 'di',
-    body: { w: 30, h: 24, fill: 0x232830, accent: 0x8a8e98 },
+    body: { w: 30, h: 28, fill: 0x2a2d33, accent: 0x8a8e98 },
+    ledPos: DI_ISO(12, 3, 12),
     ports: [
       { id: 'in',  signal: 'jack', dir: 'in',  dx: -11, dy: 0 },
       { id: 'out', signal: 'xlr',  dir: 'out', dx: 11,  dy: 0 }
@@ -247,14 +327,15 @@ const COMPONENT_TYPES = {
   // quando servirà distribuire un carico più grande su più rami.
   ciabatta_cee: {
     label: 'CIAB.CEE', category: 'corrente', powerW: 0, zone: 'backstage', shape: 'ciabatta',
-    body: { w: 74, h: 24, fill: 0x2a2c32, accent: 0x2f6fd6 },
+    body: { w: 64, h: 50, fill: 0x2a2c32, accent: 0x2f6fd6 },
+    ledPos: CIAB_ISO(16, 3, 8),
     // splitta UNA fase (monofase) su più prese: non tocca mai il trifase,
     // quello resta solo tra Allaccio e Quadro.
     ports: [
-      { id: 'in',    signal: 'cee_mono', dir: 'in',  dx: -30, dy: 0 },
-      { id: 'out_1', signal: 'cee_mono', dir: 'out', dx: -8,  dy: 0 },
-      { id: 'out_2', signal: 'cee_mono', dir: 'out', dx: 11,  dy: 0 },
-      { id: 'out_3', signal: 'cee_mono', dir: 'out', dx: 30,  dy: 0 }
+      { id: 'in',    signal: 'cee_mono', dir: 'in',  ...isoPort(CIAB_ISO, 0, 8, 4) },
+      { id: 'out_1', signal: 'cee_mono', dir: 'out', ...isoPort(CIAB_ISO, 32, 8, 8) },
+      { id: 'out_2', signal: 'cee_mono', dir: 'out', ...isoPort(CIAB_ISO, 62, 8, 8) },
+      { id: 'out_3', signal: 'cee_mono', dir: 'out', ...isoPort(CIAB_ISO, 92, 8, 8) }
     ]
   }
 };
@@ -1381,9 +1462,10 @@ class StageScene extends Phaser.Scene {
     const loads = computePhaseLoads();
     const g = qv.phaseBars;
     g.clear();
-    const barW = 22, barH = 4;
-    const barY = -def.body.h / 2 + 8 + def.body.h * 0.35 - 7;
+    // barra subito sotto ogni presa di fase
+    const barW = 14, barH = 4;
     def.ports.filter(p => p.phase).forEach(p => {
+      const barY = p.dy + PORT_R + 4;
       const frac = Math.min(1, loads[p.phase] / PHASE_BUDGET_W);
       const color = frac >= 1 ? 0xe0503f : (frac >= 0.75 ? 0xf2a541 : 0x49b06a);
       g.fillStyle(0x000000, 0.6);
@@ -1393,116 +1475,194 @@ class StageScene extends Phaser.Scene {
     });
   }
 
+  /* attrezzi di disegno isometrico su una Graphics, per un solido in un
+     isoFrame P: facce, quadrilateri e cerchi appoggiati sui tre piani */
+  isoKit (g, P) {
+    const poly = (pts, color, alpha = 1) => { g.fillStyle(color, alpha); g.fillPoints(pts, true); };
+    const circ = (fn, n = 24) => Array.from({ length: n }, (_, i) => fn(i / n * Math.PI * 2));
+    return {
+      poly,
+      // solido: faccia a=a0 (sinistra), faccia b=b1 (destra), piano z=z1
+      box: (a0, a1, b0, b1, z0, z1, c) => {
+        poly([P(a0, b0, z0), P(a0, b1, z0), P(a0, b1, z1), P(a0, b0, z1)], c.left);
+        poly([P(a0, b1, z0), P(a1, b1, z0), P(a1, b1, z1), P(a0, b1, z1)], c.right);
+        poly([P(a0, b0, z1), P(a0, b1, z1), P(a1, b1, z1), P(a1, b0, z1)], c.top);
+        g.lineStyle(0.8, 0x0c0d10, 0.85);
+        g.strokePoints([P(a0, b0, z0), P(a0, b1, z0), P(a1, b1, z0), P(a1, b1, z1), P(a1, b0, z1), P(a0, b0, z1)], true);
+        // spigoli illuminati (luce dall'alto a sinistra, come sul mixer)
+        g.lineStyle(0.8, 0xffffff, 0.14);
+        g.strokePoints([P(a0, b0, z1), P(a0, b1, z1), P(a1, b1, z1)], false);
+        const e0 = P(a0, b1, z0), e1 = P(a0, b1, z1); g.lineBetween(e0.x, e0.y, e1.x, e1.y);
+      },
+      quadA: (a, b0, b1, z0, z1, c, al) => poly([P(a, b0, z0), P(a, b1, z0), P(a, b1, z1), P(a, b0, z1)], c, al),
+      quadB: (b, a0, a1, z0, z1, c, al) => poly([P(a0, b, z0), P(a1, b, z0), P(a1, b, z1), P(a0, b, z1)], c, al),
+      quadZ: (z, a0, a1, b0, b1, c, al) => poly([P(a0, b0, z), P(a1, b0, z), P(a1, b1, z), P(a0, b1, z)], c, al),
+      // cerchi disegnati SUL piano indicato (diventano ellissi isometriche)
+      discA: (a, bc, zc, r, c, al) => poly(circ(t => P(a, bc + r * Math.cos(t), zc + r * Math.sin(t))), c, al),
+      discB: (b, ac, zc, r, c, al) => poly(circ(t => P(ac + r * Math.cos(t), b, zc + r * Math.sin(t))), c, al),
+      discZ: (z, ac, bc, r, c, al) => poly(circ(t => P(ac + r * Math.cos(t), bc + r * Math.sin(t), z)), c, al)
+    };
+  }
+
   /* ---------------- disegno di un componente: forma dedicata per tipo ---------------- */
   drawComponentBody (g, def) {
     const w = def.body.w, h = def.body.h;
     switch (def.shape) {
       case 'sub': {
-        g.fillStyle(def.body.fill, 1); g.lineStyle(2, def.body.accent, 1);
-        g.fillRoundedRect(-w / 2, -h / 2, w, h, 5); g.strokeRoundedRect(-w / 2, -h / 2, w, h, 5);
-        const r = Math.min(w, h) * 0.34;
-        g.fillStyle(0x121317, 1); g.fillCircle(0, 2, r);
-        g.lineStyle(2, def.body.accent, 1); g.strokeCircle(0, 2, r);
+        // cassa sub in multistrato nero: baffle con woofer da 18" e bocca
+        // reflex verso il pubblico, pannello connettori sul fianco
+        const P = SUB_ISO, k = this.isoKit(g, P);
+        const { A, B, Z } = P;
+        k.box(0, A, 0, B, 0, Z, ISO_BLACK);
+        k.quadA(0, 2, B - 2, 2, Z - 2, 0x1b1c20);                    // tela/griglia del baffle
+        k.discA(0, B / 2, Z / 2 + 4, 19, 0x2e3037);                  // sospensione
+        k.discA(0, B / 2, Z / 2 + 4, 17, 0x0c0d10);
+        k.discA(0, B / 2, Z / 2 + 4, 12, 0x17181c);                  // cono
+        k.discA(0, B / 2, Z / 2 + 4, 4.5, 0x2e3037);                 // parapolvere
+        k.quadA(0, 6, B - 6, 2.5, 5.5, 0x050506);                     // bocca reflex
+        k.quadA(0, B - 12, B - 4, Z - 5, Z - 3.6, def.body.accent);  // logo
+        k.quadB(B, 1.5, A - 1.5, 1.5, Z - 1.5, 0x22242a);            // piastra connettori
+        k.quadZ(Z, A / 2 - 6, A / 2 + 6, B / 2 - 1.5, B / 2 + 1.5, 0x0c0d10); // flangia del palo
         break;
       }
       case 'top': {
-        const wTop = w * 0.55;
-        g.fillStyle(def.body.fill, 1); g.lineStyle(2, def.body.accent, 1);
-        g.beginPath();
-        g.moveTo(-wTop / 2, -h / 2); g.lineTo(wTop / 2, -h / 2);
-        g.lineTo(w / 2, h / 2); g.lineTo(-w / 2, h / 2);
-        g.closePath(); g.fillPath(); g.strokePath();
-        g.fillStyle(0x121317, 1); g.fillCircle(0, -h * 0.12, Math.min(w, h) * 0.18);
+        // testa a due vie: tromba in alto e woofer da 12" sul fronte, montata
+        // sul palo che scende nel sub
+        const P = TOP_ISO, k = this.isoKit(g, P);
+        const { A, B, Z } = P;
+        const foot = P(A / 2, B / 2, 0);
+        g.fillStyle(0x6a6e78, 1); g.fillRect(foot.x - 1.6, foot.y - 2, 3.2, TOP_POLE + 2);
+        g.fillStyle(0x9aa0aa, 1); g.fillRect(foot.x - 1.6, foot.y - 2, 1.2, TOP_POLE + 2);
+        k.box(0, A, 0, B, 0, Z, ISO_BLACK);
+        k.quadA(0, 2, B - 2, 2, Z - 2, 0x1b1c20);
+        k.quadA(0, 5, B - 5, Z - 17, Z - 4, 0x0c0d10);               // tromba
+        k.quadA(0, 11, B - 11, Z - 13, Z - 8, 0x26282e);
+        k.discA(0, B / 2, 16, 12, 0x2e3037);                         // woofer
+        k.discA(0, B / 2, 16, 10.5, 0x0c0d10);
+        k.discA(0, B / 2, 16, 7, 0x17181c);
+        k.discA(0, B / 2, 16, 2.8, 0x2e3037);
+        k.quadA(0, B - 9, B - 3, 3, 4.2, def.body.accent);
+        k.quadB(B, 3, A - 3, 3, 22, 0x22242a);
         break;
       }
       case 'par': {
-        const r = Math.min(w, h - 10) / 2;
-        g.fillStyle(0x1c1d22, 1);
-        g.fillRect(-3, r - 6, 6, h / 2 - (r - 6));
-        g.fillStyle(def.body.fill, 1); g.lineStyle(2, def.body.accent, 1);
-        g.fillCircle(0, -4, r); g.strokeCircle(0, -4, r);
-        g.fillStyle(0x121317, 1); g.fillCircle(0, -4, r * 0.5);
-        g.lineStyle(1.5, def.body.accent, 0.9); g.strokeCircle(0, -4, r * 0.5);
+        // PAR LED su staffa a pavimento: corpo cilindrico nero puntato verso
+        // il pubblico, lente frontale con i LED, forcella con le manopole
+        const P = PAR_ISO, k = this.isoKit(g, P);
+        const zc = 24, bc = 17, r = 14, aF = 3, aR = 34;
+        k.box(6, 32, 4, 30, 0, 2.5, ISO_GREY);                       // piastra
+        k.box(17, 21, 2, 4.5, 2.5, zc + 1, ISO_GREY);                 // forcella
+        const ring = (a, rad) => Array.from({ length: 32 }, (_, i) => {
+          const t = i / 32 * Math.PI * 2;
+          return P(a, bc + rad * Math.cos(t), zc + rad * Math.sin(t));
+        });
+        k.poly(convexHull(ring(aR, r).concat(ring(aF, r))), 0x1c1d22);  // fusto
+        k.poly(ring(aR, r), 0x26282e);
+        g.lineStyle(1, 0x3a3d45, 1);                                   // alette di raffreddamento
+        [12, 18, 24, 30].forEach(a => { g.strokePoints(ring(a, r).slice(4, 20), false); });
+        k.poly(ring(aF, r), 0x0c0d10);                                 // anello frontale
+        k.poly(ring(aF - 0.6, r - 2), 0x3b3423);                       // lente
+        [[0, 0], [5.5, 0], [-5.5, 0], [2.7, 4.8], [-2.7, 4.8], [2.7, -4.8], [-2.7, -4.8]].forEach(([db, dz]) => {
+          k.discA(aF - 0.8, bc + db, zc + dz, 1.9, 0xf6e7a8);
+        });
+        g.lineStyle(1.4, def.body.accent, 0.9); g.strokePoints(ring(aF, r), true);
+        k.box(17, 21, 29.5, 32, 2.5, zc + 1, ISO_GREY);               // braccio destro
+        k.discB(32, 19, zc, 3.2, 0x8a8e98);                            // manopola
         break;
       }
       case 'ampli': {
-        g.fillStyle(def.body.fill, 1); g.lineStyle(2, def.body.accent, 1);
-        g.fillRoundedRect(-w / 2, -h / 2, w, h, 5); g.strokeRoundedRect(-w / 2, -h / 2, w, h, 5);
-        [-w * 0.2, w * 0.2].forEach(mx => {
-          g.lineStyle(2, def.body.accent, 0.9);
-          g.beginPath();
-          g.arc(mx, -2, 9, Phaser.Math.DegToRad(200), Phaser.Math.DegToRad(340));
-          g.strokePath();
-          g.closePath();
-          g.fillStyle(0xf2c53d, 1); g.fillCircle(mx, -2, 1.6);
-        });
+        // finale a rack 2U: maniglie, manopole di livello, LED di stato e
+        // griglie di aerazione sul coperchio
+        const P = AMP_ISO, k = this.isoKit(g, P);
+        const { A, B, Z } = P;
+        k.box(0, A, 0, B, 0, Z, ISO_BLACK);
+        for (let a = 6; a < A - 6; a += 5) k.quadZ(Z, a, a + 2, 19, 27, 0x2a2c33);
+        k.quadB(B, 1, A - 1, 1, Z - 1, 0x1a1b20);                      // pannello frontale
+        [[2, 6], [A - 6, A - 2]].forEach(([a0, a1]) => k.box(a0, a1, B, B + 3, 2, Z - 2, ISO_GREY));
+        k.discB(B, 18, Z / 2, 3.6, 0x0c0d10); k.discB(B, 18, Z / 2, 2.8, 0x8a8e98);
+        k.discB(B, 30, Z / 2, 3.6, 0x0c0d10); k.discB(B, 30, Z / 2, 2.8, 0x8a8e98);
+        [0x49b06a, 0x49b06a, 0xf2c53d, 0x2a2c33].forEach((c, i) => k.quadB(B, 42 + i * 4, 45 + i * 4, Z / 2 + 2, Z / 2 + 4.5, c));
+        [0x49b06a, 0x49b06a, 0x2a2c33, 0x2a2c33].forEach((c, i) => k.quadB(B, 42 + i * 4, 45 + i * 4, Z / 2 - 3.5, Z / 2 - 1, c));
+        k.quadB(B, 62, 70, Z / 2 - 2.5, Z / 2 + 2.5, 0xd6392f);         // interruttore
         break;
       }
       case 'quadro': {
-        // cabinet chiaro con bordo grigio-blu — un vero armadio elettrico da
-        // evento, non più una scatola tinta. Striscia di sicurezza
-        // gialla/nera in alto e maniglia sul lato per la resa realistica.
-        g.fillStyle(def.body.fill, 1); g.lineStyle(2.5, def.body.accent, 1);
-        g.fillRoundedRect(-w / 2, -h / 2, w, h, 6); g.strokeRoundedRect(-w / 2, -h / 2, w, h, 6);
-
-        const stripeY = -h / 2 + 2, stripeH = 4;
-        g.fillStyle(0xf2c53d, 1);
-        g.fillRect(-w / 2 + 3, stripeY, w - 6, stripeH);
+        // armadio di distribuzione bianco da evento: striscia di sicurezza,
+        // finestra con un interruttore per fase sopra ogni presa CEE,
+        // maniglia sul fianco
+        const P = QUADRO_ISO, k = this.isoKit(g, P);
+        const { A, B, Z } = P;
+        k.box(0, A, 0, B, 0, Z, { top: 0xf3f4f6, left: 0xd9dbdf, right: 0xc7cad0 });
+        k.quadB(B, 2, A - 2, Z - 5, Z - 2, 0xf2c53d);                   // striscia gialla/nera
         g.lineStyle(1, 0x1c1d22, 0.8);
-        for (let x = -w / 2 + 3; x < w / 2 - 3; x += 6) {
-          g.lineBetween(x, stripeY + stripeH, x + stripeH, stripeY);
+        for (let a = 4; a < A - 4; a += 6) {
+          const p0 = P(a, B, Z - 5), p1 = P(a + 3, B, Z - 2);
+          g.lineBetween(p0.x, p0.y, p1.x, p1.y);
         }
-
-        g.fillStyle(def.body.accent, 1);
-        g.fillRoundedRect(w / 2 - 6, -5, 4, 10, 1.5);
-
-        // un interruttore per ogni fase reale (solo il vero Quadro ha porte con
-        // .phase; l'Allaccio condivide questa forma ma resta una scatola liscia)
-        const outs = def.ports.filter(p => p.phase);
-        outs.forEach(p => {
-          g.fillStyle(0x2a2c32, 1);
-          g.fillRoundedRect(p.dx - 7, -h / 2 + 8, 14, h * 0.35, 2);
-          g.fillStyle(0x49b06a, 1);
-          g.fillRect(p.dx - 4, -h / 2 + 11, 8, 5);
+        k.quadB(B, 3, A - 3, 24, Z - 8, 0x3a3d45);                      // finestra interruttori
+        def.ports.filter(p => p.phase).forEach(p => {
+          const a = QUADRO_PHASE_A[['L1', 'L2', 'L3'].indexOf(p.phase)];
+          k.quadB(B, a - 6, a + 6, 25, 31, 0x2a2c32);
+          k.quadB(B, a - 3, a + 3, 26.5, 29, 0x49b06a);
         });
+        k.quadA(0, 5, 29, 4, 36, 0xcfd2d6);                             // sportello laterale
+        k.box(0, 0.1, 25, 28, 28, 34, ISO_GREY);                        // maniglia
+        k.quadZ(Z, 6, A - 6, 4, B - 4, 0xe6e8eb);
+        break;
+      }
+      case 'allaccio': {
+        // cassetta dell'allaccio della venue: centralino verde con segnale di
+        // pericolo e presa CEE trifase 400V
+        const P = ALL_ISO, k = this.isoKit(g, P);
+        const { A, B, Z } = P;
+        k.box(0, A, 0, B, 0, Z, { top: 0x3f5540, left: 0x2c3a2c, right: 0x223022 });
+        k.quadB(B, 3, A - 3, Z - 6, Z - 3, 0xf2c53d);
+        k.quadA(0, 3, B - 3, 3, Z - 3, 0x263326);
+        const t0 = P(0, B / 2 - 6, Z - 8), t1 = P(0, B / 2 + 6, Z - 8), t2 = P(0, B / 2, Z - 18);
+        g.fillStyle(0xf2c53d, 1); g.fillTriangle(t0.x, t0.y, t1.x, t1.y, t2.x, t2.y);
+        g.lineStyle(1, 0x1c1d22, 1); g.strokeTriangle(t0.x, t0.y, t1.x, t1.y, t2.x, t2.y);
         break;
       }
       case 'ciabatta': {
-        g.fillStyle(def.body.fill, 1); g.lineStyle(2, def.body.accent, 1);
-        g.fillRoundedRect(-w / 2, -h / 2, w, h, h / 2);
-        g.strokeRoundedRect(-w / 2, -h / 2, w, h, h / 2);
+        // barra di prese: corpo nero lungo e basso, filetto colorato sul
+        // fianco, interruttore rosso e le prese incassate nel piano
+        const P = CIAB_ISO, k = this.isoKit(g, P);
+        const { A, B, Z } = P;
+        k.box(0, A, 0, B, 0, Z, ISO_BLACK);
+        k.quadB(B, 2, A - 2, 2.5, 5, def.body.accent);
+        k.quadZ(Z, 12, 20, 4, 12, 0xd6392f);
+        def.ports.filter(p => p.dir === 'out').forEach((p, i) => k.discZ(Z, 32 + i * 30, B / 2, 7, 0x0c0d10));
         break;
       }
       case 'pc': {
-        // laptop in alluminio chiaro, non un rackbox generico: base con
-        // trackpad + schermo con notch fotocamera — un cenno riconoscibile
-        // a un Mac, restando comunque un'icona vettoriale come tutto il resto.
-        const baseH = h * 0.16;
-        g.fillStyle(def.body.fill, 1); g.lineStyle(1.5, def.body.accent, 1);
-        g.fillRoundedRect(-w / 2, h / 2 - baseH, w, baseH, 2);
-        g.strokeRoundedRect(-w / 2, h / 2 - baseH, w, baseH, 2);
-        g.fillStyle(def.body.accent, 0.55);
-        g.fillRoundedRect(-w * 0.14, h / 2 - baseH + 2, w * 0.28, baseH - 4, 1);
-
-        const screenH = h - baseH;
-        g.fillStyle(def.body.fill, 1); g.lineStyle(1.5, def.body.accent, 1);
-        g.fillRoundedRect(-w / 2, -h / 2, w, screenH, 3);
-        g.strokeRoundedRect(-w / 2, -h / 2, w, screenH, 3);
-        g.fillStyle(0x1c1d22, 1);
-        g.fillRoundedRect(-w * 0.42, -h / 2 + 3, w * 0.84, screenH - 6, 2);
-        g.fillStyle(0x0c0d10, 1);
-        g.fillRoundedRect(-w * 0.06, -h / 2 + 3, w * 0.12, 3, 1);
+        // laptop aperto: base in alluminio con tastiera e trackpad, schermo
+        // inclinato all'indietro rivolto verso l'operatore
+        const P = PC_ISO, k = this.isoKit(g, P);
+        const { B } = P;
+        const alu = { top: 0xe4e6e9, left: 0xc9ccd0, right: 0xb4b7bc };
+        k.box(0, 22, 0, B, 0, 2, alu);
+        k.quadZ(2, 10, 20, 3, B - 3, 0x2a2c32);                          // tastiera
+        g.lineStyle(0.5, 0x4a4d56, 1);
+        for (let a = 12; a < 20; a += 2.5) { const p0 = P(a, 4, 2), p1 = P(a, B - 4, 2); g.lineBetween(p0.x, p0.y, p1.x, p1.y); }
+        k.quadZ(2, 2.5, 8, B / 2 - 6, B / 2 + 6, 0xd3d6da);             // trackpad
+        const lid = [P(22, 0, 2), P(22, B, 2), P(26, B, 22), P(26, 0, 22)];
+        k.poly(lid, 0xd7dadd);
+        const inset = (a, b, z) => P(a, b, z);
+        k.poly([inset(22.4, 1.5, 3.8), inset(22.4, B - 1.5, 3.8), inset(25.6, B - 1.5, 20.4), inset(25.6, 1.5, 20.4)], 0x1c1d22);
+        k.poly([inset(22.6, 3, 5.2), inset(22.6, B - 3, 5.2), inset(25.4, B - 3, 19), inset(25.4, 3, 19)], 0x1d4f86);
+        k.poly([inset(22.6, 3, 5.2), inset(22.6, 11, 5.2), inset(25.4, 7, 19), inset(25.4, 3, 19)], 0xffffff, 0.08);
+        g.lineStyle(0.8, 0x8a8e98, 1); g.strokePoints(lid, true);
         break;
       }
       case 'di': {
-        // piccola scatola metallica passiva: due connettori (jack IN, XLR
-        // OUT) e un piccolo interruttore ground-lift, come una DI reale.
-        g.fillStyle(def.body.fill, 1); g.lineStyle(2, def.body.accent, 1);
-        g.fillRoundedRect(-w / 2, -h / 2, w, h, 4); g.strokeRoundedRect(-w / 2, -h / 2, w, h, 4);
-        g.fillStyle(0x1c1d22, 1);
-        g.fillRoundedRect(-4, -h / 2 + 4, 8, 5, 1);
-        g.fillStyle(def.body.accent, 0.9);
-        g.fillRect(-2.5, -h / 2 + 5.5, 5, 2);
+        // DI passiva: scatolina d'acciaio verniciato con serigrafia e
+        // interruttore ground-lift sul coperchio
+        const P = DI_ISO, k = this.isoKit(g, P);
+        const { A, B, Z } = P;
+        k.box(0, A, 0, B, 0, Z, { top: 0x4a5566, left: 0x39424f, right: 0x2c333d });
+        k.quadZ(Z, 6, 18, 3, 7, 0xdcdfe4, 0.5);
+        k.box(14, 18, 12, 16, Z, Z + 2, ISO_GREY);
+        k.quadZ(Z, 2, A - 2, B - 3, B - 2, def.body.accent, 0.6);
         break;
       }
       case 'mixer': {
@@ -1642,23 +1802,38 @@ class StageScene extends Phaser.Scene {
         break;
       }
       case 'controller': {
-        // consolle luci: piccolo display in alto + griglia di pulsanti/scene
-        // sotto — diversa a colpo d'occhio dai fader del mixer.
-        g.fillStyle(def.body.fill, 1); g.lineStyle(2, def.body.accent, 1);
-        g.fillRoundedRect(-w / 2, -h / 2, w, h, 5); g.strokeRoundedRect(-w / 2, -h / 2, w, h, 5);
-        g.fillStyle(0x1c1d22, 1);
-        g.fillRoundedRect(-w * 0.36, -h * 0.36, w * 0.72, h * 0.26, 2);
-        g.fillStyle(def.body.accent, 0.55);
-        g.fillRect(-w * 0.3, -h * 0.31, w * 0.5, h * 0.05);
-        const cols = 5, rows = 2, gridW = w * 0.74, gridTop = h * 0.02, gridH = h * 0.28;
-        for (let r = 0; r < rows; r++) {
-          for (let ci = 0; ci < cols; ci++) {
-            const bx = -gridW / 2 + (gridW / (cols - 1)) * ci;
-            const by = gridTop + (gridH / (rows - 1)) * r;
-            g.fillStyle(def.body.accent, 0.75);
-            g.fillRoundedRect(bx - 2, by - 2, 4, 4, 1);
+        // consolle luci da tavolo: display, griglia di tasti scena
+        // retroilluminati e una fila di fader, piano leggermente inclinato
+        const P = CTRL_ISO, k = this.isoKit(g, P);
+        const { A, B } = P;
+        const zb = 10, zf = 5;                         // altezza retro/fronte
+        const zAt = b => zb - (zb - zf) * b / B;
+        const T = (a, b, dz = 0) => P(a, b, zAt(b) + dz);
+        k.poly([P(0, 0, 0), P(0, B, 0), P(0, B, zf), P(0, 0, zb)], 0x26282e);
+        k.poly([P(0, B, 0), P(A, B, 0), P(A, B, zf), P(0, B, zf)], 0x17181c);
+        k.poly([T(0, 0), T(0, B), T(A, B), T(A, 0)], 0x3a3d45);
+        const q = (a0, a1, b0, b1, c, dz = 0.3) => k.poly([T(a0, b0, dz), T(a1, b0, dz), T(a1, b1, dz), T(a0, b1, dz)], c);
+        q(36, 52, 3, 11, 0x0c0d10);                    // display
+        q(37.5, 50.5, 4.2, 9.8, 0x1d4f86);
+        for (let r = 0; r < 2; r++) {
+          for (let c = 0; c < 6; c++) {
+            const a = 5 + c * 5, b = 4 + r * 5;
+            q(a, a + 3, b, b + 3, (r === 0 && c === 1) || (r === 1 && c === 4) ? 0xf2a541 : 0x55585f);
           }
         }
+        for (let c = 0; c < 6; c++) {                  // fader
+          const a = 6 + c * 5;
+          const f0 = T(a + 1.5, 16), f1 = T(a + 1.5, 30);
+          g.lineStyle(1, 0x0c0d10, 1); g.lineBetween(f0.x, f0.y, f1.x, f1.y);
+          const fb = 18 + ((c * 5) % 9);
+          q(a, a + 3, fb, fb + 2, 0xdcdfe4, 1.5);
+        }
+        q(38, 52, 16, 30, 0x2a2c33);
+        k.discZ(zAt(23) + 0.5, 45, 23, 4.2, 0x0c0d10);  // encoder
+        k.discZ(zAt(23) + 1.5, 45, 23, 3.2, 0x5a5e68);
+        k.poly([P(0, B, zf), P(A, B, zf), P(A, B, zf - 1), P(0, B, zf - 1)], def.body.accent);
+        g.lineStyle(1, 0x0c0d10, 0.85);
+        g.strokePoints([P(0, 0, zb), P(0, 0, 0), P(0, B, 0), P(A, B, 0), P(A, B, zf), P(A, 0, zb)], true);
         break;
       }
       default: {
@@ -1675,7 +1850,9 @@ class StageScene extends Phaser.Scene {
   }
 
   buildComponentVisual (id, def, x, y) {
-    const c = this.add.container(x, y).setDepth(10);
+    // ordine di disegno per profondità isometrica: chi sta più in basso
+    // sullo schermo è più vicino e copre chi sta dietro
+    const c = this.add.container(x, y).setDepth(isoDepth(y));
 
     const body = this.add.graphics();
     this.drawComponentBody(body, def);
@@ -1777,10 +1954,11 @@ class StageScene extends Phaser.Scene {
     if (isRealQuadro) {
       phaseBars = this.add.graphics();
       c.add(phaseBars);
-      const breakerBottom = -def.body.h / 2 + 8 + def.body.h * 0.35;
+      // sigla della fase nella finestra degli interruttori, sopra la presa
       def.ports.filter(p => p.phase).forEach(p => {
-        const tag = this.add.text(p.dx, breakerBottom + 7, p.phase, {
-          fontFamily: 'Inter, sans-serif', fontSize: '9px', fontStyle: 'bold', color: '#8b8e98'
+        const at = QUADRO_ISO(QUADRO_PHASE_A[['L1', 'L2', 'L3'].indexOf(p.phase)], QUADRO_ISO.B, 34.5);
+        const tag = this.add.text(at.x, at.y, p.phase, {
+          fontFamily: 'Inter, sans-serif', fontSize: '8px', fontStyle: 'bold', color: '#eee9df'
         }).setOrigin(0.5);
         c.add(tag);
       });
@@ -2140,15 +2318,14 @@ class StageScene extends Phaser.Scene {
     updateStockUI();
 
     const subVisual = this.compVisuals[bestSub.id];
-    const subDef = COMPONENT_TYPES.sub, topDef = COMPONENT_TYPES.top;
-    // 36px (non un valore più piccolo): con un distacco minore le porte
-    // sub.spk_thru e top.spk_in finiscono a meno di 18px l'una dall'altra
-    // (somma dei due raggi) e si sovrappongono, rendendo quel collegamento
-    // impossibile da cliccare — vedi cronologia del 2° livello per il bug esatto.
-    const offY = -(subDef.body.h / 2 + topDef.body.h / 2 + 36);
+    // la testa poggia sul palo piantato al centro del sub (vedi topOffsetY):
+    // le porte Speakon di sub e testa stanno sui fianchi, ben distanziate
+    const topDef = COMPONENT_TYPES.top;
+    const offY = topOffsetY();
     const pos = { x: subVisual.container.x, y: subVisual.container.y + offY };
 
     const visual = this.buildComponentVisual(id, topDef, pos.x, pos.y);
+    visual.container.setDepth(isoDepth(subVisual.container.y) + 0.001);
     this.compVisuals[id] = visual;
     bestSub.hasTop = id;
     gameState.placed[id] = { id, type: 'top', parentSubId: bestSub.id, zone: 'ground', screen: pos };
@@ -2423,15 +2600,15 @@ class StageScene extends Phaser.Scene {
     comp.gx = cx; comp.gy = cy;
     const pos = gridToScreen(cx + 0.5, cy + 0.5);
     comp.screen = pos;
-    this.compVisuals[id].container.setPosition(pos.x, pos.y);
+    this.compVisuals[id].container.setPosition(pos.x, pos.y).setDepth(isoDepth(pos.y));
 
     if (comp.type === 'sub' && comp.hasTop) {
       const topComp = gameState.placed[comp.hasTop];
-      const subDef = COMPONENT_TYPES.sub, topDef = COMPONENT_TYPES.top;
-      const offY = -(subDef.body.h / 2 + topDef.body.h / 2 + 36);
+      const offY = topOffsetY();
       const topPos = { x: pos.x, y: pos.y + offY };
       topComp.screen = topPos;
-      this.compVisuals[topComp.id].container.setPosition(topPos.x, topPos.y);
+      // la testa sta SOPRA il sub: va disegnata subito davanti a lui
+      this.compVisuals[topComp.id].container.setPosition(topPos.x, topPos.y).setDepth(isoDepth(pos.y) + 0.001);
     }
 
     this.clearMoveSelection();
@@ -2692,6 +2869,10 @@ class StageScene extends Phaser.Scene {
       const def = COMPONENT_TYPES[c.type];
       if (!def) return;
       const visual = this.buildComponentVisual(c.id, def, c.screen.x, c.screen.y);
+      // (ripristino da annulla/ripeti) la testa resta davanti al suo sub
+      if (c.type === 'top' && c.parentSubId && gameState.placed[c.parentSubId]) {
+        visual.container.setDepth(isoDepth(gameState.placed[c.parentSubId].screen.y) + 0.001);
+      }
       this.compVisuals[c.id] = visual;
       if (c.gx != null && c.gy != null) this.occupied[c.gx + ',' + c.gy] = c.id;
       if (c.type === 'quadro') {
