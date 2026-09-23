@@ -543,6 +543,125 @@ function computePhaseLoads () {
 }
 
 /* ---------------------------------------------------------------------
+   2c) SUONI — sintetizzati al volo con Web Audio (nessun file esterno):
+       ogni tipo di connettore ha il suo inserimento/estrazione, ogni
+       apparecchio la sua accensione, più protezioni, test e montaggio.
+   --------------------------------------------------------------------- */
+const SFX = (() => {
+  let ctx = null, master = null, noiseBuf = null;
+  let muted = false;
+  try { muted = localStorage.getItem('scs-muted') === '1'; } catch (e) { /* storage non disponibile */ }
+
+  function ac () {
+    if (!ctx) {
+      const AC = window.AudioContext || window.webkitAudioContext;
+      if (!AC) return null;
+      ctx = new AC();
+      master = ctx.createGain(); master.gain.value = 0.55; master.connect(ctx.destination);
+      noiseBuf = ctx.createBuffer(1, ctx.sampleRate, ctx.sampleRate);
+      const d = noiseBuf.getChannelData(0);
+      for (let i = 0; i < d.length; i++) d[i] = Math.random() * 2 - 1;
+    }
+    if (ctx.state === 'suspended') ctx.resume();
+    return ctx;
+  }
+  // colpo di rumore filtrato (scatti, strisciate, scintille)
+  function noise (t, dur, freq, q, gain, type) {
+    const src = ctx.createBufferSource(); src.buffer = noiseBuf;
+    const f = ctx.createBiquadFilter(); f.type = type || 'bandpass'; f.frequency.value = freq; f.Q.value = q;
+    const g = ctx.createGain();
+    const t0 = ctx.currentTime + t;
+    g.gain.setValueAtTime(gain, t0); g.gain.exponentialRampToValueAtTime(0.0001, t0 + dur);
+    src.connect(f); f.connect(g); g.connect(master);
+    src.start(t0, Math.random() * 0.5); src.stop(t0 + dur + 0.02);
+  }
+  // nota con inviluppo (tonfi, bip, ronzii), con glissato opzionale
+  function tone (t, freq, dur, gain, type, freqEnd, attack) {
+    const o = ctx.createOscillator(); o.type = type || 'sine';
+    const g = ctx.createGain();
+    const t0 = ctx.currentTime + t;
+    o.frequency.setValueAtTime(freq, t0);
+    if (freqEnd) o.frequency.exponentialRampToValueAtTime(freqEnd, t0 + dur);
+    g.gain.setValueAtTime(0.0001, t0);
+    g.gain.exponentialRampToValueAtTime(gain, t0 + (attack || 0.004));
+    g.gain.exponentialRampToValueAtTime(0.0001, t0 + dur);
+    o.connect(g); g.connect(master);
+    o.start(t0); o.stop(t0 + dur + 0.02);
+  }
+  const click = (t, gain, freq) => noise(t, 0.012, freq || 4000, 2, gain, 'highpass');
+  const play = fn => { if (muted) return; try { if (ac()) fn(); } catch (e) { /* audio non disponibile */ } };
+
+  // famiglia di connettore per un segnale (gli adattatori usano il loro capo)
+  const family = sig => ({ xlr: 'xlr', dmx: 'xlr', jack: 'jack', speakon: 'twist', powercon: 'twist', schuko: 'schuko',
+    cee_mono: 'cee', cee_tri: 'cee', usbc: 'usb' }[sig] || 'xlr');
+
+  const plugIn = {
+    // XLR / DMX: il fermo metallico che scatta
+    xlr: () => { click(0, 0.5, 3500); tone(0.004, 2600, 0.05, 0.07, 'triangle'); click(0.055, 0.4, 5000); },
+    // jack: il "tunk" della spina che entra, con un filo di fruscio
+    jack: () => { noise(0, 0.05, 1400, 1.5, 0.18); tone(0.03, 200, 0.09, 0.3, 'sine', 90); noise(0.05, 0.08, 3000, 1, 0.05); },
+    // Speakon / PowerCON: si infila e si ruota fino allo scatto di blocco
+    twist: () => { tone(0, 150, 0.07, 0.28, 'sine', 90); [0.1, 0.14, 0.18].forEach(t => click(t, 0.22, 3500)); click(0.25, 0.5, 2500); },
+    // Schuko: strisciata dei contatti e tonfo della spina
+    schuko: () => { noise(0, 0.1, 900, 2, 0.2); tone(0.07, 110, 0.12, 0.35, 'sine', 70); },
+    // CEE: colpo pesante e coperchio a molla che si richiude sulla spina
+    cee: () => { noise(0, 0.12, 700, 1.5, 0.22); tone(0.08, 85, 0.18, 0.45, 'sine', 55); click(0.24, 0.45, 2200); tone(0.245, 1500, 0.04, 0.06, 'triangle'); },
+    // USB-C: clic leggero
+    usb: () => { click(0, 0.3, 6000); click(0.03, 0.2, 7000); }
+  };
+  const plugOut = {
+    xlr: () => { click(0, 0.35, 3000); noise(0.02, 0.12, 1800, 1.2, 0.12); },
+    jack: () => { tone(0, 320, 0.05, 0.2, 'sine', 120); noise(0.01, 0.06, 2500, 1, 0.08); },
+    twist: () => { click(0, 0.4, 2500); [0.05, 0.09].forEach(t => click(t, 0.18, 3500)); noise(0.12, 0.1, 1500, 1.2, 0.1); },
+    schuko: () => { tone(0, 130, 0.06, 0.2, 'sine', 90); noise(0.03, 0.12, 900, 2, 0.16); },
+    cee: () => { noise(0, 0.14, 700, 1.5, 0.18); click(0.14, 0.45, 2200); tone(0.145, 1400, 0.04, 0.05, 'triangle'); },
+    usb: () => { click(0, 0.25, 5500); }
+  };
+
+  // accensione: bilanciere + il suono tipico di ogni apparecchio
+  const rocker = () => { click(0, 0.45, 2600); tone(0.002, 900, 0.03, 0.05, 'square'); };
+  const startup = {
+    ampli: () => { click(0.35, 0.5, 1800); tone(0.36, 100, 0.6, 0.06, 'sawtooth', 100, 0.2); },
+    sub: () => { click(0.3, 0.45, 1600); tone(0.32, 45, 0.35, 0.35, 'sine', 40); },
+    mixer: () => { tone(0.25, 1320, 0.08, 0.1, 'sine'); tone(0.36, 1760, 0.1, 0.1, 'sine'); },
+    controller: () => { tone(0.2, 880, 0.09, 0.1, 'square'); },
+    pc: () => { [523, 659, 784, 1047].forEach((f, i) => tone(0.3 + i * 0.09, f, 0.5, 0.08, 'sine')); },
+    par: () => { tone(0, 2400, 0.05, 0.03, 'sine'); },
+    scheda: () => { tone(0, 1175, 0.07, 0.07, 'sine'); tone(0.08, 1568, 0.09, 0.07, 'sine'); }
+  };
+
+  return {
+    get muted () { return muted; },
+    toggleMute () {
+      muted = !muted;
+      try { localStorage.setItem('scs-muted', muted ? '1' : '0'); } catch (e) { /* storage non disponibile */ }
+      return muted;
+    },
+    cableIn: sig => play(plugIn[family(sig)]),
+    cableOut: sig => play(plugOut[family(sig)]),
+    powerOn: type => play(() => { rocker(); if (startup[type]) startup[type](); }),
+    powerOff: () => play(() => { rocker(); tone(0.05, 600, 0.2, 0.05, 'sine', 200); }),
+    // un apparecchio parte perché gli arriva corrente (PAR, scheda audio)
+    wake: type => play(() => { if (startup[type]) startup[type](); }),
+    breaker: on => play(() => { noise(0, 0.03, 2200, 1, 0.5); tone(0.005, on ? 220 : 160, 0.05, 0.25, 'square'); }),
+    trip: () => play(() => {
+      noise(0, 0.05, 2500, 0.8, 0.7); tone(0, 90, 0.2, 0.5, 'sine', 50);
+      for (let i = 0; i < 12; i++) click(0.04 + Math.random() * 0.4, 0.2 + Math.random() * 0.3, 3000 + Math.random() * 4000);
+    }),
+    rcd: () => play(() => { noise(0, 0.04, 1800, 1, 0.6); tone(0.01, 140, 0.12, 0.35, 'square', 90); for (let i = 0; i < 6; i++) click(0.03 + Math.random() * 0.2, 0.25, 4000); }),
+    tump: () => play(() => { tone(0, 55, 0.35, 0.8, 'sine', 35); noise(0, 0.08, 200, 1, 0.3, 'lowpass'); }),
+    success: () => play(() => { [523, 659, 784, 1047].forEach((f, i) => tone(i * 0.11, f, 0.45, 0.1, 'triangle')); }),
+    fail: () => play(() => { tone(0, 110, 0.35, 0.12, 'square'); tone(0.02, 116, 0.33, 0.08, 'square'); }),
+    caseOpen: () => play(() => { click(0, 0.45, 2000); click(0.08, 0.45, 2200); noise(0.14, 0.3, 300, 0.8, 0.12, 'lowpass'); }),
+    pick: () => play(() => { noise(0, 0.18, 1200, 0.7, 0.1); }),
+    place: () => play(() => { tone(0, 120, 0.1, 0.3, 'sine', 70); noise(0, 0.05, 600, 1, 0.1); }),
+    lift: () => play(() => { tone(0, 300, 0.12, 0.08, 'sine', 600); }),
+    remove: () => play(() => { noise(0, 0.25, 800, 0.6, 0.15); tone(0, 500, 0.2, 0.06, 'sine', 150); }),
+    button: () => play(() => { click(0, 0.25, 3000); })
+  };
+})();
+
+/* ---------------------------------------------------------------------
    2b) CORRENTE DAL VIVO — interruttori dei dispositivi, protezioni del
        Quadro (generale, salvavita, magnetotermici di fase), carico reale
        delle fasi e corrente di spunto all'accensione. Si cabla a impianto
@@ -693,7 +812,11 @@ function applyPowerAction (action) {
     gameState.procErrors.push('pop');
     showToast('TUMP! Mixer acceso o spento con i finali già accesi: il colpo è finito nelle casse. I finali si accendono per ultimi e si spengono per primi.');
     if (scene) scene.popSpeakers();
+    SFX.tump();
   }
+  const woke = new Set();
+  after.forEach(id => { if (!before.has(id)) woke.add(gameState.placed[id].type); });
+  ['par', 'scheda'].forEach(t => { if (woke.has(t)) SFX.wake(t); });
   checkOverloads();
   if (scene) {
     scene.refreshLive();
@@ -714,6 +837,7 @@ function checkOverloads () {
   if (!tripped.length) return;
   tripped.forEach(ph => { prot[ph] = false; prot.tripped[ph] = true; });
   gameState.trips = (gameState.trips || 0) + tripped.length;
+  SFX.trip();
   const kw = tripped.map(ph => ph + ' ' + fmtKW(loads[ph], 1) + ' kW').join(', ');
   showToast('Magnetotermico scattato (' + kw + ' su ' + fmtKW(PHASE_BUDGET_W, 1) + ' kW): la fase è spenta. Togli carico o spostalo su un\'altra fase, spegni finali e sub, poi riarma dal Quadro e riaccendili uno alla volta.');
   if (window.__scene) window.__scene.sparkQuadro(tripped);
@@ -742,6 +866,7 @@ function checkLiveCableChange (edge) {
   prot.rcd = false;
   prot.tripped.rcd = true;
   gameState.rcdTrips = (gameState.rcdTrips || 0) + 1;
+  SFX.rcd();
   showToast('Salvavita scattato: hai collegato o scollegato un cavo di corrente sotto carico, con un apparecchio acceso. Spegni prima di staccare o attaccare, poi riarma il salvavita dal Quadro.');
   if (window.__scene) {
     window.__scene.sparkAtPort(edge.a, edge.aPort);
@@ -757,6 +882,7 @@ function toggleDevicePower (compId) {
   const c = gameState.placed[compId];
   if (!c) return;
   applyPowerAction(() => { c.on = !c.on; });
+  if (c.on) SFX.powerOn(c.type); else SFX.powerOff();
   saveHistory();
 }
 function toggleProtection (key) {
@@ -767,6 +893,7 @@ function toggleProtection (key) {
     prot[key] = !prot[key];
     if (prot[key]) delete prot.tripped[key];
   });
+  SFX.breaker(prot[key]);
   saveHistory();
 }
 
@@ -950,6 +1077,15 @@ document.querySelectorAll('.tab-btn').forEach(btn => {
     }
   });
 });
+
+/* Audio on/off, ricordato tra una partita e l'altra */
+(function () {
+  const btn = el('#sound-btn');
+  if (!btn) return;
+  const paint = () => { btn.textContent = SFX.muted ? '🔇' : '🔊'; btn.title = SFX.muted ? 'Attiva i suoni' : 'Disattiva i suoni'; };
+  paint();
+  btn.addEventListener('click', () => { SFX.toggleMute(); paint(); SFX.button(); });
+})();
 
 /* Reset */
 el('#reset-btn').addEventListener('click', () => {
@@ -1552,6 +1688,7 @@ function testRcd () {
   const prot = quadroProt(q);
   if (!prot.rcd) { showToast('Il salvavita è già abbassato: armalo prima di provarlo.'); return; }
   applyPowerAction(() => { prot.rcd = false; prot.tripped.rcd = true; });
+  SFX.rcd();
   saveHistory();
   showToast('Prova del salvavita: è scattato come deve. Riarmalo per ridare corrente.', 'ok');
 }
@@ -1729,6 +1866,7 @@ function renderRearPanel () {
 
 // tasti del display del PAR: MENU passa da indirizzo a modalità, ▲▼ regolano
 function onParButton (comp, act) {
+  SFX.button();
   if (!isPowered(comp.id)) { showToast('Il PAR non è alimentato: il display è spento. Dagli corrente per impostarlo.'); return; }
   const dmx = parDmx(comp);
   if (act === 'menu') parMenuField = parMenuField === 'addr' ? 'mode' : 'addr';
@@ -2015,6 +2153,7 @@ function openCase (name) {
   });
   el('#case-modal').classList.add('show');
   setSceneInput(false);
+  SFX.caseOpen();
 }
 function closeCase () {
   openCaseName = null;
@@ -2040,6 +2179,7 @@ function pickCable (cableId) {
   gameState.selectedCable = cableId;
   disarmPiece();
   updateCableHand();
+  SFX.pick();
   showToast('Cavo preso: ' + cableName(cableId) + '. Tocca un dispositivo per aprire il suo pannello e scegliere la presa.');
 }
 
@@ -3452,6 +3592,7 @@ class StageScene extends Phaser.Scene {
     setCircuitStatus('untested');
     gameState.tested = false;
     this.pushHistory();
+    SFX.place();
     // la prima volta si spiega come si usa un dispositivo posato
     if (!this.gestureHintShown) {
       this.gestureHintShown = true;
@@ -3503,6 +3644,7 @@ class StageScene extends Phaser.Scene {
     this.updateQuadroVisual();
     setCircuitStatus('untested');
     gameState.tested = false;
+    SFX.place();
     showToast('Testa montata sul palo di ' + compLabel(bestSub.id) + '.', 'ok');
     this.pushHistory();
   }
@@ -3519,6 +3661,7 @@ class StageScene extends Phaser.Scene {
     if (!gameState.pendingPort) {
       gameState.pendingPort = { componentId, portId };
       this.highlightPending(componentId, portId, true);
+      SFX.cableIn(signal);
       return;
     }
     const pending = gameState.pendingPort;
@@ -3569,7 +3712,9 @@ class StageScene extends Phaser.Scene {
     };
     // collegare sotto tensione fa scattare il salvavita; altrimenti il
     // dispositivo appena alimentato (se già acceso) parte davvero
+    const rcdBefore = gameState.rcdTrips || 0;
     applyPowerAction(() => { gameState.edges.push(edge); checkLiveCableChange(edge); });
+    if ((gameState.rcdTrips || 0) === rcdBefore) SFX.cableIn(signal);
     this.redrawEdges();
 
     this.highlightPending(pending.componentId, pending.portId, false);
@@ -3712,6 +3857,7 @@ class StageScene extends Phaser.Scene {
       // scollegare sotto tensione fa l'arco: salvavita
       const edge = gameState.edges[idx];
       applyPowerAction(() => { arced = checkLiveCableChange(edge); gameState.edges.splice(gameState.edges.indexOf(edge), 1); });
+      if (!arced) SFX.cableOut(CABLE_TYPES[edge.signal].endpoints[0]);
     }
     this.selectedEdgeId = null;
     this.redrawEdges();
@@ -3823,6 +3969,7 @@ class StageScene extends Phaser.Scene {
     disarmPiece();
     this.assemblyId = id;
     this.moveSelected = null;
+    if (!quiet) SFX.lift();
     this.setGlow(v, true, 0xf2a541);
     this.assemblyTween = this.tweens.add({ targets: v.container, angle: { from: -1.6, to: 1.6 }, duration: 110, yoyo: true, repeat: -1 });
     if (navigator.vibrate) navigator.vibrate(25);
@@ -3881,6 +4028,7 @@ class StageScene extends Phaser.Scene {
     this.redrawEdges();
     setCircuitStatus('untested');
     gameState.tested = false;
+    SFX.remove();
     showToast(name + ' tolto e rimesso tra i pezzi' + (lost ? ', insieme ai suoi ' + lost + ' cavi' : '') + '.', 'ok');
     this.pushHistory();
   }
@@ -3928,6 +4076,7 @@ class StageScene extends Phaser.Scene {
     this.redrawEdges();
     setCircuitStatus('untested');
     gameState.tested = false;
+    SFX.place();
     showToast('Dispositivo spostato.', 'ok');
     this.pushHistory();
   }
@@ -3958,6 +4107,7 @@ class StageScene extends Phaser.Scene {
 
     if (!result.pass) {
       setCircuitStatus('error');
+      SFX.fail();
       if (result.overPhase) {
         showToast('Fasi sbilanciate: con tutto acceso la fase ' + result.overloadedPhases.join(', ') + ' supererebbe i 3 kW. Sposta qualche utenza su un\'altra fase.');
       } else {
@@ -3970,24 +4120,28 @@ class StageScene extends Phaser.Scene {
     }
     if (!armed) {
       setCircuitStatus('error');
+      SFX.fail();
       showToast('Il Quadro non è armato: dal suo pannello alza l\'interruttore generale, il salvavita e le tre fasi.');
       if (q) glow([q.id]);
       return;
     }
     if (notRunning.length) {
       setCircuitStatus('error');
+      SFX.fail();
       showToast('Alcuni dispositivi sono spenti o senza corrente: accendili dal loro pannello (in rosso).');
       glow(notRunning);
       return;
     }
     if (clashes.length) {
       setCircuitStatus('error');
+      SFX.fail();
       showToast('Indirizzi DMX sovrapposti (' + clashes.map(([x, y]) => compLabel(x) + ' / ' + compLabel(y)).join(', ') + '): regolali dal display di ogni PAR.');
       glow([...new Set(clashes.flat())]);
       return;
     }
 
     setCircuitStatus('ok');
+    SFX.success();
     // la procedura conta: scatti e colpi nelle casse restano nel verbale
     const notes = [];
     if (gameState.trips) notes.push('magnetotermici scattati: ' + gameState.trips);
