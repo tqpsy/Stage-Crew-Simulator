@@ -23,11 +23,6 @@ const SIGNAL_COLOR = {
   jack:     0x2ec4e0
 };
 
-// raggio (px) del corpo tondo di ogni porta
-const PORT_R = 8.5;
-// zoom da cui in su si disegnano i contatti dei connettori (pin/fori): più
-// lontano sarebbero puntini illeggibili, restano colore, anello e freccia
-const PORT_DETAIL_ZOOM = 1.6;
 
 /* genere del connettore montato sull'apparecchio, come nella realtà:
    - XLR audio: gli ingressi sono femmina, le uscite maschio;
@@ -47,27 +42,10 @@ const CONNECTOR_GENDER = {
   jack:     { in: 'female', out: 'female' }
 };
 
-/* colore REALE del corpo del connettore da pannello (guscio metallico
-   dell'XLR, plastica nera di Speakon/PowerCON/Schuko, blu e rosso delle CEE).
-   Il colore del segnale resta sull'anello esterno della porta, così la porta
-   si abbina sempre al cavo giusto. */
-const CONNECTOR_BODY = {
-  xlr:      0xb4bac3,
-  dmx:      0xb4bac3,
-  speakon:  0x1c1d22,
-  powercon: 0x1c1d22,
-  schuko:   0x2a2c32,
-  cee_mono: 0x2f6fd6,
-  cee_tri:  0xd6392f,
-  jack:     0x1c1d22
-};
-// corpi scuri: i fori di una femmina non si vedrebbero, serve un inserto grigio
-const DARK_BODY = new Set(['speakon', 'powercon', 'schuko', 'jack']);
-
-// nomi leggibili per l'etichetta che compare sopra una porta
+// nomi leggibili dei connettori (pannello posteriore)
 const SIGNAL_LABEL = {
   xlr: 'XLR 3 poli', dmx: 'DMX 5 poli', speakon: 'Speakon', powercon: 'PowerCON',
-  schuko: 'Schuko', cee_mono: 'CEE 16A monofase', cee_tri: 'CEE 16A trifase', jack: 'Jack 6,35'
+  schuko: 'Schuko', cee_mono: 'CEE 230V', cee_tri: 'CEE 400V', jack: 'Jack 6,35'
 };
 
 /* Geometria del mixer in "unità banco" (a = lungo i canali, b = dal retro
@@ -137,9 +115,10 @@ const CTRL_ISO  = isoFrame(56, 34, 10);   // consolle luci da tavolo, piano incl
 const QUADRO_ISO = isoFrame(112, 34, 46); // armadio di distribuzione, prese sul fronte b=B
 const QUADRO_PHASE_A = [22, 56, 90];      // posizione lungo il fronte di prese/interruttori L1-L3
 const ALL_ISO   = isoFrame(26, 26, 30);   // cassetta dell'allaccio della venue
-const CIAB_ISO  = isoFrame(104, 16, 8);   // ciabatta: barra lunga e bassa, prese sul piano
+const CIAB_ISO  = isoFrame(104, 16, 8);   // ciabatta civile: barra lunga e bassa, 3 prese sul piano
+const CIABCEE_ISO = isoFrame(134, 16, 8); // ciabatta con spina CEE: 4 prese
 const PC_ISO    = isoFrame(26, 34, 22);   // laptop aperto
-const DI_ISO    = isoFrame(24, 20, 12);   // DI passiva, scatolina d'acciaio
+const DI_ISO    = isoFrame(30, 26, 14);   // DI passiva doppia, scatolina d'acciaio
 
 // la testa sta sul sub: il fondo del suo palo tocca il centro del piano del sub
 function isoDepth (screenY) { return 10 + screenY / 10000; }
@@ -207,11 +186,15 @@ const COMPONENT_TYPES = {
     // fader) e LED di alimentazione sul ponte, come su un banco vero
     labelPos: { x: 30, y: 26 },
     ledPos: mixerIso(3.5, 7, 17),
+    // retro del ponte: 6 ingressi microfonici XLR, uscite MAIN L/R, 2 mandate
+    // AUX per i monitor e l'alimentazione (i canali cresceranno coi livelli)
     ports: [
-      { id: 'power',   signal: 'powercon', dir: 'in',  ...mixerRearPort(14) },
-      { id: 'in_pc',   signal: 'xlr',      dir: 'in',  ...mixerRearPort(44) },
-      { id: 'audio_L', signal: 'xlr',      dir: 'out', ...mixerRearPort(74) },
-      { id: 'audio_R', signal: 'xlr',      dir: 'out', ...mixerRearPort(104) }
+      ...[1, 2, 3, 4, 5, 6].map(n => ({ id: 'in_' + n, signal: 'xlr', dir: 'in', ...mixerRearPort(-2 + n * 10) })),
+      { id: 'main_L', signal: 'xlr',      dir: 'out', ...mixerRearPort(68) },
+      { id: 'main_R', signal: 'xlr',      dir: 'out', ...mixerRearPort(78) },
+      { id: 'aux_1',  signal: 'xlr',      dir: 'out', ...mixerRearPort(88) },
+      { id: 'aux_2',  signal: 'xlr',      dir: 'out', ...mixerRearPort(98) },
+      { id: 'power',  signal: 'powercon', dir: 'in',  ...mixerRearPort(108) }
     ]
   },
   ampli: {
@@ -247,9 +230,11 @@ const COMPONENT_TYPES = {
     body: { w: 62, h: 42, fill: 0x2a2c32, accent: 0xf2a541 },
     labelPos: { x: -14, y: 10 },
     ledPos: CTRL_ISO(52, 30, 10),
+    // alimentazione PowerCON e due universi DMX in uscita
     ports: [
-      { id: 'power', signal: 'powercon', dir: 'in',  dx: -24, dy: 22 },
-      { id: 'dmx',   signal: 'dmx',      dir: 'out', dx: 24,  dy: 22 }
+      { id: 'power', signal: 'powercon', dir: 'in',  ...isoPort(CTRL_ISO, 8, 34, 3) },
+      { id: 'dmx_1', signal: 'dmx',      dir: 'out', ...isoPort(CTRL_ISO, 34, 34, 3) },
+      { id: 'dmx_2', signal: 'dmx',      dir: 'out', ...isoPort(CTRL_ISO, 46, 34, 3) }
     ]
   },
   quadro: {
@@ -283,16 +268,19 @@ const COMPONENT_TYPES = {
       { id: 'out', signal: 'cee_tri', dir: 'out', ...isoPort(ALL_ISO, 13, 26, 14) }
     ]
   },
+  // ciabatta "civile": cavo con spina Schuko già attaccato (si collega a una
+  // presa Schuko) e 3 prese Schuko. Il cavo fa parte della ciabatta: non si
+  // sceglie nella scheda Cavi, si prende la spina dal pannello (lead: true).
   ciabatta: {
-    label: 'CIABATTA', category: 'regia', powerW: 0, zone: 'foh', shape: 'ciabatta',
+    label: 'CIABATTA', category: 'corrente', powerW: 0, zone: 'foh', shape: 'ciabatta',
     body: { w: 64, h: 50, fill: 0x2a2c32, accent: 0xc77dff },
+    iso: CIAB_ISO,
     ledPos: CIAB_ISO(16, 3, 8),
-    // ingresso in testa alla barra (faccia a=0), prese in fila sul piano
     ports: [
-      { id: 'in',    signal: 'powercon', dir: 'in',  ...isoPort(CIAB_ISO, 0, 8, 4) },
-      { id: 'out_1', signal: 'schuko',   dir: 'out', ...isoPort(CIAB_ISO, 32, 8, 8) },
-      { id: 'out_2', signal: 'schuko',   dir: 'out', ...isoPort(CIAB_ISO, 62, 8, 8) },
-      { id: 'out_3', signal: 'schuko',   dir: 'out', ...isoPort(CIAB_ISO, 92, 8, 8) }
+      { id: 'in',    signal: 'schuko', dir: 'in',  lead: true, ...isoPort(CIAB_ISO, 0, 8, 4) },
+      { id: 'out_1', signal: 'schuko', dir: 'out', ...isoPort(CIAB_ISO, 32, 8, 8) },
+      { id: 'out_2', signal: 'schuko', dir: 'out', ...isoPort(CIAB_ISO, 62, 8, 8) },
+      { id: 'out_3', signal: 'schuko', dir: 'out', ...isoPort(CIAB_ISO, 92, 8, 8) }
     ]
   },
   pc: {
@@ -303,39 +291,42 @@ const COMPONENT_TYPES = {
     labelPos: { x: 4, y: -8 },
     ledPos: PC_ISO(2, 30, 2),
     ports: [
-      { id: 'power',     signal: 'schuko', dir: 'in',  dx: 0,  dy: 22 },
-      // uscita audio (jack, non bilanciata): va in una DI prima di entrare
-      // nel mixer, che vuole un ingresso bilanciato XLR.
-      { id: 'audio_out', signal: 'jack',   dir: 'out', dx: 19, dy: 4 }
+      // cavo di alimentazione già attaccato, con spina Schuko: come per le
+      // ciabatte si prende la spina dal pannello, senza scegliere un cavo
+      { id: 'power',   signal: 'schuko', dir: 'in',  lead: true, dx: 0,  dy: 22 },
+      // uscita audio stereo (cavo mini-jack → 2 jack, non bilanciata): passa
+      // da una DI doppia prima di entrare nel mixer, che vuole ingressi XLR.
+      { id: 'audio_L', signal: 'jack',   dir: 'out', dx: 17, dy: 1 },
+      { id: 'audio_R', signal: 'jack',   dir: 'out', dx: 17, dy: 9 }
     ]
   },
-  // DI passiva: converte l'uscita jack del PC (sbilanciata) in un segnale
-  // XLR bilanciato adatto a un ingresso mixer — nessuna alimentazione
-  // richiesta, sta accanto al PC (Regia di sala o Off Stage).
+  // DI passiva doppia: converte le due uscite jack del PC (sbilanciate) in
+  // due segnali XLR bilanciati per gli ingressi del mixer — nessuna
+  // alimentazione richiesta, sta accanto al PC (Regia di sala o Off Stage).
   di: {
     label: 'DI', category: 'regia', powerW: 0, zone: 'foh', shape: 'di',
-    body: { w: 30, h: 28, fill: 0x2a2d33, accent: 0x8a8e98 },
-    ledPos: DI_ISO(12, 3, 12),
+    body: { w: 36, h: 32, fill: 0x2a2d33, accent: 0x8a8e98 },
+    ledPos: DI_ISO(15, 3, 14),
     ports: [
-      { id: 'in',  signal: 'jack', dir: 'in',  dx: -11, dy: 0 },
-      { id: 'out', signal: 'xlr',  dir: 'out', dx: 11,  dy: 0 }
+      { id: 'in_1',  signal: 'jack', dir: 'in',  ...isoPort(DI_ISO, 0, 8, 7) },
+      { id: 'in_2',  signal: 'jack', dir: 'in',  ...isoPort(DI_ISO, 0, 18, 7) },
+      { id: 'out_1', signal: 'xlr',  dir: 'out', ...isoPort(DI_ISO, 10, 26, 7) },
+      { id: 'out_2', signal: 'xlr',  dir: 'out', ...isoPort(DI_ISO, 22, 26, 7) }
     ]
   },
-  // splitter industriale: smista una linea CEE del Quadro su più uscite CEE.
-  // Non è richiesta dal collegamento attuale del Livello 1 (che passa diretto
-  // dal Quadro alla Ciabatta Schuko via adattatore), ma è già disponibile per
-  // quando servirà distribuire un carico più grande su più rami.
+  // ciabatta con spina CEE 230V blu già attaccata (va in una presa del
+  // Quadro) e 4 prese Schuko. Anche qui il cavo fa parte della ciabatta.
   ciabatta_cee: {
     label: 'CIAB.CEE', category: 'corrente', powerW: 0, zone: 'backstage', shape: 'ciabatta',
-    body: { w: 64, h: 50, fill: 0x2a2c32, accent: 0x2f6fd6 },
-    ledPos: CIAB_ISO(16, 3, 8),
-    // splitta UNA fase (monofase) su più prese: non tocca mai il trifase,
-    // quello resta solo tra Allaccio e Quadro.
+    body: { w: 78, h: 58, fill: 0x2a2c32, accent: 0x2f6fd6 },
+    iso: CIABCEE_ISO,
+    ledPos: CIABCEE_ISO(16, 3, 8),
     ports: [
-      { id: 'in',    signal: 'cee_mono', dir: 'in',  ...isoPort(CIAB_ISO, 0, 8, 4) },
-      { id: 'out_1', signal: 'cee_mono', dir: 'out', ...isoPort(CIAB_ISO, 32, 8, 8) },
-      { id: 'out_2', signal: 'cee_mono', dir: 'out', ...isoPort(CIAB_ISO, 62, 8, 8) },
-      { id: 'out_3', signal: 'cee_mono', dir: 'out', ...isoPort(CIAB_ISO, 92, 8, 8) }
+      { id: 'in',    signal: 'cee_mono', dir: 'in',  lead: true, ...isoPort(CIABCEE_ISO, 0, 8, 4) },
+      { id: 'out_1', signal: 'schuko',   dir: 'out', ...isoPort(CIABCEE_ISO, 32, 8, 8) },
+      { id: 'out_2', signal: 'schuko',   dir: 'out', ...isoPort(CIABCEE_ISO, 62, 8, 8) },
+      { id: 'out_3', signal: 'schuko',   dir: 'out', ...isoPort(CIABCEE_ISO, 92, 8, 8) },
+      { id: 'out_4', signal: 'schuko',   dir: 'out', ...isoPort(CIABCEE_ISO, 122, 8, 8) }
     ]
   }
 };
@@ -371,21 +362,28 @@ function buildExpectedConnections () {
     { a: 'quadro_1', aPort: null, b: 'sub_1',        bPort: 'power',    signal: 'cee_powercon' },
     { a: 'quadro_1', aPort: null, b: 'sub_2',        bPort: 'power',    signal: 'cee_powercon' },
     { a: 'quadro_1', aPort: null, b: 'par_1',        bPort: 'power_in', signal: 'cee_powercon' },
-    { a: 'quadro_1', aPort: null, b: 'ciabatta_1',   bPort: 'in',       signal: 'cee_powercon' },
+    // corrente alla regia: la ciabatta CEE si attacca con la sua spina a una
+    // presa del Quadro, la ciabatta civile con la sua spina a una presa della
+    // ciabatta CEE, e il PC a una presa della ciabatta civile
+    { a: 'quadro_1', aPort: null, b: 'ciabatta_cee_1', bPort: 'in',  signal: 'cee_mono' },
+    { a: 'ciabatta_cee_1', aPort: null, b: 'ciabatta_1', bPort: 'in', signal: 'schuko' },
     { a: 'ciabatta_1', aPort: null, b: 'pc_1', bPort: 'power', signal: 'schuko' },
     { a: 'par_1', aPort: 'power_thru', b: 'par_2', bPort: 'power_in', signal: 'powercon' },
     { a: 'par_2', aPort: 'power_thru', b: 'par_3', bPort: 'power_in', signal: 'powercon' },
     { a: 'par_3', aPort: 'power_thru', b: 'par_4', bPort: 'power_in', signal: 'powercon' },
 
-    { a: 'mixer_1', aPort: 'audio_L', b: 'ampli_1', bPort: 'in_L', signal: 'xlr' },
-    { a: 'mixer_1', aPort: 'audio_R', b: 'ampli_1', bPort: 'in_R', signal: 'xlr' },
+    { a: 'mixer_1', aPort: 'main_L', b: 'ampli_1', bPort: 'in_L', signal: 'xlr' },
+    { a: 'mixer_1', aPort: 'main_R', b: 'ampli_1', bPort: 'in_R', signal: 'xlr' },
 
-    // il PC entra nel mixer passando da una DI: l'uscita jack (sbilanciata)
-    // va convertita in XLR bilanciato prima di arrivare all'ingresso mixer.
-    { a: 'pc_1', aPort: 'audio_out', b: 'di_1', bPort: 'in', signal: 'jack' },
-    { a: 'di_1', aPort: 'out', b: 'mixer_1', bPort: 'in_pc', signal: 'xlr' },
+    // il PC entra nel mixer passando da una DI doppia: le uscite jack L/R
+    // (sbilanciate) diventano XLR bilanciati, su due ingressi qualsiasi del mixer
+    { a: 'pc_1', aPort: 'audio_L', b: 'di_1', bPort: 'in_1', signal: 'jack' },
+    { a: 'pc_1', aPort: 'audio_R', b: 'di_1', bPort: 'in_2', signal: 'jack' },
+    { a: 'di_1', aPort: 'out_1', b: 'mixer_1', bPort: null, signal: 'xlr' },
+    { a: 'di_1', aPort: 'out_2', b: 'mixer_1', bPort: null, signal: 'xlr' },
 
-    { a: 'controller_1', aPort: 'dmx', b: 'par_1', bPort: 'dmx_in', signal: 'dmx' },
+    // l'universo DMX è a scelta (1 o 2), purché la catena parta dalla consolle
+    { a: 'controller_1', aPort: null, b: 'par_1', bPort: 'dmx_in', signal: 'dmx' },
     { a: 'par_1', aPort: 'dmx_thru', b: 'par_2', bPort: 'dmx_in', signal: 'dmx' },
     { a: 'par_2', aPort: 'dmx_thru', b: 'par_3', bPort: 'dmx_in', signal: 'dmx' },
     { a: 'par_3', aPort: 'dmx_thru', b: 'par_4', bPort: 'dmx_in', signal: 'dmx' }
@@ -491,30 +489,226 @@ function computePhaseLoads () {
   return loads;
 }
 
-/* Il LED di un dispositivo: risale dalla sua porta "critica" (l'ingresso di
-   potenza, se ce l'ha; altrimenti il suo primo ingresso — è il caso di una DI
-   passiva, che non ha alimentazione ma ha bisogno del segnale) fino a una
-   sorgente viva (l'Allaccio). Non si accontenta che un cavo sia collegato:
-   se un anello della catena è spezzato più a monte, il LED resta spento —
-   esattamente come un vero dispositivo senza corrente/segnale reale. */
-function isComponentLive (componentId, visited) {
-  visited = visited || new Set();
-  if (visited.has(componentId)) return false;
-  visited.add(componentId);
+/* ---------------------------------------------------------------------
+   2b) CORRENTE DAL VIVO — interruttori dei dispositivi, protezioni del
+       Quadro (generale, salvavita, magnetotermici di fase), carico reale
+       delle fasi e corrente di spunto all'accensione. Si cabla a impianto
+       spento, poi si accende dal pannello di ogni dispositivo.
+   --------------------------------------------------------------------- */
+// dispositivi con l'interruttore di accensione sul pannello (i PAR si
+// accendono appena arriva corrente, Testa e DI non si alimentano)
+const SWITCHABLE = new Set(['sub', 'mixer', 'ampli', 'controller', 'pc', 'ciabatta', 'ciabatta_cee']);
+// corrente di spunto: all'accensione finali e sub chiedono per un attimo un
+// multiplo del loro consumo (si caricano i condensatori dell'alimentatore)
+const INRUSH_FACTOR = { ampli: 5, sub: 4 };
+const INRUSH_MS = 700;
+const PROTECTIONS = ['main', 'rcd', 'L1', 'L2', 'L3'];
 
-  const comp = gameState.placed[componentId];
+function findQuadro () { return Object.values(gameState.placed).find(c => c.type === 'quadro'); }
+// stato delle protezioni del Quadro: tutte abbassate finché non le si arma
+function quadroProt (q) {
+  if (!q.prot) q.prot = { main: false, rcd: false, L1: false, L2: false, L3: false, tripped: {} };
+  if (!q.prot.tripped) q.prot.tripped = {};
+  return q.prot;
+}
+function powerInPort (def) {
+  return def.ports.find(p => p.dir === 'in' && POWER_CABLE_IDS.has(p.signal));
+}
+function feedingPowerEdge (compId) {
+  const comp = gameState.placed[compId];
+  const pin = comp && powerInPort(COMPONENT_TYPES[comp.type]);
+  if (!pin) return null;
+  return gameState.edges.find(e => e.b === compId && e.bPort === pin.id && POWER_CABLE_IDS.has(e.signal)) || null;
+}
+
+// il dispositivo riceve corrente al suo ingresso di alimentazione?
+function isPowered (compId, visited) {
+  visited = visited || new Set();
+  if (visited.has(compId)) return false;
+  visited.add(compId);
+  const comp = gameState.placed[compId];
   if (!comp) return false;
   if (comp.type === 'allaccio') return true;
-
+  const e = feedingPowerEdge(compId);
+  return !!e && portEnergized(e.a, e.aPort, visited);
+}
+// una presa di USCITA sta erogando corrente in questo momento?
+function portEnergized (compId, portId, visited) {
+  const comp = gameState.placed[compId];
+  if (!comp) return false;
+  if (comp.type === 'allaccio') return true;
+  if (comp.type === 'quadro') {
+    const prot = quadroProt(comp);
+    const p = COMPONENT_TYPES.quadro.ports.find(q => q.id === portId);
+    return isPowered(compId, visited) && prot.main && prot.rcd && !!(p && prot[p.phase]);
+  }
+  // prese delle ciabatte (accese) e PowerCON passante dei PAR
+  return isPowered(compId, visited) && (!SWITCHABLE.has(comp.type) || !!comp.on);
+}
+// il dispositivo sta funzionando (alimentato e, se ha l'interruttore, acceso)
+function isRunning (compId) {
+  const comp = gameState.placed[compId];
+  if (!comp) return false;
   const def = COMPONENT_TYPES[comp.type];
-  if (!def) return false;
-  const criticalPort = def.ports.find(p => p.dir === 'in' && POWER_CABLE_IDS.has(p.signal))
-    || def.ports.find(p => p.dir === 'in');
-  if (!criticalPort) return true;
+  if (comp.type === 'allaccio') return true;
+  if (!powerInPort(def)) return false;
+  return isPowered(compId) && (!SWITCHABLE.has(comp.type) || !!comp.on);
+}
+// LED: acceso se il dispositivo funziona; Testa e DI (senza alimentazione)
+// si accendono quando ricevono il segnale da un dispositivo che funziona
+function isLedOn (compId) {
+  const comp = gameState.placed[compId];
+  if (!comp) return false;
+  const def = COMPONENT_TYPES[comp.type];
+  if (powerInPort(def) || comp.type === 'allaccio') return isRunning(compId);
+  const inPort = def.ports.find(p => p.dir === 'in');
+  const e = inPort && gameState.edges.find(x => x.b === compId && x.bPort === inPort.id);
+  return !!e && (isRunning(e.a) || isLedOn(e.a));
+}
+// fase del Quadro da cui arriva la corrente di un dispositivo (o null)
+function phaseOf (compId, visited) {
+  visited = visited || new Set();
+  if (visited.has(compId)) return null;
+  visited.add(compId);
+  const e = feedingPowerEdge(compId);
+  if (!e) return null;
+  const src = gameState.placed[e.a];
+  if (!src) return null;
+  if (src.type === 'quadro') {
+    const p = COMPONENT_TYPES.quadro.ports.find(q => q.id === e.aPort);
+    return p ? p.phase : null;
+  }
+  return phaseOf(e.a, visited);
+}
+// carico reale di ogni fase: solo i dispositivi che stanno funzionando,
+// più gli eventuali picchi di accensione ancora in corso
+function livePhaseLoads (withInrush) {
+  const loads = { L1: 0, L2: 0, L3: 0 };
+  Object.values(gameState.placed).forEach(c => {
+    const w = COMPONENT_TYPES[c.type].powerW || 0;
+    if (!w || !isRunning(c.id)) return;
+    const ph = phaseOf(c.id);
+    if (ph) loads[ph] += w;
+  });
+  if (withInrush) {
+    const now = Date.now();
+    gameState.inrush = (gameState.inrush || []).filter(s => s.until > now);
+    gameState.inrush.forEach(s => { loads[s.phase] += s.w; });
+  }
+  return loads;
+}
+function runningSet () {
+  return new Set(Object.keys(gameState.placed).filter(isRunning));
+}
 
-  const feedingEdge = gameState.edges.find(e => e.b === componentId && e.bPort === criticalPort.id);
-  if (!feedingEdge) return false;
-  return isComponentLive(feedingEdge.a, visited);
+/* esegue un'azione sull'impianto (interruttore, protezione, cavo) e ne
+   applica le conseguenze reali: spunto dei finali appena partiti, "tump"
+   nelle casse se il mixer cambia stato coi finali accesi, sovraccarichi */
+function applyPowerAction (action) {
+  const before = runningSet();
+  action();
+  const after = runningSet();
+  const now = Date.now();
+  const scene = window.__scene;
+  after.forEach(id => {
+    if (before.has(id)) return;
+    const c = gameState.placed[id];
+    const k = INRUSH_FACTOR[c.type];
+    const ph = phaseOf(id);
+    if (k && ph) {
+      gameState.inrush = gameState.inrush || [];
+      gameState.inrush.push({ phase: ph, w: COMPONENT_TYPES[c.type].powerW * (k - 1), until: now + INRUSH_MS });
+    }
+  });
+  // il mixer si accende o si spegne mentre i finali sono già accesi: il
+  // colpo passa amplificato nelle casse
+  const ampsOn = [...after].some(id => gameState.placed[id].type === 'ampli' && before.has(id));
+  const mixerFlip = Object.values(gameState.placed).some(c => c.type === 'mixer' && before.has(c.id) !== after.has(c.id));
+  if (ampsOn && mixerFlip) {
+    gameState.procErrors = gameState.procErrors || [];
+    gameState.procErrors.push('pop');
+    showToast('TUMP! Mixer acceso o spento con i finali già accesi: il colpo è finito nelle casse. I finali si accendono per ultimi e si spengono per primi.');
+    if (scene) scene.popSpeakers();
+  }
+  checkOverloads();
+  if (scene) {
+    scene.refreshLive();
+    // a fine picco si ricontrolla e si ridisegna
+    if (gameState.inrush && gameState.inrush.length) {
+      scene.time.delayedCall(INRUSH_MS + 30, () => scene.refreshLive());
+    }
+  }
+}
+
+// una fase oltre il limite fa scattare il suo magnetotermico
+function checkOverloads () {
+  const q = findQuadro();
+  if (!q) return;
+  const prot = quadroProt(q);
+  const loads = livePhaseLoads(true);
+  const tripped = ['L1', 'L2', 'L3'].filter(ph => prot[ph] && loads[ph] > PHASE_BUDGET_W);
+  if (!tripped.length) return;
+  tripped.forEach(ph => { prot[ph] = false; prot.tripped[ph] = true; });
+  gameState.trips = (gameState.trips || 0) + tripped.length;
+  const kw = tripped.map(ph => ph + ' ' + (loads[ph] / 1000).toFixed(1) + ' kW').join(', ');
+  showToast('Magnetotermico scattato (' + kw + ' su 3.0 kW): la fase è spenta. Togli carico o spostalo su un\'altra fase, spegni finali e sub, poi riarma dal Quadro e riaccendili uno alla volta.');
+  if (window.__scene) window.__scene.sparkQuadro(tripped);
+}
+
+// cavo di corrente collegato o scollegato con la presa a monte sotto
+// tensione: fa l'arco e il salvavita scatta, spegnendo tutto l'impianto
+function checkLiveCableChange (edge) {
+  if (!POWER_CABLE_IDS.has(edge.signal) || edge.a === 'allaccio') return false;
+  if (!portEnergized(edge.a, edge.aPort)) return false;
+  const q = findQuadro();
+  if (!q) return false;
+  const prot = quadroProt(q);
+  prot.rcd = false;
+  prot.tripped.rcd = true;
+  gameState.rcdTrips = (gameState.rcdTrips || 0) + 1;
+  showToast('Salvavita scattato: hai collegato o scollegato un cavo di corrente sotto tensione. Si cabla a impianto spento: riarma il salvavita dal Quadro.');
+  if (window.__scene) {
+    window.__scene.sparkAtPort(edge.a, edge.aPort);
+    window.__scene.sparkQuadro([]);
+  }
+  return true;
+}
+
+// ogni manovra entra nella cronologia, così annulla/ripeti restano coerenti
+function saveHistory () { if (window.__scene) window.__scene.pushHistory(); }
+
+function toggleDevicePower (compId) {
+  const c = gameState.placed[compId];
+  if (!c) return;
+  applyPowerAction(() => { c.on = !c.on; });
+  saveHistory();
+}
+function toggleProtection (key) {
+  const q = findQuadro();
+  if (!q) return;
+  const prot = quadroProt(q);
+  applyPowerAction(() => {
+    prot[key] = !prot[key];
+    if (prot[key]) delete prot.tripped[key];
+  });
+  saveHistory();
+}
+
+// indirizzi DMX dei PAR: nessuno deve sovrapporsi a un altro
+function dmxOverlaps () {
+  const pars = Object.values(gameState.placed).filter(c => c.type === 'par');
+  const ranges = pars.map(c => {
+    const d = parDmx(c);
+    const n = parseInt(PAR_MODES[d.mode].id, 10);
+    return { id: c.id, from: d.addr, to: d.addr + n - 1 };
+  });
+  const clashes = [];
+  for (let i = 0; i < ranges.length; i++) {
+    for (let j = i + 1; j < ranges.length; j++) {
+      if (ranges[i].from <= ranges[j].to && ranges[j].from <= ranges[i].to) clashes.push([ranges[i].id, ranges[j].id]);
+    }
+  }
+  return clashes;
 }
 
 /* Un cavo appena creato collegherebbe fromId (lato OUT) -> toId (lato IN).
@@ -713,7 +907,7 @@ document.querySelectorAll('.cable-btn').forEach(btn => {
     btn.classList.add('active');
     gameState.selectedCable = btn.dataset.cable;
     disarmPiece();
-    showToast('Cavo selezionato: ' + btn.textContent.trim() + '. Tocca due componenti da collegare (o lo stesso cavo per deselezionarlo).');
+    showToast('Cavo selezionato: ' + btn.textContent.trim() + '. Tocca un dispositivo per aprire il suo pannello e scegliere la presa.');
     // il gruppo si richiude da solo una volta scelto il cavo: da qui in poi
     // si tocca il palco, non serve più tenere aperta la lista dei cavi
     const group = btn.closest('.cable-group');
@@ -782,6 +976,773 @@ el('#quadro-modal-close').addEventListener('click', () => el('#quadro-modal').cl
 el('#quadro-modal').addEventListener('click', ev => {
   if (ev.target.id === 'quadro-modal') el('#quadro-modal').classList.remove('show');
 });
+
+/* ---------------------------------------------------------------------
+   3b) CONNETTORI REALI (SVG) — la faccia del connettore da pannello così
+      com'è nella realtà, disegnata in un riquadro 120×120. Usati dal popup
+      del pannello posteriore (vedi openRearPanel).
+   --------------------------------------------------------------------- */
+const CONN_CX = 60, CONN_CY = 62;   // centro della presa nel riquadro
+
+// flangia Neutrik "D" (26×31 mm): nera, con due fori di fissaggio in diagonale
+function svgDFlange () {
+  return `
+    <rect x="21" y="13" width="78" height="96" rx="9" fill="#1b1c20" stroke="#3a3d45" stroke-width="1.5"/>
+    <rect x="23" y="15" width="74" height="92" rx="8" fill="none" stroke="#000" stroke-opacity=".35"/>
+    <circle cx="31" cy="23" r="4.2" fill="#0a0a0c" stroke="#55585f" stroke-width="1.2"/>
+    <circle cx="89" cy="99" r="4.2" fill="#0a0a0c" stroke="#55585f" stroke-width="1.2"/>`;
+}
+// contatto: pin (maschio) in ottone nichelato, o foro (femmina) nell'inserto
+function svgPin (x, y, r) {
+  return `<circle cx="${x}" cy="${y}" r="${r}" fill="#e8e2d0" stroke="#8a8578" stroke-width=".8"/>
+          <circle cx="${x - r * 0.3}" cy="${y - r * 0.3}" r="${r * 0.35}" fill="#fff" fill-opacity=".7"/>`;
+}
+function svgHole (x, y, r) {
+  return `<circle cx="${x}" cy="${y}" r="${r + 1.2}" fill="#2a2c33"/>
+          <circle cx="${x}" cy="${y}" r="${r}" fill="#030304"/>`;
+}
+function svgNum (x, y, n) {
+  return `<text x="${x}" y="${y}" font-size="6.5" fill="#8b8e98" text-anchor="middle" font-family="Inter,sans-serif">${n}</text>`;
+}
+
+// XLR (3 poli audio, 5 poli DMX) — femmina NC3FD-L con tasto PUSH, maschio NC3MD-L
+function svgXlr (n, male) {
+  let s = svgDFlange();
+  // anello metallico del guscio
+  s += `<circle cx="${CONN_CX}" cy="${CONN_CY}" r="26" fill="#c9ccd1" stroke="#7d828c" stroke-width="1.2"/>
+        <circle cx="${CONN_CX}" cy="${CONN_CY}" r="23.5" fill="#9aa0aa"/>`;
+  const pts = n === 3
+    ? (male ? [[-10, -5, 1], [10, -5, 2], [0, 11, 3]] : [[10, -5, 1], [-10, -5, 2], [0, 11, 3]])
+    : [0, 1, 2, 3, 4].map(i => {
+        const a = (180 - i * 45) * Math.PI / 180;
+        const x = Math.cos(a) * 13 * (male ? 1 : -1), y = Math.sin(a) * 13 - 2;
+        return [x, y, i + 1];
+      });
+  if (male) {
+    // incavo del guscio con la scanalatura di guida in alto, isolante e pin
+    s += `<circle cx="${CONN_CX}" cy="${CONN_CY}" r="21.5" fill="#0e0f12"/>
+          <rect x="${CONN_CX - 3}" y="${CONN_CY - 24}" width="6" height="6" fill="#0e0f12"/>
+          <circle cx="${CONN_CX}" cy="${CONN_CY}" r="18.5" fill="#23252b"/>`;
+    pts.forEach(([x, y, k]) => { s += svgPin(CONN_CX + x, CONN_CY + y, n === 3 ? 3.6 : 3) + svgNum(CONN_CX + x, CONN_CY + y + (y > 0 ? 10 : -6), k); });
+  } else {
+    // inserto nero pieno con i fori, e il fermo metallico in alto
+    s += `<circle cx="${CONN_CX}" cy="${CONN_CY}" r="21.5" fill="#141519"/>`;
+    pts.forEach(([x, y, k]) => { s += svgHole(CONN_CX + x, CONN_CY + y, n === 3 ? 3.4 : 2.9) + svgNum(CONN_CX + x, CONN_CY + y + (y > 0 ? 10 : -6), k); });
+    s += `<rect x="${CONN_CX - 5}" y="${CONN_CY - 26}" width="10" height="7" rx="1.5" fill="#dcdfe4" stroke="#7d828c"/>
+          <text x="${CONN_CX}" y="${CONN_CY - 30}" font-size="7" font-weight="700" fill="#cfd2d6" text-anchor="middle" font-family="Inter,sans-serif">PUSH</text>`;
+  }
+  return s;
+}
+
+// Speakon da pannello NL4MP: presa nera con anello, perno centrale e chiavi
+function svgSpeakon () {
+  return svgDFlange() + `
+    <circle cx="${CONN_CX}" cy="${CONN_CY}" r="27" fill="#26282e" stroke="#4a4d56" stroke-width="1.5"/>
+    <circle cx="${CONN_CX}" cy="${CONN_CY}" r="22" fill="#0e0f12"/>
+    <rect x="${CONN_CX - 4}" y="${CONN_CY - 24}" width="8" height="6" fill="#26282e"/>
+    <rect x="${CONN_CX - 4}" y="${CONN_CY + 18}" width="8" height="6" fill="#26282e"/>
+    <circle cx="${CONN_CX}" cy="${CONN_CY}" r="10" fill="#33363d" stroke="#55585f"/>
+    <rect x="${CONN_CX - 1.5}" y="${CONN_CY - 10}" width="3" height="20" fill="#17181c"/>
+    <text x="${CONN_CX - 16}" y="${CONN_CY - 13}" font-size="6.5" fill="#cfd2d6" text-anchor="middle" font-family="Inter,sans-serif">1+</text>
+    <text x="${CONN_CX + 16}" y="${CONN_CY - 13}" font-size="6.5" fill="#cfd2d6" text-anchor="middle" font-family="Inter,sans-serif">1−</text>`;
+}
+
+// PowerCON: NAC3MPA blu = power IN, NAC3MPB grigio chiaro = power OUT
+function svgPowercon (isIn) {
+  const body = isIn ? '#2f6fd6' : '#cfd2d6', dark = isIn ? '#1d4a9a' : '#9aa0aa';
+  return svgDFlange() + `
+    <circle cx="${CONN_CX}" cy="${CONN_CY}" r="27" fill="${body}" stroke="${dark}" stroke-width="1.5"/>
+    <circle cx="${CONN_CX}" cy="${CONN_CY}" r="21" fill="#141519"/>
+    <circle cx="${CONN_CX}" cy="${CONN_CY}" r="11" fill="${dark}"/>
+    <circle cx="${CONN_CX}" cy="${CONN_CY}" r="7" fill="#23252b"/>
+    ${[0, 120, 240].map(d => {
+      const a = (d - 90) * Math.PI / 180;
+      return `<rect x="${CONN_CX + Math.cos(a) * 15.5 - 2}" y="${CONN_CY + Math.sin(a) * 15.5 - 4}" width="4" height="8" rx="1"
+        fill="#e8e2d0" transform="rotate(${d} ${CONN_CX + Math.cos(a) * 15.5} ${CONN_CY + Math.sin(a) * 15.5})"/>`;
+    }).join('')}
+    <rect x="${CONN_CX + 18}" y="${CONN_CY - 6}" width="7" height="12" rx="2" fill="${dark}"/>
+    <text x="${CONN_CX}" y="${CONN_CY + 36}" font-size="7" font-weight="700" fill="${isIn ? '#9cc0ff' : '#e6e8eb'}" text-anchor="middle" font-family="Inter,sans-serif">${isIn ? 'POWER IN' : 'POWER OUT'}</text>`;
+}
+
+// jack 6,35 da pannello: ghiera esagonale e boccola filettata
+function svgJack () {
+  const hex = [0, 1, 2, 3, 4, 5].map(i => {
+    const a = (i * 60 + 30) * Math.PI / 180;
+    return `${CONN_CX + Math.cos(a) * 20},${CONN_CY + Math.sin(a) * 20}`;
+  }).join(' ');
+  return svgDFlange() + `
+    <polygon points="${hex}" fill="#9aa0aa" stroke="#6a6e78" stroke-width="1.2"/>
+    <circle cx="${CONN_CX}" cy="${CONN_CY}" r="14" fill="#c9ccd1" stroke="#7d828c"/>
+    ${[11.5, 9.5].map(r => `<circle cx="${CONN_CX}" cy="${CONN_CY}" r="${r}" fill="none" stroke="#8a8e98" stroke-width="1"/>`).join('')}
+    <circle cx="${CONN_CX}" cy="${CONN_CY}" r="6" fill="#030304"/>`;
+}
+
+// Schuko: placca quadrata nera, invaso tondo, due poli e lamelle di terra
+function svgSchuko (male) {
+  let s = `<rect x="12" y="12" width="96" height="96" rx="10" fill="#1c1d22" stroke="#3a3d45" stroke-width="1.5"/>
+           <circle cx="${CONN_CX}" cy="${CONN_CY - 2}" r="36" fill="#141519" stroke="#2e3037"/>
+           <circle cx="${CONN_CX}" cy="${CONN_CY - 2}" r="33" fill="#191a1f"/>
+           <rect x="${CONN_CX - 7}" y="${CONN_CY - 36}" width="14" height="6" rx="1" fill="#c9ccd1"/>
+           <rect x="${CONN_CX - 7}" y="${CONN_CY + 26}" width="14" height="6" rx="1" fill="#c9ccd1"/>`;
+  s += male ? svgPin(CONN_CX - 16, CONN_CY - 2, 4.6) + svgPin(CONN_CX + 16, CONN_CY - 2, 4.6)
+            : svgHole(CONN_CX - 16, CONN_CY - 2, 5) + svgHole(CONN_CX + 16, CONN_CY - 2, 5);
+  return s;
+}
+
+// CEE (IEC 60309): presa da quadro (femmina) con coperchio a molla aperto,
+// oppure spina fissa da apparecchio (maschio) con il manicotto e i pin.
+// Blu = 230V monofase 2P+T, rosso = 400V trifase 3P+N+T; la terra è il
+// contatto più grosso, in basso (posizione "6 h").
+function svgCee (tri, male) {
+  const body = tri ? '#d6392f' : '#2f6fd6', dark = tri ? '#9e2820' : '#1d4a9a', light = tri ? '#ee6a60' : '#5d8fe6';
+  const poles = tri
+    ? [[-20, 6], [-15, -14], [15, -14], [20, 6]]
+    : [[-17, -6], [17, -6]];
+  let s = '';
+  if (!male) {
+    // coperchio incernierato, aperto verso l'alto
+    s += `<path d="M 26 20 L 94 20 L 88 6 L 32 6 Z" fill="${light}" stroke="${dark}" stroke-width="1.2"/>
+          <rect x="30" y="18" width="60" height="5" rx="2" fill="${dark}"/>`;
+  }
+  s += `<rect x="16" y="20" width="88" height="90" rx="10" fill="${body}" stroke="${dark}" stroke-width="1.5"/>
+        <circle cx="${CONN_CX}" cy="${CONN_CY + 4}" r="34" fill="${dark}"/>`;
+  if (male) {
+    s += `<circle cx="${CONN_CX}" cy="${CONN_CY + 4}" r="31" fill="#0e0f12"/>
+          <circle cx="${CONN_CX}" cy="${CONN_CY + 4}" r="27" fill="${body}" fill-opacity=".35"/>
+          <rect x="${CONN_CX - 4}" y="${CONN_CY - 30}" width="8" height="7" fill="${dark}"/>`;
+    poles.forEach(([x, y]) => { s += svgPin(CONN_CX + x, CONN_CY + 4 + y, 4); });
+    s += svgPin(CONN_CX, CONN_CY + 4 + 20, 5.4);
+  } else {
+    s += `<circle cx="${CONN_CX}" cy="${CONN_CY + 4}" r="30" fill="${body}"/>
+          <circle cx="${CONN_CX}" cy="${CONN_CY + 4}" r="30" fill="#000" fill-opacity=".12"/>
+          <rect x="${CONN_CX - 4}" y="${CONN_CY - 27}" width="8" height="7" fill="${dark}"/>`;
+    poles.forEach(([x, y]) => { s += svgHole(CONN_CX + x, CONN_CY + 4 + y, 4.2); });
+    s += svgHole(CONN_CX, CONN_CY + 4 + 20, 5.6);
+  }
+  s += `<text x="${CONN_CX}" y="${CONN_CY + 44}" font-size="7" font-weight="700" fill="#fff" fill-opacity=".85" text-anchor="middle" font-family="Inter,sans-serif">${tri ? '400V 16A' : '230V 16A'}</text>`;
+  return s;
+}
+
+function connectorSVG (signal, dir) {
+  const male = (CONNECTOR_GENDER[signal] || {})[dir] === 'male';
+  switch (signal) {
+    case 'xlr':      return svgXlr(3, male);
+    case 'dmx':      return svgXlr(5, male);
+    case 'speakon':  return svgSpeakon();
+    case 'powercon': return svgPowercon(dir === 'in');
+    case 'jack':     return svgJack();
+    case 'schuko':   return svgSchuko(male);
+    case 'cee_mono': return svgCee(false, male);
+    case 'cee_tri':  return svgCee(true, male);
+    default:         return `<circle cx="${CONN_CX}" cy="${CONN_CY}" r="20" fill="#555"/>`;
+  }
+}
+
+/* ---------------------------------------------------------------------
+   3c) PANNELLO POSTERIORE — in modalità cablaggio, toccando un dispositivo
+      si apre il suo retro con i connettori reali: si sceglie lì la presa.
+      Nella scena non ci sono più porte da centrare col dito.
+   --------------------------------------------------------------------- */
+/* per ogni dispositivo: stile del pannello, sezioni serigrafate con le prese
+   (id porta + scritta), decorazioni a sinistra/destra e targhetta */
+const REAR_PANELS = {
+  sub: { style: 'cabinet', left: 'vents', power: true, serial: 'ACTIVE SUBWOOFER 18"  ·  1200 W',
+    sections: [['SPEAKER', [['spk_in', 'INPUT'], ['spk_thru', 'LINK']]], ['POWER', [['power', 'MAINS IN']]]] },
+  top: { style: 'cabinet', serial: '2-WAY 12" + 1"  ·  8 Ω',
+    sections: [['SPEAKER', [['spk_in', 'INPUT']]]] },
+  // retro del ponte del mixer: su due file, sopra i 6 ingressi, sotto uscite e corrente
+  mixer: { style: 'desk', power: true, serial: 'DIGITAL MIXER  ·  6 CH  ·  2 AUX',
+    rows: [
+      [['INPUT', [1, 2, 3, 4, 5, 6].map(n => ['in_' + n, 'CH ' + n])]],
+      [['MAIN OUT', [['main_L', 'MAIN L'], ['main_R', 'MAIN R']]], ['AUX · MONITOR', [['aux_1', 'AUX 1'], ['aux_2', 'AUX 2']]], ['POWER', [['power', 'POWER']]]]
+    ] },
+  ampli: { style: 'rack', left: 'fan', right: 'fuse', power: true, serial: 'CLASS-D POWER AMPLIFIER  ·  2 × 500 W @ 4 Ω',
+    sections: [['INPUT', [['in_L', 'IN A (L)'], ['in_R', 'IN B (R)']]], ['OUTPUT', [['out_L', 'OUT CH1'], ['out_R', 'OUT CH2']]], ['POWER ~230V', [['power', 'MAINS IN']]]] },
+  par: { style: 'round', serial: 'LED PAR 7 × 10 W RGBW',
+    sections: [['POWER', [['power_in', 'POWER IN'], ['power_thru', 'POWER OUT']]], ['DMX 512', [['dmx_in', 'DMX IN'], ['dmx_thru', 'DMX THRU']]]] },
+  controller: { style: 'desk', accent: true, power: true, serial: 'DMX CONTROLLER  ·  2 UNIVERSI  ·  1024 CH',
+    sections: [['DMX OUT', [['dmx_1', 'UNIVERSO 1'], ['dmx_2', 'UNIVERSO 2']]], ['POWER', [['power', 'POWER IN']]]] },
+  // sopra le protezioni su guida DIN, sotto ingresso e prese
+  quadro: { style: 'white', serial: 'QUADRO DI DISTRIBUZIONE  ·  3F+N 16A  ·  IP44',
+    rows: [
+      [['__PROT__', []]],
+      [['INGRESSO', [['in', '400V TRIFASE']]], ['USCITE 230V', [['out_1', 'L1'], ['out_2', 'L2'], ['out_3', 'L3']]]]
+    ] },
+  allaccio: { style: 'green', serial: 'ALLACCIO VENUE  ·  400V 16A',
+    sections: [['USCITA', [['out', '400V TRIFASE']]]] },
+  // ciabatte: barra vista dall'alto con le prese a 45° e il cavo con la spina
+  ciabatta: { style: 'strip', serial: 'CIABATTA 3 PRESE  ·  SPINA SCHUKO  ·  16A',
+    sections: [['SPINA', [['in', 'SPINA']]], ['PRESE', [['out_1', 'PRESA 1'], ['out_2', 'PRESA 2'], ['out_3', 'PRESA 3']]]] },
+  ciabatta_cee: { style: 'strip', serial: 'CIABATTA 4 PRESE  ·  SPINA CEE 230V 16A',
+    sections: [['SPINA', [['in', 'SPINA']]], ['PRESE', [['out_1', 'PRESA 1'], ['out_2', 'PRESA 2'], ['out_3', 'PRESA 3'], ['out_4', 'PRESA 4']]]] },
+  pc: { style: 'laptop', power: true, serial: 'LAPTOP  ·  lato sinistro',
+    sections: [['ALIMENTAZIONE', [['power', 'SPINA']]], ['AUDIO (cavo mini-jack → 2 jack)', [['audio_L', 'LINE OUT L'], ['audio_R', 'LINE OUT R']]]] },
+  di: { style: 'steel', right: 'lift', serial: 'PASSIVE DI BOX  ·  2 CANALI',
+    sections: [['INPUT', [['in_1', 'CH1 IN'], ['in_2', 'CH2 IN']]], ['OUTPUT', [['out_1', 'CH1 OUT'], ['out_2', 'CH2 OUT']]]] }
+};
+// tutte le sezioni di un pannello, qualunque sia la disposizione
+function panelSections (panel) { return panel.rows ? panel.rows.flat() : panel.sections; }
+
+// modalità DMX del faro: quante canali occupa ciascuna
+const PAR_MODES = [
+  { id: '3CH', name: '3CH · RGB' },
+  { id: '4CH', name: '4CH · RGBW' },
+  { id: '8CH', name: '8CH · RGBW + dimmer + strobo' }
+];
+function parDmx (comp) {
+  if (!comp.dmx) comp.dmx = { addr: 1, mode: 1 };
+  return comp.dmx;
+}
+let parMenuField = 'addr';   // cosa si sta regolando sul display: indirizzo o modalità
+
+const REAR_STYLES = {
+  rack:    { bg: '#2e3037', edge: '#4a4d56', ink: '#cfd2d6', sub: '#8b8e98' },
+  cabinet: { bg: '#1b1c20', edge: '#33363d', ink: '#cfd2d6', sub: '#8b8e98', plate: '#2a2c33' },
+  desk:    { bg: '#26282e', edge: '#3a3d45', ink: '#cfd2d6', sub: '#8b8e98' },
+  round:   { bg: '#1c1d22', edge: '#3a3d45', ink: '#cfd2d6', sub: '#8b8e98' },
+  white:   { bg: '#e9eaed', edge: '#b9bcc1', ink: '#2a2c32', sub: '#5f646d' },
+  green:   { bg: '#2c3a2c', edge: '#49b06a', ink: '#e6efe6', sub: '#9fb89f' },
+  strip:   { bg: '#1c1d22', edge: '#3a3d45', ink: '#cfd2d6', sub: '#8b8e98' },
+  laptop:  { bg: '#d7dadd', edge: '#9a9da3', ink: '#2a2c32', sub: '#5f646d' },
+  steel:   { bg: '#39424f', edge: '#5b6676', ink: '#e1e6ee', sub: '#a4adba' }
+};
+
+let rearPanelId = null;   // dispositivo il cui pannello è aperto
+
+function compLabel (id) {
+  const c = gameState.placed[id];
+  if (!c) return id;
+  const n = id.indexOf('_') >= 0 ? ' ' + id.replace(/^.*_/, '') : '';
+  return COMPONENT_TYPES[c.type].label + n;
+}
+function portLabel (compId, portId) {
+  const c = gameState.placed[compId];
+  const panel = c && REAR_PANELS[c.type];
+  if (panel) {
+    for (const [, ports] of panelSections(panel)) {
+      const hit = ports.find(([pid]) => pid === portId);
+      if (hit) return hit[1];
+    }
+  }
+  return portId;
+}
+function edgesOnPort (compId, portId) {
+  return gameState.edges.filter(e => (e.a === compId && e.aPort === portId) || (e.b === compId && e.bPort === portId));
+}
+function escapeHtml (s) { return String(s).replace(/[&<>"]/g, ch => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[ch])); }
+
+function rearDeco (kind, x, h, st) {
+  switch (kind) {
+    case 'fan': {
+      const cx = x + 70, cy = h / 2;
+      return `<circle cx="${cx}" cy="${cy}" r="58" fill="#17181c" stroke="#4a4d56" stroke-width="2"/>
+        ${[18, 34, 50].map(r => `<circle cx="${cx}" cy="${cy}" r="${r}" fill="none" stroke="#4a4d56" stroke-width="2"/>`).join('')}
+        <line x1="${cx - 58}" y1="${cy}" x2="${cx + 58}" y2="${cy}" stroke="#4a4d56" stroke-width="2"/>
+        <line x1="${cx}" y1="${cy - 58}" x2="${cx}" y2="${cy + 58}" stroke="#4a4d56" stroke-width="2"/>
+        <circle cx="${cx}" cy="${cy}" r="9" fill="#2e3037"/>`;
+    }
+    case 'vents':
+      return Array.from({ length: 6 }, (_, i) => `<rect x="${x + 20 + i * 18}" y="${h / 2 - 70}" width="8" height="140" rx="4" fill="#0e0f12"/>`).join('');
+    case 'fuse':
+      return `<rect x="${x + 25}" y="${h / 2 - 22}" width="50" height="44" rx="6" fill="#0e0f12"/>
+        <rect x="${x + 36}" y="${h / 2 - 5}" width="28" height="10" fill="#8a8e98"/>
+        <text x="${x + 50}" y="${h / 2 + 42}" font-size="12" fill="${st.sub}" text-anchor="middle">FUSE T6.3A</text>`;
+    case 'lift':
+      return `<rect x="${x + 35}" y="${h / 2 - 30}" width="30" height="60" rx="6" fill="#0e0f12"/>
+        <rect x="${x + 42}" y="${h / 2 - 24}" width="16" height="24" rx="3" fill="#c9ccd1"/>
+        <text x="${x + 50}" y="${h / 2 + 48}" font-size="12" fill="${st.sub}" text-anchor="middle">GND LIFT</text>`;
+    default: return '';
+  }
+}
+
+// spina volante (sul cavo della ciabatta), vista di fronte: corpo tondo con
+// l'impugnatura zigrinata e i contatti maschi
+function svgPlug (signal) {
+  const ribs = n => Array.from({ length: n }, (_, i) => {
+    const a = i / n * Math.PI * 2;
+    return `<line x1="${CONN_CX + Math.cos(a) * 34}" y1="${CONN_CY + Math.sin(a) * 34}" x2="${CONN_CX + Math.cos(a) * 40}" y2="${CONN_CY + Math.sin(a) * 40}" stroke="#000" stroke-opacity=".35" stroke-width="2"/>`;
+  }).join('');
+  if (signal === 'cee_mono') {
+    return `<circle cx="${CONN_CX}" cy="${CONN_CY}" r="42" fill="#2f6fd6" stroke="#1d4a9a" stroke-width="2"/>${ribs(28)}
+      <circle cx="${CONN_CX}" cy="${CONN_CY}" r="31" fill="#1d4a9a"/>
+      <circle cx="${CONN_CX}" cy="${CONN_CY}" r="27" fill="#0e0f12"/>
+      <rect x="${CONN_CX - 4}" y="${CONN_CY - 32}" width="8" height="7" fill="#1d4a9a"/>
+      ${svgPin(CONN_CX - 15, CONN_CY - 5, 4)}${svgPin(CONN_CX + 15, CONN_CY - 5, 4)}${svgPin(CONN_CX, CONN_CY + 15, 5.4)}
+      <text x="${CONN_CX}" y="${CONN_CY + 52}" font-size="7" font-weight="700" fill="#9cc0ff" text-anchor="middle" font-family="Inter,sans-serif">230V 16A</text>`;
+  }
+  // spina Schuko: corpo nero, due spinotti e le scanalature laterali di terra
+  return `<circle cx="${CONN_CX}" cy="${CONN_CY}" r="40" fill="#1c1d22" stroke="#3a3d45" stroke-width="2"/>${ribs(24)}
+    <circle cx="${CONN_CX}" cy="${CONN_CY}" r="30" fill="#26282e"/>
+    <rect x="${CONN_CX - 33}" y="${CONN_CY - 7}" width="8" height="14" rx="2" fill="#c9ccd1"/>
+    <rect x="${CONN_CX + 25}" y="${CONN_CY - 7}" width="8" height="14" rx="2" fill="#c9ccd1"/>
+    ${svgPin(CONN_CX - 13, CONN_CY, 4.8)}${svgPin(CONN_CX + 13, CONN_CY, 4.8)}`;
+}
+
+/* una presa del pannello: scritta, tipo e genere sopra, il connettore reale,
+   il badge IN/OUT, la spina inserita se occupata e la targhetta di stato.
+   y0 = bordo superiore dello spazio della presa (alto REAR_FRAME_H). */
+const REAR_SLOT = 150, REAR_PADX = 18, REAR_FRAME_H = 234;
+function rearSlot (ctx, cx, y0, pid, label) {
+  const { id, def, st, pending, loads, planned, bottom, plugOnly, tilt } = ctx;
+  const p = def.ports.find(q => q.id === pid);
+  if (!p) return '';
+  const yb = y0 + REAR_FRAME_H;
+  const cTop = y0 + 56;                                  // riquadro 120×120 del connettore
+  const gender = (CONNECTOR_GENDER[p.signal] || {})[p.dir] === 'male' ? 'maschio' : 'femmina';
+  const busy = edgesOnPort(id, pid);
+  const inHand = pending && pending.componentId === id && pending.portId === pid;
+  const sigColor = '#' + SIGNAL_COLOR[p.signal].toString(16).padStart(6, '0');
+  const phaseLoad = loads && p.phase;
+  const face = p.lead ? svgPlug(p.signal) : connectorSVG(p.signal, p.dir);
+  const rot = tilt && p.dir === 'out' ? ` rotate(45 ${CONN_CX} ${CONN_CY})` : '';
+  let svg = `<g class="rp-port" data-port="${pid}" style="cursor:pointer">
+    <rect x="${cx - REAR_SLOT / 2 + 4}" y="${y0 + 14}" width="${REAR_SLOT - 8}" height="${REAR_FRAME_H - 28}" fill="transparent"/>
+    <text x="${cx}" y="${y0 + 32}" font-size="16" font-weight="700" fill="${st.ink}" text-anchor="middle">${escapeHtml(label)}</text>
+    <text x="${cx}" y="${y0 + 50}" font-size="11.5" fill="${st.sub}" text-anchor="middle">${escapeHtml(SIGNAL_LABEL[p.signal] || p.signal)} · ${gender}</text>
+    <g transform="translate(${cx - 60} ${cTop})${rot}">${face}</g>
+    <g transform="translate(${cx + 46} ${cTop + 14})">
+      <rect x="-15" y="-9" width="30" height="18" rx="4" fill="${p.dir === 'in' ? '#1f5a33' : '#6b4413'}"/>
+      <text x="0" y="4.5" font-size="11" font-weight="700" fill="${p.dir === 'in' ? '#7fe0a0' : '#ffc27a'}" text-anchor="middle">${p.dir === 'in' ? 'IN' : 'OUT'}</text></g>`;
+  if (busy.length && !p.lead) {
+    // spina inserita: cavo in neoprene nero col filetto del tipo di cavo (sulle
+    // prese del Quadro sotto c'è la barra del carico, e dove le file sono
+    // impilate il cavo coprirebbe quella sotto: lì solo la spina)
+    const cable = '#' + CABLE_TYPES[busy[0].signal].color.toString(16).padStart(6, '0');
+    svg += `<rect x="${cx - 14}" y="${cTop + 100}" width="28" height="26" rx="6" fill="#17181b" stroke="#55585f"/>` + (phaseLoad || plugOnly ? '' : `
+      <line x1="${cx}" y1="${cTop + 126}" x2="${cx}" y2="${bottom}" stroke="#17181b" stroke-width="11"/>
+      <line x1="${cx}" y1="${cTop + 126}" x2="${cx}" y2="${bottom}" stroke="${cable}" stroke-width="3"/>`);
+  }
+  if (inHand) svg += `<circle cx="${cx}" cy="${cTop + CONN_CY}" r="${p.lead ? 50 : 46}" fill="none" stroke="#f2a541" stroke-width="4" stroke-dasharray="8 5"/>`;
+  let status;
+  if (inHand) status = p.lead ? 'spina in mano' : 'cavo in mano da qui';
+  else if (busy.length === 1) {
+    const e = busy[0];
+    const otherId = e.a === id ? e.b : e.a, otherPort = e.a === id ? e.bPort : e.aPort;
+    status = '→ ' + compLabel(otherId) + ' · ' + portLabel(otherId, otherPort);
+  } else if (busy.length > 1) status = busy.length + ' cavi collegati';
+  else status = p.lead ? 'tocca per prendere la spina' : 'libera';
+  if (status.length > 23) status = status.slice(0, 22) + '…';   // deve stare nella targhetta
+  svg += `<rect x="${cx - REAR_SLOT / 2 + 6}" y="${yb - 24}" width="${REAR_SLOT - 12}" height="22" rx="11"
+      fill="${busy.length ? '#1c1d22' : 'transparent'}" stroke="${busy.length ? sigColor : 'none'}"/>
+    <text x="${cx}" y="${yb - 9}" font-size="11.5" fill="${busy.length ? '#eee9df' : st.sub}" text-anchor="middle">${escapeHtml(status)}</text>`;
+  if (phaseLoad) {
+    // carico della fase, subito sotto la presa
+    const frac = Math.min(1, loads[p.phase] / PHASE_BUDGET_W);
+    const col = frac >= 1 ? '#e0503f' : (frac >= 0.75 ? '#f2a541' : '#49b06a');
+    svg += `<rect x="${cx - 50}" y="${cTop + 130}" width="100" height="7" rx="3" fill="#00000033"/>
+      <rect x="${cx - 50}" y="${cTop + 130}" width="${100 * frac}" height="7" rx="3" fill="${col}"/>
+      <text x="${cx}" y="${cTop + 150}" font-size="10.5" font-weight="600" fill="${st.sub}" text-anchor="middle">${(loads[p.phase] / 1000).toFixed(2)} kW (a regime ${(planned[p.phase] / 1000).toFixed(2)})</text>`;
+  }
+  return svg + `</g>`;
+}
+
+// sezione serigrafata: riquadro con il titolo e le sue prese in fila
+function rearSection (ctx, x, y0, title, ports) {
+  const { st } = ctx;
+  const w = ports.length * REAR_SLOT + REAR_PADX * 2;
+  let svg = `<rect x="${x}" y="${y0}" width="${w}" height="${REAR_FRAME_H}" rx="4" fill="none" stroke="${st.ink}" stroke-opacity=".45" stroke-width="1.5"/>
+    <rect x="${x + 12}" y="${y0 - 10}" width="${title.length * 10 + 18}" height="22" fill="${st.bg}"/>
+    <text x="${x + 21}" y="${y0 + 6}" font-size="15" font-weight="700" fill="${st.ink}">${escapeHtml(title)}</text>`;
+  ports.forEach(([pid, label], pi) => {
+    svg += rearSlot(ctx, x + REAR_PADX + pi * REAR_SLOT + REAR_SLOT / 2, y0, pid, label);
+  });
+  return { svg, w };
+}
+const sectionWidth = ports => ports.length * REAR_SLOT + REAR_PADX * 2;
+
+/* interruttore di accensione del dispositivo (bilanciere I/O illuminato) */
+function rearPowerSwitch (comp, x, yMid, st) {
+  const on = !!comp.on, powered = isPowered(comp.id);
+  const status = on ? (powered ? 'ACCESO' : 'ACCESO · senza corrente') : 'SPENTO';
+  const col = on ? (powered ? '#7fe0a0' : '#ffc27a') : st.sub;
+  return `<g class="rp-switch" style="cursor:pointer">
+    <rect x="${x}" y="${yMid - 100}" width="130" height="200" fill="transparent"/>
+    <text x="${x + 65}" y="${yMid - 78}" font-size="15" font-weight="700" fill="${st.ink}" text-anchor="middle">POWER</text>
+    <rect x="${x + 33}" y="${yMid - 58}" width="64" height="104" rx="8" fill="#0e0f12" stroke="#55585f"/>
+    <rect x="${x + 40}" y="${yMid - 51}" width="50" height="90" rx="5" fill="${on && powered ? '#e0503f' : '#6b1d17'}"/>
+    <rect x="${x + 40}" y="${on ? yMid - 51 : yMid - 6}" width="50" height="45" rx="5" fill="#000" fill-opacity=".28"/>
+    ${on && powered ? `<rect x="${x + 36}" y="${yMid - 55}" width="58" height="98" rx="7" fill="none" stroke="#ff7a6a" stroke-opacity=".6" stroke-width="3"/>` : ''}
+    <text x="${x + 65}" y="${yMid - 22}" font-size="18" font-weight="700" fill="#fff" fill-opacity=".85" text-anchor="middle">I</text>
+    <text x="${x + 65}" y="${yMid + 24}" font-size="16" font-weight="700" fill="#fff" fill-opacity=".85" text-anchor="middle">O</text>
+    <text x="${x + 65}" y="${yMid + 70}" font-size="12" font-weight="700" fill="${col}" text-anchor="middle">${status}</text>
+  </g>`;
+}
+
+/* protezioni del Quadro su guida DIN: generale, salvavita (con tasto di
+   prova T) e un magnetotermico per fase. Leva su = armato. */
+const PROT_MODULES = [
+  ['main', 'GENERALE', '4P 40A', 120],
+  ['rcd', 'SALVAVITA', 'Idn 30 mA', 120],
+  ['L1', 'L1', 'C16', 80],
+  ['L2', 'L2', 'C16', 80],
+  ['L3', 'L3', 'C16', 80]
+];
+const PROT_GAP = 14;
+const PROT_W = REAR_PADX * 2 + PROT_MODULES.reduce((s, m) => s + m[3], 0) + PROT_GAP * (PROT_MODULES.length - 1);
+function rearProtections (ctx, comp, x, y0) {
+  const { st } = ctx;
+  const prot = quadroProt(comp);
+  let svg = `<rect x="${x}" y="${y0}" width="${PROT_W}" height="${REAR_FRAME_H}" rx="4" fill="none" stroke="${st.ink}" stroke-opacity=".45" stroke-width="1.5"/>
+    <rect x="${x + 12}" y="${y0 - 10}" width="128" height="22" fill="${st.bg}"/>
+    <text x="${x + 21}" y="${y0 + 6}" font-size="15" font-weight="700" fill="${st.ink}">PROTEZIONI</text>
+    <rect x="${x + 10}" y="${y0 + 112}" width="${PROT_W - 20}" height="12" fill="#b9bcc1"/>`;   // guida DIN
+  let mx = x + REAR_PADX;
+  PROT_MODULES.forEach(([key, label, spec, w]) => {
+    const on = !!prot[key], tripped = !!prot.tripped[key];
+    const lever = key === 'rcd' ? '#2f6fd6' : '#1c1d22';
+    const cx = mx + w / 2;
+    svg += `<g class="rp-brk" data-brk="${key}" style="cursor:pointer">
+      <text x="${cx}" y="${y0 + 32}" font-size="14" font-weight="700" fill="${st.ink}" text-anchor="middle">${label}</text>
+      <rect x="${mx}" y="${y0 + 44}" width="${w}" height="150" rx="4" fill="#f7f7f8" stroke="#9a9da3" stroke-width="1.5"/>
+      ${[y0 + 54, y0 + 184].map(yy => [0.3, 0.7].map(f => `<circle cx="${mx + w * f}" cy="${yy}" r="4" fill="#c9ccd1" stroke="#7d828c"/>`).join('')).join('')}
+      <rect x="${cx - 16}" y="${y0 + 78}" width="32" height="76" rx="3" fill="#2a2c32"/>
+      <rect x="${cx - 12}" y="${on ? y0 + 82 : y0 + 116}" width="24" height="34" rx="3" fill="${lever}" stroke="#55585f"/>
+      <text x="${cx}" y="${y0 + 72}" font-size="9" font-weight="700" fill="#2a2c32" text-anchor="middle">I ON</text>
+      <text x="${cx}" y="${y0 + 166}" font-size="9" font-weight="700" fill="#2a2c32" text-anchor="middle">O OFF</text>
+      <text x="${cx}" y="${y0 + 178}" font-size="9.5" fill="#5f646d" text-anchor="middle">${spec}</text>`;
+    const status = on ? 'ARMATO' : (tripped ? 'SCATTATO' : 'ABBASSATO');
+    const sc = on ? '#1f7a40' : (tripped ? '#e0503f' : st.sub);
+    svg += `<rect x="${cx - w / 2 + 2}" y="${y0 + 202}" width="${w - 4}" height="22" rx="11" fill="${tripped && !on ? '#e0503f22' : 'transparent'}" stroke="${tripped && !on ? '#e0503f' : 'none'}"/>
+      <text x="${cx}" y="${y0 + 217}" font-size="11" font-weight="700" fill="${sc}" text-anchor="middle">${status}</text></g>`;
+    if (key === 'rcd') {
+      svg += `<g class="rp-brk" data-brk="rcd_test" style="cursor:pointer">
+        <circle cx="${mx + w - 18}" cy="${y0 + 100}" r="10" fill="#f2c53d" stroke="#8a5f1f"/>
+        <text x="${mx + w - 18}" y="${y0 + 104}" font-size="11" font-weight="700" fill="#2a2c32" text-anchor="middle">T</text></g>`;
+    }
+    mx += w + PROT_GAP;
+  });
+  return svg;
+}
+
+function testRcd () {
+  const q = findQuadro();
+  if (!q) return;
+  const prot = quadroProt(q);
+  if (!prot.rcd) { showToast('Il salvavita è già abbassato: armalo prima di provarlo.'); return; }
+  applyPowerAction(() => { prot.rcd = false; prot.tripped.rcd = true; });
+  saveHistory();
+  showToast('Prova del salvavita: è scattato come deve. Riarmalo per ridare corrente.', 'ok');
+}
+
+/* retro TONDO del faro PAR: disco con la forcella ai lati, display con i
+   tasti MENU / UP / DOWN / ENTER per indirizzo e modalità DMX, e le prese in
+   due file serigrafate direttamente sul disco (niente riquadri) */
+function renderRoundPanel (ctx, comp, panel) {
+  const { st } = ctx;
+  const D = 760, R = D / 2, ARM = 70;
+  const W = D + ARM * 2, H = D + 20;
+  const cx = W / 2, cy = R + 10;
+  const dmx = parDmx(comp);
+  const mode = PAR_MODES[dmx.mode];
+  const chCount = parseInt(mode.id, 10);
+  // display acceso solo se il faro è alimentato
+  const powered = isPowered(comp.id);
+  const shown = !powered ? '' : (parMenuField === 'addr' ? 'A' + String(dmx.addr).padStart(3, '0') : mode.id);
+  let svg = `<svg class="rear-svg round" viewBox="0 0 ${W} ${H}" xmlns="http://www.w3.org/2000/svg" font-family="Inter,sans-serif">
+    ${[6, W - 50].map(x => `<rect x="${x}" y="${cy - 40}" width="44" height="${R + 60}" rx="8" fill="#6a6e78" stroke="#4a4d56" stroke-width="2"/>
+      <circle cx="${x + 22}" cy="${cy}" r="26" fill="#2a2c32" stroke="#8a8e98" stroke-width="3"/>
+      ${[0, 60, 120, 180, 240, 300].map(d => { const a = d * Math.PI / 180; return `<circle cx="${x + 22 + Math.cos(a) * 17}" cy="${cy + Math.sin(a) * 17}" r="4" fill="#8a8e98"/>`; }).join('')}`).join('')}
+    <circle cx="${cx}" cy="${cy}" r="${R}" fill="${st.bg}" stroke="${st.edge}" stroke-width="3"/>
+    <circle cx="${cx}" cy="${cy}" r="${R - 14}" fill="none" stroke="#0e0f12" stroke-width="10" stroke-dasharray="3 9"/>
+    <circle cx="${cx}" cy="${cy}" r="${R - 30}" fill="none" stroke="${st.edge}" stroke-width="1.5"/>
+    <rect x="${cx - 150}" y="${cy - R + 52}" width="120" height="48" rx="6" fill="#0e0f12" stroke="#3a3d45"/>
+    <text x="${cx - 90}" y="${cy - R + 86}" font-size="28" font-weight="700" fill="#e0503f" text-anchor="middle" font-family="monospace">${shown}</text>
+    ${[['menu', 'MENU'], ['up', '▲'], ['down', '▼'], ['enter', 'ENTER']].map(([act, l], i) => `
+      <g class="rp-btn" data-act="${act}" style="cursor:pointer">
+        <rect x="${cx - 18 + i * 44}" y="${cy - R + 60}" width="40" height="32" rx="6" fill="#3a3d45" stroke="#55585f"/>
+        <text x="${cx + 2 + i * 44}" y="${cy - R + 81}" font-size="${act === 'up' || act === 'down' ? 14 : 9.5}" font-weight="700" fill="#cfd2d6" text-anchor="middle">${l}</text></g>`).join('')}
+    ${!powered ? `<text x="${cx}" y="${cy - R + 124}" font-size="13" fill="#ffc27a" text-anchor="middle">Display spento: il faro non riceve corrente</text>` : ''}
+    <text x="${cx}" y="${cy - R + 124}" font-size="13" fill="#cfd2d6" text-anchor="middle" opacity="${powered ? 1 : 0}">Indirizzo <tspan font-weight="700" fill="${parMenuField === 'addr' ? '#f2a541' : '#eee9df'}">${String(dmx.addr).padStart(3, '0')}</tspan> · Modalità <tspan font-weight="700" fill="${parMenuField === 'mode' ? '#f2a541' : '#eee9df'}">${escapeHtml(mode.name)}</tspan></text>
+    <text x="${cx}" y="${cy - R + 142}" font-size="11.5" fill="${st.sub}" text-anchor="middle" opacity="${powered ? 1 : 0}">occupa i canali ${dmx.addr}–${dmx.addr + chCount - 1} · MENU cambia voce, ▲▼ regolano</text>`;
+  let y0 = cy - R + 176;
+  panel.sections.forEach(([title, ports]) => {
+    const w = sectionWidth(ports);
+    const x = cx - w / 2;
+    // titolo serigrafato con due filetti ai lati, direttamente sul disco
+    svg += `<line x1="${x + 20}" y1="${y0}" x2="${cx - 50}" y2="${y0}" stroke="${st.ink}" stroke-opacity=".4"/>
+      <line x1="${cx + 50}" y1="${y0}" x2="${x + w - 20}" y2="${y0}" stroke="${st.ink}" stroke-opacity=".4"/>
+      <text x="${cx}" y="${y0 + 5}" font-size="14" font-weight="700" fill="${st.ink}" text-anchor="middle">${escapeHtml(title)}</text>`;
+    ports.forEach(([pid, label], pi) => { svg += rearSlot(ctx, x + REAR_PADX + pi * REAR_SLOT + REAR_SLOT / 2, y0 - 4, pid, label); });
+    y0 += REAR_FRAME_H + 18;
+  });
+  svg += `<text x="${cx}" y="${cy + R - 40}" font-size="12" fill="${st.sub}" text-anchor="middle" letter-spacing="1">${escapeHtml(panel.serial)}</text>`;
+  return svg + `</svg>`;
+}
+
+/* ciabatta vista dall'alto: a sinistra la spina sul suo cavo (si prende da
+   qui per collegare la ciabatta, il cavo fa già parte della ciabatta), a
+   destra la barra nera con interruttore e prese Schuko inclinate a 45° */
+function renderStripPanel (ctx, comp, def, panel) {
+  const { st } = ctx;
+  const outs = panelSections(panel).find(([t]) => t === 'PRESE')[1];
+  const plugX = 125, barX = 260, H = 330;
+  const W = barX + 120 + outs.length * REAR_SLOT + 30;
+  const accent = '#' + def.body.accent.toString(16).padStart(6, '0');
+  const y0 = 48;
+  let svg = `<svg class="rear-svg" viewBox="0 0 ${W} ${H}" xmlns="http://www.w3.org/2000/svg" font-family="Inter,sans-serif">
+    <path d="M ${plugX + 44} ${y0 + 118} C ${plugX + 90} ${y0 + 118}, ${barX - 60} ${y0 + 150}, ${barX + 6} ${y0 + 150}" fill="none" stroke="#0c0d10" stroke-width="16"/>
+    <path d="M ${plugX + 44} ${y0 + 118} C ${plugX + 90} ${y0 + 118}, ${barX - 60} ${y0 + 150}, ${barX + 6} ${y0 + 150}" fill="none" stroke="#26282e" stroke-width="10"/>
+    <rect x="${barX}" y="${y0 + 52}" width="${W - barX - 14}" height="148" rx="26" fill="${st.bg}" stroke="${st.edge}" stroke-width="2"/>
+    <rect x="${barX + 16}" y="${y0 + 186}" width="${W - barX - 46}" height="6" rx="3" fill="${accent}"/>
+    <g class="rp-switch" style="cursor:pointer">
+      <rect x="${barX + 24}" y="${y0 + 84}" width="74" height="100" fill="transparent"/>
+      <rect x="${barX + 30}" y="${y0 + 94}" width="62" height="64" rx="8" fill="#0e0f12"/>
+      <rect x="${barX + 38}" y="${y0 + 102}" width="46" height="48" rx="5" fill="${comp.on && isPowered(comp.id) ? '#ff5a4a' : '#7a2019'}"/>
+      <rect x="${barX + 38}" y="${comp.on ? y0 + 102 : y0 + 128}" width="46" height="22" rx="5" fill="#000" fill-opacity=".3"/>
+      <text x="${barX + 61}" y="${y0 + 176}" font-size="11" font-weight="700" fill="${comp.on ? (isPowered(comp.id) ? '#7fe0a0' : '#ffc27a') : st.sub}" text-anchor="middle">${comp.on ? (isPowered(comp.id) ? 'ACCESA' : 'ACCESA · no corrente') : 'I / O · SPENTA'}</text>
+    </g>`;
+  svg += rearSlot(ctx, plugX, y0, 'in', 'SPINA');
+  outs.forEach(([pid, label], i) => {
+    svg += rearSlot({ ...ctx, tilt: true }, barX + 120 + REAR_SLOT / 2 + i * REAR_SLOT, y0, pid, label);
+  });
+  svg += `<text x="${(barX + W) / 2}" y="${H - 22}" font-size="12" fill="${st.sub}" text-anchor="middle" letter-spacing="1">${escapeHtml(panel.serial)}</text>`;
+  return svg + `</svg>`;
+}
+
+function renderRearPanel () {
+  const id = rearPanelId;
+  const comp = gameState.placed[id];
+  if (!comp) { closeRearPanel(); return; }
+  const def = COMPONENT_TYPES[comp.type];
+  const panel = REAR_PANELS[comp.type];
+  const st = REAR_STYLES[panel.style];
+  const pending = gameState.pendingPort;
+  const loads = comp.type === 'quadro' ? livePhaseLoads(false) : null;
+  const planned = comp.type === 'quadro' ? computePhaseLoads() : null;
+  const ctx = { id, def, st, pending, loads, planned };
+
+  el('#rear-title').textContent = def.label + '  ·  ' + id.replace(/_/g, ' ') + '  —  pannello posteriore';
+
+  let svg;
+  if (panel.style === 'round') {
+    svg = renderRoundPanel({ ...ctx, plugOnly: true }, comp, panel);
+  } else if (panel.style === 'strip') {
+    svg = renderStripPanel({ ...ctx, plugOnly: true }, comp, def, panel);
+  } else {
+    // una o più file di sezioni affiancate
+    const rows = panel.rows || [panel.sections];
+    const GAP = 26, MARGIN = 36, ROW_H = REAR_FRAME_H + 34;
+    const secW = ([title, ports]) => title === '__PROT__' ? PROT_W : sectionWidth(ports);
+    const leftW = panel.left ? 140 : 0, rightW = (panel.right ? 140 : 0) + (panel.power ? 140 : 0);
+    const rowW = rows.map(r => r.reduce((s, sec) => s + secW(sec), 0) + GAP * (r.length - 1));
+    const W = MARGIN * 2 + leftW + rightW + Math.max(...rowW);
+    const H = 48 + rows.length * ROW_H + 48;
+    const plugOnly = rows.length > 1;
+    svg = `<svg class="rear-svg${rows.length > 1 ? ' tall' : ''}" viewBox="0 0 ${W} ${H}" xmlns="http://www.w3.org/2000/svg" font-family="Inter,sans-serif">`;
+    // telaio del pannello con la forma e i colori del dispositivo
+    if (panel.style === 'rack') {
+      svg += `<rect x="30" y="8" width="${W - 60}" height="${H - 16}" fill="${st.bg}" stroke="${st.edge}" stroke-width="2"/>
+        <rect x="30" y="8" width="${W - 60}" height="10" fill="#3a3d45"/><rect x="30" y="${H - 18}" width="${W - 60}" height="10" fill="#3a3d45"/>
+        ${[2, W - 32].map(x => `<rect x="${x}" y="8" width="30" height="${H - 16}" fill="#4a4d56"/>
+          <rect x="${x + 9}" y="40" width="12" height="28" rx="6" fill="#0e0f12"/><rect x="${x + 9}" y="${H - 68}" width="12" height="28" rx="6" fill="#0e0f12"/>`).join('')}`;
+    } else if (panel.style === 'cabinet') {
+      svg += `<rect x="4" y="4" width="${W - 8}" height="${H - 8}" rx="6" fill="${st.bg}" stroke="${st.edge}" stroke-width="2"/>
+        <rect x="22" y="22" width="${W - 44}" height="${H - 44}" rx="8" fill="${st.plate}" stroke="#44474f" stroke-width="1.5"/>
+        ${[[32, 32], [W - 32, 32], [32, H - 32], [W - 32, H - 32]].map(([x, y]) => `<circle cx="${x}" cy="${y}" r="4" fill="#55585f"/>`).join('')}`;
+    } else if (panel.style === 'white') {
+      svg += `<rect x="4" y="4" width="${W - 8}" height="${H - 8}" rx="10" fill="${st.bg}" stroke="${st.edge}" stroke-width="2"/>
+        <rect x="4" y="4" width="${W - 8}" height="14" rx="6" fill="#f2c53d"/>
+        ${Array.from({ length: Math.floor(W / 16) }, (_, i) => `<line x1="${8 + i * 16}" y1="18" x2="${18 + i * 16}" y2="4" stroke="#1c1d22" stroke-width="3"/>`).join('')}`;
+    } else if (panel.style === 'laptop') {
+      // fianco del laptop: lastra in alluminio con lo spigolo smussato
+      svg += `<path d="M 14 30 L ${W - 14} 30 Q ${W - 4} 30 ${W - 4} 44 L ${W - 4} ${H - 30} Q ${W - 4} ${H - 12} ${W - 22} ${H - 12} L 22 ${H - 12} Q 4 ${H - 12} 4 ${H - 30} L 4 44 Q 4 30 14 30 Z"
+          fill="${st.bg}" stroke="${st.edge}" stroke-width="2"/>
+        <rect x="10" y="30" width="${W - 20}" height="6" rx="3" fill="#ffffff" fill-opacity=".35"/>`;
+    } else if (panel.style === 'desk') {
+      // retro di un banco (mixer, consolle): scocca scura col bordo del ponte
+      svg += `<rect x="4" y="4" width="${W - 8}" height="${H - 8}" rx="12" fill="${st.bg}" stroke="${st.edge}" stroke-width="2"/>
+        <rect x="4" y="4" width="${W - 8}" height="16" rx="8" fill="#4a4d56"/>
+        ${panel.accent ? `<rect x="20" y="${H - 16}" width="${W - 40}" height="5" rx="2.5" fill="${'#' + def.body.accent.toString(16).padStart(6, '0')}"/>` : ''}`;
+    } else {
+      svg += `<rect x="4" y="4" width="${W - 8}" height="${H - 8}" rx="16" fill="${st.bg}" stroke="${st.edge}" stroke-width="2"/>`;
+    }
+    if (panel.left) svg += rearDeco(panel.left, MARGIN, H, st);
+    rows.forEach((row, ri) => {
+      const y0 = 48 + ri * ROW_H;
+      let x = MARGIN + leftW + (Math.max(...rowW) - rowW[ri]) / 2;
+      row.forEach(([title, ports]) => {
+        svg += title === '__PROT__'
+          ? rearProtections(ctx, comp, x, y0)
+          : rearSection({ ...ctx, plugOnly, bottom: H - 8 }, x, y0, title, ports).svg;
+        x += secW([title, ports]) + GAP;
+      });
+    });
+    let rx = W - MARGIN - rightW + 10;
+    if (panel.power) { svg += rearPowerSwitch(comp, rx, H / 2, st); rx += 140; }
+    if (panel.right) svg += rearDeco(panel.right, rx, H, st);
+    if (panel.serial) svg += `<text x="${W / 2}" y="${H - 22}" font-size="12" fill="${st.sub}" text-anchor="middle" letter-spacing="1">${escapeHtml(panel.serial)}</text>`;
+    svg += `</svg>`;
+  }
+
+  el('#rear-svg').innerHTML = svg;
+  el('#rear-svg').querySelectorAll('.rp-port').forEach(node => {
+    node.addEventListener('click', () => onRearPortClick(id, node.dataset.port));
+  });
+  el('#rear-svg').querySelectorAll('.rp-btn').forEach(node => {
+    node.addEventListener('click', () => onParButton(comp, node.dataset.act));
+  });
+  el('#rear-svg').querySelectorAll('.rp-switch').forEach(node => {
+    node.addEventListener('click', () => toggleDevicePower(id));
+  });
+  el('#rear-svg').querySelectorAll('.rp-brk').forEach(node => {
+    node.addEventListener('click', () => node.dataset.brk === 'rcd_test' ? testRcd() : toggleProtection(node.dataset.brk));
+  });
+  renderRearHand();
+}
+
+// tasti del display del PAR: MENU passa da indirizzo a modalità, ▲▼ regolano
+function onParButton (comp, act) {
+  if (!isPowered(comp.id)) { showToast('Il PAR non è alimentato: il display è spento. Dagli corrente per impostarlo.'); return; }
+  const dmx = parDmx(comp);
+  if (act === 'menu') parMenuField = parMenuField === 'addr' ? 'mode' : 'addr';
+  else if (act === 'up' || act === 'down') {
+    const d = act === 'up' ? 1 : -1;
+    if (parMenuField === 'addr') dmx.addr = Math.min(512, Math.max(1, dmx.addr + d));
+    else dmx.mode = (dmx.mode + d + PAR_MODES.length) % PAR_MODES.length;
+  } else if (act === 'enter') {
+    showToast(compLabel(comp.id) + ': indirizzo ' + String(dmx.addr).padStart(3, '0') + ', modalità ' + PAR_MODES[dmx.mode].id + '.', 'ok');
+    if (window.__scene) window.__scene.pushHistory();
+  }
+  renderRearPanel();
+}
+
+// riga "cavo in mano" in testa al popup
+function renderRearHand () {
+  const box = el('#rear-hand');
+  const pending = gameState.pendingPort;
+  const cable = gameState.selectedCable;
+  const pdef = pending && getPortDef(pending.componentId, pending.portId);
+  if (pdef && pdef.lead) {
+    box.innerHTML = `Spina <b>${escapeHtml(SIGNAL_LABEL[pdef.signal])}</b> di <b>${escapeHtml(compLabel(pending.componentId))}</b> in mano — scegli la presa dove infilarla.`;
+  } else if (pending) {
+    box.innerHTML = `Cavo <b>${escapeHtml(cableName(cable))}</b> in mano da <b>${escapeHtml(compLabel(pending.componentId))} · ${escapeHtml(portLabel(pending.componentId, pending.portId))}</b> — scegli la presa dove collegarlo.`;
+  } else if (cable) {
+    box.innerHTML = `Cavo selezionato: <b>${escapeHtml(cableName(cable))}</b> — scegli la presa da cui partire.`;
+  } else {
+    box.innerHTML = `Nessun cavo selezionato: scegline uno nella scheda <b>Cavi</b> per collegare (le spine di ciabatte e PC si prendono direttamente dal pannello).`;
+  }
+}
+
+function cableName (cableId) {
+  const btn = document.querySelector('.cable-btn[data-cable="' + cableId + '"]');
+  return btn ? btn.textContent.trim() : String(cableId || '');
+}
+
+function showRearDetail (compId, portId) {
+  const box = el('#rear-detail');
+  const busy = edgesOnPort(compId, portId);
+  if (!busy.length) { box.innerHTML = ''; return; }
+  box.innerHTML = `<div class="rear-detail-head">${escapeHtml(portLabel(compId, portId))} — cavi collegati</div>` + busy.map(e => {
+    const otherId = e.a === compId ? e.b : e.a, otherPort = e.a === compId ? e.bPort : e.aPort;
+    return `<div class="rear-detail-row"><span>${escapeHtml(cableName(e.signal))} → ${escapeHtml(compLabel(otherId))} · ${escapeHtml(portLabel(otherId, otherPort))}</span>
+      <button class="rear-unplug" data-edge="${e.id}">Scollega</button></div>`;
+  }).join('');
+  box.querySelectorAll('.rear-unplug').forEach(b => b.addEventListener('click', () => {
+    const scene = window.__scene;
+    if (!scene) return;
+    scene.selectedEdgeId = Number(b.dataset.edge);
+    scene.deleteSelectedEdge();
+    box.innerHTML = '';
+    renderRearPanel();
+  }));
+}
+
+// seleziona un cavo come farebbe il suo pulsante nella scheda Cavi
+function selectCable (cableId) {
+  gameState.selectedCable = cableId;
+  document.querySelectorAll('.cable-btn').forEach(b => b.classList.toggle('active', b.dataset.cable === cableId));
+}
+
+function onRearPortClick (compId, portId) {
+  const scene = window.__scene;
+  if (!scene) return;
+  const p = getPortDef(compId, portId);
+  const busy = edgesOnPort(compId, portId);
+  const pending = gameState.pendingPort;
+  const isPendingPort = pending && pending.componentId === compId && pending.portId === portId;
+
+  // spina della ciabatta: il cavo è già suo, non si sceglie nella scheda Cavi
+  if (p.lead && !busy.length && !isPendingPort) {
+    if (pending) {
+      const pendDef = getPortDef(pending.componentId, pending.portId);
+      if (!pendDef || pendDef.signal !== p.signal || pendDef.dir === p.dir) {
+        showToast('La spina ' + SIGNAL_LABEL[p.signal] + ' va infilata in una presa ' + SIGNAL_LABEL[p.signal] + ' libera.');
+        return;
+      }
+    }
+    selectCable(p.signal);
+  }
+  // spina di una ciabatta in mano: va solo in una presa del suo tipo
+  const pendLead = pending && getPortDef(pending.componentId, pending.portId);
+  if (pendLead && pendLead.lead && !isPendingPort && !busy.length && p.signal !== pendLead.signal) {
+    showToast('La spina ' + SIGNAL_LABEL[pendLead.signal] + ' di ' + compLabel(pending.componentId) + ' va in una presa ' + SIGNAL_LABEL[pendLead.signal] + '.');
+    return;
+  }
+
+  // presa occupata (e non è una presa multipla del Quadro con un cavo in
+  // mano): si mostrano i cavi collegati, con la possibilità di scollegarli
+  if (busy.length && !isPendingPort && !(p.multi && gameState.selectedCable)) {
+    showRearDetail(compId, portId);
+    return;
+  }
+  el('#rear-detail').innerHTML = '';
+  const edgesBefore = gameState.edges.length;
+  const rcdBefore = gameState.rcdTrips || 0;
+  scene.handlePortClick(compId, portId, p.signal);
+  const arced = (gameState.rcdTrips || 0) > rcdBefore;   // il salvavita ha già il suo messaggio
+  const connected = gameState.edges.length > edgesBefore;
+  const picked = !pending && gameState.pendingPort;
+  if (connected || picked) {
+    // cavo collegato, o primo capo scelto: si torna alla scena
+    closeRearPanel();
+    if (picked && p.lead) showToast('Spina in mano: tocca il dispositivo con la presa ' + SIGNAL_LABEL[p.signal] + ' dove infilarla.', 'ok');
+    else if (picked) showToast('Cavo in mano: ora tocca il dispositivo da collegare.', 'ok');
+    else if (!arced) showToast('Collegato: ' + compLabel(compId) + ' · ' + portLabel(compId, portId) + '.', 'ok');
+    return;
+  }
+  renderRearPanel();
+}
+
+// mentre il popup è aperto la scena non deve ricevere i tocchi: Phaser
+// ascolta il puntatore anche fuori dal canvas, e un tocco sul popup verrebbe
+// letto come un tocco sul pavimento (che annulla il cavo in mano)
+function setSceneInput (on) {
+  const scene = window.__scene;
+  if (scene && scene.input) scene.input.enabled = on;
+}
+function openRearPanel (compId) {
+  if (!REAR_PANELS[(gameState.placed[compId] || {}).type]) return;
+  rearPanelId = compId;
+  el('#rear-detail').innerHTML = '';
+  renderRearPanel();
+  el('#rear-modal').classList.add('show');
+  setSceneInput(false);
+}
+function closeRearPanel () {
+  rearPanelId = null;
+  el('#rear-modal').classList.remove('show');
+  // riattivato al giro successivo: il rilascio del tocco che ha chiuso il
+  // popup non deve arrivare alla scena
+  setTimeout(() => { if (!rearPanelId) setSceneInput(true); }, 0);
+}
+el('#rear-close').addEventListener('click', closeRearPanel);
+el('#rear-modal').addEventListener('click', ev => { if (ev.target.id === 'rear-modal') closeRearPanel(); });
+
+// barra "cavo in mano" sopra la scena, finché il secondo capo non è collegato
+function updateCableBanner () {
+  const bar = el('#cable-banner');
+  const pending = gameState.pendingPort;
+  if (!pending) { bar.classList.remove('show'); return; }
+  const pdef = getPortDef(pending.componentId, pending.portId);
+  el('#cable-banner-text').innerHTML = pdef && pdef.lead
+    ? `Spina <b>${escapeHtml(SIGNAL_LABEL[pdef.signal])}</b> di <b>${escapeHtml(compLabel(pending.componentId))}</b> in mano → tocca il dispositivo con la presa dove infilarla`
+    : `Cavo <b>${escapeHtml(cableName(gameState.selectedCable))}</b> in mano da <b>${escapeHtml(compLabel(pending.componentId))} · ${escapeHtml(portLabel(pending.componentId, pending.portId))}</b> → tocca il dispositivo da collegare`;
+  bar.classList.add('show');
+}
+el('#cable-banner-cancel').addEventListener('click', () => {
+  if (window.__scene) window.__scene.cancelPending();
+});
+
 
 /* Livelli: filtri di visibilità per tipo di cavo */
 document.querySelectorAll('.layer-toggle').forEach(btn => {
@@ -1177,16 +2138,10 @@ class StageScene extends Phaser.Scene {
 
   update (time, delta) {
     const cam = this.cameras.main;
-    // i contatti dei connettori si vedono solo da vicino: si accendono o
-    // spengono tutti insieme quando lo zoom attraversa la soglia
-    const showDetail = cam.zoom >= PORT_DETAIL_ZOOM;
-    if (showDetail !== this.portDetailShown) {
-      this.portDetailShown = showDetail;
-      Object.values(this.compVisuals).forEach(v => {
-        Object.values(v.portMarkers || {}).forEach(m => { if (m.faceDetail) m.faceDetail.setVisible(showDetail); });
-      });
-    }
-    const speed = (420 * (delta / 1000)) / cam.zoom;
+    // barra "cavo in mano": si aggiorna solo quando cambia il capo in attesa
+    const pend = gameState.pendingPort;
+    const pendKey = pend ? pend.componentId + '/' + pend.portId + '/' + gameState.selectedCable : '';
+    if (pendKey !== this.pendingKey) { this.pendingKey = pendKey; updateCableBanner(); }
     let dx = 0, dy = 0;
     if (this.cursors.left.isDown || this.wasd.left.isDown) dx -= speed;
     if (this.cursors.right.isDown || this.wasd.right.isDown) dx += speed;
@@ -1459,13 +2414,22 @@ class StageScene extends Phaser.Scene {
     const qv = this.compVisuals[quadroId];
     if (!qv || !qv.phaseBars) return;
     const def = COMPONENT_TYPES.quadro;
-    const loads = computePhaseLoads();
+    const loads = livePhaseLoads(false);
     const g = qv.phaseBars;
     g.clear();
+    // leva di ogni magnetotermico sul fronte: verde armato, rossa scattato,
+    // grigia abbassato
+    const prot = quadroProt(gameState.placed[quadroId]);
+    def.ports.filter(p => p.phase).forEach(p => {
+      const a = QUADRO_PHASE_A[['L1', 'L2', 'L3'].indexOf(p.phase)];
+      const c = prot[p.phase] ? 0x49b06a : (prot.tripped[p.phase] ? 0xe0503f : 0x6a6e78);
+      const pts = [[a - 3, 26.5], [a + 3, 26.5], [a + 3, 29], [a - 3, 29]].map(([aa, z]) => QUADRO_ISO(aa, QUADRO_ISO.B, z));
+      g.fillStyle(c, 1); g.fillPoints(pts, true);
+    });
     // barra subito sotto ogni presa di fase
     const barW = 14, barH = 4;
     def.ports.filter(p => p.phase).forEach(p => {
-      const barY = p.dy + PORT_R + 4;
+      const barY = p.dy + 7;
       const frac = Math.min(1, loads[p.phase] / PHASE_BUDGET_W);
       const color = frac >= 1 ? 0xe0503f : (frac >= 0.75 ? 0xf2a541 : 0x49b06a);
       g.fillStyle(0x000000, 0.6);
@@ -1603,9 +2567,13 @@ class StageScene extends Phaser.Scene {
         def.ports.filter(p => p.phase).forEach(p => {
           const a = QUADRO_PHASE_A[['L1', 'L2', 'L3'].indexOf(p.phase)];
           k.quadB(B, a - 6, a + 6, 25, 31, 0x2a2c32);
-          k.quadB(B, a - 3, a + 3, 26.5, 29, 0x49b06a);
+          k.quadB(B, a - 3, a + 3, 26.5, 29, 0x6a6e78);
+        });
+        QUADRO_PHASE_A.forEach(a => {                                  // prese CEE blu
+          k.discB(B, a, 12, 7.5, 0x1d4a9a); k.discB(B, a, 12, 6, 0x2f6fd6);
         });
         k.quadA(0, 5, 29, 4, 36, 0xcfd2d6);                             // sportello laterale
+        k.discA(0, 17, 14, 7.5, 0x9e2820); k.discA(0, 17, 14, 6, 0xd6392f); // ingresso CEE rosso
         k.box(0, 0.1, 25, 28, 28, 34, ISO_GREY);                        // maniglia
         k.quadZ(Z, 6, A - 6, 4, B - 4, 0xe6e8eb);
         break;
@@ -1626,8 +2594,11 @@ class StageScene extends Phaser.Scene {
       case 'ciabatta': {
         // barra di prese: corpo nero lungo e basso, filetto colorato sul
         // fianco, interruttore rosso e le prese incassate nel piano
-        const P = CIAB_ISO, k = this.isoKit(g, P);
+        const P = def.iso, k = this.isoKit(g, P);
         const { A, B, Z } = P;
+        // cavo della spina che esce dalla testa della barra
+        const c0 = P(0, B / 2, 3), c1 = P(-10, B / 2 + 8, 0);
+        g.lineStyle(3, 0x17181b, 1); g.lineBetween(c0.x, c0.y, c1.x, c1.y);
         k.box(0, A, 0, B, 0, Z, ISO_BLACK);
         k.quadB(B, 2, A - 2, 2.5, 5, def.body.accent);
         k.quadZ(Z, 12, 20, 4, 12, 0xd6392f);
@@ -1856,6 +2827,12 @@ class StageScene extends Phaser.Scene {
 
     const body = this.add.graphics();
     this.drawComponentBody(body, def);
+    // punti di aggancio dei cavi: piccole prese appena accennate sul corpo,
+    // la presa vera si sceglie nel pannello posteriore
+    def.ports.forEach(p => {
+      body.fillStyle(0x0c0d10, 1); body.fillCircle(p.dx, p.dy, 3);
+      body.lineStyle(1.2, SIGNAL_COLOR[p.signal], 0.9); body.strokeCircle(p.dx, p.dy, 3);
+    });
     c.add(body);
 
     const glow = this.add.graphics();
@@ -1866,9 +2843,9 @@ class StageScene extends Phaser.Scene {
     // grafico), ma qui sotto contano solo le regole del Quadro vero e proprio.
     const isRealQuadro = compType === 'quadro';
 
-    // LED di stato: spento finché non si preme Test Impianto, poi verde solo
-    // se arriva davvero corrente (o segnale, per un dispositivo passivo come
-    // la DI) fino in fondo alla catena — vedi isComponentLive/runSystemTest.
+    // LED di stato, in tempo reale: verde solo se il dispositivo è acceso e
+    // la corrente (o il segnale, per Testa e DI) arriva davvero — vedi
+    // isLedOn/refreshLive.
     // L'Allaccio è la sorgente fissa: non ha bisogno di un proprio LED.
     let led = null;
     if (compType !== 'allaccio') {
@@ -1892,9 +2869,9 @@ class StageScene extends Phaser.Scene {
     // Bersaglio per interagire col componente: l'INTERO corpo (con un margine
     // extra), non la sola etichetta o le minuscole porte — molto più facile
     // da toccare su schermi piccoli. Il comportamento dipende dalla modalità:
-    //  - un cavo è selezionato (modalità cablaggio) -> il tocco collega alla
-    //    porta più vicina al punto toccato, su QUALUNQUE componente (anche
-    //    Quadro e Testa, che non si spostano ma vanno comunque cablati);
+    //  - modalità cablaggio -> il tocco apre il pannello posteriore del
+    //    dispositivo, dove si sceglie la presa (vale per QUALUNQUE componente,
+    //    anche Quadro e Testa, che non si spostano ma vanno comunque cablati);
     //  - nessun cavo selezionato -> il tocco seleziona il componente per
     //    spostarlo (solo per i tipi che si possono spostare).
     // Così, mentre si cablano i cavi, toccare un componente non fa MAI
@@ -1908,46 +2885,14 @@ class StageScene extends Phaser.Scene {
     });
     body.on('pointerdown', (pointer, lx, ly, event) => {
       if (event && event.stopPropagation) event.stopPropagation();
-      if (isWiringTabActive()) {
-        let nearest = null, nearestDist = Infinity;
-        def.ports.forEach(p => {
-          const d = Math.hypot(lx - p.dx, ly - p.dy);
-          if (d < nearestDist) { nearestDist = d; nearest = p; }
-        });
-        if (nearest) this.handlePortClick(id, nearest.id, nearest.signal);
-        return;
-      }
+      // in cablaggio si apre il pannello posteriore: la presa si sceglie lì
+      if (isWiringTabActive()) { openRearPanel(id); return; }
       if (movable) { this.handleMoveSelect(id); return; }
       // Quadro/Testa: non si spostano, ma un tocco qui non deve comunque
       // "perdersi" — si comporta come un tocco sul pavimento sottostante.
       if (gameState.selectedPieceType) { this.placeArmedPieceAt(pointer.worldX, pointer.worldY); return; }
       this.clearEdgeSelection();
       this.cancelPending();
-    });
-
-    const portDots = {};
-    const portMarkers = {};
-    def.ports.forEach(p => {
-      // ogni porta è la FACCIA del connettore reale (vedi drawPortGlyph):
-      // corpo del colore vero del connettore, anello esterno del colore del
-      // cavo che ci va, contatti disegnati sopra.
-      const dot = this.add.circle(p.dx, p.dy, PORT_R, CONNECTOR_BODY[p.signal] || SIGNAL_COLOR[p.signal], 1)
-        .setStrokeStyle(2.4, SIGNAL_COLOR[p.signal])
-        .setInteractive({ useHandCursor: true });
-      dot.on('pointerover', () => this.showPortLabel(id, p));
-      dot.on('pointerout', () => this.hidePortLabel());
-      dot.on('pointerdown', (pointer, lx, ly, event) => {
-        if (event && event.stopPropagation) event.stopPropagation();
-        // su touch non c'è il passaggio del mouse: l'etichetta compare al tocco
-        if (pointer && pointer.wasTouch) this.showPortLabel(id, p, 1800);
-        if (isWiringTabActive()) { this.handlePortClick(id, p.id, p.signal); return; }
-        if (movable) { this.handleMoveSelect(id); return; }
-      });
-      c.add(dot);
-      portDots[p.id] = dot;
-      const marker = this.drawPortGlyph(p);
-      c.add(marker);
-      portMarkers[p.id] = marker;
     });
 
     let phaseBars = null;
@@ -1981,166 +2926,7 @@ class StageScene extends Phaser.Scene {
       c.add(badgeBg); c.add(badgeIcon);
     }
 
-    return { container: c, glow, portDots, portMarkers, idLabel, def, phaseBars, led };
-  }
-
-  /* faccia del connettore reale, disegnata sopra il corpo tondo della porta:
-     numero e disposizione dei contatti come nella realtà, e il genere
-     (vedi CONNECTOR_GENDER): MASCHIO = inserto scuro con pin metallici
-     chiari, FEMMINA = fori neri (su un inserto grigio se il corpo è scuro).
-     In più una freccetta sul bordo dice il verso del segnale:
-     verde che ENTRA nella presa = IN, arancione che ESCE = OUT.
-     I contatti compaiono solo da vicino (zoom >= PORT_DETAIL_ZOOM): da
-     lontano restano corpo, anello colorato e freccia — vedi update(). */
-  drawPortGlyph (p) {
-    const box = this.add.container(p.dx, p.dy);
-    const g = this.add.graphics();       // faccia: contatti, inserti, ghiere
-    const ga = this.add.graphics();      // contorno + freccia IN/OUT, sempre visibili
-    box.add(g); box.add(ga);
-    box.faceDetail = g;
-    g.setVisible(this.cameras.main.zoom >= PORT_DETAIL_ZOOM);
-    const gender = (CONNECTOR_GENDER[p.signal] || {})[p.dir] || 'female';
-    const male = gender === 'male';
-    const PIN = 0xe4dfd2, HOLE = 0x0b0c0e;
-    const insert = (r, color) => { g.fillStyle(color || 0x141519, 1); g.fillCircle(0, 0, r); };
-    // fondo della faccia: inserto scuro per i pin, grigio per i fori su un
-    // corpo scuro, nessuno (si vede il corpo) per i fori su un corpo chiaro
-    const face = (r) => {
-      if (male) insert(r);
-      else if (DARK_BODY.has(p.signal)) insert(r, 0x6a6e77);
-    };
-    // un contatto: pin metallico (maschio) o foro (femmina)
-    const contact = (x, y, r) => {
-      g.fillStyle(male ? PIN : HOLE, 1);
-      g.fillCircle(x, y, r || 1.25);
-    };
-    const latch = () => { g.fillStyle(male ? PIN : HOLE, 1); g.fillRect(-1, -PORT_R + 0.6, 2, 2); };
-    const deg = Math.PI / 180;
-
-    // contorno scuro sottile attorno all'anello colorato, stacca dal fondo
-    ga.lineStyle(1, 0x0c0d10, 1);
-    ga.strokeCircle(0, 0, PORT_R + 1.7);
-
-    switch (p.signal) {
-      case 'xlr': {
-        // XLR 3 poli: due contatti affiancati in alto, il terzo in basso
-        // leggermente spostato; tacca del fermo sul bordo superiore
-        face(5.8);
-        contact(-2.6, -1.6); contact(2.6, -1.6); contact(0.9, 2.8);
-        latch();
-        break;
-      }
-      case 'dmx': {
-        // XLR 5 poli: i cinque contatti su un SEMICERCHIO (arco di 180°),
-        // aperto verso la tacca del fermo — nessun contatto al centro
-        face(5.8);
-        for (let i = 0; i < 5; i++) {
-          const a = (180 - i * 45) * deg;
-          contact(Math.cos(a) * 3.7, Math.sin(a) * 3.7 - 1.2, 1.1);
-        }
-        latch();
-        break;
-      }
-      case 'speakon': {
-        // Speakon da pannello: corpo nero, anello bianco, perno centrale e
-        // due chiavi di bloccaggio — il genere non cambia tra ingresso e link
-        g.lineStyle(1.3, 0xeeeeee, 1); g.strokeCircle(0, 0, 5.6);
-        g.fillStyle(0x3a3d44, 1); g.fillCircle(0, 0, 2.6);
-        g.fillStyle(0xeeeeee, 1);
-        g.fillRect(-0.9, -6.4, 1.8, 2); g.fillRect(-0.9, 4.4, 1.8, 2);
-        break;
-      }
-      case 'powercon': {
-        // PowerCON: corpo nero, anello interno del colore reale del
-        // connettore da pannello — BLU = power in, GRIGIO = power out
-        g.lineStyle(1.6, p.dir === 'in' ? 0x3d7fe0 : 0xcfd2d6, 1);
-        g.strokeCircle(0, 0, 5.1);
-        g.fillStyle(PIN, 1);
-        [0, 120, 240].forEach(d => {
-          const a = (d - 90) * deg;
-          g.fillCircle(Math.cos(a) * 2.6, Math.sin(a) * 2.6, 1.1);
-        });
-        break;
-      }
-      case 'schuko': {
-        // Schuko: due poli affiancati + contatti di terra laterali (sopra e
-        // sotto); la presa (femmina) ha i fori, la spina (maschio) i pin
-        face(6.2);
-        contact(-2.9, 0, 1.5); contact(2.9, 0, 1.5);
-        g.fillStyle(PIN, 1);
-        g.fillRect(-1.6, -6.4, 3.2, 1.6); g.fillRect(-1.6, 4.8, 3.2, 1.6);
-        break;
-      }
-      case 'cee_mono': {
-        // CEE 2P+T (blu): due poli + terra più grossa in basso
-        face(5.8);
-        contact(-3.3, -1.2); contact(3.3, -1.2); contact(0, 3.3, 1.8);
-        latch();
-        break;
-      }
-      case 'cee_tri': {
-        // CEE 3P+N+T (rossa): quattro contatti sulla corona + terra più grossa
-        face(5.8);
-        for (let i = 0; i < 4; i++) {
-          const a = (150 + i * 80) * deg;
-          contact(Math.cos(a) * 3.9, Math.sin(a) * 3.9);
-        }
-        contact(0, 3.9, 1.7);
-        latch();
-        break;
-      }
-      case 'jack': {
-        // presa jack: ghiera metallica filettata con il foro al centro
-        g.fillStyle(0xb8bcc4, 1); g.fillCircle(0, 0, 5.4);
-        g.lineStyle(1, 0x7d828c, 1); g.strokeCircle(0, 0, 4.2);
-        g.fillStyle(HOLE, 1); g.fillCircle(0, 0, 2.2);
-        break;
-      }
-      default:
-        contact(0, 0, 2);
-    }
-
-    // freccia di direzione sul bordo in alto a destra
-    const bx = PORT_R * 0.8, by = -PORT_R * 0.8;
-    const isIn = p.dir === 'in';
-    const tip = isIn ? { x: bx - 2.6, y: by + 2.6 } : { x: bx + 3.4, y: by - 3.4 };
-    const ux = isIn ? -0.7071 : 0.7071, uy = isIn ? 0.7071 : -0.7071; // verso della freccia
-    const back = { x: tip.x - ux * 5.5, y: tip.y - uy * 5.5 };
-    const px = -uy * 3.2, py = ux * 3.2;
-    ga.fillStyle(isIn ? 0x49b06a : 0xf2a541, 1);
-    ga.lineStyle(1.2, 0x141519, 1);
-    ga.fillTriangle(tip.x, tip.y, back.x + px, back.y + py, back.x - px, back.y - py);
-    ga.strokeTriangle(tip.x, tip.y, back.x + px, back.y + py, back.x - px, back.y - py);
-    return box;
-  }
-
-  /* etichetta sopra una porta: tipo di connettore, verso e genere
-     (es. "DMX 5 poli · OUT · femmina"), più la fase per le prese del Quadro.
-     Dimensione costante sullo schermo, qualunque sia lo zoom. */
-  showPortLabel (componentId, p, autoHideMs) {
-    const pos = this.getPortScreenPos(componentId, p.id);
-    if (!pos) return;
-    const gender = (CONNECTOR_GENDER[p.signal] || {})[p.dir] === 'male' ? 'maschio' : 'femmina';
-    const parts = [SIGNAL_LABEL[p.signal] || p.signal, p.dir === 'in' ? 'IN' : 'OUT', gender];
-    if (p.phase) parts.push(p.phase);
-    if (!this.portLabel) {
-      this.portLabel = this.add.text(0, 0, '', {
-        fontFamily: 'Inter, sans-serif', fontSize: '15px', fontStyle: 'bold', color: '#eee9df',
-        backgroundColor: '#1c1d22', padding: { x: 8, y: 4 }, resolution: 2
-      }).setOrigin(0.5, 1).setDepth(80);
-    }
-    const z = this.cameras.main.zoom;
-    this.portLabel.setText(parts.join(' · '))
-      .setScale(1 / z)
-      .setPosition(pos.x, pos.y - PORT_R - 6 / z)
-      .setVisible(true);
-    if (this.portLabelTimer) { this.portLabelTimer.remove(); this.portLabelTimer = null; }
-    if (autoHideMs) this.portLabelTimer = this.time.delayedCall(autoHideMs, () => this.hidePortLabel());
-  }
-
-  hidePortLabel () {
-    if (this.portLabelTimer) { this.portLabelTimer.remove(); this.portLabelTimer = null; }
-    if (this.portLabel) this.portLabel.setVisible(false);
+    return { container: c, glow, idLabel, def, phaseBars, led };
   }
 
   setGlow (v, on, color) {
@@ -2282,6 +3068,7 @@ class StageScene extends Phaser.Scene {
     // la fascia Off Stage, che è alla stessa quota.
     const zone = isStageCell(cx, cy) ? 'stage' : 'ground';
     gameState.placed[id] = { id, type, gx: cx, gy: cy, screen: pos, zone, hasTop: type === 'sub' ? null : undefined };
+    if (type === 'par') gameState.placed[id].dmx = { addr: 1, mode: 1 };   // indirizzo/modalità DMX dal display
 
     this.updateQuadroVisual();
     setCircuitStatus('untested');
@@ -2391,12 +3178,15 @@ class StageScene extends Phaser.Scene {
       return;
     }
 
-    gameState.edges.push({
+    const edge = {
       id: gameState.edgeSeq++,
       a: outSide.componentId, aPort: outSide.portId,
       b: inSide.componentId, bPort: inSide.portId,
       signal: gameState.selectedCable
-    });
+    };
+    // collegare sotto tensione fa scattare il salvavita; altrimenti il
+    // dispositivo appena alimentato (se già acceso) parte davvero
+    applyPowerAction(() => { gameState.edges.push(edge); checkLiveCableChange(edge); });
     this.redrawEdges();
 
     this.highlightPending(pending.componentId, pending.portId, false);
@@ -2443,6 +3233,8 @@ class StageScene extends Phaser.Scene {
       if (!isSelected) this.drawFlowArrow(pts, color, alpha);
     });
     this.refreshEdgeDeleteButton();
+    this.updateConnectionBadges();
+    this.refreshLive();
     updateConnectionCounter();
     this.updateQuadroVisual();
     const modal = el('#quadro-modal');
@@ -2463,6 +3255,18 @@ class StageScene extends Phaser.Scene {
     g.lineStyle(1.5, 0x141519, alpha);
     g.fillTriangle(tri[0].x, tri[0].y, tri[1].x, tri[1].y, tri[2].x, tri[2].y);
     g.strokeTriangle(tri[0].x, tri[0].y, tri[1].x, tri[1].y, tri[2].x, tri[2].y);
+  }
+
+  // sotto ogni dispositivo: quante delle sue prese sono collegate (es. "2/4")
+  updateConnectionBadges () {
+    Object.values(gameState.placed).forEach(c => {
+      const v = this.compVisuals[c.id];
+      if (!v || !v.idLabel) return;
+      const ports = v.def.ports;
+      const used = ports.filter(p => edgesOnPort(c.id, p.id).length > 0).length;
+      v.idLabel.setText(c.id.replace(/_/g, ' ') + '  ·  ' + used + '/' + ports.length);
+      v.idLabel.setColor(used === ports.length ? '#49b06a' : '#8b8e98');
+    });
   }
 
   /* ---------------- selezione ed eliminazione di un cavo ---------------- */
@@ -2512,13 +3316,18 @@ class StageScene extends Phaser.Scene {
 
   deleteSelectedEdge () {
     if (this.selectedEdgeId == null) return;
+    let arced = false;
     const idx = gameState.edges.findIndex(e => e.id === this.selectedEdgeId);
-    if (idx >= 0) gameState.edges.splice(idx, 1);
+    if (idx >= 0) {
+      // scollegare sotto tensione fa l'arco: salvavita
+      const edge = gameState.edges[idx];
+      applyPowerAction(() => { arced = checkLiveCableChange(edge); gameState.edges.splice(gameState.edges.indexOf(edge), 1); });
+    }
     this.selectedEdgeId = null;
     this.redrawEdges();
     setCircuitStatus('untested');
     gameState.tested = false;
-    showToast('Cavo eliminato.', 'ok');
+    if (!arced) showToast('Cavo eliminato.', 'ok');
     this.pushHistory();
   }
 
@@ -2526,36 +3335,22 @@ class StageScene extends Phaser.Scene {
   applyLayerVisibility () {
     this.selectedEdgeId = null;
     this.redrawEdges();
-    Object.values(gameState.placed).forEach(c => {
-      const def = COMPONENT_TYPES[c.type];
-      const v = this.compVisuals[c.id];
-      if (!v || !def) return;
-      def.ports.forEach(p => {
-        const dot = v.portDots[p.id];
-        const marker = v.portMarkers[p.id];
-        const a = gameState.visibleSignals[p.signal] ? 1 : 0.22;
-        if (dot) dot.setAlpha(a);
-        if (marker) marker.setAlpha(a);
-      });
-    });
   }
 
+  // punto di aggancio del cavo: la posizione della porta sul corpo isometrico
+  // (non disegnata: le prese si vedono solo nel pannello posteriore)
   getPortScreenPos (componentId, portId) {
     const v = this.compVisuals[componentId];
     if (!v) return null;
-    const dot = v.portDots[portId];
-    if (!dot) return null;
-    return { x: v.container.x + dot.x * v.container.scaleX, y: v.container.y + dot.y * v.container.scaleY };
+    const p = v.def.ports.find(q => q.id === portId);
+    if (!p) return null;
+    return { x: v.container.x + p.dx * v.container.scaleX, y: v.container.y + p.dy * v.container.scaleY };
   }
 
+  // il dispositivo da cui parte il cavo in mano resta cerchiato in arancione
   highlightPending (componentId, portId, on) {
     const v = this.compVisuals[componentId];
-    const dot = v.portDots[portId];
-    const portDef = getPortDef(componentId, portId);
-    dot.setStrokeStyle(on ? 3 : 2.4, on ? 0xf2a541 : SIGNAL_COLOR[portDef.signal]);
-    dot.setScale(on ? 1.3 : 1);
-    const marker = v.portMarkers[portId];
-    if (marker) marker.setScale(on ? 1.3 : 1);
+    if (v) this.setGlow(v, on, 0xf2a541);
   }
 
   cancelPending () {
@@ -2626,89 +3421,105 @@ class StageScene extends Phaser.Scene {
     const result = runValidation();
     gameState.tested = true;
     Object.values(this.compVisuals).forEach(v => this.setGlow(v, false));
+    this.refreshLive();
 
-    let trippedIds = new Set();
-    if (result.overPhase) {
-      trippedIds = this.triggerPhaseTrip(result.overloadedPhases);
-    }
-
-    // LED per ogni dispositivo (tranne l'Allaccio, che è la sorgente):
-    // verde solo se corrente/segnale arrivano davvero fino in fondo alla
-    // catena E la fase che lo alimenta non è saltata per sovraccarico.
-    Object.keys(gameState.placed).forEach(id => {
-      if (gameState.placed[id].type === 'allaccio') return;
-      const v = this.compVisuals[id];
-      if (!v) return;
-      this.setLed(v, isComponentLive(id) && !trippedIds.has(id));
-    });
-
-    if (result.pass) {
-      setCircuitStatus('ok');
-      showToast('Impianto collaudato: alimentazione e segnale integri su tutta la linea.', 'ok');
-      this.playSuccessSequence();
-      return;
-    }
-
-    setCircuitStatus('error');
-
-    if (result.overPhase) {
-      showToast('Sovraccarico sulla fase ' + result.overloadedPhases.join(', ') + ': la protezione è scattata.');
-    } else {
-      const msg = result.overBudget
-        ? 'Potenza richiesta oltre il limite disponibile.'
-        : 'Circuito incompleto: componenti evidenziati in rosso non ricevono segnale o alimentazione.';
-      showToast(msg);
-    }
-
-    result.failedComponents.forEach(id => {
+    const q = findQuadro();
+    const prot = q ? quadroProt(q) : null;
+    const armed = !!prot && PROTECTIONS.every(k => prot[k]);
+    // tutto ciò che si alimenta deve essere acceso e ricevere corrente
+    const notRunning = Object.values(gameState.placed)
+      .filter(c => c.type !== 'allaccio' && powerInPort(COMPONENT_TYPES[c.type]) && !isRunning(c.id))
+      .map(c => c.id);
+    const clashes = dmxOverlaps();
+    const glow = ids => ids.forEach(id => {
       const v = this.compVisuals[id];
       if (!v) return;
       this.setGlow(v, true, 0xe0503f);
       this.tweens.add({ targets: v.container, angle: { from: -2, to: 2 }, duration: 90, yoyo: true, repeat: 3 });
     });
+
+    if (!result.pass) {
+      setCircuitStatus('error');
+      if (result.overPhase) {
+        showToast('Fasi sbilanciate: con tutto acceso la fase ' + result.overloadedPhases.join(', ') + ' supererebbe 3 kW. Sposta qualche utenza su un\'altra fase.');
+      } else {
+        showToast(result.overBudget
+          ? 'Potenza richiesta oltre il limite disponibile.'
+          : 'Cablaggio incompleto: i componenti evidenziati in rosso non sono collegati come serve.');
+        glow([...result.failedComponents]);
+      }
+      return;
+    }
+    if (!armed) {
+      setCircuitStatus('error');
+      showToast('Il Quadro non è armato: dal suo pannello alza l\'interruttore generale, il salvavita e le tre fasi.');
+      if (q) glow([q.id]);
+      return;
+    }
+    if (notRunning.length) {
+      setCircuitStatus('error');
+      showToast('Alcuni dispositivi sono spenti o senza corrente: accendili dal loro pannello (in rosso).');
+      glow(notRunning);
+      return;
+    }
+    if (clashes.length) {
+      setCircuitStatus('error');
+      showToast('Indirizzi DMX sovrapposti (' + clashes.map(([x, y]) => compLabel(x) + ' / ' + compLabel(y)).join(', ') + '): regolali dal display di ogni PAR.');
+      glow([...new Set(clashes.flat())]);
+      return;
+    }
+
+    setCircuitStatus('ok');
+    // la procedura conta: scatti e colpi nelle casse restano nel verbale
+    const notes = [];
+    if (gameState.trips) notes.push('magnetotermici scattati: ' + gameState.trips);
+    if (gameState.rcdTrips) notes.push('salvavita scattati: ' + gameState.rcdTrips);
+    const pops = (gameState.procErrors || []).filter(x => x === 'pop').length;
+    if (pops) notes.push('colpi nelle casse: ' + pops);
+    showToast('Impianto collaudato: tutto acceso, alimentazione e segnale integri.' + (notes.length ? ' Da migliorare — ' + notes.join(', ') + '.' : ' Procedura perfetta!'), 'ok');
+    this.playSuccessSequence();
   }
 
-  /* ---------------- sovraccarico di fase: distacco + scintille ---------------- */
-  triggerPhaseTrip (overloadedPhases) {
-    const tripped = new Set();
-    const quadroEntry = Object.values(gameState.placed).find(c => c.type === 'quadro');
-    if (!quadroEntry) return tripped;
-    const def = COMPONENT_TYPES.quadro;
-    this.cameras.main.shake(220, 0.006);
-
-    overloadedPhases.forEach(phase => {
-      const portDef = def.ports.find(p => p.phase === phase);
-      if (!portDef) return;
-      const pos = this.getPortScreenPos(quadroEntry.id, portDef.id);
-      if (pos) this.spawnSparks(pos.x, pos.y);
-      gameState.edges
-        .filter(e => e.a === quadroEntry.id && e.aPort === portDef.id)
-        .forEach(e => this.markSubtreeTripped(e.b, new Set([quadroEntry.id]), tripped));
+  /* ---------------- corrente dal vivo: LED, fasi, pannello aperto ---------------- */
+  refreshLive () {
+    Object.keys(gameState.placed).forEach(id => {
+      if (gameState.placed[id].type === 'allaccio') return;
+      const v = this.compVisuals[id];
+      if (v) this.setLed(v, isLedOn(id));
     });
-    return tripped;
+    const q = findQuadro();
+    if (q) this.updateQuadroPhaseBars(q.id);
+    if (rearPanelId) renderRearPanel();
   }
 
-  /* spegne (glow rosso + scossone) l'intero ramo a valle di una presa in
-     sovraccarico: non solo il primo dispositivo, ma tutto ciò che vi pende.
-     Gli id raccolti in "tripped" servono poi a runSystemTest per spegnere
-     anche il LED di questi dispositivi (topologicamente "collegati", ma la
-     corrente non arriva comunque perché la protezione è scattata a monte). */
-  markSubtreeTripped (componentId, visited, tripped) {
-    if (visited.has(componentId)) return;
-    visited.add(componentId);
-    tripped.add(componentId);
-    const v = this.compVisuals[componentId];
+  // scintille sulle prese delle fasi scattate (o al centro del Quadro)
+  sparkQuadro (phases) {
+    const q = findQuadro();
+    if (!q) return;
+    this.cameras.main.shake(220, 0.006);
+    const def = COMPONENT_TYPES.quadro;
+    const targets = phases.length ? phases.map(ph => def.ports.find(p => p.phase === ph).id) : [null];
+    targets.forEach(pid => {
+      const v = this.compVisuals[q.id];
+      const pos = pid ? this.getPortScreenPos(q.id, pid) : (v && { x: v.container.x, y: v.container.y });
+      if (pos) this.spawnSparks(pos.x, pos.y);
+    });
+    const v = this.compVisuals[q.id];
     if (v) {
       this.setGlow(v, true, 0xe0503f);
-      this.tweens.add({ targets: v.container, angle: { from: -3, to: 3 }, duration: 80, yoyo: true, repeat: 4 });
+      this.time.delayedCall(900, () => this.setGlow(v, false));
     }
-    // solo a valle elettricamente: un Sub/Top non va marcato come "in
-    // blackout" solo perché è collegato via Speakon a un finale che sta su
-    // una fase saltata — lui potrebbe benissimo essere su un'altra fase.
-    gameState.edges.forEach(e => {
-      if (e.a === componentId && POWER_CABLE_IDS.has(e.signal)) {
-        this.markSubtreeTripped(e.b, visited, tripped);
-      }
+  }
+  sparkAtPort (compId, portId) {
+    const pos = this.getPortScreenPos(compId, portId);
+    if (pos) this.spawnSparks(pos.x, pos.y);
+  }
+  // "tump": le casse sussultano
+  popSpeakers () {
+    Object.values(gameState.placed).forEach(c => {
+      if (c.type !== 'sub' && c.type !== 'top') return;
+      const v = this.compVisuals[c.id];
+      if (v) this.tweens.add({ targets: v.container, scale: { from: v.container.scaleX, to: v.container.scaleX * 1.12 }, yoyo: true, duration: 90 });
     });
   }
 
@@ -2805,8 +3616,9 @@ class StageScene extends Phaser.Scene {
     gameState.edgeSeq = 0;
     gameState.selectedCable = null;
     gameState.pendingPort = null;
-    this.hidePortLabel();
+    closeRearPanel();
     gameState.tested = false;
+    gameState.trips = 0; gameState.rcdTrips = 0; gameState.procErrors = []; gameState.inrush = [];
 
     document.querySelectorAll('.cable-btn').forEach(b => b.classList.remove('active'));
     updateStockUI();
