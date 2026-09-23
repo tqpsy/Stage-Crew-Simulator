@@ -611,8 +611,10 @@ document.querySelectorAll('.cable-group-toggle').forEach(btn => {
 /* Cable selectors */
 document.querySelectorAll('.cable-btn').forEach(btn => {
   btn.addEventListener('click', () => {
-    gameState.pendingPort = null;
+    // prima si spegne l'evidenziazione (e la lente) della porta in attesa,
+    // poi si azzera: nell'ordine inverso cancelPending non la troverebbe più
     if (window.__scene) window.__scene.clearPendingHighlight();
+    gameState.pendingPort = null;
 
     if (gameState.selectedCable === btn.dataset.cable) {
       // tocca di nuovo lo stesso cavo già attivo -> lo deseleziona,
@@ -1091,6 +1093,11 @@ class StageScene extends Phaser.Scene {
 
   update (time, delta) {
     const cam = this.cameras.main;
+    // la lente sulla porta resta della stessa dimensione a schermo anche se
+    // intanto si cambia lo zoom
+    if (this.portLensTarget && this.portLensZoom !== cam.zoom) {
+      this.showPortLabel(this.portLensTarget.componentId, this.portLensTarget.p, null, true);
+    }
     const speed = (420 * (delta / 1000)) / cam.zoom;
     let dx = 0, dy = 0;
     if (this.cursors.left.isDown || this.wasd.left.isDown) dx -= speed;
@@ -1915,32 +1922,64 @@ class StageScene extends Phaser.Scene {
     return g;
   }
 
-  /* etichetta sopra una porta: tipo di connettore, verso e genere
-     (es. "DMX 5 poli · IN · maschio"), più la fase per le prese del Quadro */
-  showPortLabel (componentId, p, autoHideMs) {
+  /* LENTE sulla porta: sopra la porta compare la faccia del connettore
+     ingrandita (contatti, maschio/femmina, freccia IN/OUT) con sotto il suo
+     nome (es. "DMX 5 poli · OUT · femmina", più la fase per le prese del
+     Quadro). Si apre al passaggio del mouse o al tocco, e resta aperta
+     sulla prima porta scelta finché il cavo non viene completato/annullato.
+     Dimensione costante sullo schermo, qualunque sia lo zoom. */
+  showPortLabel (componentId, p, autoHideMs, refreshOnly) {
     const v = this.compVisuals[componentId];
     if (!v) return;
+    const pos = this.getPortScreenPos(componentId, p.id);
+    if (!pos) return;
     const gender = (CONNECTOR_GENDER[p.signal] || {})[p.dir] === 'male' ? 'maschio' : 'femmina';
     const parts = [SIGNAL_LABEL[p.signal] || p.signal, p.dir === 'in' ? 'IN' : 'OUT', gender];
     if (p.phase) parts.push(p.phase);
-    const pos = this.getPortScreenPos(componentId, p.id);
+
     if (!this.portLabel) {
       this.portLabel = this.add.text(0, 0, '', {
-        fontFamily: 'Inter, sans-serif', fontSize: '17px', fontStyle: 'bold', color: '#eee9df',
+        fontFamily: 'Inter, sans-serif', fontSize: '15px', fontStyle: 'bold', color: '#eee9df',
         backgroundColor: '#1c1d22', padding: { x: 8, y: 4 }, resolution: 2
-      }).setOrigin(0.5, 1).setDepth(80);
+      }).setOrigin(0.5, 1).setDepth(81);
     }
-    this.portLabel.setText(parts.join(' · '));
-    this.portLabel.setPosition(pos.x, pos.y - PORT_R - 6);
-    // sempre leggibile, qualunque sia lo zoom della camera
-    this.portLabel.setScale(1 / this.cameras.main.zoom);
-    this.portLabel.setVisible(true);
+    if (this.portLens) this.portLens.destroy();
+    const lens = this.add.container(0, 0).setDepth(80);
+    lens.add(this.add.circle(0, 0, PORT_R + 5, 0x1c1d22, 1).setStrokeStyle(0.6, 0xf2a541, 1));
+    lens.add(this.add.circle(0, 0, PORT_R, CONNECTOR_BODY[p.signal] || SIGNAL_COLOR[p.signal], 1)
+      .setStrokeStyle(2.4, SIGNAL_COLOR[p.signal]));
+    lens.add(this.drawPortGlyph({ ...p, dx: 0, dy: 0 }));
+    this.portLens = lens;
+    this.portLensTarget = { componentId, p };
+
+    const z = this.cameras.main.zoom;
+    const LENS_SCALE = 3.4;                 // ingrandimento rispetto alla porta a zoom 1
+    const lensR = (PORT_R + 5) * LENS_SCALE / z;
+    const cy = pos.y - PORT_R - 10 / z - lensR;
+    lens.setScale(LENS_SCALE / z).setPosition(pos.x, cy);
+    this.portLabel.setText(parts.join(' · '))
+      .setScale(1 / z)
+      .setPosition(pos.x, cy - lensR - 4 / z)
+      .setVisible(true);
+    this.portLensZoom = z;
+
+    if (refreshOnly) return;
     if (this.portLabelTimer) { this.portLabelTimer.remove(); this.portLabelTimer = null; }
     if (autoHideMs) this.portLabelTimer = this.time.delayedCall(autoHideMs, () => this.hidePortLabel());
   }
 
+  /* chiude la lente — ma se c'è una porta in attesa del secondo capo del
+     cavo, torna a mostrare quella */
   hidePortLabel () {
+    if (this.portLabelTimer) { this.portLabelTimer.remove(); this.portLabelTimer = null; }
+    const pending = gameState.pendingPort;
+    if (pending) {
+      const def = getPortDef(pending.componentId, pending.portId);
+      if (def) { this.showPortLabel(pending.componentId, def); return; }
+    }
     if (this.portLabel) this.portLabel.setVisible(false);
+    if (this.portLens) { this.portLens.destroy(); this.portLens = null; }
+    this.portLensTarget = null;
   }
 
   setGlow (v, on, color) {
@@ -2150,6 +2189,7 @@ class StageScene extends Phaser.Scene {
     if (!gameState.pendingPort) {
       gameState.pendingPort = { componentId, portId };
       this.highlightPending(componentId, portId, true);
+      this.showPortLabel(componentId, getPortDef(componentId, portId));
       return;
     }
     const pending = gameState.pendingPort;
@@ -2202,6 +2242,7 @@ class StageScene extends Phaser.Scene {
 
     this.highlightPending(pending.componentId, pending.portId, false);
     gameState.pendingPort = null;
+    this.hidePortLabel();
     setCircuitStatus('untested');
     gameState.tested = false;
     this.pushHistory();
@@ -2363,6 +2404,7 @@ class StageScene extends Phaser.Scene {
     if (!gameState.pendingPort) return;
     this.highlightPending(gameState.pendingPort.componentId, gameState.pendingPort.portId, false);
     gameState.pendingPort = null;
+    this.hidePortLabel();
   }
 
   clearPendingHighlight () { this.cancelPending(); }
@@ -2606,6 +2648,7 @@ class StageScene extends Phaser.Scene {
     gameState.edgeSeq = 0;
     gameState.selectedCable = null;
     gameState.pendingPort = null;
+    this.hidePortLabel();
     gameState.tested = false;
 
     document.querySelectorAll('.cable-btn').forEach(b => b.classList.remove('active'));
