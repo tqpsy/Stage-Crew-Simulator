@@ -1278,6 +1278,56 @@ function svgPlug (signal) {
     ${svgPin(CONN_CX - 13, CONN_CY, 4.8)}${svgPin(CONN_CX + 13, CONN_CY, 4.8)}`;
 }
 
+/* connettore del CAVO inserito nella presa, visto da dietro: corpo della
+   spina (zigrinato, del colore reale), pressacavo con l'anello colorato del
+   tipo di cavo e il cavo che esce. Si sovrappone alla faccia della presa. */
+function svgMated (signal, dir, cableColor) {
+  const cx = CONN_CX, cy = CONN_CY;
+  const ribs = (r0, r1, n, op) => Array.from({ length: n }, (_, i) => {
+    const a = i / n * Math.PI * 2;
+    return `<line x1="${cx + Math.cos(a) * r0}" y1="${cy + Math.sin(a) * r0}" x2="${cx + Math.cos(a) * r1}" y2="${cy + Math.sin(a) * r1}" stroke="#000" stroke-opacity="${op || 0.3}" stroke-width="2"/>`;
+  }).join('');
+  const boot = r => `<circle cx="${cx}" cy="${cy}" r="${r}" fill="#1c1d22" stroke="#0c0d10"/>
+    <circle cx="${cx}" cy="${cy}" r="${r - 4}" fill="none" stroke="${cableColor}" stroke-width="3.5"/>
+    <circle cx="${cx}" cy="${cy}" r="${r - 8}" fill="#0c0d10"/>
+    <circle cx="${cx - 2}" cy="${cy - 2}" r="${Math.max(2, r - 13)}" fill="#26282e"/>`;
+  const shadow = r => `<circle cx="${cx + 3}" cy="${cy + 4}" r="${r}" fill="#000" fill-opacity=".35"/>`;
+  switch (signal) {
+    case 'xlr':
+    case 'dmx':
+      // spina XLR Neutrik: guscio metallico con le scanalature, pressacavo nero
+      return shadow(27) + `<circle cx="${cx}" cy="${cy}" r="27" fill="#c3c7ce" stroke="#7d828c" stroke-width="1.5"/>
+        ${ribs(21, 27, 18, 0.25)}<circle cx="${cx}" cy="${cy}" r="21" fill="#9aa0aa"/>` + boot(17);
+    case 'speakon':
+      // Speakon NL4FX: corpo nero con la ghiera di bloccaggio zigrinata
+      return shadow(30) + `<circle cx="${cx}" cy="${cy}" r="30" fill="#1c1d22" stroke="#3a3d45" stroke-width="1.5"/>
+        ${ribs(24, 30, 26, 0.6)}<circle cx="${cx}" cy="${cy}" r="24" fill="#2a2c32"/>` + boot(17);
+    case 'powercon': {
+      // PowerCON volante: blu verso un ingresso, grigio chiaro verso un'uscita
+      const body = dir === 'in' ? '#2f6fd6' : '#cfd2d6', dark = dir === 'in' ? '#1d4a9a' : '#9aa0aa';
+      return shadow(30) + `<circle cx="${cx}" cy="${cy}" r="30" fill="${body}" stroke="${dark}" stroke-width="1.5"/>
+        ${ribs(24, 30, 22, 0.3)}<rect x="${cx + 24}" y="${cy - 7}" width="10" height="14" rx="3" fill="${dark}"/>` + boot(17);
+    }
+    case 'jack':
+      return shadow(18) + `<circle cx="${cx}" cy="${cy}" r="18" fill="#c9ccd1" stroke="#7d828c" stroke-width="1.5"/>
+        ${ribs(14, 18, 14, 0.3)}` + boot(14);
+    case 'schuko':
+      // spina Schuko infilata: corpo nero tondo con l'impugnatura
+      return shadow(38) + `<circle cx="${cx}" cy="${cy}" r="38" fill="#1c1d22" stroke="#3a3d45" stroke-width="1.5"/>
+        ${ribs(31, 38, 28, 0.6)}<circle cx="${cx}" cy="${cy}" r="31" fill="#23252b"/>` + boot(16);
+    case 'cee_mono':
+    case 'cee_tri': {
+      // spina CEE volante: corpo blu (230V) o rosso (400V) con la ghiera
+      const body = signal === 'cee_tri' ? '#d6392f' : '#2f6fd6', dark = signal === 'cee_tri' ? '#9e2820' : '#1d4a9a';
+      return shadow(40) + `<circle cx="${cx}" cy="${cy + 4}" r="40" fill="${body}" stroke="${dark}" stroke-width="2"/>
+        <circle cx="${cx}" cy="${cy + 4}" r="31" fill="${dark}"/>
+        ${ribs(31, 40, 30, 0.3)}` + boot(18);
+    }
+    default:
+      return shadow(24) + `<circle cx="${cx}" cy="${cy}" r="24" fill="#26282e"/>` + boot(16);
+  }
+}
+
 /* una presa del pannello: scritta, tipo e genere sopra, il connettore reale,
    il badge IN/OUT, la spina inserita se occupata e la targhetta di stato.
    y0 = bordo superiore dello spazio della presa (alto REAR_FRAME_H). */
@@ -1299,19 +1349,25 @@ function rearSlot (ctx, cx, y0, pid, label) {
     <rect x="${cx - REAR_SLOT / 2 + 4}" y="${y0 + 14}" width="${REAR_SLOT - 8}" height="${REAR_FRAME_H - 28}" fill="transparent"/>
     <text x="${cx}" y="${y0 + 32}" font-size="16" font-weight="700" fill="${st.ink}" text-anchor="middle">${escapeHtml(label)}</text>
     <text x="${cx}" y="${y0 + 50}" font-size="11.5" fill="${st.sub}" text-anchor="middle">${escapeHtml(SIGNAL_LABEL[p.signal] || p.signal)} · ${gender}</text>
-    <g transform="translate(${cx - 60} ${cTop})${rot}">${face}</g>
-    <g transform="translate(${cx + 46} ${cTop + 14})">
+    <g transform="translate(${cx - 60} ${cTop})${rot}">${face}</g>`;
+  if (busy.length) {
+    // connettore collegato: si vede il connettore del cavo infilato nella
+    // presa, col cavo in neoprene che scende (filetto del tipo di cavo). Sulle
+    // prese del Quadro sotto c'è la barra del carico, e dove le file sono
+    // impilate il cavo coprirebbe quella sotto: lì solo un tratto corto.
+    // Per una spina volante (ciabatte, PC) si vede la spina infilata nella
+    // presa dell'altro dispositivo.
+    const cable = '#' + CABLE_TYPES[busy[0].signal].color.toString(16).padStart(6, '0');
+    const yc = cTop + CONN_CY;
+    const yEnd = (phaseLoad || plugOnly) ? yc + 58 : bottom;
+    if (p.lead) svg += `<g transform="translate(${cx - 60} ${cTop})">${connectorSVG(p.signal, 'out')}</g>`;
+    svg += `<line x1="${cx}" y1="${yc}" x2="${cx}" y2="${yEnd}" stroke="#17181b" stroke-width="12" stroke-linecap="round"/>
+      <line x1="${cx}" y1="${yc}" x2="${cx}" y2="${yEnd}" stroke="${cable}" stroke-width="3"/>
+      <g transform="translate(${cx - 60} ${cTop})">${svgMated(p.signal, p.lead ? 'out' : p.dir, cable)}</g>`;
+  }
+  svg += `<g transform="translate(${cx + 46} ${cTop + 14})">
       <rect x="-15" y="-9" width="30" height="18" rx="4" fill="${p.dir === 'in' ? '#1f5a33' : '#6b4413'}"/>
       <text x="0" y="4.5" font-size="11" font-weight="700" fill="${p.dir === 'in' ? '#7fe0a0' : '#ffc27a'}" text-anchor="middle">${p.dir === 'in' ? 'IN' : 'OUT'}</text></g>`;
-  if (busy.length && !p.lead) {
-    // spina inserita: cavo in neoprene nero col filetto del tipo di cavo (sulle
-    // prese del Quadro sotto c'è la barra del carico, e dove le file sono
-    // impilate il cavo coprirebbe quella sotto: lì solo la spina)
-    const cable = '#' + CABLE_TYPES[busy[0].signal].color.toString(16).padStart(6, '0');
-    svg += `<rect x="${cx - 14}" y="${cTop + 100}" width="28" height="26" rx="6" fill="#17181b" stroke="#55585f"/>` + (phaseLoad || plugOnly ? '' : `
-      <line x1="${cx}" y1="${cTop + 126}" x2="${cx}" y2="${bottom}" stroke="#17181b" stroke-width="11"/>
-      <line x1="${cx}" y1="${cTop + 126}" x2="${cx}" y2="${bottom}" stroke="${cable}" stroke-width="3"/>`);
-  }
   if (inHand) svg += `<circle cx="${cx}" cy="${cTop + CONN_CY}" r="${p.lead ? 50 : 46}" fill="none" stroke="#f2a541" stroke-width="4" stroke-dasharray="8 5"/>`;
   let status;
   if (inHand) status = p.lead ? 'spina in mano' : 'cavo in mano da qui';
@@ -3228,6 +3284,13 @@ class StageScene extends Phaser.Scene {
         strokeRoutedPath(this.edgeGraphics, pts, color, 1.4, 18, alpha);
       }
       e._pts = pts;
+      // a ogni capo del cavo la sua spina, infilata nel dispositivo
+      [from, to].forEach(pt => {
+        this.edgeGraphics.fillStyle(0x17181b, alpha);
+        this.edgeGraphics.fillCircle(pt.x, pt.y, 4.6);
+        this.edgeGraphics.lineStyle(1.8, color, alpha);
+        this.edgeGraphics.strokeCircle(pt.x, pt.y, 4.6);
+      });
       // verso del cavo: freccia a metà percorso, dall'OUT (a) all'IN (b).
       // Sul cavo selezionato al suo posto c'è il pulsante ✕.
       if (!isSelected) this.drawFlowArrow(pts, color, alpha);
