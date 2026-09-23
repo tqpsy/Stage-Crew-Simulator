@@ -25,6 +25,9 @@ const SIGNAL_COLOR = {
 
 // raggio (px) del corpo tondo di ogni porta
 const PORT_R = 8.5;
+// zoom da cui in su si disegnano i contatti dei connettori (pin/fori): più
+// lontano sarebbero puntini illeggibili, restano colore, anello e freccia
+const PORT_DETAIL_ZOOM = 1.6;
 
 /* genere del connettore montato sull'apparecchio, come nella realtà:
    - XLR audio: gli ingressi sono femmina, le uscite maschio;
@@ -1093,10 +1096,14 @@ class StageScene extends Phaser.Scene {
 
   update (time, delta) {
     const cam = this.cameras.main;
-    // la lente sulla porta resta della stessa dimensione a schermo anche se
-    // intanto si cambia lo zoom
-    if (this.portLensTarget && this.portLensZoom !== cam.zoom) {
-      this.showPortLabel(this.portLensTarget.componentId, this.portLensTarget.p, null, true);
+    // i contatti dei connettori si vedono solo da vicino: si accendono o
+    // spengono tutti insieme quando lo zoom attraversa la soglia
+    const showDetail = cam.zoom >= PORT_DETAIL_ZOOM;
+    if (showDetail !== this.portDetailShown) {
+      this.portDetailShown = showDetail;
+      Object.values(this.compVisuals).forEach(v => {
+        Object.values(v.portMarkers || {}).forEach(m => { if (m.faceDetail) m.faceDetail.setVisible(showDetail); });
+      });
     }
     const speed = (420 * (delta / 1000)) / cam.zoom;
     let dx = 0, dy = 0;
@@ -1804,9 +1811,16 @@ class StageScene extends Phaser.Scene {
      (vedi CONNECTOR_GENDER): MASCHIO = inserto scuro con pin metallici
      chiari, FEMMINA = fori neri (su un inserto grigio se il corpo è scuro).
      In più una freccetta sul bordo dice il verso del segnale:
-     verde che ENTRA nella presa = IN, arancione che ESCE = OUT. */
+     verde che ENTRA nella presa = IN, arancione che ESCE = OUT.
+     I contatti compaiono solo da vicino (zoom >= PORT_DETAIL_ZOOM): da
+     lontano restano corpo, anello colorato e freccia — vedi update(). */
   drawPortGlyph (p) {
-    const g = this.add.graphics({ x: p.dx, y: p.dy });
+    const box = this.add.container(p.dx, p.dy);
+    const g = this.add.graphics();       // faccia: contatti, inserti, ghiere
+    const ga = this.add.graphics();      // contorno + freccia IN/OUT, sempre visibili
+    box.add(g); box.add(ga);
+    box.faceDetail = g;
+    g.setVisible(this.cameras.main.zoom >= PORT_DETAIL_ZOOM);
     const gender = (CONNECTOR_GENDER[p.signal] || {})[p.dir] || 'female';
     const male = gender === 'male';
     const PIN = 0xe4dfd2, HOLE = 0x0b0c0e;
@@ -1826,8 +1840,8 @@ class StageScene extends Phaser.Scene {
     const deg = Math.PI / 180;
 
     // contorno scuro sottile attorno all'anello colorato, stacca dal fondo
-    g.lineStyle(1, 0x0c0d10, 1);
-    g.strokeCircle(0, 0, PORT_R + 1.7);
+    ga.lineStyle(1, 0x0c0d10, 1);
+    ga.strokeCircle(0, 0, PORT_R + 1.7);
 
     switch (p.signal) {
       case 'xlr': {
@@ -1915,71 +1929,40 @@ class StageScene extends Phaser.Scene {
     const ux = isIn ? -0.7071 : 0.7071, uy = isIn ? 0.7071 : -0.7071; // verso della freccia
     const back = { x: tip.x - ux * 5.5, y: tip.y - uy * 5.5 };
     const px = -uy * 3.2, py = ux * 3.2;
-    g.fillStyle(isIn ? 0x49b06a : 0xf2a541, 1);
-    g.lineStyle(1.2, 0x141519, 1);
-    g.fillTriangle(tip.x, tip.y, back.x + px, back.y + py, back.x - px, back.y - py);
-    g.strokeTriangle(tip.x, tip.y, back.x + px, back.y + py, back.x - px, back.y - py);
-    return g;
+    ga.fillStyle(isIn ? 0x49b06a : 0xf2a541, 1);
+    ga.lineStyle(1.2, 0x141519, 1);
+    ga.fillTriangle(tip.x, tip.y, back.x + px, back.y + py, back.x - px, back.y - py);
+    ga.strokeTriangle(tip.x, tip.y, back.x + px, back.y + py, back.x - px, back.y - py);
+    return box;
   }
 
-  /* LENTE sulla porta: sopra la porta compare la faccia del connettore
-     ingrandita (contatti, maschio/femmina, freccia IN/OUT) con sotto il suo
-     nome (es. "DMX 5 poli · OUT · femmina", più la fase per le prese del
-     Quadro). Si apre al passaggio del mouse o al tocco, e resta aperta
-     sulla prima porta scelta finché il cavo non viene completato/annullato.
+  /* etichetta sopra una porta: tipo di connettore, verso e genere
+     (es. "DMX 5 poli · OUT · femmina"), più la fase per le prese del Quadro.
      Dimensione costante sullo schermo, qualunque sia lo zoom. */
-  showPortLabel (componentId, p, autoHideMs, refreshOnly) {
-    const v = this.compVisuals[componentId];
-    if (!v) return;
+  showPortLabel (componentId, p, autoHideMs) {
     const pos = this.getPortScreenPos(componentId, p.id);
     if (!pos) return;
     const gender = (CONNECTOR_GENDER[p.signal] || {})[p.dir] === 'male' ? 'maschio' : 'femmina';
     const parts = [SIGNAL_LABEL[p.signal] || p.signal, p.dir === 'in' ? 'IN' : 'OUT', gender];
     if (p.phase) parts.push(p.phase);
-
     if (!this.portLabel) {
       this.portLabel = this.add.text(0, 0, '', {
         fontFamily: 'Inter, sans-serif', fontSize: '15px', fontStyle: 'bold', color: '#eee9df',
         backgroundColor: '#1c1d22', padding: { x: 8, y: 4 }, resolution: 2
-      }).setOrigin(0.5, 1).setDepth(81);
+      }).setOrigin(0.5, 1).setDepth(80);
     }
-    if (this.portLens) this.portLens.destroy();
-    const lens = this.add.container(0, 0).setDepth(80);
-    lens.add(this.add.circle(0, 0, PORT_R + 5, 0x1c1d22, 1).setStrokeStyle(0.6, 0xf2a541, 1));
-    lens.add(this.add.circle(0, 0, PORT_R, CONNECTOR_BODY[p.signal] || SIGNAL_COLOR[p.signal], 1)
-      .setStrokeStyle(2.4, SIGNAL_COLOR[p.signal]));
-    lens.add(this.drawPortGlyph({ ...p, dx: 0, dy: 0 }));
-    this.portLens = lens;
-    this.portLensTarget = { componentId, p };
-
     const z = this.cameras.main.zoom;
-    const LENS_SCALE = 3.4;                 // ingrandimento rispetto alla porta a zoom 1
-    const lensR = (PORT_R + 5) * LENS_SCALE / z;
-    const cy = pos.y - PORT_R - 10 / z - lensR;
-    lens.setScale(LENS_SCALE / z).setPosition(pos.x, cy);
     this.portLabel.setText(parts.join(' · '))
       .setScale(1 / z)
-      .setPosition(pos.x, cy - lensR - 4 / z)
+      .setPosition(pos.x, pos.y - PORT_R - 6 / z)
       .setVisible(true);
-    this.portLensZoom = z;
-
-    if (refreshOnly) return;
     if (this.portLabelTimer) { this.portLabelTimer.remove(); this.portLabelTimer = null; }
     if (autoHideMs) this.portLabelTimer = this.time.delayedCall(autoHideMs, () => this.hidePortLabel());
   }
 
-  /* chiude la lente — ma se c'è una porta in attesa del secondo capo del
-     cavo, torna a mostrare quella */
   hidePortLabel () {
     if (this.portLabelTimer) { this.portLabelTimer.remove(); this.portLabelTimer = null; }
-    const pending = gameState.pendingPort;
-    if (pending) {
-      const def = getPortDef(pending.componentId, pending.portId);
-      if (def) { this.showPortLabel(pending.componentId, def); return; }
-    }
     if (this.portLabel) this.portLabel.setVisible(false);
-    if (this.portLens) { this.portLens.destroy(); this.portLens = null; }
-    this.portLensTarget = null;
   }
 
   setGlow (v, on, color) {
@@ -2189,7 +2172,6 @@ class StageScene extends Phaser.Scene {
     if (!gameState.pendingPort) {
       gameState.pendingPort = { componentId, portId };
       this.highlightPending(componentId, portId, true);
-      this.showPortLabel(componentId, getPortDef(componentId, portId));
       return;
     }
     const pending = gameState.pendingPort;
@@ -2242,7 +2224,6 @@ class StageScene extends Phaser.Scene {
 
     this.highlightPending(pending.componentId, pending.portId, false);
     gameState.pendingPort = null;
-    this.hidePortLabel();
     setCircuitStatus('untested');
     gameState.tested = false;
     this.pushHistory();
@@ -2404,7 +2385,6 @@ class StageScene extends Phaser.Scene {
     if (!gameState.pendingPort) return;
     this.highlightPending(gameState.pendingPort.componentId, gameState.pendingPort.portId, false);
     gameState.pendingPort = null;
-    this.hidePortLabel();
   }
 
   clearPendingHighlight () { this.cancelPending(); }
