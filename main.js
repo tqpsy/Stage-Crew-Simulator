@@ -23,6 +23,27 @@ const SIGNAL_COLOR = {
   jack:     0x2ec4e0
 };
 
+// raggio (px) del corpo tondo di ogni porta
+const PORT_R = 8.5;
+
+/* genere del connettore montato sull'apparecchio, come nella realtà:
+   - XLR audio: gli ingressi sono femmina, le uscite maschio;
+   - DMX (XLR 5 poli): al contrario, DMX IN maschio e OUT/THRU femmina;
+   - Schuko / CEE: la presa che eroga corrente è femmina, la vaschetta
+     d'ingresso (inlet) dell'apparecchio è maschio;
+   - Speakon, PowerCON e jack da pannello hanno la stessa faccia sia in
+     ingresso sia in uscita (il PowerCON si riconosce dal colore: blu/grigio). */
+const CONNECTOR_GENDER = {
+  xlr:      { in: 'female', out: 'male' },
+  dmx:      { in: 'male',   out: 'female' },
+  schuko:   { in: 'male',   out: 'female' },
+  cee_mono: { in: 'male',   out: 'female' },
+  cee_tri:  { in: 'male',   out: 'female' },
+  speakon:  { in: 'female', out: 'female' },
+  powercon: { in: 'male',   out: 'male' },
+  jack:     { in: 'female', out: 'female' }
+};
+
 /* Geometria del mixer in "unità banco" (a = lungo i canali, b = dal retro
    al fronte operatore, z = altezza), proiettata con la stessa inclinazione
    della griglia di gioco (TILE_H/TILE_W = 70/102). Usata sia dal disegno
@@ -166,8 +187,8 @@ const COMPONENT_TYPES = {
     body: { w: 74, h: 24, fill: 0x2a2c32, accent: 0xc77dff },
     ports: [
       { id: 'in',    signal: 'powercon', dir: 'in',  dx: -30, dy: 0 },
-      { id: 'out_1', signal: 'schuko',   dir: 'out', dx: -4,  dy: 0 },
-      { id: 'out_2', signal: 'schuko',   dir: 'out', dx: 13,  dy: 0 },
+      { id: 'out_1', signal: 'schuko',   dir: 'out', dx: -8,  dy: 0 },
+      { id: 'out_2', signal: 'schuko',   dir: 'out', dx: 11,  dy: 0 },
       { id: 'out_3', signal: 'schuko',   dir: 'out', dx: 30,  dy: 0 }
     ]
   },
@@ -205,8 +226,8 @@ const COMPONENT_TYPES = {
     // quello resta solo tra Allaccio e Quadro.
     ports: [
       { id: 'in',    signal: 'cee_mono', dir: 'in',  dx: -30, dy: 0 },
-      { id: 'out_1', signal: 'cee_mono', dir: 'out', dx: -4,  dy: 0 },
-      { id: 'out_2', signal: 'cee_mono', dir: 'out', dx: 13,  dy: 0 },
+      { id: 'out_1', signal: 'cee_mono', dir: 'out', dx: -8,  dy: 0 },
+      { id: 'out_2', signal: 'cee_mono', dir: 'out', dx: 11,  dy: 0 },
       { id: 'out_3', signal: 'cee_mono', dir: 'out', dx: 30,  dy: 0 }
     ]
   }
@@ -1693,14 +1714,9 @@ class StageScene extends Phaser.Scene {
     const portDots = {};
     const portMarkers = {};
     def.ports.forEach(p => {
-      // IN e OUT si distinguono per FORMA, non solo per un dettaglio interno:
-      //  - IN  = presa tonda (cerchio) con foro scuro al centro;
-      //  - OUT = connettore quadrato con triangolino ▲.
-      // Il colore resta quello del segnale nativo della porta.
-      const isIn = p.dir === 'in';
-      const dot = (isIn
-        ? this.add.circle(p.dx, p.dy, 8, SIGNAL_COLOR[p.signal], 1)
-        : this.add.rectangle(p.dx, p.dy, 15, 15, SIGNAL_COLOR[p.signal], 1))
+      // ogni porta è la FACCIA del connettore reale (vedi drawPortGlyph):
+      // corpo tondo nel colore del segnale, contatti disegnati sopra.
+      const dot = this.add.circle(p.dx, p.dy, PORT_R, SIGNAL_COLOR[p.signal], 1)
         .setStrokeStyle(2, 0x141519)
         .setInteractive({ useHandCursor: true });
       dot.on('pointerdown', (pointer, lx, ly, event) => {
@@ -1748,14 +1764,115 @@ class StageScene extends Phaser.Scene {
     return { container: c, glow, portDots, portMarkers, idLabel, def, phaseBars, led };
   }
 
-  /* simbolo dentro la porta, sempre uguale e mai ruotato, così si legge
-     a colpo d'occhio su qualunque componente: IN = foro scuro al centro
-     (presa femmina), OUT = triangolino pieno che punta verso l'alto (esce). */
+  /* faccia del connettore reale, disegnata sopra il corpo tondo della porta:
+     numero e disposizione dei contatti come nella realtà, e il genere
+     (vedi CONNECTOR_GENDER): MASCHIO = inserto scuro con pin metallici
+     chiari, FEMMINA = fori neri direttamente sul corpo colorato.
+     In più una freccetta sul bordo dice il verso del segnale:
+     verde che ENTRA nella presa = IN, arancione che ESCE = OUT. */
   drawPortGlyph (p) {
     const g = this.add.graphics({ x: p.dx, y: p.dy });
-    g.fillStyle(0x141519, 1);
-    if (p.dir === 'in') g.fillCircle(0, 0, 3);
-    else g.fillTriangle(0, -4.5, 4.5, 3, -4.5, 3);
+    const gender = (CONNECTOR_GENDER[p.signal] || {})[p.dir] || 'female';
+    const male = gender === 'male';
+    const PIN = 0xe4dfd2, HOLE = 0x0b0c0e, INSERT = 0x1c1d22;
+    const insert = (r) => { g.fillStyle(INSERT, 1); g.fillCircle(0, 0, r); };
+    // un contatto: pin metallico (maschio) o foro (femmina)
+    const contact = (x, y, r) => {
+      g.fillStyle(male ? PIN : HOLE, 1);
+      g.fillCircle(x, y, r || 1.25);
+    };
+    const onCircle = (n, rad, start, step) => {
+      for (let i = 0; i < n; i++) {
+        const a = start + i * step;
+        contact(Math.cos(a) * rad, Math.sin(a) * rad);
+      }
+    };
+    const deg = Math.PI / 180;
+
+    switch (p.signal) {
+      case 'xlr': {
+        // XLR 3 poli: due contatti affiancati in alto, il terzo in basso
+        // leggermente spostato; tacca del fermo sul bordo superiore
+        if (male) insert(5.8);
+        contact(-2.6, -1.6); contact(2.6, -1.6); contact(0.9, 2.8);
+        g.fillStyle(male ? PIN : HOLE, 1); g.fillRect(-1, -PORT_R + 0.5, 2, 2);
+        break;
+      }
+      case 'dmx': {
+        // XLR 5 poli: quattro contatti sulla corona + uno centrale
+        if (male) insert(5.8);
+        onCircle(4, 3.7, 200 * deg, 47 * deg);
+        contact(0, 1.4);
+        g.fillStyle(male ? PIN : HOLE, 1); g.fillRect(-1, -PORT_R + 0.5, 2, 2);
+        break;
+      }
+      case 'speakon': {
+        // presa Speakon da pannello: anello scuro con perno centrale e due
+        // chiavi di bloccaggio — il genere non cambia tra ingresso e link
+        insert(6.4);
+        g.fillStyle(SIGNAL_COLOR.speakon, 1); g.fillCircle(0, 0, 2.4);
+        g.fillRect(-1, -6.4, 2, 2.2); g.fillRect(-1, 4.2, 2, 2.2);
+        break;
+      }
+      case 'powercon': {
+        // PowerCON: inserto scuro con 3 lamelle e anello interno del colore
+        // reale del connettore da pannello — BLU = power in, GRIGIO = power out
+        insert(6.4);
+        g.lineStyle(1.6, p.dir === 'in' ? 0x3d7fe0 : 0xcfd2d6, 1);
+        g.strokeCircle(0, 0, 5.1);
+        g.fillStyle(PIN, 1);
+        [0, 120, 240].forEach(d => {
+          const a = (d - 90) * deg;
+          g.fillCircle(Math.cos(a) * 2.6, Math.sin(a) * 2.6, 1.1);
+        });
+        break;
+      }
+      case 'schuko': {
+        // Schuko: due poli affiancati + contatti di terra laterali (sopra e
+        // sotto); la presa (femmina) ha i fori, la spina (maschio) i pin
+        if (male) insert(5.8);
+        contact(-2.9, 0, 1.5); contact(2.9, 0, 1.5);
+        g.fillStyle(PIN, 1);
+        g.fillRect(-1.6, -6.4, 3.2, 1.6); g.fillRect(-1.6, 4.8, 3.2, 1.6);
+        break;
+      }
+      case 'cee_mono': {
+        // CEE 2P+T (blu): due poli + terra più grossa in basso
+        if (male) insert(5.8);
+        contact(-3.3, -1.2); contact(3.3, -1.2); contact(0, 3.3, 1.8);
+        g.fillStyle(male ? PIN : HOLE, 1); g.fillRect(-1, -PORT_R + 0.5, 2, 2);
+        break;
+      }
+      case 'cee_tri': {
+        // CEE 3P+N+T (rossa): quattro contatti sulla corona + terra più grossa
+        if (male) insert(5.8);
+        onCircle(4, 3.9, 150 * deg, 80 * deg);
+        contact(0, 3.9, 1.7);
+        g.fillStyle(male ? PIN : HOLE, 1); g.fillRect(-1, -PORT_R + 0.5, 2, 2);
+        break;
+      }
+      case 'jack': {
+        // presa jack: ghiera metallica filettata con il foro al centro
+        g.fillStyle(0xb8bcc4, 1); g.fillCircle(0, 0, 5.4);
+        g.lineStyle(1, 0x7d828c, 1); g.strokeCircle(0, 0, 4.2);
+        g.fillStyle(HOLE, 1); g.fillCircle(0, 0, 2.2);
+        break;
+      }
+      default:
+        contact(0, 0, 2);
+    }
+
+    // freccia di direzione sul bordo in alto a destra
+    const bx = PORT_R * 0.8, by = -PORT_R * 0.8;
+    const isIn = p.dir === 'in';
+    const tip = isIn ? { x: bx - 2.6, y: by + 2.6 } : { x: bx + 3.4, y: by - 3.4 };
+    const ux = isIn ? -0.7071 : 0.7071, uy = isIn ? 0.7071 : -0.7071; // verso della freccia
+    const back = { x: tip.x - ux * 5.5, y: tip.y - uy * 5.5 };
+    const px = -uy * 3.2, py = ux * 3.2;
+    g.fillStyle(isIn ? 0x49b06a : 0xf2a541, 1);
+    g.lineStyle(1.2, 0x141519, 1);
+    g.fillTriangle(tip.x, tip.y, back.x + px, back.y + py, back.x - px, back.y - py);
+    g.strokeTriangle(tip.x, tip.y, back.x + px, back.y + py, back.x - px, back.y - py);
     return g;
   }
 

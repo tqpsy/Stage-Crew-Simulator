@@ -378,8 +378,8 @@
     opacity:.8;
   }
 
-  .port-legend .pl-in,
-  .port-legend .pl-out{ color:var(--text-main); font-size:11px; }
+  .port-legend .pl-in{ color:#49b06a; font-weight:600; }
+  .port-legend .pl-out{ color:#f2a541; font-weight:600; }
 
   .piece{
     display:flex;
