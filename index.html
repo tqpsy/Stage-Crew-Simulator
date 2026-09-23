@@ -79,6 +79,7 @@
       <button class="layer-toggle active" data-signal="cee_tri" title="CEE Trifase"><span class="dot" style="background:var(--c-cee-tri);"></span>CEE-T</button>
       <button class="layer-toggle active" data-signal="cee_mono" title="CEE Monofase"><span class="dot" style="background:var(--c-cee-mono);"></span>CEE-M</button>
       <button class="layer-toggle active" data-signal="jack" title="Jack"><span class="dot" style="background:var(--c-jack);"></span>JCK</button>
+      <button class="layer-toggle active" data-signal="usbc" title="USB"><span class="dot" style="background:var(--c-usb);"></span>USB</button>
     </div>
     <div class="zoom-controls">
       <button id="zoom-in" title="Aumenta zoom">+</button>
@@ -143,12 +144,12 @@
           <div class="swatch" style="color:#c9ccd3;"><div class="stripe" style="background:#c77dff;"></div>PC</div>
           <span class="count" id="count-pc">×1</span>
         </div>
-        <div class="piece" data-type="di">
-          <div class="swatch" style="color:#9fb8d8;"><div class="stripe" style="background:var(--c-jack);"></div>DI</div>
-          <span class="count" id="count-di">×1</span>
+        <div class="piece" data-type="interface">
+          <div class="swatch" style="color:#e6bcb5;"><div class="stripe" style="background:#b23a2e;"></div>SCHEDA</div>
+          <span class="count" id="count-interface">×1</span>
         </div>
       </div>
-      <span class="panel-hint">Il finale va nella fascia Off Stage, accanto al mixer di palco. Il PC va in Regia di sala (FOH) oppure in Regia di palco (Off Stage): si alimenta con il suo cavo: la spina Schuko si prende dal suo pannello e va in una presa della ciabatta civile, e manda l'audio L/R con due Jack alla DI doppia. La DI, anch'essa in FOH oppure Off Stage, converte i due segnali in XLR bilanciati verso due ingressi qualsiasi del mixer.</span>
+      <span class="panel-hint">Il finale va nella fascia Off Stage, accanto al mixer di palco. Il PC va in Regia di sala (FOH) oppure in Regia di palco (Off Stage): si alimenta con il suo cavo: la spina Schuko si prende dal suo pannello e va in una presa della ciabatta civile, e manda l'audio alla scheda audio con un cavo USB-C (che la alimenta anche). La scheda audio, accanto al PC in FOH oppure Off Stage, esce con due Jack (L e R) nei CH 5 e 6 LINE IN del mixer.</span>
     </div>
 
     <div class="tab-panel" data-panel="luci">
@@ -191,6 +192,7 @@
             <button class="cable-btn" data-cable="dmx"><span class="lead" style="background:var(--c-dmx);"></span>DMX</button>
             <button class="cable-btn" data-cable="xlr"><span class="lead" style="background:var(--c-xlr);"></span>XLR</button>
             <button class="cable-btn" data-cable="jack"><span class="lead" style="background:var(--c-jack);"></span>Jack</button>
+            <button class="cable-btn" data-cable="usbc"><span class="lead" style="background:var(--c-usb);"></span>USB-C</button>
           </div>
         </div>
       </div>

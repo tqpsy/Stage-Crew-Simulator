@@ -20,7 +20,8 @@ const SIGNAL_COLOR = {
   schuko:   0xc77dff,
   cee_mono: 0x2f6fd6,
   cee_tri:  0xd6392f,
-  jack:     0x2ec4e0
+  jack:     0x2ec4e0,
+  usbc:     0x6fd08c
 };
 
 
@@ -39,13 +40,14 @@ const CONNECTOR_GENDER = {
   cee_tri:  { in: 'male',   out: 'female' },
   speakon:  { in: 'female', out: 'female' },
   powercon: { in: 'male',   out: 'male' },
-  jack:     { in: 'female', out: 'female' }
+  jack:     { in: 'female', out: 'female' },
+  usbc:     { in: 'female', out: 'female' }   // le prese sono femmine, il cavo è maschio ai due capi
 };
 
 // nomi leggibili dei connettori (pannello posteriore)
 const SIGNAL_LABEL = {
   xlr: 'XLR 3 poli', dmx: 'DMX 5 poli', speakon: 'Speakon', powercon: 'PowerCON',
-  schuko: 'Schuko', cee_mono: 'CEE 230V', cee_tri: 'CEE 400V', jack: 'Jack 6,35'
+  schuko: 'Schuko', cee_mono: 'CEE 230V', cee_tri: 'CEE 400V', jack: 'Jack 6,35', usbc: 'USB-C'
 };
 
 /* Geometria del mixer in "unità banco" (a = lungo i canali, b = dal retro
@@ -119,6 +121,7 @@ const CIAB_ISO  = isoFrame(104, 16, 8);   // ciabatta civile: barra lunga e bass
 const CIABCEE_ISO = isoFrame(134, 16, 8); // ciabatta con spina CEE: 4 prese
 const PC_ISO    = isoFrame(26, 34, 22);   // laptop aperto
 const DI_ISO    = isoFrame(30, 26, 14);   // DI passiva doppia, scatolina d'acciaio
+const INTF_ISO  = isoFrame(46, 30, 12);   // scheda audio USB da tavolo
 
 // la testa sta sul sub: il fondo del suo palo tocca il centro del piano del sub
 function isoDepth (screenY) { return 10 + screenY / 10000; }
@@ -142,6 +145,7 @@ const CABLE_TYPES = {
   dmx:             { endpoints: ['dmx'],                  layer: 'dmx',      color: 0xf2c53d },
   speakon:         { endpoints: ['speakon'],              layer: 'speakon',  color: 0xf0619a },
   jack:            { endpoints: ['jack'],                  layer: 'jack',     color: 0x2ec4e0 },
+  usbc:            { endpoints: ['usbc'],                  layer: 'usbc',     color: 0x6fd08c },
   // adattatori: il lato CEE è sempre monofase (mai trifase — si adatta un
   // singolo ramo di fase, non l'intero allaccio a monte del Quadro).
   cee_powercon:    { endpoints: ['cee_mono', 'powercon'], layer: 'cee_mono', color: 0xd9773f },
@@ -296,10 +300,22 @@ const COMPONENT_TYPES = {
       // cavo di alimentazione già attaccato, con spina Schuko: come per le
       // ciabatte si prende la spina dal pannello, senza scegliere un cavo
       { id: 'power',   signal: 'schuko', dir: 'in',  lead: true, dx: 0,  dy: 22 },
-      // uscita audio stereo (cavo mini-jack → 2 jack, non bilanciata): passa
-      // da una DI doppia prima di entrare nel mixer, che vuole ingressi XLR.
-      { id: 'audio_L', signal: 'jack',   dir: 'out', dx: 17, dy: 1 },
-      { id: 'audio_R', signal: 'jack',   dir: 'out', dx: 17, dy: 9 }
+      // l'audio esce in digitale dalla porta USB-C verso la scheda audio
+      { id: 'usb',     signal: 'usbc',   dir: 'out', dx: 17, dy: 4 }
+    ]
+  },
+  // scheda audio USB: prende l'audio dal PC via USB-C (da cui è anche
+  // alimentata, niente presa né interruttore) e lo manda al mixer su due
+  // uscite di linea jack bilanciate (TRS), verso i CH 5-6 LINE IN
+  interface: {
+    label: 'SCHEDA', category: 'regia', powerW: 0, zone: 'foh', shape: 'interface',
+    body: { w: 46, h: 40, fill: 0x8e2a22, accent: 0x6fd08c },
+    busPowered: true,
+    ledPos: INTF_ISO(3, 30, 9),
+    ports: [
+      { id: 'usb',   signal: 'usbc', dir: 'in',  ...isoPort(INTF_ISO, 40, 3, 12) },
+      { id: 'out_L', signal: 'jack', dir: 'out', ...isoPort(INTF_ISO, 26, 3, 12) },
+      { id: 'out_R', signal: 'jack', dir: 'out', ...isoPort(INTF_ISO, 16, 3, 12) }
     ]
   },
   // DI passiva doppia: converte le due uscite jack del PC (sbilanciate) in
@@ -333,7 +349,9 @@ const COMPONENT_TYPES = {
   }
 };
 
-const AVAILABLE_STOCK = { sub: 2, top: 2, mixer: 1, par: 4, controller: 1, ampli: 1, quadro: 1, ciabatta: 1, ciabatta_cee: 1, pc: 1, di: 1 };
+// la DI resta nel catalogo per gli strumenti sul palco dei livelli successivi,
+// ma nel livello 1 non serve: il PC entra nel mixer dalla scheda audio
+const AVAILABLE_STOCK = { sub: 2, top: 2, mixer: 1, par: 4, controller: 1, ampli: 1, quadro: 1, ciabatta: 1, ciabatta_cee: 1, pc: 1, interface: 1, di: 0 };
 
 const POWER_LIMIT_KW = 3.0;
 const TOP_ATTACH_RADIUS = 300; // px: quanto lontano può essere trascinata una Testa da un Sub libero
@@ -377,12 +395,11 @@ function buildExpectedConnections () {
     { a: 'mixer_1', aPort: 'main_L', b: 'ampli_1', bPort: 'in_L', signal: 'xlr' },
     { a: 'mixer_1', aPort: 'main_R', b: 'ampli_1', bPort: 'in_R', signal: 'xlr' },
 
-    // il PC entra nel mixer passando da una DI doppia: le uscite jack L/R
-    // (sbilanciate) diventano XLR bilanciati, su due ingressi qualsiasi del mixer
-    { a: 'pc_1', aPort: 'audio_L', b: 'di_1', bPort: 'in_1', signal: 'jack' },
-    { a: 'pc_1', aPort: 'audio_R', b: 'di_1', bPort: 'in_2', signal: 'jack' },
-    { a: 'di_1', aPort: 'out_1', b: 'mixer_1', bPort: null, signal: 'xlr' },
-    { a: 'di_1', aPort: 'out_2', b: 'mixer_1', bPort: null, signal: 'xlr' },
+    // il PC suona dalla scheda audio: USB-C dal PC, poi le due uscite di linea
+    // jack L/R nei due ingressi jack del mixer (CH 5 = L, CH 6 = R)
+    { a: 'pc_1', aPort: 'usb', b: 'interface_1', bPort: 'usb', signal: 'usbc' },
+    { a: 'interface_1', aPort: 'out_L', b: 'mixer_1', bPort: 'in_5', signal: 'jack' },
+    { a: 'interface_1', aPort: 'out_R', b: 'mixer_1', bPort: 'in_6', signal: 'jack' },
 
     // l'universo DMX è a scelta (1 o 2), purché la catena parta dalla consolle
     { a: 'controller_1', aPort: null, b: 'par_1', bPort: 'dmx_in', signal: 'dmx' },
@@ -427,13 +444,13 @@ function buildExpectedConnections () {
 const gameState = {
   placed: {},
   stock: { ...AVAILABLE_STOCK },
-  nextIndex: { sub: 1, top: 1, mixer: 1, par: 1, controller: 1, ampli: 1, quadro: 1, ciabatta: 1, ciabatta_cee: 1, pc: 1, di: 1 },
+  nextIndex: { sub: 1, top: 1, mixer: 1, par: 1, controller: 1, ampli: 1, quadro: 1, ciabatta: 1, ciabatta_cee: 1, pc: 1, interface: 1, di: 1 },
   edges: [],              // { id, a, aPort, b, bPort, signal }
   edgeSeq: 0,
   selectedCable: null,
   pendingPort: null,      // { componentId, portId }
   selectedPieceType: null, // tipo di pezzo "armato" in attesa di un tocco sulla pedana
-  visibleSignals: { powercon: true, xlr: true, speakon: true, dmx: true, schuko: true, cee_tri: true, cee_mono: true, jack: true },
+  visibleSignals: { powercon: true, xlr: true, speakon: true, dmx: true, schuko: true, cee_tri: true, cee_mono: true, jack: true, usbc: true },
   tested: false
 };
 
@@ -553,6 +570,11 @@ function isRunning (compId) {
   if (!comp) return false;
   const def = COMPONENT_TYPES[comp.type];
   if (comp.type === 'allaccio') return true;
+  if (def.busPowered) {
+    // alimentata dal cavo USB: funziona se il PC a monte funziona
+    const e = gameState.edges.find(x => x.b === compId && x.signal === 'usbc');
+    return !!e && isRunning(e.a);
+  }
   if (!powerInPort(def)) return false;
   return isPowered(compId) && (!SWITCHABLE.has(comp.type) || !!comp.on);
 }
@@ -562,7 +584,7 @@ function isLedOn (compId) {
   const comp = gameState.placed[compId];
   if (!comp) return false;
   const def = COMPONENT_TYPES[comp.type];
-  if (powerInPort(def) || comp.type === 'allaccio') return isRunning(compId);
+  if (powerInPort(def) || def.busPowered || comp.type === 'allaccio') return isRunning(compId);
   const inPort = def.ports.find(p => p.dir === 'in');
   const e = inPort && gameState.edges.find(x => x.b === compId && x.bPort === inPort.id);
   return !!e && (isRunning(e.a) || isLedOn(e.a));
@@ -1125,6 +1147,20 @@ function svgCee (tri, male) {
   return s;
 }
 
+// presa USB-C: fessura a "stadio" col guscio metallico e la linguetta dei
+// contatti al centro, reversibile; sopra il simbolo USB serigrafato
+function svgUsbC () {
+  const cx = CONN_CX, cy = CONN_CY;
+  return `<rect x="${cx - 36}" y="${cy - 30}" width="72" height="60" rx="10" fill="#000" fill-opacity=".12"/>
+    <path d="M ${cx - 8} ${cy - 16} L ${cx + 8} ${cy - 16} M ${cx} ${cy - 22} L ${cx} ${cy - 12} M ${cx - 8} ${cy - 16} L ${cx - 8} ${cy - 20} M ${cx + 8} ${cy - 16} L ${cx + 8} ${cy - 12}"
+      stroke="#8b8e98" stroke-width="1.6" fill="none"/>
+    <rect x="${cx - 24}" y="${cy - 7}" width="48" height="18" rx="9" fill="#c9ccd1" stroke="#7d828c" stroke-width="1.2"/>
+    <rect x="${cx - 20}" y="${cy - 4}" width="40" height="12" rx="6" fill="#0e0f12"/>
+    <rect x="${cx - 13}" y="${cy}" width="26" height="4" rx="1.5" fill="#d9d4c7"/>
+    ${Array.from({ length: 6 }, (_, i) => `<rect x="${cx - 11 + i * 4.2}" y="${cy + 0.6}" width="1.6" height="2.8" fill="#b8a36a"/>`).join('')}
+    <text x="${cx}" y="${cy + 26}" font-size="7" font-weight="700" fill="#8b8e98" text-anchor="middle" font-family="Inter,sans-serif">USB-C</text>`;
+}
+
 function connectorSVG (signal, dir) {
   const male = (CONNECTOR_GENDER[signal] || {})[dir] === 'male';
   switch (signal) {
@@ -1136,6 +1172,7 @@ function connectorSVG (signal, dir) {
     case 'schuko':   return svgSchuko(male);
     case 'cee_mono': return svgCee(false, male);
     case 'cee_tri':  return svgCee(true, male);
+    case 'usbc':     return svgUsbC();
     default:         return `<circle cx="${CONN_CX}" cy="${CONN_CY}" r="20" fill="#555"/>`;
   }
 }
@@ -1178,7 +1215,9 @@ const REAR_PANELS = {
   ciabatta_cee: { style: 'strip', serial: 'CIABATTA 4 PRESE  ·  SPINA CEE 230V 16A',
     sections: [['SPINA', [['in', 'SPINA']]], ['PRESE', [['out_1', 'PRESA 1'], ['out_2', 'PRESA 2'], ['out_3', 'PRESA 3'], ['out_4', 'PRESA 4']]]] },
   pc: { style: 'laptop', power: true, serial: 'LAPTOP  ·  lato sinistro',
-    sections: [['ALIMENTAZIONE', [['power', 'SPINA']]], ['AUDIO (cavo mini-jack → 2 jack)', [['audio_L', 'LINE OUT L'], ['audio_R', 'LINE OUT R']]]] },
+    sections: [['ALIMENTAZIONE', [['power', 'SPINA']]], ['USB', [['usb', 'USB-C']]]] },
+  interface: { style: 'interface', left: 'kensington', serial: 'USB AUDIO INTERFACE  ·  2 IN / 2 OUT  ·  24 bit / 192 kHz  ·  alimentata via USB',
+    sections: [['USB', [['usb', 'USB-C']]], ['LINE OUTPUTS (bilanciate)', [['out_L', 'OUT L'], ['out_R', 'OUT R']]]] },
   di: { style: 'steel', right: 'lift', serial: 'PASSIVE DI BOX  ·  2 CANALI',
     sections: [['INPUT', [['in_1', 'CH1 IN'], ['in_2', 'CH2 IN']]], ['OUTPUT', [['out_1', 'CH1 OUT'], ['out_2', 'CH2 OUT']]]] }
 };
@@ -1206,7 +1245,8 @@ const REAR_STYLES = {
   green:   { bg: '#2c3a2c', edge: '#49b06a', ink: '#e6efe6', sub: '#9fb89f' },
   strip:   { bg: '#1c1d22', edge: '#3a3d45', ink: '#cfd2d6', sub: '#8b8e98' },
   laptop:  { bg: '#d7dadd', edge: '#9a9da3', ink: '#2a2c32', sub: '#5f646d' },
-  steel:   { bg: '#39424f', edge: '#5b6676', ink: '#e1e6ee', sub: '#a4adba' }
+  steel:   { bg: '#39424f', edge: '#5b6676', ink: '#e1e6ee', sub: '#a4adba' },
+  interface: { bg: '#8e2a22', edge: '#b8463b', ink: '#f6e9e6', sub: '#e6bcb5' }
 };
 
 let rearPanelId = null;   // dispositivo il cui pannello è aperto
@@ -1249,6 +1289,12 @@ function rearDeco (kind, x, h, st) {
       return `<rect x="${x + 25}" y="${h / 2 - 22}" width="50" height="44" rx="6" fill="#0e0f12"/>
         <rect x="${x + 36}" y="${h / 2 - 5}" width="28" height="10" fill="#8a8e98"/>
         <text x="${x + 50}" y="${h / 2 + 42}" font-size="12" fill="${st.sub}" text-anchor="middle">FUSE T6.3A</text>`;
+    case 'kensington':
+      // retro della scheda audio: slot antifurto e piedini in gomma
+      return `<rect x="${x + 40}" y="${h / 2 - 9}" width="22" height="14" rx="3" fill="#0e0f12"/>
+        <text x="${x + 51}" y="${h / 2 + 24}" font-size="11" fill="${st.sub}" text-anchor="middle">K-SLOT</text>
+        <rect x="${x + 16}" y="${h - 40}" width="26" height="8" rx="4" fill="#1c1d22"/>
+        <rect x="${x + 70}" y="${h - 40}" width="26" height="8" rx="4" fill="#1c1d22"/>`;
     case 'lift':
       return `<rect x="${x + 35}" y="${h / 2 - 30}" width="30" height="60" rx="6" fill="#0e0f12"/>
         <rect x="${x + 42}" y="${h / 2 - 24}" width="16" height="24" rx="3" fill="#c9ccd1"/>
@@ -1325,6 +1371,13 @@ function svgMated (signal, dir, cableColor) {
         <circle cx="${cx}" cy="${cy + 4}" r="31" fill="${dark}"/>
         ${ribs(31, 40, 30, 0.3)}` + boot(18);
     }
+    case 'usbc':
+      // spina USB-C: guscio sovrastampato nero, con il cavo che esce al centro
+      return `<rect x="${cx - 27}" y="${cy - 11}" width="60" height="30" rx="10" fill="#000" fill-opacity=".35"/>
+        <rect x="${cx - 30}" y="${cy - 14}" width="60" height="28" rx="10" fill="#1c1d22" stroke="#3a3d45" stroke-width="1.5"/>
+        <rect x="${cx - 24}" y="${cy - 9}" width="48" height="18" rx="7" fill="#26282e"/>
+        <circle cx="${cx}" cy="${cy}" r="8" fill="none" stroke="${cableColor}" stroke-width="3"/>
+        <circle cx="${cx}" cy="${cy}" r="5" fill="#0c0d10"/>`;
     default:
       return shadow(24) + `<circle cx="${cx}" cy="${cy}" r="24" fill="#26282e"/>` + boot(16);
   }
@@ -1606,6 +1659,11 @@ function renderRearPanel () {
       svg += `<path d="M 14 30 L ${W - 14} 30 Q ${W - 4} 30 ${W - 4} 44 L ${W - 4} ${H - 30} Q ${W - 4} ${H - 12} ${W - 22} ${H - 12} L 22 ${H - 12} Q 4 ${H - 12} 4 ${H - 30} L 4 44 Q 4 30 14 30 Z"
           fill="${st.bg}" stroke="${st.edge}" stroke-width="2"/>
         <rect x="10" y="30" width="${W - 20}" height="6" rx="3" fill="#ffffff" fill-opacity=".35"/>`;
+    } else if (panel.style === 'interface') {
+      // retro della scheda: guscio in alluminio anodizzato, bordi arrotondati
+      svg += `<rect x="4" y="16" width="${W - 8}" height="${H - 32}" rx="22" fill="${st.bg}" stroke="${st.edge}" stroke-width="2"/>
+        <rect x="16" y="24" width="${W - 32}" height="6" rx="3" fill="#ffffff" fill-opacity=".12"/>
+        ${[[26, 40], [W - 26, 40], [26, H - 40], [W - 26, H - 40]].map(([x, y]) => `<circle cx="${x}" cy="${y}" r="4.5" fill="#5e1b16" stroke="#c4574b"/>`).join('')}`;
     } else if (panel.style === 'desk') {
       // retro di un banco (mixer, consolle): scocca scura col bordo del ponte
       svg += `<rect x="4" y="4" width="${W - 8}" height="${H - 8}" rx="12" fill="${st.bg}" stroke="${st.edge}" stroke-width="2"/>
@@ -2018,7 +2076,9 @@ const ZONE_PREDICATES = {
   // (Off Stage, accanto al mixer di palco) — due postazioni plausibili.
   pc: (cx, cy) => isFohCell(cx, cy) || isOffStageCell(cx, cy),
   // la DI segue il PC: accanto a lui in FOH oppure in Off Stage
-  di: (cx, cy) => isFohCell(cx, cy) || isOffStageCell(cx, cy)
+  di: (cx, cy) => isFohCell(cx, cy) || isOffStageCell(cx, cy),
+  // la scheda audio sta sul tavolo accanto al PC
+  interface: (cx, cy) => isFohCell(cx, cy) || isOffStageCell(cx, cy)
 };
 
 /* ---------------------------------------------------------------------
@@ -2681,6 +2741,30 @@ class StageScene extends Phaser.Scene {
         k.poly([inset(22.6, 3, 5.2), inset(22.6, B - 3, 5.2), inset(25.4, B - 3, 19), inset(25.4, 3, 19)], 0x1d4f86);
         k.poly([inset(22.6, 3, 5.2), inset(22.6, 11, 5.2), inset(25.4, 7, 19), inset(25.4, 3, 19)], 0xffffff, 0.08);
         g.lineStyle(0.8, 0x8a8e98, 1); g.strokePoints(lid, true);
+        break;
+      }
+      case 'interface': {
+        // scheda audio USB da tavolo: guscio in alluminio anodizzato rosso,
+        // sul fronte due ingressi combo XLR/jack con le manopole del gain e
+        // l'anello luminoso, la grande manopola del volume monitor e la cuffia
+        const P = INTF_ISO, k = this.isoKit(g, P);
+        const { A, B, Z } = P;
+        k.box(0, A, 0, B, 0, Z, { top: 0xb23a2e, left: 0x8e2a22, right: 0x6f1f19 });
+        k.quadZ(Z, 3, A - 3, 3, B - 3, 0xc0453a);
+        k.quadZ(Z, 5, 22, B - 8, B - 5, 0x2a2c32);                     // serigrafia del marchio
+        // fronte (faccia b=B): combo, gain con anello, monitor, cuffia
+        [7, 17].forEach(a => {
+          k.discB(B, a, Z / 2, 3.6, 0x1c1d22);
+          k.discB(B, a, Z / 2, 2.4, 0x0c0d10);
+          k.discB(B, a, Z / 2, 0.9, 0x6a6e78);
+        });
+        [26, 32].forEach(a => {
+          k.discB(B, a, Z / 2 + 1, 2.8, 0x6fd08c);                      // anello del gain (verde = ok)
+          k.discB(B, a, Z / 2 + 1, 2.1, 0x2a2c32);
+        });
+        k.discB(B, 39.5, Z / 2 + 0.5, 3.4, 0x0c0d10);                    // volume monitor
+        k.discB(B, 39.5, Z / 2 + 0.5, 2.8, 0xb9bcc1);
+        k.discB(B, 44, Z / 2 - 2.5, 1.2, 0x0c0d10);                      // cuffia
         break;
       }
       case 'di': {
@@ -3493,7 +3577,7 @@ class StageScene extends Phaser.Scene {
     const armed = !!prot && PROTECTIONS.every(k => prot[k]);
     // tutto ciò che si alimenta deve essere acceso e ricevere corrente
     const notRunning = Object.values(gameState.placed)
-      .filter(c => c.type !== 'allaccio' && powerInPort(COMPONENT_TYPES[c.type]) && !isRunning(c.id))
+      .filter(c => c.type !== 'allaccio' && (powerInPort(COMPONENT_TYPES[c.type]) || COMPONENT_TYPES[c.type].busPowered) && !isRunning(c.id))
       .map(c => c.id);
     const clashes = dmxOverlaps();
     const glow = ids => ids.forEach(id => {
@@ -3676,7 +3760,7 @@ class StageScene extends Phaser.Scene {
 
     gameState.placed = {};
     gameState.stock = { ...AVAILABLE_STOCK };
-    gameState.nextIndex = { sub: 1, top: 1, mixer: 1, par: 1, controller: 1, ampli: 1, quadro: 1, ciabatta: 1, ciabatta_cee: 1, pc: 1, di: 1 };
+    gameState.nextIndex = { sub: 1, top: 1, mixer: 1, par: 1, controller: 1, ampli: 1, quadro: 1, ciabatta: 1, ciabatta_cee: 1, pc: 1, interface: 1, di: 1 };
     gameState.edges = [];
     gameState.edgeSeq = 0;
     gameState.selectedCable = null;
