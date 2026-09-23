@@ -9,10 +9,14 @@
     --amber-dim:#8a5f1f;
     --green:#49b06a;
     --red:#e0503f;
-    --c-power:#e0503f;
+    --c-power:#f2954a;
     --c-speakon:#dcdcdc;
     --c-dmx:#f2c53d;
     --c-xlr:#4a90e2;
+    --c-schuko:#c77dff;
+    --c-cee-mono:#2f6fd6;
+    --c-cee-tri:#d6392f;
+    --c-jack:#2ec4e0;
     --font-display:'Barlow Condensed', sans-serif;
     --font-ui:'Inter', system-ui, sans-serif;
   }
@@ -244,6 +248,69 @@
   #toast.show{ opacity:1; transform:translate(-50%,0); }
   #toast.ok{ border-left-color:var(--green); }
 
+  /* ---------- QUADRO: finestra pop-up diagnostica ---------- */
+  .modal-overlay{
+    position:fixed; inset:0;
+    background:rgba(10,10,12,.72);
+    display:none;
+    align-items:center; justify-content:center;
+    z-index:100;
+    padding:16px;
+  }
+  .modal-overlay.show{ display:flex; }
+  .modal-box{
+    background:var(--bg-panel);
+    border:1px solid var(--hairline);
+    border-radius:10px;
+    width:min(560px, 92vw);
+    max-height:86vh;
+    overflow-y:auto;
+    box-shadow:0 12px 40px rgba(0,0,0,.5);
+  }
+  .modal-header{
+    display:flex; align-items:center; justify-content:space-between;
+    padding:12px 16px;
+    border-bottom:1px solid var(--hairline);
+    position:sticky; top:0;
+    background:var(--bg-panel);
+  }
+  .modal-header h2{
+    font-family:var(--font-display); font-size:20px; margin:0; letter-spacing:.02em;
+  }
+  .modal-close{
+    background:none; border:1px solid var(--hairline); color:var(--text-muted);
+    border-radius:5px; width:28px; height:28px; cursor:pointer; font-size:14px;
+  }
+  .modal-close:hover{ color:var(--text-main); border-color:var(--text-muted); }
+  .modal-body{ padding:14px 16px; display:flex; flex-direction:column; gap:12px; }
+  .modal-hint{ color:var(--text-muted); font-size:13px; }
+  .quadro-summary{
+    display:flex; justify-content:space-between; align-items:baseline;
+    font-family:var(--font-display); font-size:18px; letter-spacing:.01em;
+    padding-bottom:10px; border-bottom:1px solid var(--hairline);
+  }
+  .quadro-summary .amount{ font-family:var(--font-ui); font-size:13px; color:var(--amber); font-weight:600; }
+  .phase-card{
+    border:1px solid var(--hairline); border-radius:8px; padding:10px 12px;
+    background:var(--bg-panel-raised);
+  }
+  .phase-card.over{ border-color:var(--red); }
+  .phase-card-head{
+    display:flex; justify-content:space-between; align-items:baseline;
+    font-family:var(--font-display); font-size:16px; margin-bottom:6px;
+  }
+  .phase-card-head .amount{ font-family:var(--font-ui); font-size:11.5px; color:var(--text-muted); font-variant-numeric:tabular-nums; }
+  .phase-card.over .phase-card-head .amount{ color:var(--red); font-weight:600; }
+  .phase-bar{
+    height:8px; border-radius:4px; background:#000; border:1px solid var(--hairline);
+    overflow:hidden; margin-bottom:8px;
+  }
+  .phase-bar-fill{ height:100%; background:var(--green); transition:width .25s ease; }
+  .phase-bar-fill.warn{ background:var(--amber); }
+  .phase-bar-fill.over{ background:var(--red); }
+  .phase-devices{ list-style:none; margin:0; padding:0; font-size:12px; color:var(--text-muted); display:flex; flex-direction:column; gap:2px; }
+  .phase-devices .modal-empty{ font-style:italic; }
+
   /* ---------- TOOLBAR (compatto) ---------- */
   #toolbar{
     flex-shrink:0;
@@ -275,21 +342,40 @@
     background:var(--bg-panel-raised);
   }
 
+  /* Il pannello scorre INTERNAMENTE se il contenuto non ci sta (max-height +
+     overflow-y): lo spazio del gioco sopra non si riduce mai per far posto ai
+     pezzi/cavi, a differenza di un pannello che cresce libero in altezza. */
   .tab-panel{
     display:none;
-    padding:8px 16px;
-    min-height:66px;
+    flex-direction:column;
+    gap:4px;
+    padding:6px 16px 7px;
+    max-height:132px;
+    overflow-y:auto;
+    overflow-x:hidden;
+    scrollbar-width:thin;
+    scrollbar-color:var(--hairline) transparent;
+  }
+  .tab-panel.active{ display:flex; }
+  .tab-panel::-webkit-scrollbar{ width:6px; }
+  .tab-panel::-webkit-scrollbar-track{ background:transparent; }
+  .tab-panel::-webkit-scrollbar-thumb{ background:var(--hairline); border-radius:3px; }
+  .tab-panel::-webkit-scrollbar-thumb:hover{ background:var(--text-muted); }
+
+  .panel-items{
+    display:flex;
     align-items:center;
     gap:12px;
     flex-wrap:wrap;
   }
-  .tab-panel.active{ display:flex; }
 
+  /* descrizioni: sempre in fondo, il più discrete possibile — servono a chi
+     ne ha bisogno ma non devono rubare spazio ai pezzi/cavi da piazzare */
   .panel-hint{
-    font-size:11.5px;
+    font-size:9.5px;
     color:var(--text-muted);
-    max-width:260px;
-    line-height:1.35;
+    line-height:1.3;
+    opacity:.8;
   }
 
   .piece{
@@ -339,6 +425,34 @@
     opacity:.92;
     filter:drop-shadow(0 6px 14px rgba(0,0,0,.55));
   }
+
+  /* Cavi "a tendina": raggruppati per Trifase/Monofase/Segnale e chiusi di
+     default, così la scheda Cavi occupa poco spazio finché non serve aprirli
+     (un solo gruppo alla volta, come una fisarmonica). */
+  .cable-groups{ align-items:flex-start; }
+  .cable-group{ display:flex; flex-direction:column; }
+  .cable-group-toggle{
+    display:flex; align-items:center; gap:6px;
+    background:none; border:none;
+    font-family:var(--font-display);
+    font-size:12.5px;
+    letter-spacing:.04em;
+    text-transform:uppercase;
+    color:var(--text-muted);
+    padding:4px 2px;
+    cursor:pointer;
+  }
+  .cable-group-toggle:hover{ color:var(--text-main); }
+  .cable-group-toggle .chev{ font-size:9px; transition:transform .15s ease; display:inline-block; }
+  .cable-group.open .cable-group-toggle{ color:var(--amber); }
+  .cable-group.open .cable-group-toggle .chev{ transform:rotate(90deg); }
+  .cable-group-body{
+    display:none;
+    flex-wrap:wrap;
+    gap:8px;
+    padding:2px 2px 4px;
+  }
+  .cable-group.open .cable-group-body{ display:flex; }
 
   .cable-btn{
     display:flex;

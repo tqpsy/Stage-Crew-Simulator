@@ -8,12 +8,44 @@
 /* ---------------------------------------------------------------------
    1) CATALOGO COMPONENTI — zona di posa, forma grafica, porte
    --------------------------------------------------------------------- */
+// colori reali (norma IEC 60309 per le prese CEE): PowerCON arancione,
+// CEE monofase 230V blu, CEE trifase 400V rosso. Sono segnali NATIVI di
+// porta a tutti gli effetti (non solo un colore cosmetico), quindi anche la
+// compatibilità dei cavi li tratta come due tipi distinti.
 const SIGNAL_COLOR = {
-  powercon: 0xe0503f,
+  powercon: 0xf2954a,
   speakon:  0xdcdcdc,
   dmx:      0xf2c53d,
-  xlr:      0x4a90e2
+  xlr:      0x4a90e2,
+  schuko:   0xc77dff,
+  cee_mono: 0x2f6fd6,
+  cee_tri:  0xd6392f,
+  jack:     0x2ec4e0
 };
+
+/* Catalogo dei CAVI selezionabili (scheda "Cavi") — diverso dal catalogo delle
+   PORTE (SIGNAL_COLOR): una porta ha sempre un solo segnale nativo, ma un
+   cavo può essere un ADATTATORE tra due segnali diversi (endpoints con 2
+   valori). "layer" dice quale interruttore del pannello Livelli lo nasconde. */
+const CABLE_TYPES = {
+  powercon:        { endpoints: ['powercon'],            layer: 'powercon', color: 0xf2954a },
+  schuko:          { endpoints: ['schuko'],               layer: 'schuko',   color: 0xc77dff },
+  cee_tri:         { endpoints: ['cee_tri'],              layer: 'cee_tri',  color: 0xd6392f },
+  cee_mono:        { endpoints: ['cee_mono'],             layer: 'cee_mono', color: 0x2f6fd6 },
+  xlr:             { endpoints: ['xlr'],                  layer: 'xlr',      color: 0x4a90e2 },
+  dmx:             { endpoints: ['dmx'],                  layer: 'dmx',      color: 0xf2c53d },
+  speakon:         { endpoints: ['speakon'],              layer: 'speakon',  color: 0xdcdcdc },
+  jack:            { endpoints: ['jack'],                  layer: 'jack',     color: 0x2ec4e0 },
+  // adattatori: il lato CEE è sempre monofase (mai trifase — si adatta un
+  // singolo ramo di fase, non l'intero allaccio a monte del Quadro).
+  cee_powercon:    { endpoints: ['cee_mono', 'powercon'], layer: 'cee_mono', color: 0xd9773f },
+  schuko_powercon: { endpoints: ['schuko', 'powercon'],   layer: 'schuko',   color: 0xcf7fcf },
+  cee_schuko:      { endpoints: ['cee_mono', 'schuko'],   layer: 'cee_mono', color: 0xd996c0 }
+};
+
+// carica reale (powercon/schuko/cee, anche via adattatore): usato per capire
+// quali cavi contano come "elettrici" nel calcolo del carico per fase.
+const POWER_CABLE_IDS = new Set(['powercon', 'schuko', 'cee_tri', 'cee_mono', 'cee_powercon', 'schuko_powercon', 'cee_schuko']);
 
 /* zone: chiave usata per sapere DOVE si può piazzare un componente (vedi
    ZONE_PREDICATES sopra) · 'fixed' = posizione imposta, non trascinabile.
@@ -37,10 +69,11 @@ const COMPONENT_TYPES = {
     ]
   },
   mixer: {
-    label: 'MIX', category: 'audio', powerW: 50, zone: 'offstage', shape: 'rackbox',
+    label: 'MIX', category: 'audio', powerW: 50, zone: 'offstage', shape: 'mixer',
     body: { w: 68, h: 44, fill: 0x2a2c32, accent: 0x8a8e98 },
     ports: [
       { id: 'power',   signal: 'powercon', dir: 'in',  dx: -27, dy: -19 },
+      { id: 'in_pc',   signal: 'xlr',      dir: 'in',  dx: 27,  dy: -19 },
       { id: 'audio_L', signal: 'xlr',      dir: 'out', dx: -14, dy: 21 },
       { id: 'audio_R', signal: 'xlr',      dir: 'out', dx: 14,  dy: 21 }
     ]
@@ -67,7 +100,7 @@ const COMPONENT_TYPES = {
     ]
   },
   controller: {
-    label: 'CTRL', category: 'luci', powerW: 20, zone: 'offstage', shape: 'rackbox',
+    label: 'CTRL', category: 'luci', powerW: 20, zone: 'offstage', shape: 'controller',
     body: { w: 62, h: 42, fill: 0x2a2c32, accent: 0xf2a541 },
     ports: [
       { id: 'power', signal: 'powercon', dir: 'in',  dx: -24, dy: 22 },
@@ -76,44 +109,125 @@ const COMPONENT_TYPES = {
   },
   quadro: {
     label: 'QUADRO', category: 'power', powerW: 0, zone: 'backstage', shape: 'quadro',
-    body: { w: 58, h: 52, fill: 0x3a1f1f, accent: 0xe0503f },
+    // cabinet bianco/metallo, come un vero armadio elettrico da evento —
+    // non più una scatola tinta a caso (vedi drawComponentBody per i dettagli).
+    body: { w: 92, h: 54, fill: 0xe9eaed, accent: 0x4a4f5a },
+    // 3 prese, una per fase (L1/L2/L3): a differenza degli altri componenti,
+    // ogni presa può ricevere PIÙ cavi (multi:true) — non è il singolo cavo a
+    // contare, ma il carico totale che finisce su quella fase (vedi
+    // computePhaseLoads/PHASE_BUDGET_W): sta al giocatore distribuirlo bene.
     ports: [
-      { id: 'in',  signal: 'powercon', dir: 'in',  dx: 0, dy: 29 },
-      { id: 'out', signal: 'powercon', dir: 'out', dx: 0, dy: -29 }
+      // sia l'ingresso (dall'Allaccio) sia le 3 uscite sono CEE industriale:
+      // un quadro trifase non ha prese PowerCON incorporate. Ogni utenza a
+      // valle (PowerCON o Schuko) richiede l'adattatore giusto in scheda Cavi.
+      { id: 'in',    signal: 'cee_tri',  dir: 'in',  dx: 0,   dy: 25 },
+      { id: 'out_1', signal: 'cee_mono', dir: 'out', dx: -27, dy: -25, phase: 'L1', multi: true },
+      { id: 'out_2', signal: 'cee_mono', dir: 'out', dx: 0,   dy: -25, phase: 'L2', multi: true },
+      { id: 'out_3', signal: 'cee_mono', dir: 'out', dx: 27,  dy: -25, phase: 'L3', multi: true }
     ]
   },
   allaccio: {
     label: 'ALLACCIO', category: 'power', powerW: 0, zone: 'fixed', shape: 'quadro',
     body: { w: 50, h: 44, fill: 0x1f2a1f, accent: 0x49b06a },
     ports: [
-      { id: 'out', signal: 'powercon', dir: 'out', dx: 0, dy: -27 }
+      { id: 'out', signal: 'cee_tri', dir: 'out', dx: 0, dy: -27 }
+    ]
+  },
+  ciabatta: {
+    label: 'CIABATTA', category: 'regia', powerW: 0, zone: 'foh', shape: 'ciabatta',
+    body: { w: 74, h: 24, fill: 0x2a2c32, accent: 0xc77dff },
+    ports: [
+      { id: 'in',    signal: 'powercon', dir: 'in',  dx: -30, dy: 0 },
+      { id: 'out_1', signal: 'schuko',   dir: 'out', dx: -4,  dy: 0 },
+      { id: 'out_2', signal: 'schuko',   dir: 'out', dx: 13,  dy: 0 },
+      { id: 'out_3', signal: 'schuko',   dir: 'out', dx: 30,  dy: 0 }
+    ]
+  },
+  pc: {
+    label: 'PC', category: 'regia', powerW: 150, zone: 'foh', shape: 'pc',
+    // stile "Mac": scocca in alluminio chiaro, non più il rackbox scuro
+    // generico — vedi drawComponentBody per lo schermo/trackpad/notch.
+    body: { w: 40, h: 34, fill: 0xd7dadd, accent: 0x9a9da3 },
+    ports: [
+      { id: 'power',     signal: 'schuko', dir: 'in',  dx: 0,  dy: 22 },
+      // uscita audio (jack, non bilanciata): va in una DI prima di entrare
+      // nel mixer, che vuole un ingresso bilanciato XLR.
+      { id: 'audio_out', signal: 'jack',   dir: 'out', dx: 19, dy: 4 }
+    ]
+  },
+  // DI passiva: converte l'uscita jack del PC (sbilanciata) in un segnale
+  // XLR bilanciato adatto a un ingresso mixer — nessuna alimentazione
+  // richiesta, resta in Regia accanto al PC.
+  di: {
+    label: 'DI', category: 'regia', powerW: 0, zone: 'foh', shape: 'di',
+    body: { w: 30, h: 24, fill: 0x232830, accent: 0x8a8e98 },
+    ports: [
+      { id: 'in',  signal: 'jack', dir: 'in',  dx: -11, dy: 0 },
+      { id: 'out', signal: 'xlr',  dir: 'out', dx: 11,  dy: 0 }
+    ]
+  },
+  // splitter industriale: smista una linea CEE del Quadro su più uscite CEE.
+  // Non è richiesta dal collegamento attuale del Livello 1 (che passa diretto
+  // dal Quadro alla Ciabatta Schuko via adattatore), ma è già disponibile per
+  // quando servirà distribuire un carico più grande su più rami.
+  ciabatta_cee: {
+    label: 'CIAB.CEE', category: 'corrente', powerW: 0, zone: 'backstage', shape: 'ciabatta',
+    body: { w: 74, h: 24, fill: 0x2a2c32, accent: 0x2f6fd6 },
+    // splitta UNA fase (monofase) su più prese: non tocca mai il trifase,
+    // quello resta solo tra Allaccio e Quadro.
+    ports: [
+      { id: 'in',    signal: 'cee_mono', dir: 'in',  dx: -30, dy: 0 },
+      { id: 'out_1', signal: 'cee_mono', dir: 'out', dx: -4,  dy: 0 },
+      { id: 'out_2', signal: 'cee_mono', dir: 'out', dx: 13,  dy: 0 },
+      { id: 'out_3', signal: 'cee_mono', dir: 'out', dx: 30,  dy: 0 }
     ]
   }
 };
 
-const AVAILABLE_STOCK = { sub: 2, top: 2, mixer: 1, par: 4, controller: 1, ampli: 1, quadro: 1 };
+const AVAILABLE_STOCK = { sub: 2, top: 2, mixer: 1, par: 4, controller: 1, ampli: 1, quadro: 1, ciabatta: 1, ciabatta_cee: 1, pc: 1, di: 1 };
 
 const POWER_LIMIT_KW = 3.0;
 const TOP_ATTACH_RADIUS = 300; // px: quanto lontano può essere trascinata una Testa da un Sub libero
+
+/* Il quadro del livello è forzato Trifase (16A, 3 prese: una per fase) anche se
+   il carico reale resterebbe sotto la soglia Monofase — scelta didattica, per
+   far esercitare da subito il bilanciamento delle fasi. */
+const FORCE_TRIFASE = true;
+
+// budget per fase: 3kW ciascuna (coerente con un 16A monofase per fase su un
+// quadro trifase, 16A×230V≈3680W con un margine di sicurezza tondo a 3000W).
+const PHASE_BUDGET_W = 3000;
 
 /* La "soluzione" del livello: collegamenti richiesti, PORTA per PORTA (non
    solo componente-componente), così i cavi devono rispettare L/R e la
    sequenza reale della catena (mixer -> finale -> sub -> top, daisy DMX/potenza). */
 function buildExpectedConnections () {
   const list = [
-    { a: 'allaccio', aPort: 'out', b: 'quadro_1',      bPort: 'in',       signal: 'powercon' },
-    { a: 'quadro_1', aPort: 'out', b: 'mixer_1',      bPort: 'power',    signal: 'powercon' },
-    { a: 'quadro_1', aPort: 'out', b: 'controller_1', bPort: 'power',    signal: 'powercon' },
-    { a: 'quadro_1', aPort: 'out', b: 'ampli_1',      bPort: 'power',    signal: 'powercon' },
-    { a: 'quadro_1', aPort: 'out', b: 'sub_1',        bPort: 'power',    signal: 'powercon' },
-    { a: 'quadro_1', aPort: 'out', b: 'sub_2',        bPort: 'power',    signal: 'powercon' },
-    { a: 'quadro_1', aPort: 'out', b: 'par_1',        bPort: 'power_in', signal: 'powercon' },
+    // aPort: null = "una qualunque presa/fase del Quadro" — non importa su quale
+    // delle 3 fasi finisca il cavo, conta solo che la connessione esista (il
+    // bilanciamento del carico tra le fasi è controllato a parte, vedi runValidation).
+    // il Quadro esce in CEE su tutte e 3 le fasi: ogni utenza qui sotto ha
+    // porte PowerCON, quindi il cavo che serve è l'adattatore CEE/PowerCON.
+    { a: 'allaccio', aPort: 'out', b: 'quadro_1',      bPort: 'in',       signal: 'cee_tri' },
+    { a: 'quadro_1', aPort: null, b: 'mixer_1',      bPort: 'power',    signal: 'cee_powercon' },
+    { a: 'quadro_1', aPort: null, b: 'controller_1', bPort: 'power',    signal: 'cee_powercon' },
+    { a: 'quadro_1', aPort: null, b: 'ampli_1',      bPort: 'power',    signal: 'cee_powercon' },
+    { a: 'quadro_1', aPort: null, b: 'sub_1',        bPort: 'power',    signal: 'cee_powercon' },
+    { a: 'quadro_1', aPort: null, b: 'sub_2',        bPort: 'power',    signal: 'cee_powercon' },
+    { a: 'quadro_1', aPort: null, b: 'par_1',        bPort: 'power_in', signal: 'cee_powercon' },
+    { a: 'quadro_1', aPort: null, b: 'ciabatta_1',   bPort: 'in',       signal: 'cee_powercon' },
+    { a: 'ciabatta_1', aPort: null, b: 'pc_1', bPort: 'power', signal: 'schuko' },
     { a: 'par_1', aPort: 'power_thru', b: 'par_2', bPort: 'power_in', signal: 'powercon' },
     { a: 'par_2', aPort: 'power_thru', b: 'par_3', bPort: 'power_in', signal: 'powercon' },
     { a: 'par_3', aPort: 'power_thru', b: 'par_4', bPort: 'power_in', signal: 'powercon' },
 
     { a: 'mixer_1', aPort: 'audio_L', b: 'ampli_1', bPort: 'in_L', signal: 'xlr' },
     { a: 'mixer_1', aPort: 'audio_R', b: 'ampli_1', bPort: 'in_R', signal: 'xlr' },
+
+    // il PC entra nel mixer passando da una DI: l'uscita jack (sbilanciata)
+    // va convertita in XLR bilanciato prima di arrivare all'ingresso mixer.
+    { a: 'pc_1', aPort: 'audio_out', b: 'di_1', bPort: 'in', signal: 'jack' },
+    { a: 'di_1', aPort: 'out', b: 'mixer_1', bPort: 'in_pc', signal: 'xlr' },
 
     { a: 'controller_1', aPort: 'dmx', b: 'par_1', bPort: 'dmx_in', signal: 'dmx' },
     { a: 'par_1', aPort: 'dmx_thru', b: 'par_2', bPort: 'dmx_in', signal: 'dmx' },
@@ -157,13 +271,13 @@ function buildExpectedConnections () {
 const gameState = {
   placed: {},
   stock: { ...AVAILABLE_STOCK },
-  nextIndex: { sub: 1, top: 1, mixer: 1, par: 1, controller: 1, ampli: 1, quadro: 1 },
+  nextIndex: { sub: 1, top: 1, mixer: 1, par: 1, controller: 1, ampli: 1, quadro: 1, ciabatta: 1, ciabatta_cee: 1, pc: 1, di: 1 },
   edges: [],              // { id, a, aPort, b, bPort, signal }
   edgeSeq: 0,
   selectedCable: null,
   pendingPort: null,      // { componentId, portId }
   selectedPieceType: null, // tipo di pezzo "armato" in attesa di un tocco sulla pedana
-  visibleSignals: { powercon: true, xlr: true, speakon: true, dmx: true },
+  visibleSignals: { powercon: true, xlr: true, speakon: true, dmx: true, schuko: true, cee_tri: true, cee_mono: true, jack: true },
   tested: false
 };
 
@@ -179,6 +293,72 @@ function getPortDef (componentId, portId) {
   const def = COMPONENT_TYPES[comp.type];
   if (!def) return null;
   return def.ports.find(p => p.id === portId) || null;
+}
+
+/* Somma il consumo di componentId + tutto ciò che pende elettricamente a
+   valle (seguendo i cavi in uscita, di qualunque segnale — powercon o
+   schuko: una Ciabatta non ha un consumo proprio, ma tutto quello che vi si
+   collega pesa comunque sulla fase a monte). Usata per capire quanto pesa
+   davvero una singola presa del Quadro, non solo il primo anello. */
+function downstreamPowerLoad (componentId, visited) {
+  visited = visited || new Set();
+  if (visited.has(componentId)) return 0;
+  visited.add(componentId);
+  const comp = gameState.placed[componentId];
+  if (!comp) return 0;
+  const def = COMPONENT_TYPES[comp.type];
+  let total = def ? (def.powerW || 0) : 0;
+  // solo i cavi che trasportano davvero corrente (anche tramite adattatore)
+  // continuano il circuito elettrico: Speakon/XLR/DMX sono segnale, non
+  // alimentazione, e non vanno sommati al carico della fase a monte.
+  gameState.edges.forEach(e => {
+    if (e.a === componentId && POWER_CABLE_IDS.has(e.signal)) {
+      total += downstreamPowerLoad(e.b, visited);
+    }
+  });
+  return total;
+}
+
+/* Carico reale di ciascuna fase del Quadro: somma di downstreamPowerLoad per
+   ogni dispositivo collegato direttamente a una presa di quella fase. */
+function computePhaseLoads () {
+  const quadroEntry = Object.values(gameState.placed).find(c => c.type === 'quadro');
+  const loads = { L1: 0, L2: 0, L3: 0 };
+  if (!quadroEntry) return loads;
+  const def = COMPONENT_TYPES.quadro;
+  gameState.edges.forEach(e => {
+    if (e.a !== quadroEntry.id) return;
+    const portDef = def.ports.find(p => p.id === e.aPort);
+    if (!portDef || !portDef.phase) return;
+    loads[portDef.phase] += downstreamPowerLoad(e.b, new Set([quadroEntry.id]));
+  });
+  return loads;
+}
+
+/* Il LED di un dispositivo: risale dalla sua porta "critica" (l'ingresso di
+   potenza, se ce l'ha; altrimenti il suo primo ingresso — è il caso di una DI
+   passiva, che non ha alimentazione ma ha bisogno del segnale) fino a una
+   sorgente viva (l'Allaccio). Non si accontenta che un cavo sia collegato:
+   se un anello della catena è spezzato più a monte, il LED resta spento —
+   esattamente come un vero dispositivo senza corrente/segnale reale. */
+function isComponentLive (componentId, visited) {
+  visited = visited || new Set();
+  if (visited.has(componentId)) return false;
+  visited.add(componentId);
+
+  const comp = gameState.placed[componentId];
+  if (!comp) return false;
+  if (comp.type === 'allaccio') return true;
+
+  const def = COMPONENT_TYPES[comp.type];
+  if (!def) return false;
+  const criticalPort = def.ports.find(p => p.dir === 'in' && POWER_CABLE_IDS.has(p.signal))
+    || def.ports.find(p => p.dir === 'in');
+  if (!criticalPort) return true;
+
+  const feedingEdge = gameState.edges.find(e => e.b === componentId && e.bPort === criticalPort.id);
+  if (!feedingEdge) return false;
+  return isComponentLive(feedingEdge.a, visited);
 }
 
 /* Un cavo appena creato collegherebbe fromId (lato OUT) -> toId (lato IN).
@@ -201,11 +381,20 @@ function wouldCreateCycle (fromId, toId) {
   return false;
 }
 
+/* aPort/bPort possono essere null: significa "una qualunque porta", usato per le
+   linee del Quadro/Ciabatta, dove non importa quale uscita fisica si usi. */
 function portEdgeExists (a, aPort, b, bPort, signal) {
   return gameState.edges.some(e => e.signal === signal && (
-    (e.a === a && e.aPort === aPort && e.b === b && e.bPort === bPort) ||
-    (e.a === b && e.aPort === bPort && e.b === a && e.bPort === aPort)
+    (e.a === a && e.b === b && (aPort == null || e.aPort === aPort) && (bPort == null || e.bPort === bPort)) ||
+    (e.a === b && e.b === a && (aPort == null || e.bPort === aPort) && (bPort == null || e.aPort === bPort))
   ));
+}
+
+/* vincolo realistico: una porta fisica accetta un solo cavo alla volta */
+function portHasConnection (componentId, portId) {
+  return gameState.edges.some(e =>
+    (e.a === componentId && e.aPort === portId) || (e.b === componentId && e.bPort === portId)
+  );
 }
 
 function runValidation () {
@@ -232,16 +421,25 @@ function runValidation () {
   // senza questo controllo il livello potrebbe risultare "superato" a torto
   const allSubsTopsPlaced = gameState.stock.sub === 0 && gameState.stock.top === 0;
 
-  return { pass: allFound && !overBudget && allSubsTopsPlaced, failedComponents, overBudget, usedW, madeCount, totalCount: expected.length };
+  const phaseLoads = computePhaseLoads();
+  const overloadedPhases = Object.keys(phaseLoads).filter(ph => phaseLoads[ph] > PHASE_BUDGET_W);
+  const overPhase = overloadedPhases.length > 0;
+
+  return {
+    pass: allFound && !overBudget && allSubsTopsPlaced && !overPhase,
+    failedComponents, overBudget, usedW, madeCount, totalCount: expected.length,
+    phaseLoads, overloadedPhases, overPhase
+  };
 }
 
 function computeQuadroSpec (totalW) {
-  if (totalW <= 3680) {
+  if (totalW <= 3680 && !FORCE_TRIFASE) {
     const amps = Math.max(6, Math.ceil(totalW / 230));
     return { phase: 1, ampsLabel: amps + 'A', phaseLabel: 'Monofase 230V', scale: 1 + Math.min(0.35, (totalW / 3680) * 0.35) };
   }
   const amps = Math.max(16, Math.ceil(totalW / (400 * Math.sqrt(3))));
-  return { phase: 3, ampsLabel: amps + 'A', phaseLabel: 'Trifase 400V', scale: 1.5 + Math.min(0.6, ((totalW - 3680) / 20000) * 0.6) };
+  const growth = Math.max(0, Math.min(0.4, ((totalW - 3680) / 20000) * 0.4));
+  return { phase: 3, ampsLabel: amps + 'A', phaseLabel: 'Trifase 400V', scale: 1.1 + growth };
 }
 
 /* ---------------------------------------------------------------------
@@ -271,7 +469,7 @@ function setCircuitStatus (state) {
   const lamp = el('#circuit-lamp');
   const text = el('#circuit-text');
   lamp.classList.remove('ok', 'error');
-  if (state === 'ok') { lamp.classList.add('ok'); text.textContent = 'SHOW READY'; }
+  if (state === 'ok') { lamp.classList.add('ok'); text.textContent = 'IMPIANTO OK'; }
   else if (state === 'error') { lamp.classList.add('error'); text.textContent = 'GUASTO IN CATENA'; }
   else { text.textContent = 'DA TESTARE'; }
 }
@@ -327,6 +525,17 @@ document.querySelectorAll('.tab-btn').forEach(btn => {
   });
 });
 
+/* Gruppi di cavi "a tendina" (Trifase/Monofase/Segnale): un solo gruppo
+   aperto alla volta, per tenere la scheda Cavi il più compatta possibile. */
+document.querySelectorAll('.cable-group-toggle').forEach(btn => {
+  btn.addEventListener('click', () => {
+    const group = btn.closest('.cable-group');
+    const wasOpen = group.classList.contains('open');
+    document.querySelectorAll('.cable-group').forEach(g => g.classList.remove('open'));
+    if (!wasOpen) group.classList.add('open');
+  });
+});
+
 /* Cable selectors */
 document.querySelectorAll('.cable-btn').forEach(btn => {
   btn.addEventListener('click', () => {
@@ -347,6 +556,10 @@ document.querySelectorAll('.cable-btn').forEach(btn => {
     gameState.selectedCable = btn.dataset.cable;
     disarmPiece();
     showToast('Cavo selezionato: ' + btn.textContent.trim() + '. Tocca due componenti da collegare (o lo stesso cavo per deselezionarlo).');
+    // il gruppo si richiude da solo una volta scelto il cavo: da qui in poi
+    // si tocca il palco, non serve più tenere aperta la lista dei cavi
+    const group = btn.closest('.cable-group');
+    if (group) group.classList.remove('open');
   });
 });
 
@@ -358,6 +571,59 @@ el('#reset-btn').addEventListener('click', () => {
 /* Undo/Redo */
 el('#undo-btn').addEventListener('click', () => { if (window.__scene) window.__scene.undo(); });
 el('#redo-btn').addEventListener('click', () => { if (window.__scene) window.__scene.redo(); });
+
+/* ---------------------------------------------------------------------
+   Pop-up diagnostico del Quadro — sola visualizzazione: mostra il carico di
+   ogni fase (L1/L2/L3) rispetto a PHASE_BUDGET_W e chi vi è collegato. Il
+   cablaggio resta sempre sul palco, nella scheda "Cavi": questa finestra
+   non introduce un secondo modo di collegare i cavi.
+   --------------------------------------------------------------------- */
+function renderQuadroModal () {
+  const body = el('#quadro-modal-body');
+  const quadroEntry = Object.values(gameState.placed).find(c => c.type === 'quadro');
+  if (!quadroEntry) {
+    body.innerHTML = '<p class="modal-hint">Il Quadro non è ancora stato piazzato in Backstage.</p>';
+    return;
+  }
+  const def = COMPONENT_TYPES.quadro;
+  const loads = computePhaseLoads();
+  const phasePorts = def.ports.filter(p => p.phase);
+  const spec = computeQuadroSpec(totalPowerUsedW());
+
+  const summaryHtml = `
+    <div class="quadro-summary">
+      <span>Quadro ${spec.phaseLabel}</span>
+      <span class="amount">${spec.ampsLabel}</span>
+    </div>`;
+
+  body.innerHTML = summaryHtml + phasePorts.map(portDef => {
+    const phase = portDef.phase;
+    const load = loads[phase] || 0;
+    const pct = Math.min(100, (load / PHASE_BUDGET_W) * 100);
+    const over = load > PHASE_BUDGET_W;
+    const warn = !over && load > PHASE_BUDGET_W * 0.75;
+
+    const devicesHtml = gameState.edges
+      .filter(e => e.a === quadroEntry.id && e.aPort === portDef.id)
+      .map(e => `<li>${e.b.replace(/_/g, ' ')} — ${downstreamPowerLoad(e.b, new Set([quadroEntry.id]))} W</li>`)
+      .join('') || '<li class="modal-empty">Nessun dispositivo collegato</li>';
+
+    return `
+      <div class="phase-card ${over ? 'over' : ''}">
+        <div class="phase-card-head">
+          <span>Fase ${phase}</span>
+          <span class="amount">${load} / ${PHASE_BUDGET_W} W</span>
+        </div>
+        <div class="phase-bar"><div class="phase-bar-fill ${over ? 'over' : (warn ? 'warn' : '')}" style="width:${pct}%"></div></div>
+        <ul class="phase-devices">${devicesHtml}</ul>
+      </div>`;
+  }).join('');
+}
+
+el('#quadro-modal-close').addEventListener('click', () => el('#quadro-modal').classList.remove('show'));
+el('#quadro-modal').addEventListener('click', ev => {
+  if (ev.target.id === 'quadro-modal') el('#quadro-modal').classList.remove('show');
+});
 
 /* Livelli: filtri di visibilità per tipo di cavo */
 document.querySelectorAll('.layer-toggle').forEach(btn => {
@@ -474,7 +740,7 @@ document.addEventListener('pointercancel', ev => {
 
 /* Run button */
 el('#run-btn').addEventListener('click', () => {
-  if (window.__scene) window.__scene.runSoundcheck();
+  if (window.__scene) window.__scene.runSystemTest();
 });
 
 /* ---------------------------------------------------------------------
@@ -565,7 +831,13 @@ const ZONE_PREDICATES = {
   ampli: isOffStageCell,
   par: isStageCoreCell,
   sub: isPitCell,
-  quadro: isBackstageCell
+  quadro: isBackstageCell,
+  ciabatta: isFohCell,
+  ciabatta_cee: isBackstageCell,
+  // il PC può stare sia in Regia di sala (FOH) sia in Regia di palco
+  // (Off Stage, accanto al mixer di palco) — due postazioni plausibili.
+  pc: (cx, cy) => isFohCell(cx, cy) || isOffStageCell(cx, cy),
+  di: isFohCell
 };
 
 /* ---------------------------------------------------------------------
@@ -832,25 +1104,74 @@ class StageScene extends Phaser.Scene {
     this.drawZoneOutline([[0, fohStart], [VENUE_W, fohStart], [VENUE_W, VENUE_H], [0, VENUE_H]], 'Regia di sala (FOH)');
   }
 
-  /* scenografia non interattiva in Carico e Scarico: un furgone e alcuni case */
+  /* scenografia non interattiva in Carico e Scarico: un furgone e alcuni case,
+     disegnati con più dettaglio (non solo scatole) per leggersi a colpo
+     d'occhio come "furgone da service" e "flight case", pur restando
+     un'icona vettoriale piatta come tutto il resto del gioco. */
   drawLoadingDock () {
     const g = this.add.graphics().setDepth(1);
     const van = gridToScreen(2.2, 0.9);
+    const vw = 104, vh = 40;
+    const cargoW = vw * 0.66;
+    const cabX = van.x - vw / 2 + cargoW;
+
+    // paraurti/base scura, ruote
+    g.fillStyle(0x1c1d22, 1);
+    g.fillRoundedRect(van.x - vw / 2, van.y + vh * 0.32, vw, 7, 3);
+    g.fillStyle(0x121317, 1);
+    g.fillCircle(van.x - vw * 0.28, van.y + vh / 2, 8);
+    g.fillCircle(cabX + vw * 0.09, van.y + vh / 2, 8);
+    g.fillStyle(0x54575f, 1);
+    g.fillCircle(van.x - vw * 0.28, van.y + vh / 2, 3);
+    g.fillCircle(cabX + vw * 0.09, van.y + vh / 2, 3);
+
+    // cassone di carico (bianco)
+    g.fillStyle(0xd8dadd, 1); g.lineStyle(1.5, 0x9a9da3, 1);
+    g.fillRoundedRect(van.x - vw / 2, van.y - vh / 2, cargoW, vh, 5);
+    g.strokeRoundedRect(van.x - vw / 2, van.y - vh / 2, cargoW, vh, 5);
+    // striscia di livrea
+    g.fillStyle(0xf2a541, 1);
+    g.fillRect(van.x - vw / 2, van.y + vh * 0.06, cargoW, 4);
+    // linea del portellone laterale
+    g.lineStyle(1, 0x9a9da3, 0.7);
+    g.lineBetween(van.x - vw * 0.06, van.y - vh / 2 + 3, van.x - vw * 0.06, van.y + vh * 0.3);
+    // fanale posteriore
+    g.fillStyle(0xe0503f, 1);
+    g.fillRoundedRect(van.x - vw / 2 + 3, van.y - vh * 0.12, 4, 9, 1);
+
+    // cabina di guida (muso spiovente + parabrezza)
     g.fillStyle(0xc9cad1, 1);
-    g.fillRoundedRect(van.x - 46, van.y - 20, 92, 34, 6);
-    g.fillStyle(0x9a9ba3, 1);
-    g.fillRoundedRect(van.x - 46, van.y - 20, 30, 34, 6);
-    g.fillStyle(0x232830, 1);
-    g.fillCircle(van.x - 28, van.y + 15, 7);
-    g.fillCircle(van.x + 24, van.y + 15, 7);
+    g.beginPath();
+    g.moveTo(cabX, van.y - vh * 0.12);
+    g.lineTo(cabX + vw * 0.22, van.y - vh * 0.12);
+    g.lineTo(cabX + vw * 0.3, van.y + vh / 2 - 4);
+    g.lineTo(cabX, van.y + vh / 2 - 4);
+    g.closePath(); g.fillPath();
+    g.lineStyle(1.3, 0x9a9da3, 1); g.strokePath();
+    g.fillStyle(0x3c4451, 0.9);
+    g.fillRoundedRect(cabX + 3, van.y - vh * 0.08, vw * 0.15, vh * 0.26, 2);
 
     const caseSpots = [[6.2, 1.3], [6.9, 1.6], [6.4, 0.7]];
     caseSpots.forEach(([gx, gy]) => {
       const p = gridToScreen(gx, gy);
-      g.fillStyle(0x2a2c32, 1);
-      g.fillRoundedRect(p.x - 16, p.y - 11, 32, 22, 3);
-      g.lineStyle(1.5, 0x8a8e98, 0.8);
-      g.strokeRoundedRect(p.x - 16, p.y - 11, 32, 22, 3);
+      const cw = 34, ch = 24, corner = 5;
+      g.fillStyle(0x232428, 1);
+      g.fillRoundedRect(p.x - cw / 2, p.y - ch / 2, cw, ch, 3);
+      g.lineStyle(1.2, 0x54575f, 0.9);
+      g.strokeRoundedRect(p.x - cw / 2, p.y - ch / 2, cw, ch, 3);
+      // venatura orizzontale del pannello
+      g.lineStyle(0.8, 0x18191d, 0.7);
+      g.lineBetween(p.x - cw / 2 + 3, p.y - ch * 0.22, p.x + cw / 2 - 3, p.y - ch * 0.22);
+      g.lineBetween(p.x - cw / 2 + 3, p.y + ch * 0.22, p.x + cw / 2 - 3, p.y + ch * 0.22);
+      // angoli metallici (i tipici rinforzi da flight case)
+      g.fillStyle(0x9a9da3, 1);
+      g.fillRect(p.x - cw / 2, p.y - ch / 2, corner, corner);
+      g.fillRect(p.x + cw / 2 - corner, p.y - ch / 2, corner, corner);
+      g.fillRect(p.x - cw / 2, p.y + ch / 2 - corner, corner, corner);
+      g.fillRect(p.x + cw / 2 - corner, p.y + ch / 2 - corner, corner, corner);
+      // maniglia incassata
+      g.fillStyle(0x0c0d10, 1);
+      g.fillRoundedRect(p.x - 7, p.y - 2, 14, 4, 1.5);
     });
   }
 
@@ -957,6 +1278,29 @@ class StageScene extends Phaser.Scene {
     const spec = computeQuadroSpec(totalPowerUsedW());
     qv.container.setScale(spec.scale);
     if (qv.specLabel) qv.specLabel.setText(spec.phaseLabel + '\n' + spec.ampsLabel);
+    this.updateQuadroPhaseBars(quadroEntry.id);
+  }
+
+  /* barra verde->rosso sotto ogni presa: quanto di PHASE_BUDGET_W è già
+     impegnato su quella fase. Chiamata ogni volta che cambia un cavo o si
+     piazza/sposta/toglie un componente, non solo alla pressione di Test. */
+  updateQuadroPhaseBars (quadroId) {
+    const qv = this.compVisuals[quadroId];
+    if (!qv || !qv.phaseBars) return;
+    const def = COMPONENT_TYPES.quadro;
+    const loads = computePhaseLoads();
+    const g = qv.phaseBars;
+    g.clear();
+    const barW = 22, barH = 4;
+    const barY = -def.body.h / 2 + 8 + def.body.h * 0.35 - 7;
+    def.ports.filter(p => p.phase).forEach(p => {
+      const frac = Math.min(1, loads[p.phase] / PHASE_BUDGET_W);
+      const color = frac >= 1 ? 0xe0503f : (frac >= 0.75 ? 0xf2a541 : 0x49b06a);
+      g.fillStyle(0x000000, 0.6);
+      g.fillRect(p.dx - barW / 2, barY, barW, barH);
+      g.fillStyle(color, 1);
+      g.fillRect(p.dx - barW / 2, barY, barW * frac, barH);
+    });
   }
 
   /* ---------------- disegno di un componente: forma dedicata per tipo ---------------- */
@@ -1005,17 +1349,152 @@ class StageScene extends Phaser.Scene {
         break;
       }
       case 'quadro': {
+        // cabinet chiaro con bordo grigio-blu — un vero armadio elettrico da
+        // evento, non più una scatola tinta. Striscia di sicurezza
+        // gialla/nera in alto e maniglia sul lato per la resa realistica.
         g.fillStyle(def.body.fill, 1); g.lineStyle(2.5, def.body.accent, 1);
-        g.fillRoundedRect(-w / 2, -h / 2, w, h, 5); g.strokeRoundedRect(-w / 2, -h / 2, w, h, 5);
-        [-w * 0.18, w * 0.18].forEach(mx => {
-          g.fillStyle(0x1c1d22, 1);
-          g.fillRoundedRect(mx - 6, -h * 0.18, 12, 20, 2);
-          g.fillStyle(def.body.accent, 1);
-          g.fillRect(mx - 4, -h * 0.18 + 2, 8, 7);
+        g.fillRoundedRect(-w / 2, -h / 2, w, h, 6); g.strokeRoundedRect(-w / 2, -h / 2, w, h, 6);
+
+        const stripeY = -h / 2 + 2, stripeH = 4;
+        g.fillStyle(0xf2c53d, 1);
+        g.fillRect(-w / 2 + 3, stripeY, w - 6, stripeH);
+        g.lineStyle(1, 0x1c1d22, 0.8);
+        for (let x = -w / 2 + 3; x < w / 2 - 3; x += 6) {
+          g.lineBetween(x, stripeY + stripeH, x + stripeH, stripeY);
+        }
+
+        g.fillStyle(def.body.accent, 1);
+        g.fillRoundedRect(w / 2 - 6, -5, 4, 10, 1.5);
+
+        // un interruttore per ogni fase reale (solo il vero Quadro ha porte con
+        // .phase; l'Allaccio condivide questa forma ma resta una scatola liscia)
+        const outs = def.ports.filter(p => p.phase);
+        outs.forEach(p => {
+          g.fillStyle(0x2a2c32, 1);
+          g.fillRoundedRect(p.dx - 7, -h / 2 + 8, 14, h * 0.35, 2);
+          g.fillStyle(0x49b06a, 1);
+          g.fillRect(p.dx - 4, -h / 2 + 11, 8, 5);
         });
         break;
       }
-      default: { // 'rackbox' — mixer, controller
+      case 'ciabatta': {
+        g.fillStyle(def.body.fill, 1); g.lineStyle(2, def.body.accent, 1);
+        g.fillRoundedRect(-w / 2, -h / 2, w, h, h / 2);
+        g.strokeRoundedRect(-w / 2, -h / 2, w, h, h / 2);
+        break;
+      }
+      case 'pc': {
+        // laptop in alluminio chiaro, non un rackbox generico: base con
+        // trackpad + schermo con notch fotocamera — un cenno riconoscibile
+        // a un Mac, restando comunque un'icona vettoriale come tutto il resto.
+        const baseH = h * 0.16;
+        g.fillStyle(def.body.fill, 1); g.lineStyle(1.5, def.body.accent, 1);
+        g.fillRoundedRect(-w / 2, h / 2 - baseH, w, baseH, 2);
+        g.strokeRoundedRect(-w / 2, h / 2 - baseH, w, baseH, 2);
+        g.fillStyle(def.body.accent, 0.55);
+        g.fillRoundedRect(-w * 0.14, h / 2 - baseH + 2, w * 0.28, baseH - 4, 1);
+
+        const screenH = h - baseH;
+        g.fillStyle(def.body.fill, 1); g.lineStyle(1.5, def.body.accent, 1);
+        g.fillRoundedRect(-w / 2, -h / 2, w, screenH, 3);
+        g.strokeRoundedRect(-w / 2, -h / 2, w, screenH, 3);
+        g.fillStyle(0x1c1d22, 1);
+        g.fillRoundedRect(-w * 0.42, -h / 2 + 3, w * 0.84, screenH - 6, 2);
+        g.fillStyle(0x0c0d10, 1);
+        g.fillRoundedRect(-w * 0.06, -h / 2 + 3, w * 0.12, 3, 1);
+        break;
+      }
+      case 'di': {
+        // piccola scatola metallica passiva: due connettori (jack IN, XLR
+        // OUT) e un piccolo interruttore ground-lift, come una DI reale.
+        g.fillStyle(def.body.fill, 1); g.lineStyle(2, def.body.accent, 1);
+        g.fillRoundedRect(-w / 2, -h / 2, w, h, 4); g.strokeRoundedRect(-w / 2, -h / 2, w, h, 4);
+        g.fillStyle(0x1c1d22, 1);
+        g.fillRoundedRect(-4, -h / 2 + 4, 8, 5, 1);
+        g.fillStyle(def.body.accent, 0.9);
+        g.fillRect(-2.5, -h / 2 + 5.5, 5, 2);
+        break;
+      }
+      case 'mixer': {
+        // slab isometrico, stessa inclinazione della griglia di gioco: il
+        // piano superiore (la plancia canali, vista dall'alto come sul
+        // palco) in piena luce, due facce laterali in ombra sotto — non più
+        // un pannello frontale piatto.
+        const skew = h * 0.22, boxDepth = h * 0.56;
+        const y0 = -h / 2 + skew;
+        const pTop = { x: 0, y: -h / 2 };
+        const pRight = { x: w / 2, y: y0 };
+        const pBottom = { x: 0, y: -h / 2 + skew * 2 };
+        const pLeft = { x: -w / 2, y: y0 };
+        const dLeft = { x: pLeft.x, y: pLeft.y + boxDepth };
+        const dBottom = { x: pBottom.x, y: pBottom.y + boxDepth };
+        const dRight = { x: pRight.x, y: pRight.y + boxDepth };
+
+        g.fillStyle(0x1c1d22, 1);
+        g.beginPath();
+        g.moveTo(pLeft.x, pLeft.y); g.lineTo(pBottom.x, pBottom.y);
+        g.lineTo(dBottom.x, dBottom.y); g.lineTo(dLeft.x, dLeft.y);
+        g.closePath(); g.fillPath();
+
+        g.fillStyle(0x26282e, 1);
+        g.beginPath();
+        g.moveTo(pRight.x, pRight.y); g.lineTo(pBottom.x, pBottom.y);
+        g.lineTo(dBottom.x, dBottom.y); g.lineTo(dRight.x, dRight.y);
+        g.closePath(); g.fillPath();
+
+        g.fillStyle(0x35373f, 1);
+        g.beginPath();
+        g.moveTo(pTop.x, pTop.y); g.lineTo(pRight.x, pRight.y);
+        g.lineTo(pBottom.x, pBottom.y); g.lineTo(pLeft.x, pLeft.y);
+        g.closePath(); g.fillPath();
+        g.lineStyle(1.5, def.body.accent, 0.9);
+        g.beginPath();
+        g.moveTo(pTop.x, pTop.y); g.lineTo(pRight.x, pRight.y);
+        g.lineTo(pBottom.x, pBottom.y); g.lineTo(pLeft.x, pLeft.y);
+        g.closePath(); g.strokePath();
+        g.lineStyle(1, 0x141519, 0.5);
+        g.lineBetween(pLeft.x, pLeft.y, dLeft.x, dLeft.y);
+        g.lineBetween(pRight.x, pRight.y, dRight.x, dRight.y);
+        g.lineBetween(pBottom.x, pBottom.y, dBottom.x, dBottom.y);
+
+        // 5 canali sulla plancia: knob EQ verso il fondo, cursore fader
+        // verso il bordo anteriore, posizionati lungo il rombo del piano.
+        const isoP = (u, v) => ({ x: u * (w / 2), y: y0 - v * skew });
+        const n = 5;
+        for (let i = 0; i < n; i++) {
+          const u = -0.6 + (1.2 / (n - 1)) * i;
+          const knob = isoP(u, -0.42);
+          const fader = isoP(u, 0.3);
+          g.lineStyle(1.1, def.body.accent, 0.9);
+          g.strokeCircle(knob.x, knob.y, 2.1);
+          g.fillStyle(0x141519, 1);
+          g.fillCircle(fader.x, fader.y, 2.6);
+          g.fillStyle(def.body.accent, 1);
+          g.fillCircle(fader.x, fader.y, 1.1);
+        }
+        break;
+      }
+      case 'controller': {
+        // consolle luci: piccolo display in alto + griglia di pulsanti/scene
+        // sotto — diversa a colpo d'occhio dai fader del mixer.
+        g.fillStyle(def.body.fill, 1); g.lineStyle(2, def.body.accent, 1);
+        g.fillRoundedRect(-w / 2, -h / 2, w, h, 5); g.strokeRoundedRect(-w / 2, -h / 2, w, h, 5);
+        g.fillStyle(0x1c1d22, 1);
+        g.fillRoundedRect(-w * 0.36, -h * 0.36, w * 0.72, h * 0.26, 2);
+        g.fillStyle(def.body.accent, 0.55);
+        g.fillRect(-w * 0.3, -h * 0.31, w * 0.5, h * 0.05);
+        const cols = 5, rows = 2, gridW = w * 0.74, gridTop = h * 0.02, gridH = h * 0.28;
+        for (let r = 0; r < rows; r++) {
+          for (let ci = 0; ci < cols; ci++) {
+            const bx = -gridW / 2 + (gridW / (cols - 1)) * ci;
+            const by = gridTop + (gridH / (rows - 1)) * r;
+            g.fillStyle(def.body.accent, 0.75);
+            g.fillRoundedRect(bx - 2, by - 2, 4, 4, 1);
+          }
+        }
+        break;
+      }
+      default: {
         g.fillStyle(def.body.fill, 1); g.lineStyle(2, def.body.accent, 1);
         g.fillRoundedRect(-w / 2, -h / 2, w, h, 5); g.strokeRoundedRect(-w / 2, -h / 2, w, h, 5);
         const n = 4, usableW = w * 0.68;
@@ -1038,12 +1517,26 @@ class StageScene extends Phaser.Scene {
     const glow = this.add.graphics();
     c.add(glow);
 
-    const label = this.add.text(0, def.shape === 'par' || def.shape === 'top' ? -def.body.h / 2 - 8 : 0, def.label, {
+    const compType = id.indexOf('_') >= 0 ? id.split('_')[0] : id;
+    // 'allaccio' condivide shape:'quadro' con il vero Quadro (stesso stile
+    // grafico), ma qui sotto contano solo le regole del Quadro vero e proprio.
+    const isRealQuadro = compType === 'quadro';
+
+    // LED di stato: spento finché non si preme Test Impianto, poi verde solo
+    // se arriva davvero corrente (o segnale, per un dispositivo passivo come
+    // la DI) fino in fondo alla catena — vedi isComponentLive/runSystemTest.
+    // L'Allaccio è la sorgente fissa: non ha bisogno di un proprio LED.
+    let led = null;
+    if (compType !== 'allaccio') {
+      led = this.add.graphics();
+      c.add(led);
+      this.drawLed(led, def, false);
+    }
+
+    const label = this.add.text(0, (def.shape === 'par' || def.shape === 'top' || def.shape === 'ciabatta' || def.shape === 'di' || isRealQuadro) ? -def.body.h / 2 - 8 : 0, def.label, {
       fontFamily: 'Barlow Condensed, sans-serif', fontSize: '12px', fontStyle: 'bold', color: '#eee9df'
     }).setOrigin(0.5);
     c.add(label);
-
-    const compType = id.indexOf('_') >= 0 ? id.split('_')[0] : id;
     const idLabel = this.add.text(0, def.body.h / 2 + 12, id.replace(/_/g, ' '), {
       fontFamily: 'Inter, sans-serif', fontSize: '11px', color: '#8b8e98'
     }).setOrigin(0.5);
@@ -1086,6 +1579,7 @@ class StageScene extends Phaser.Scene {
     });
 
     const portDots = {};
+    const portMarkers = {};
     def.ports.forEach(p => {
       const dot = this.add.circle(p.dx, p.dy, 9, SIGNAL_COLOR[p.signal], 1)
         .setStrokeStyle(2, 0x141519)
@@ -1097,9 +1591,50 @@ class StageScene extends Phaser.Scene {
       });
       c.add(dot);
       portDots[p.id] = dot;
+      // Marcatore interno per distinguere input/output a colpo d'occhio:
+      // pallino pieno al centro = ingresso, anello vuoto = uscita.
+      let marker;
+      if (p.dir === 'in') {
+        marker = this.add.circle(p.dx, p.dy, 3, 0x141519, 1);
+      } else {
+        marker = this.add.circle(p.dx, p.dy, 4, 0x141519, 0)
+          .setStrokeStyle(1.5, 0x141519, 1);
+      }
+      c.add(marker);
+      portMarkers[p.id] = marker;
     });
 
-    return { container: c, glow, portDots, idLabel, def };
+    let phaseBars = null;
+    if (isRealQuadro) {
+      phaseBars = this.add.graphics();
+      c.add(phaseBars);
+      const breakerBottom = -def.body.h / 2 + 8 + def.body.h * 0.35;
+      def.ports.filter(p => p.phase).forEach(p => {
+        const tag = this.add.text(p.dx, breakerBottom + 7, p.phase, {
+          fontFamily: 'Inter, sans-serif', fontSize: '9px', fontStyle: 'bold', color: '#8b8e98'
+        }).setOrigin(0.5);
+        c.add(tag);
+      });
+
+      // pulsante sempre visibile, ancorato al Quadro stesso: molto più diretto
+      // di un bottone in header slegato dall'oggetto a cui si riferisce.
+      // Ha una hit area propria "sopra" quella del corpo (stesso meccanismo
+      // delle porte, incluso stopPropagation) così non fa scattare
+      // spostamento/cablaggio quando viene toccato.
+      const badgeX = def.body.w / 2 - 2, badgeY = -def.body.h / 2 - 2;
+      const badgeBg = this.add.circle(badgeX, badgeY, 11, 0x1c1d22, 1)
+        .setStrokeStyle(2, 0xf2a541, 1)
+        .setInteractive({ useHandCursor: true });
+      const badgeIcon = this.add.text(badgeX, badgeY, '🔍', { fontSize: '11px' }).setOrigin(0.5);
+      badgeBg.on('pointerdown', (pointer, lx, ly, event) => {
+        if (event && event.stopPropagation) event.stopPropagation();
+        renderQuadroModal();
+        el('#quadro-modal').classList.add('show');
+      });
+      c.add(badgeBg); c.add(badgeIcon);
+    }
+
+    return { container: c, glow, portDots, portMarkers, idLabel, def, phaseBars, led };
   }
 
   setGlow (v, on, color) {
@@ -1113,6 +1648,27 @@ class StageScene extends Phaser.Scene {
     } else {
       v.glow.strokeRoundedRect(-v.def.body.w / 2 - 4, -v.def.body.h / 2 - 4, v.def.body.w + 8, v.def.body.h + 8, 8);
     }
+  }
+
+  /* piccolo LED nell'angolo in alto a sinistra di ogni dispositivo (tranne
+     l'Allaccio): spento/grigio scuro di default, verde acceso quando
+     runSystemTest verifica che corrente/segnale arrivano davvero. */
+  drawLed (g, def, on) {
+    const x = -def.body.w / 2 + 7, y = -def.body.h / 2 + 9;
+    g.clear();
+    g.lineStyle(1, 0x0c0d10, 1);
+    g.fillStyle(on ? 0x49b06a : 0x3a1414, 1);
+    g.fillCircle(x, y, 3.5);
+    g.strokeCircle(x, y, 3.5);
+    if (on) {
+      g.fillStyle(0x49b06a, 0.3);
+      g.fillCircle(x, y, 6.5);
+    }
+  }
+
+  setLed (v, on) {
+    if (!v.led) return;
+    this.drawLed(v.led, v.def, on);
   }
 
   /* ---------------- conversioni coordinate ---------------- */
@@ -1281,7 +1837,8 @@ class StageScene extends Phaser.Scene {
     this.clearEdgeSelection();
     disarmPiece();
     if (!gameState.selectedCable) { showToast('Seleziona prima un tipo di cavo nella scheda "Cavi".'); return; }
-    if (signal !== gameState.selectedCable) { showToast('Questo cavo non è compatibile con questa porta.'); return; }
+    const cableKind = CABLE_TYPES[gameState.selectedCable];
+    if (!cableKind.endpoints.includes(signal)) { showToast('Questo cavo non è compatibile con questa porta.'); return; }
 
     if (!gameState.pendingPort) {
       gameState.pendingPort = { componentId, portId };
@@ -1296,6 +1853,13 @@ class StageScene extends Phaser.Scene {
     const currentDef = getPortDef(componentId, portId);
     if (!pendingDef || !currentDef) { this.cancelPending(); return; }
 
+    // un adattatore (2 endpoint diversi, es. CEE/PowerCON) collega solo
+    // connettori DIVERSI tra loro: due porte uguali vogliono il cavo semplice.
+    if (cableKind.endpoints.length === 2 && pendingDef.signal === currentDef.signal) {
+      showToast('Questo è un adattatore: collega due connettori diversi. Per due porte uguali serve il cavo semplice.');
+      return;
+    }
+
     if (pendingDef.dir === currentDef.dir) {
       showToast(pendingDef.dir === 'out'
         ? 'Due uscite non si collegano tra loro: serve una porta IN.'
@@ -1305,6 +1869,16 @@ class StageScene extends Phaser.Scene {
 
     const outSide = pendingDef.dir === 'out' ? pending : { componentId, portId };
     const inSide = pendingDef.dir === 'out' ? { componentId, portId } : pending;
+    const outDef = pendingDef.dir === 'out' ? pendingDef : currentDef;
+    const inDef = pendingDef.dir === 'out' ? currentDef : pendingDef;
+
+    // le prese del Quadro (multi:true) accettano più cavi: lì il vincolo non è
+    // "una porta, un cavo" ma il carico per fase, controllato al Test Impianto.
+    if ((!outDef.multi && portHasConnection(outSide.componentId, outSide.portId)) ||
+        (!inDef.multi && portHasConnection(inSide.componentId, inSide.portId))) {
+      showToast('Questa porta è già impegnata da un altro cavo: scegline una libera.');
+      return;
+    }
 
     if (wouldCreateCycle(outSide.componentId, inSide.componentId)) {
       showToast('Questo collegamento richiuderebbe un anello nel circuito: non è consentito.');
@@ -1330,14 +1904,15 @@ class StageScene extends Phaser.Scene {
     this.edgeGraphics.clear();
     const anySelected = this.selectedEdgeId != null;
     gameState.edges.forEach(e => {
-      if (!gameState.visibleSignals[e.signal]) { e._pts = null; return; }
+      const cableKind = CABLE_TYPES[e.signal];
+      if (!gameState.visibleSignals[cableKind.layer]) { e._pts = null; return; }
       const from = this.getPortScreenPos(e.a, e.aPort);
       const to = this.getPortScreenPos(e.b, e.bPort);
       if (!from || !to) { e._pts = null; return; }
       const zoneA = gameState.placed[e.a] && gameState.placed[e.a].zone;
       const zoneB = gameState.placed[e.b] && gameState.placed[e.b].zone;
       const isSelected = e.id === this.selectedEdgeId;
-      const color = isSelected ? 0xf2a541 : SIGNAL_COLOR[e.signal];
+      const color = isSelected ? 0xf2a541 : cableKind.color;
       const width = isSelected ? 5 : 3;
       // con un cavo selezionato, tutti gli altri si "spengono" per farlo
       // risaltare nella matassa; senza selezione restano tutti a piena vista
@@ -1355,6 +1930,9 @@ class StageScene extends Phaser.Scene {
     });
     this.refreshEdgeDeleteButton();
     updateConnectionCounter();
+    this.updateQuadroVisual();
+    const modal = el('#quadro-modal');
+    if (modal && modal.classList.contains('show')) renderQuadroModal();
   }
 
   /* ---------------- selezione ed eliminazione di un cavo ---------------- */
@@ -1424,7 +2002,10 @@ class StageScene extends Phaser.Scene {
       if (!v || !def) return;
       def.ports.forEach(p => {
         const dot = v.portDots[p.id];
-        if (dot) dot.setAlpha(gameState.visibleSignals[p.signal] ? 1 : 0.22);
+        const marker = v.portMarkers[p.id];
+        const a = gameState.visibleSignals[p.signal] ? 1 : 0.22;
+        if (dot) dot.setAlpha(a);
+        if (marker) marker.setAlpha(a);
       });
     });
   }
@@ -1438,9 +2019,12 @@ class StageScene extends Phaser.Scene {
   }
 
   highlightPending (componentId, portId, on) {
-    const dot = this.compVisuals[componentId].portDots[portId];
+    const v = this.compVisuals[componentId];
+    const dot = v.portDots[portId];
     dot.setStrokeStyle(on ? 3 : 2, on ? 0xf2a541 : 0x141519);
     dot.setScale(on ? 1.3 : 1);
+    const marker = v.portMarkers[portId];
+    if (marker) marker.setScale(on ? 1.3 : 1);
   }
 
   cancelPending () {
@@ -1504,27 +2088,117 @@ class StageScene extends Phaser.Scene {
     this.pushHistory();
   }
 
-  /* ---------------- SOUNDCHECK ---------------- */
-  runSoundcheck () {
+  /* ---------------- TEST IMPIANTO: collaudo tecnico (potenza + segnale + PC di
+     regia), prima ancora che arrivino i musicisti. Il vero soundcheck con gli
+     strumenti è una fase successiva, separata da questa. ---------------- */
+  runSystemTest () {
     const result = runValidation();
     gameState.tested = true;
     Object.values(this.compVisuals).forEach(v => this.setGlow(v, false));
 
+    let trippedIds = new Set();
+    if (result.overPhase) {
+      trippedIds = this.triggerPhaseTrip(result.overloadedPhases);
+    }
+
+    // LED per ogni dispositivo (tranne l'Allaccio, che è la sorgente):
+    // verde solo se corrente/segnale arrivano davvero fino in fondo alla
+    // catena E la fase che lo alimenta non è saltata per sovraccarico.
+    Object.keys(gameState.placed).forEach(id => {
+      if (gameState.placed[id].type === 'allaccio') return;
+      const v = this.compVisuals[id];
+      if (!v) return;
+      this.setLed(v, isComponentLive(id) && !trippedIds.has(id));
+    });
+
     if (result.pass) {
       setCircuitStatus('ok');
-      showToast('Catena di segnale e potenza integra su tutti i componenti.', 'ok');
+      showToast('Impianto collaudato: alimentazione e segnale integri su tutta la linea.', 'ok');
       this.playSuccessSequence();
+      return;
+    }
+
+    setCircuitStatus('error');
+
+    if (result.overPhase) {
+      showToast('Sovraccarico sulla fase ' + result.overloadedPhases.join(', ') + ': la protezione è scattata.');
     } else {
-      setCircuitStatus('error');
       const msg = result.overBudget
         ? 'Potenza richiesta oltre il limite disponibile.'
         : 'Circuito incompleto: componenti evidenziati in rosso non ricevono segnale o alimentazione.';
       showToast(msg);
-      result.failedComponents.forEach(id => {
-        const v = this.compVisuals[id];
-        if (!v) return;
-        this.setGlow(v, true, 0xe0503f);
-        this.tweens.add({ targets: v.container, angle: { from: -2, to: 2 }, duration: 90, yoyo: true, repeat: 3 });
+    }
+
+    result.failedComponents.forEach(id => {
+      const v = this.compVisuals[id];
+      if (!v) return;
+      this.setGlow(v, true, 0xe0503f);
+      this.tweens.add({ targets: v.container, angle: { from: -2, to: 2 }, duration: 90, yoyo: true, repeat: 3 });
+    });
+  }
+
+  /* ---------------- sovraccarico di fase: distacco + scintille ---------------- */
+  triggerPhaseTrip (overloadedPhases) {
+    const tripped = new Set();
+    const quadroEntry = Object.values(gameState.placed).find(c => c.type === 'quadro');
+    if (!quadroEntry) return tripped;
+    const def = COMPONENT_TYPES.quadro;
+    this.cameras.main.shake(220, 0.006);
+
+    overloadedPhases.forEach(phase => {
+      const portDef = def.ports.find(p => p.phase === phase);
+      if (!portDef) return;
+      const pos = this.getPortScreenPos(quadroEntry.id, portDef.id);
+      if (pos) this.spawnSparks(pos.x, pos.y);
+      gameState.edges
+        .filter(e => e.a === quadroEntry.id && e.aPort === portDef.id)
+        .forEach(e => this.markSubtreeTripped(e.b, new Set([quadroEntry.id]), tripped));
+    });
+    return tripped;
+  }
+
+  /* spegne (glow rosso + scossone) l'intero ramo a valle di una presa in
+     sovraccarico: non solo il primo dispositivo, ma tutto ciò che vi pende.
+     Gli id raccolti in "tripped" servono poi a runSystemTest per spegnere
+     anche il LED di questi dispositivi (topologicamente "collegati", ma la
+     corrente non arriva comunque perché la protezione è scattata a monte). */
+  markSubtreeTripped (componentId, visited, tripped) {
+    if (visited.has(componentId)) return;
+    visited.add(componentId);
+    tripped.add(componentId);
+    const v = this.compVisuals[componentId];
+    if (v) {
+      this.setGlow(v, true, 0xe0503f);
+      this.tweens.add({ targets: v.container, angle: { from: -3, to: 3 }, duration: 80, yoyo: true, repeat: 4 });
+    }
+    // solo a valle elettricamente: un Sub/Top non va marcato come "in
+    // blackout" solo perché è collegato via Speakon a un finale che sta su
+    // una fase saltata — lui potrebbe benissimo essere su un'altra fase.
+    gameState.edges.forEach(e => {
+      if (e.a === componentId && POWER_CABLE_IDS.has(e.signal)) {
+        this.markSubtreeTripped(e.b, visited, tripped);
+      }
+    });
+  }
+
+  /* piccola scarica di scintille disegnata a mano (nessun asset esterno,
+     stesso linguaggio grafico vettoriale del resto del gioco) */
+  spawnSparks (x, y) {
+    const flash = this.add.circle(x, y, 16, 0xffffff, 0.9).setDepth(89);
+    this.tweens.add({ targets: flash, alpha: 0, scale: 2.2, duration: 220, onComplete: () => flash.destroy() });
+
+    for (let i = 0; i < 10; i++) {
+      const angle = Math.random() * Math.PI * 2;
+      const dist = 14 + Math.random() * 22;
+      const spark = this.add.rectangle(x, y, 3, 3, Math.random() < 0.5 ? 0xffffff : 0xf2c53d, 1).setDepth(90);
+      this.tweens.add({
+        targets: spark,
+        x: x + Math.cos(angle) * dist,
+        y: y + Math.sin(angle) * dist,
+        alpha: 0,
+        duration: 260 + Math.random() * 160,
+        ease: 'Cubic.Out',
+        onComplete: () => spark.destroy()
       });
     }
   }
@@ -1547,7 +2221,7 @@ class StageScene extends Phaser.Scene {
 
     this.playBeep();
 
-    const banner = this.add.text(GAME_W / 2, GAME_H / 2, 'DOORS OPEN — SHOW STARTED!', {
+    const banner = this.add.text(GAME_W / 2, GAME_H / 2, 'IMPIANTO COLLAUDATO', {
       fontFamily: 'Barlow Condensed, sans-serif', fontSize: '40px', fontStyle: 'bold',
       color: '#f2a541', align: 'center', wordWrap: { width: GAME_W - 80 }
     }).setOrigin(0.5).setDepth(100).setAlpha(0).setScale(0.85).setScrollFactor(0);
@@ -1595,7 +2269,7 @@ class StageScene extends Phaser.Scene {
 
     gameState.placed = {};
     gameState.stock = { ...AVAILABLE_STOCK };
-    gameState.nextIndex = { sub: 1, top: 1, mixer: 1, par: 1, controller: 1, ampli: 1, quadro: 1 };
+    gameState.nextIndex = { sub: 1, top: 1, mixer: 1, par: 1, controller: 1, ampli: 1, quadro: 1, ciabatta: 1, ciabatta_cee: 1, pc: 1, di: 1 };
     gameState.edges = [];
     gameState.edgeSeq = 0;
     gameState.selectedCable = null;

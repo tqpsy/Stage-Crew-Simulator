@@ -44,6 +44,16 @@
     </div>
   </header>
 
+  <div class="modal-overlay" id="quadro-modal">
+    <div class="modal-box">
+      <div class="modal-header">
+        <h2>Quadro elettrico</h2>
+        <button class="modal-close" id="quadro-modal-close">✕</button>
+      </div>
+      <div class="modal-body" id="quadro-modal-body"></div>
+    </div>
+  </div>
+
   <div id="stage-wrap">
     <div id="game-container"></div>
     <div class="layers-panel">
@@ -51,6 +61,10 @@
       <button class="layer-toggle active" data-signal="xlr" title="Audio"><span class="dot" style="background:var(--c-xlr);"></span>AUD</button>
       <button class="layer-toggle active" data-signal="speakon" title="Diffusori"><span class="dot" style="background:var(--c-speakon);"></span>DIF</button>
       <button class="layer-toggle active" data-signal="dmx" title="DMX"><span class="dot" style="background:var(--c-dmx);"></span>DMX</button>
+      <button class="layer-toggle active" data-signal="schuko" title="Schuko"><span class="dot" style="background:var(--c-schuko);"></span>SCH</button>
+      <button class="layer-toggle active" data-signal="cee_tri" title="CEE Trifase"><span class="dot" style="background:var(--c-cee-tri);"></span>CEE-T</button>
+      <button class="layer-toggle active" data-signal="cee_mono" title="CEE Monofase"><span class="dot" style="background:var(--c-cee-mono);"></span>CEE-M</button>
+      <button class="layer-toggle active" data-signal="jack" title="Jack"><span class="dot" style="background:var(--c-jack);"></span>JCK</button>
     </div>
     <div class="zoom-controls">
       <button id="zoom-in" title="Aumenta zoom">+</button>
@@ -62,67 +76,115 @@
 
   <div id="toolbar">
     <div class="tabs">
-      <button class="tab-btn active" data-tab="strutture">Strutture</button>
+      <button class="tab-btn active" data-tab="corrente">Corrente</button>
       <button class="tab-btn" data-tab="audio">Audio</button>
       <button class="tab-btn" data-tab="regia">Regia</button>
       <button class="tab-btn" data-tab="luci">Luci</button>
       <button class="tab-btn" data-tab="cavi">Cavi</button>
     </div>
 
-    <div class="tab-panel active" data-panel="strutture">
-      <div class="piece" data-type="quadro">
-        <div class="swatch" style="color:#f2a3a3;"><div class="stripe" style="background:#e0503f;"></div>QDR</div>
-        <span class="count" id="count-quadro">×1</span>
+    <div class="tab-panel active" data-panel="corrente">
+      <div class="panel-items">
+        <div class="piece" data-type="quadro">
+          <div class="swatch" style="color:#f2a3a3;"><div class="stripe" style="background:var(--c-cee-tri);"></div>QDR</div>
+          <span class="count" id="count-quadro">×1</span>
+        </div>
+        <div class="piece" data-type="ciabatta">
+          <div class="swatch" style="color:#c9ccd3;"><div class="stripe" style="background:#c77dff;"></div>CIAB</div>
+          <span class="count" id="count-ciabatta">×1</span>
+        </div>
+        <div class="piece" data-type="ciabatta_cee">
+          <div class="swatch" style="color:#c9ccd3;"><div class="stripe" style="background:var(--c-cee-mono);"></div>CIAB CEE</div>
+          <span class="count" id="count-ciabatta_cee">×1</span>
+        </div>
       </div>
-      <span class="panel-hint">Pedana 4×4 m rialzata, con una fascia laterale "Off Stage" alla stessa quota per la zona tecnici. Il Quadro va piazzato in Backstage e collegato all'Allaccio Venue (fisso).</span>
+      <span class="panel-hint">Pedana 4×4 m rialzata, con fascia "Off Stage" per la zona tecnici. Quadro in Backstage, collegato all'Allaccio con un cavo CEE: le 3 uscite sono anch'esse CEE, serve l'adattatore giusto per ogni utenza a valle. Ciabatta Schuko in Regia di sala; Ciabatta CEE vicino al Quadro.</span>
     </div>
 
     <div class="tab-panel" data-panel="audio">
-      <div class="piece" data-type="sub">
-        <div class="swatch" style="color:#9fb8d8;"><div class="stripe" style="background:#4a90e2;"></div>SUB</div>
-        <span class="count" id="count-sub">×2</span>
-      </div>
-      <div class="piece" data-type="top">
-        <div class="swatch" style="color:#9fb8d8;"><div class="stripe" style="background:#4a90e2;"></div>TOP</div>
-        <span class="count" id="count-top">×2</span>
-      </div>
-      <div class="piece" data-type="mixer">
-        <div class="swatch" style="color:#c9ccd3;"><div class="stripe" style="background:#8a8e98;"></div>MIX</div>
-        <span class="count" id="count-mixer">×1</span>
+      <div class="panel-items">
+        <div class="piece" data-type="sub">
+          <div class="swatch" style="color:#9fb8d8;"><div class="stripe" style="background:#4a90e2;"></div>SUB</div>
+          <span class="count" id="count-sub">×2</span>
+        </div>
+        <div class="piece" data-type="top">
+          <div class="swatch" style="color:#9fb8d8;"><div class="stripe" style="background:#4a90e2;"></div>TOP</div>
+          <span class="count" id="count-top">×2</span>
+        </div>
+        <div class="piece" data-type="mixer">
+          <div class="swatch" style="color:#c9ccd3;"><div class="stripe" style="background:#8a8e98;"></div>MIX</div>
+          <span class="count" id="count-mixer">×1</span>
+        </div>
       </div>
       <span class="panel-hint">Il mixer di palco va nella fascia Off Stage. Sub e Teste si posizionano nel Pit: le Teste si agganciano automaticamente sopra un Sub libero.</span>
     </div>
 
     <div class="tab-panel" data-panel="regia">
-      <div class="piece" data-type="ampli">
-        <div class="swatch" style="color:#c9ccd3;"><div class="stripe" style="background:#8a8e98;"></div>FIN</div>
-        <span class="count" id="count-ampli">×1</span>
+      <div class="panel-items">
+        <div class="piece" data-type="ampli">
+          <div class="swatch" style="color:#c9ccd3;"><div class="stripe" style="background:#8a8e98;"></div>FIN</div>
+          <span class="count" id="count-ampli">×1</span>
+        </div>
+        <div class="piece" data-type="pc">
+          <div class="swatch" style="color:#c9ccd3;"><div class="stripe" style="background:#c77dff;"></div>PC</div>
+          <span class="count" id="count-pc">×1</span>
+        </div>
+        <div class="piece" data-type="di">
+          <div class="swatch" style="color:#9fb8d8;"><div class="stripe" style="background:var(--c-jack);"></div>DI</div>
+          <span class="count" id="count-di">×1</span>
+        </div>
       </div>
-      <span class="panel-hint">Il finale di potenza va nella fascia Off Stage, accanto al mixer di palco: qui passa il segnale prima di arrivare ai Sub nel Pit.</span>
+      <span class="panel-hint">Il finale va nella fascia Off Stage, accanto al mixer di palco. Il PC va in Regia di sala (FOH) oppure in Regia di palco (Off Stage): si collega alla Ciabatta Schuko con uno Schuko per l'alimentazione, e a una DI con un Jack per l'audio. La DI converte il segnale in XLR bilanciato verso l'ingresso dedicato del mixer.</span>
     </div>
 
     <div class="tab-panel" data-panel="luci">
-      <div class="piece" data-type="par">
-        <div class="swatch" style="color:#f2c53d;"><div class="stripe" style="background:#f2c53d;"></div>PAR</div>
-        <span class="count" id="count-par">×4</span>
-      </div>
-      <div class="piece" data-type="controller">
-        <div class="swatch" style="color:#c9ccd3;"><div class="stripe" style="background:#f2a541;"></div>CTRL</div>
-        <span class="count" id="count-controller">×1</span>
+      <div class="panel-items">
+        <div class="piece" data-type="par">
+          <div class="swatch" style="color:#f2c53d;"><div class="stripe" style="background:#f2c53d;"></div>PAR</div>
+          <span class="count" id="count-par">×4</span>
+        </div>
+        <div class="piece" data-type="controller">
+          <div class="swatch" style="color:#c9ccd3;"><div class="stripe" style="background:#f2a541;"></div>CTRL</div>
+          <span class="count" id="count-controller">×1</span>
+        </div>
       </div>
       <span class="panel-hint">I PAR restano sulla pedana spettacolo. La consolle luci va nella fascia Off Stage, insieme al mixer. I PAR si numerano nell'ordine in cui li posizioni.</span>
     </div>
 
     <div class="tab-panel" data-panel="cavi">
-      <button class="cable-btn" data-cable="speakon"><span class="lead" style="background:var(--c-speakon);"></span>Speakon</button>
-      <button class="cable-btn" data-cable="powercon"><span class="lead" style="background:var(--c-power);"></span>PowerCON</button>
-      <button class="cable-btn" data-cable="dmx"><span class="lead" style="background:var(--c-dmx);"></span>DMX</button>
-      <button class="cable-btn" data-cable="xlr"><span class="lead" style="background:var(--c-xlr);"></span>XLR</button>
-      <span class="panel-hint">Scegli un cavo, poi tocca due componenti da collegare. Finché questa scheda è aperta, toccare un componente lo collega — per spostarlo, vai su un'altra scheda.</span>
+      <div class="panel-items cable-groups">
+        <div class="cable-group" data-group="trifase">
+          <button class="cable-group-toggle">Trifase<span class="chev">▸</span></button>
+          <div class="cable-group-body">
+            <button class="cable-btn" data-cable="cee_tri"><span class="lead" style="background:var(--c-cee-tri);"></span>CEE Trifase</button>
+          </div>
+        </div>
+        <div class="cable-group" data-group="monofase">
+          <button class="cable-group-toggle">Monofase<span class="chev">▸</span></button>
+          <div class="cable-group-body">
+            <button class="cable-btn" data-cable="powercon"><span class="lead" style="background:var(--c-power);"></span>PowerCON</button>
+            <button class="cable-btn" data-cable="schuko"><span class="lead" style="background:var(--c-schuko);"></span>Schuko</button>
+            <button class="cable-btn" data-cable="cee_mono"><span class="lead" style="background:var(--c-cee-mono);"></span>CEE Monofase</button>
+            <button class="cable-btn" data-cable="cee_powercon"><span class="lead" style="background:linear-gradient(90deg,var(--c-cee-mono) 50%,var(--c-power) 50%);"></span>CEE / PowerCON</button>
+            <button class="cable-btn" data-cable="cee_schuko"><span class="lead" style="background:linear-gradient(90deg,var(--c-cee-mono) 50%,var(--c-schuko) 50%);"></span>CEE / Schuko</button>
+            <button class="cable-btn" data-cable="schuko_powercon"><span class="lead" style="background:linear-gradient(90deg,var(--c-schuko) 50%,var(--c-power) 50%);"></span>Schuko / PowerCON</button>
+          </div>
+        </div>
+        <div class="cable-group" data-group="segnale">
+          <button class="cable-group-toggle">Segnale<span class="chev">▸</span></button>
+          <div class="cable-group-body">
+            <button class="cable-btn" data-cable="speakon"><span class="lead" style="background:var(--c-speakon);"></span>Speakon</button>
+            <button class="cable-btn" data-cable="dmx"><span class="lead" style="background:var(--c-dmx);"></span>DMX</button>
+            <button class="cable-btn" data-cable="xlr"><span class="lead" style="background:var(--c-xlr);"></span>XLR</button>
+            <button class="cable-btn" data-cable="jack"><span class="lead" style="background:var(--c-jack);"></span>Jack</button>
+          </div>
+        </div>
+      </div>
+      <span class="panel-hint">Scegli un cavo, poi tocca due componenti da collegare. Ogni porta accetta un solo cavo (le prese del Quadro fanno eccezione). Gli adattatori (es. CEE / PowerCON) collegano due connettori diversi: servono quando i due lati non coincidono, come tra Quadro (CEE) e utenze a valle (PowerCON). CEE/PowerCON e CEE/Schuko sono comunque cavi monofase.</span>
     </div>
 
     <div id="run-bar">
-      <button id="run-btn">▶ SOUNDCHECK</button>
+      <button id="run-btn">▶ TEST IMPIANTO</button>
     </div>
   </div>
 
