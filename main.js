@@ -860,8 +860,11 @@ const ZONE_PREDICATES = {
   par: isStageCoreCell,
   sub: isPitCell,
   quadro: isBackstageCell,
-  ciabatta: isFohCell,
-  ciabatta_cee: isBackstageCell,
+  // le ciabatte portano corrente dove serve: sul palco, in Regia di palco
+  // (Off Stage) e in Regia di sala (FOH). Quella CEE può restare anche in
+  // Backstage accanto al Quadro, da cui prende la linea.
+  ciabatta: (cx, cy) => isStageCell(cx, cy) || isFohCell(cx, cy),
+  ciabatta_cee: (cx, cy) => isStageCell(cx, cy) || isFohCell(cx, cy) || isBackstageCell(cx, cy),
   // il PC può stare sia in Regia di sala (FOH) sia in Regia di palco
   // (Off Stage, accanto al mixer di palco) — due postazioni plausibili.
   pc: (cx, cy) => isFohCell(cx, cy) || isOffStageCell(cx, cy),
@@ -1690,7 +1693,14 @@ class StageScene extends Phaser.Scene {
     const portDots = {};
     const portMarkers = {};
     def.ports.forEach(p => {
-      const dot = this.add.circle(p.dx, p.dy, 9, SIGNAL_COLOR[p.signal], 1)
+      // IN e OUT si distinguono per FORMA, non solo per un dettaglio interno:
+      //  - IN  = presa tonda (cerchio) con foro scuro al centro;
+      //  - OUT = connettore quadrato con triangolino ▲.
+      // Il colore resta quello del segnale nativo della porta.
+      const isIn = p.dir === 'in';
+      const dot = (isIn
+        ? this.add.circle(p.dx, p.dy, 8, SIGNAL_COLOR[p.signal], 1)
+        : this.add.rectangle(p.dx, p.dy, 15, 15, SIGNAL_COLOR[p.signal], 1))
         .setStrokeStyle(2, 0x141519)
         .setInteractive({ useHandCursor: true });
       dot.on('pointerdown', (pointer, lx, ly, event) => {
@@ -1700,15 +1710,7 @@ class StageScene extends Phaser.Scene {
       });
       c.add(dot);
       portDots[p.id] = dot;
-      // Marcatore interno per distinguere input/output a colpo d'occhio:
-      // pallino pieno al centro = ingresso, anello vuoto = uscita.
-      let marker;
-      if (p.dir === 'in') {
-        marker = this.add.circle(p.dx, p.dy, 3, 0x141519, 1);
-      } else {
-        marker = this.add.circle(p.dx, p.dy, 4, 0x141519, 0)
-          .setStrokeStyle(1.5, 0x141519, 1);
-      }
+      const marker = this.drawPortGlyph(p);
       c.add(marker);
       portMarkers[p.id] = marker;
     });
@@ -1744,6 +1746,17 @@ class StageScene extends Phaser.Scene {
     }
 
     return { container: c, glow, portDots, portMarkers, idLabel, def, phaseBars, led };
+  }
+
+  /* simbolo dentro la porta, sempre uguale e mai ruotato, così si legge
+     a colpo d'occhio su qualunque componente: IN = foro scuro al centro
+     (presa femmina), OUT = triangolino pieno che punta verso l'alto (esce). */
+  drawPortGlyph (p) {
+    const g = this.add.graphics({ x: p.dx, y: p.dy });
+    g.fillStyle(0x141519, 1);
+    if (p.dir === 'in') g.fillCircle(0, 0, 3);
+    else g.fillTriangle(0, -4.5, 4.5, 3, -4.5, 3);
+    return g;
   }
 
   setGlow (v, on, color) {
@@ -2037,12 +2050,31 @@ class StageScene extends Phaser.Scene {
         strokeRoutedPath(this.edgeGraphics, pts, color, width, 18, alpha);
       }
       e._pts = pts;
+      // verso del cavo: freccia a metà percorso, dall'OUT (a) all'IN (b).
+      // Sul cavo selezionato al suo posto c'è il pulsante ✕.
+      if (!isSelected) this.drawFlowArrow(pts, color, alpha);
     });
     this.refreshEdgeDeleteButton();
     updateConnectionCounter();
     this.updateQuadroVisual();
     const modal = el('#quadro-modal');
     if (modal && modal.classList.contains('show')) renderQuadroModal();
+  }
+
+  drawFlowArrow (pts, color, alpha) {
+    const p0 = pointAlongPolyline(pts, 0.47);
+    const p1 = pointAlongPolyline(pts, 0.53);
+    const ang = Math.atan2(p1.y - p0.y, p1.x - p0.x);
+    const mid = pointAlongPolyline(pts, 0.5);
+    const tri = [[7, 0], [-5, -5.5], [-5, 5.5]].map(([x, y]) => ({
+      x: mid.x + x * Math.cos(ang) - y * Math.sin(ang),
+      y: mid.y + x * Math.sin(ang) + y * Math.cos(ang)
+    }));
+    const g = this.edgeGraphics;
+    g.fillStyle(color, alpha);
+    g.lineStyle(1.5, 0x141519, alpha);
+    g.fillTriangle(tri[0].x, tri[0].y, tri[1].x, tri[1].y, tri[2].x, tri[2].y);
+    g.strokeTriangle(tri[0].x, tri[0].y, tri[1].x, tri[1].y, tri[2].x, tri[2].y);
   }
 
   /* ---------------- selezione ed eliminazione di un cavo ---------------- */

@@ -378,6 +378,9 @@
     opacity:.8;
   }
 
+  .port-legend .pl-in,
+  .port-legend .pl-out{ color:var(--text-main); font-size:11px; }
+
   .piece{
     display:flex;
     flex-direction:column;
