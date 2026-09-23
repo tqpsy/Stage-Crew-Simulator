@@ -399,74 +399,85 @@ const FORCE_TRIFASE = true;
 // quadro trifase, 16A×230V≈3680W con un margine di sicurezza tondo a 3000W).
 const PHASE_BUDGET_W = 3000;
 
-/* La "soluzione" del livello: collegamenti richiesti, PORTA per PORTA (non
-   solo componente-componente), così i cavi devono rispettare L/R e la
-   sequenza reale della catena (mixer -> finale -> sub -> top, daisy DMX/potenza). */
+/* Cosa deve essere cablato nel livello: 26 "posti" fissi. Non c'è un unico
+   schema giusto: conta che funzioni come nella realtà.
+   - corrente: ogni utenza arriva al Quadro, da una sua presa qualunque, da
+     una ciabatta o dal passante di un altro PAR (il bilanciamento delle fasi
+     è controllato a parte, vedi runValidation);
+   - DMX: ogni PAR arriva alla consolle luci (universo e ordine della catena
+     a scelta);
+   - audio: porta per porta, perché L/R e i canali contano.
+   I dispositivi si cercano per tipo e non per id, così un pezzo tolto e
+   rimesso (che prende un id nuovo) conta come prima. */
+const REQUIRED_POWER = { mixer: 1, controller: 1, ampli: 1, sub: 2, par: 4, ciabatta_cee: 1, ciabatta: 1, pc: 1 };
+
+function placedOfType (type) {
+  return Object.values(gameState.placed)
+    .filter(c => c.type === type)
+    .sort((a, b) => parseInt(a.id.split('_').pop(), 10) - parseInt(b.id.split('_').pop(), 10));
+}
+// l'ingresso di corrente risale, cavo dopo cavo, fino a una presa del Quadro?
+function wiredToQuadro (compId, visited) {
+  visited = visited || new Set();
+  if (visited.has(compId)) return false;
+  visited.add(compId);
+  const e = feedingPowerEdge(compId);
+  const src = e && gameState.placed[e.a];
+  if (!src) return false;
+  return src.type === 'quadro' || wiredToQuadro(src.id, visited);
+}
+// l'ingresso DMX del PAR risale la catena fino alla consolle luci?
+function dmxToController (parId, visited) {
+  visited = visited || new Set();
+  if (visited.has(parId)) return false;
+  visited.add(parId);
+  const e = gameState.edges.find(x => x.b === parId && x.bPort === 'dmx_in' && x.signal === 'dmx');
+  const src = e && gameState.placed[e.a];
+  if (!src) return false;
+  return src.type === 'controller' || (src.type === 'par' && dmxToController(src.id, visited));
+}
+
 function buildExpectedConnections () {
-  const list = [
-    // aPort: null = "una qualunque presa/fase del Quadro" — non importa su quale
-    // delle 3 fasi finisca il cavo, conta solo che la connessione esista (il
-    // bilanciamento del carico tra le fasi è controllato a parte, vedi runValidation).
-    // il Quadro esce in CEE su tutte e 3 le fasi: ogni utenza qui sotto ha
-    // porte PowerCON, quindi il cavo che serve è l'adattatore CEE/PowerCON.
-    { a: 'allaccio', aPort: 'out', b: 'quadro_1',      bPort: 'in',       signal: 'cee_tri' },
-    { a: 'quadro_1', aPort: null, b: 'mixer_1',      bPort: 'power',    signal: 'cee_powercon' },
-    { a: 'quadro_1', aPort: null, b: 'controller_1', bPort: 'power',    signal: 'cee_powercon' },
-    { a: 'quadro_1', aPort: null, b: 'ampli_1',      bPort: 'power',    signal: 'cee_powercon' },
-    { a: 'quadro_1', aPort: null, b: 'sub_1',        bPort: 'power',    signal: 'cee_powercon' },
-    { a: 'quadro_1', aPort: null, b: 'sub_2',        bPort: 'power',    signal: 'cee_powercon' },
-    { a: 'quadro_1', aPort: null, b: 'par_1',        bPort: 'power_in', signal: 'cee_powercon' },
-    // corrente alla regia: la ciabatta CEE si attacca con la sua spina a una
-    // presa del Quadro, la ciabatta civile con la sua spina a una presa della
-    // ciabatta CEE, e il PC a una presa della ciabatta civile
-    { a: 'quadro_1', aPort: null, b: 'ciabatta_cee_1', bPort: 'in',  signal: 'cee_mono' },
-    { a: 'ciabatta_cee_1', aPort: null, b: 'ciabatta_1', bPort: 'in', signal: 'schuko' },
-    { a: 'ciabatta_1', aPort: null, b: 'pc_1', bPort: 'power', signal: 'schuko' },
-    { a: 'par_1', aPort: 'power_thru', b: 'par_2', bPort: 'power_in', signal: 'powercon' },
-    { a: 'par_2', aPort: 'power_thru', b: 'par_3', bPort: 'power_in', signal: 'powercon' },
-    { a: 'par_3', aPort: 'power_thru', b: 'par_4', bPort: 'power_in', signal: 'powercon' },
+  const one = t => placedOfType(t)[0] || null;
+  const edge = (a, aPort, b, bPort, signal) => ({ ok: !!a && !!b && portEdgeExists(a.id, aPort, b.id, bPort, signal), ids: [a && a.id, b && b.id].filter(Boolean) });
+  const list = [];
 
-    { a: 'mixer_1', aPort: 'main_L', b: 'ampli_1', bPort: 'in_L', signal: 'xlr' },
-    { a: 'mixer_1', aPort: 'main_R', b: 'ampli_1', bPort: 'in_R', signal: 'xlr' },
+  // allaccio -> Quadro con il CEE 400V
+  const allaccio = one('allaccio'), quadro = one('quadro');
+  list.push(edge(allaccio, 'out', quadro, 'in', 'cee_tri'));
 
-    // il PC suona dalla scheda audio: USB-C dal PC, poi le due uscite di linea
-    // jack L/R nei due ingressi jack del mixer (CH 5 = L, CH 6 = R)
-    { a: 'pc_1', aPort: 'usb', b: 'scheda_1', bPort: 'usb', signal: 'usbc' },
-    { a: 'scheda_1', aPort: 'out_L', b: 'mixer_1', bPort: 'in_5', signal: 'jack' },
-    { a: 'scheda_1', aPort: 'out_R', b: 'mixer_1', bPort: 'in_6', signal: 'jack' },
-
-    // l'universo DMX è a scelta (1 o 2), purché la catena parta dalla consolle
-    { a: 'controller_1', aPort: null, b: 'par_1', bPort: 'dmx_in', signal: 'dmx' },
-    { a: 'par_1', aPort: 'dmx_thru', b: 'par_2', bPort: 'dmx_in', signal: 'dmx' },
-    { a: 'par_2', aPort: 'dmx_thru', b: 'par_3', bPort: 'dmx_in', signal: 'dmx' },
-    { a: 'par_3', aPort: 'dmx_thru', b: 'par_4', bPort: 'dmx_in', signal: 'dmx' }
-  ];
-
-  // finale -> sub: L/R assegnati in base alla posizione FISICA sullo schermo
-  // (il Sub più a sinistra va con out_L), non all'ordine in cui sono stati
-  // piazzati — così il giocatore collega in base a quello che vede. Sono
-  // sempre 2 "posti" nel conteggio totale, anche se un Sub non è ancora
-  // stato piazzato (in quel caso usiamo un id segnaposto che nessun cavo
-  // reale potrà mai soddisfare, così il totale resta fisso a 19 durante
-  // tutta la costruzione del livello, invece di scendere e risalire).
-  const subs = Object.values(gameState.placed)
-    .filter(c => c.type === 'sub')
-    .sort((a, b) => (a.screen ? a.screen.x : 0) - (b.screen ? b.screen.x : 0));
-  const leftSub = subs[0] || null;
-  const rightSub = subs[1] || null;
-  list.push({ a: 'ampli_1', aPort: 'out_L', b: leftSub ? leftSub.id : '__sub_L_non_piazzato__', bPort: 'spk_in', signal: 'speakon' });
-  list.push({ a: 'ampli_1', aPort: 'out_R', b: rightSub ? rightSub.id : '__sub_R_non_piazzato__', bPort: 'spk_in', signal: 'speakon' });
-
-  // sub -> testa: stesso principio, 2 posti fissi (uno per il Sub di sinistra,
-  // uno per quello di destra), risolti verso LA testa realmente agganciata a
-  // quel Sub specifico, qualunque id essa abbia.
-  list.push({
-    a: leftSub ? leftSub.id : '__sub_L_non_piazzato__', aPort: 'spk_thru',
-    b: (leftSub && leftSub.hasTop) ? leftSub.hasTop : '__top_L_non_agganciata__', bPort: 'spk_in', signal: 'speakon'
+  // una alimentazione per ogni utenza
+  Object.entries(REQUIRED_POWER).forEach(([t, n]) => {
+    const cs = placedOfType(t);
+    for (let i = 0; i < n; i++) {
+      const c = cs[i];
+      list.push({ ok: !!c && wiredToQuadro(c.id), ids: c ? [c.id] : [] });
+    }
   });
-  list.push({
-    a: rightSub ? rightSub.id : '__sub_R_non_piazzato__', aPort: 'spk_thru',
-    b: (rightSub && rightSub.hasTop) ? rightSub.hasTop : '__top_R_non_agganciata__', bPort: 'spk_in', signal: 'speakon'
+
+  // audio: mixer -> finale L/R, PC -> scheda (USB-C), scheda -> mixer CH5/CH6
+  const mixer = one('mixer'), ampli = one('ampli'), pc = one('pc'), scheda = one('scheda');
+  list.push(edge(mixer, 'main_L', ampli, 'in_L', 'xlr'));
+  list.push(edge(mixer, 'main_R', ampli, 'in_R', 'xlr'));
+  list.push(edge(pc, 'usb', scheda, 'usb', 'usbc'));
+  list.push(edge(scheda, 'out_L', mixer, 'in_5', 'jack'));
+  list.push(edge(scheda, 'out_R', mixer, 'in_6', 'jack'));
+
+  // DMX: ogni PAR in catena dalla consolle
+  const pars = placedOfType('par');
+  for (let i = 0; i < 4; i++) {
+    const c = pars[i];
+    list.push({ ok: !!c && dmxToController(c.id), ids: c ? [c.id] : [] });
+  }
+
+  // finale -> sub: L/R in base alla posizione FISICA sullo schermo (il Sub
+  // più a sinistra va con out_L), così il giocatore collega quello che vede;
+  // sub -> la testa realmente agganciata a quel Sub
+  const subs = placedOfType('sub').sort((a, b) => (a.screen ? a.screen.x : 0) - (b.screen ? b.screen.x : 0));
+  [['out_L', subs[0]], ['out_R', subs[1]]].forEach(([out, sub]) => {
+    list.push(edge(ampli, out, sub, 'spk_in', 'speakon'));
+    const top = sub && sub.hasTop ? gameState.placed[sub.hasTop] : null;
+    list.push(edge(sub, 'spk_thru', top, 'spk_in', 'speakon'));
   });
 
   return list;
@@ -957,12 +968,10 @@ function runValidation () {
   let madeCount = 0;
 
   expected.forEach(exp => {
-    if (portEdgeExists(exp.a, exp.aPort, exp.b, exp.bPort, exp.signal)) {
-      madeCount++;
-    } else {
+    if (exp.ok) madeCount++;
+    else {
       allFound = false;
-      failedComponents.add(exp.a);
-      failedComponents.add(exp.b);
+      exp.ids.forEach(i => failedComponents.add(i));
     }
   });
 
