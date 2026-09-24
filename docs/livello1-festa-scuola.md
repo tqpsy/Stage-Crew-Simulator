@@ -212,3 +212,21 @@ per provare il ritmo prima di portarla nel gioco.
   zittito. Nuovi imprevisti: la sigla dal PC, e il dilemma "più volume!"
   (accontentare il preside o il pubblico). Suggerimenti nei fumetti solo alla
   prima partita (si possono riaccendere).
+
+### Guasti e reputazione (rivisti)
+
+- **Indizi sul palco**: ogni causa si vede (connettore che penzola dall'asta,
+  sedia sopra il cavo, cavo per terra dalla parte del mixer). Chi osserva va
+  dritto al punto giusto; chi controlla a caso perde tempo.
+- **Pubblico paziente all'inizio**: nei primi 5 s di silenzio il gradimento cala
+  appena; poi il preside se ne accorge («Tramp? TRAMP?») e cala di più; solo un
+  silenzio lungo fa crollare il pubblico.
+- **Al massimo un guasto per spettacolo**, tra i primi imprevisti e senza altri
+  imprevisti addosso.
+- **La reputazione misura la professionalità, non la sfortuna**:
+  - il guasto capita: 0;
+  - risolto entro 8 s: +3 e applausi del pubblico (+6 gradimento);
+  - risolto lentamente: 0;
+  - risolto dal bidello al posto tuo: −5;
+  - microfono lasciato su un ingresso diverso dal CH1: −2;
+  - larsen: −5 (colpa del volume).

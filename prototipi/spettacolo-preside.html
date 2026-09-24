@@ -183,6 +183,10 @@
       <g id="preside" transform="translate(172 72)"><use href="#tramp" width="56" height="78"/></g>
       <path d="M170 150 L230 150 L222 112 L178 112 Z" fill="#3a2a1e" stroke="#4d3927"/>
       <text x="200" y="136" text-anchor="middle" font-family="Barlow Condensed" font-size="10" fill="#c8a36a">LICEO</text>
+      <!-- indizi del guasto: chi guarda bene il palco capisce dove cercare -->
+      <g id="clue-mic" display="none"><path d="M189 92 Q172 104 166 128" stroke="#a3acb8" stroke-width="2.4" fill="none"/><rect x="161" y="126" width="9" height="12" rx="2" fill="#dfe2e8" stroke="#6b6f78"/></g>
+      <g id="clue-cavo" display="none" fill="#6b6f78" stroke="#4a4d55"><rect x="224" y="146" width="24" height="4"/><rect x="243" y="126" width="5" height="22"/><path d="M227 150 L223 164 M245 150 L249 164" stroke-width="2.5" fill="none"/></g>
+      <g id="clue-ing" display="none"><path d="M284 159 q6 -6 12 0 q6 6 12 0" stroke="#a3acb8" stroke-width="2.4" fill="none"/><rect x="306" y="153" width="12" height="9" rx="2" fill="#dfe2e8" stroke="#6b6f78"/></g>
       <g id="pars"></g>
       <g id="crowd"></g>
       <g id="bubbles"></g>
@@ -226,6 +230,7 @@
       <li>Quando sale sul palco: <b>luce bianca</b>, <b>microfono aperto</b>, <b>musica giù</b>.</li>
       <li>Tieni la sua voce nella <b>zona verde</b>. Ogni sera è diversa: lui non parla mai uguale.</li>
       <li>Se va verso le casse il <b>larsen</b> cresce: abbassa quanto basta, senza zittirlo.</li>
+      <li>Se qualcosa si guasta, <b>guarda bene il palco</b>: il problema si vede. Risolverlo in fretta ti fa guadagnare reputazione.</li>
     </ul>
     <button class="toggle" id="hints-btn" aria-pressed="true"><span>Suggerimenti nei fumetti</span><span class="sw"></span></button>
     <button class="cta" id="start">Inizia il discorso</button>
@@ -330,9 +335,14 @@
     tap: () => ({ win: 3.5, dur: 5, target: 'preside', icon: '👊', text: '«Tramp?» batte sul microfono', hint: 'MUTE, poi riapri', tab: 'mixer',
       ok: () => S.mute[S.micCh] || voiceOut() < 0.2 || !S.micOk,
       fail () { S.pops++; sfx.pop(); hit(-8, 'BUM BUM nelle casse.'); }, after: 'Ora riapri il canale!' }),
-    cavo: () => ({ win: 24, dur: 24, target: 'stand', icon: '🔇', text: 'non si sente più niente', hint: 'apri GUASTO e segui il cavo', tab: 'guasto',
+    cavo: () => ({ win: 24, dur: 24, target: 'preside', icon: '🔇', text: 'non si sente più niente', hint: 'guarda il palco, poi GUASTO', tab: 'guasto',
       start () { startFault(); }, ok: () => S.micOk && voiceOut() > 0.3,
-      fail () { endFault(); S.micCh = 1; S.fad[1] = Math.max(S.fad[1], 0.55); hit(-10, 'Il bidello ha trovato il guasto prima di te.'); } }),
+      onSolved () {
+        const secs = Math.round(S.t - this.at);
+        if (secs <= 8) { S.grad = clamp(S.grad + 6); S.repDelta += 3; sfx.applause(85); toast('Applausi per il tecnico!', 'ok'); S.notes.push('Guasto risolto in ' + secs + ' s: il pubblico ha applaudito il tecnico (+3 reputazione).'); }
+        else S.notes.push('Guasto risolto in ' + secs + ' s.');
+      },
+      fail () { endFault(); S.micCh = 1; S.fad[1] = Math.max(S.fad[1], 0.55); S.repDelta -= 5; S.notes.push('Il guasto l\'ha trovato il bidello al posto tuo (−5 reputazione).'); hit(-10, 'Il bidello ha trovato il guasto prima di te. Figuraccia.'); } }),
     sigla: () => ({ win: 5, dur: 8, target: 'preside', icon: '🎺', text: '«TRAMP TRAMP!» vuole la sua sigla', hint: 'su il PC, poi giù', tab: 'mixer',
       start () { S.jingle = true; }, end () { S.jingle = false; }, hold: 0.5,
       ok: () => chOut(PC) >= 0.55, fail: () => hit(-6, 'Niente sigla: il preside è offeso.') }),
@@ -345,13 +355,16 @@
   };
   function script () {
     const ids = Object.keys(POOL).sort(() => Math.random() - 0.5).slice(0, 5);
+    // il guasto, se esce, va tra i primi due e ha la scena tutta per sé
+    const ci = ids.indexOf('cavo');
+    if (ci > 1) { ids.splice(ci, 1); ids.splice(Math.floor(Math.random() * 2), 0, 'cavo'); }
     const evs = [{ id: 'apertura', at: 1, win: 9, target: 'preside', icon: '🎤', text: 'sale sul palco', hint: 'luce bianca, CH1 su, PC giù', tab: 'luci',
       ok: () => lightsWhite() && S.fad[1] >= 0.3 && !S.mute[1] && chOut(PC) < 0.3, hold: 0.3,
       fail: () => hit(-10, 'Il preside ha cominciato al buio e sopra la musica.') }];
     let at = rnd(12, 15);
     ids.forEach((id, i) => {
       evs.push(Object.assign({ id, at }, POOL[id]()));
-      at += i >= 2 ? rnd(6, 10) : rnd(10, 14);    // verso la fine si accavallano
+      at += id === 'cavo' ? 26 : i >= 2 ? rnd(6, 10) : rnd(10, 14);    // verso la fine si accavallano
       at = Math.min(at, 72);
     });
     evs.push({ id: 'finale', at: 82, win: 7, target: 'preside', icon: '🎉', text: '«TRAMP!» ha finito', hint: 'luci Festa e musica su', tab: 'luci',
@@ -375,6 +388,7 @@
     const cause = pick(['mic', 'cavo', 'ing']);
     S.fault = { cause, nodes: { mic: 'unk', cavo: 'unk', ing: 'unk' } };
     S.micOk = false; S.patchNeeded = false;   // l'ingresso da ricollegare si scopre solo controllando
+    S.faultAt = S.t;
     $('#tab-guasto').hidden = false;
     renderFault();
   }
@@ -409,7 +423,7 @@
       const txt = { unk: 'Da controllare ' + n.where, checking: 'Controllo…', fixing: 'Ci sto lavorando…', ok: 'Tutto a posto qui.', fixed: 'Sistemato.', bad: CAUSES[n.id].st }[st];
       d.innerHTML = `<b>${n.name}</b><div class="st">${txt}</div>`;
       if (st === 'checking' || st === 'fixing') { d.insertAdjacentHTML('beforeend', `<div class="prog"><i id="prog-${n.id}"></i></div>`); }
-      else if (st === 'unk') { const b = document.createElement('button'); b.className = 'act'; b.textContent = 'Controlla'; b.onclick = () => startTask(n.id, 'check', 1.3); d.appendChild(b); }
+      else if (st === 'unk') { const b = document.createElement('button'); b.className = 'act'; b.textContent = 'Controlla'; b.onclick = () => startTask(n.id, 'check', 1); d.appendChild(b); }
       else if (st === 'bad' && CAUSES[n.id].fix) { const b = document.createElement('button'); b.className = 'act go'; b.textContent = CAUSES[n.id].fix; b.onclick = () => startTask(n.id, 'fix', CAUSES[n.id].time); d.appendChild(b); }
       ch.appendChild(d);
     });
@@ -448,7 +462,9 @@
       beamEls[i].setAttribute('opacity', (0.28 * S.dimmer).toFixed(3));
     });
     $('#preside').setAttribute('transform', `translate(${S.px.toFixed(1)} ${72 + Math.sin(S.t * 4) * 1.2})`);
-    $('#cable').setAttribute('d', S.fault ? 'M200 150 Q214 166 226 170' : 'M200 150 Q230 158 250 162');
+    const cause = S.fault && S.fault.nodes[S.fault.cause] !== 'fixed' ? S.fault.cause : null;
+    $('#cable').setAttribute('d', cause === 'ing' ? 'M200 150 Q250 162 284 159' : 'M200 150 Q230 158 250 162');
+    ['mic', 'cavo', 'ing'].forEach(c => $('#clue-' + c).setAttribute('display', cause === c ? 'inline' : 'none'));
     const nearL = S.px < LECTERN_X - 20;
     $('#ring-l').setAttribute('opacity', nearL ? S.ring.toFixed(2) : 0);
     $('#ring-r').setAttribute('opacity', !nearL ? S.ring.toFixed(2) : 0);
@@ -625,7 +641,7 @@
     S.events.forEach(e => {
       if (!e.started && S.t >= e.at) { e.started = true; e.live = true; e.deadline = S.t + e.win * k; e.start && e.start(); sfx.ding(); }
       if (e.live) {
-        if (e.ok()) { e.held = (e.held || 0) + dt; if (e.held > (e.hold || 0.15)) { e.live = false; e.solved = true; S.grad = clamp(S.grad + 4); toast('Fatto! ' + (e.after || ''), 'ok'); sfx.ok(); if (e.id === 'cavo') endFault(); } }
+        if (e.ok()) { e.held = (e.held || 0) + dt; if (e.held > (e.hold || 0.15)) { e.live = false; e.solved = true; S.grad = clamp(S.grad + 4); toast('Fatto! ' + (e.after || ''), 'ok'); sfx.ok(); if (e.onSolved) e.onSolved(); if (e.id === 'cavo') endFault(); } }
         else e.held = 0;
         if (e.live && e.win < 90 && S.t > e.deadline && !(e.id === 'cavo' && S.task)) { e.live = false; e.fail(); }
       }
@@ -646,7 +662,9 @@
     const o = voiceOut();
     let d = 0;
     if (speaking()) {
-      if (!S.micOk || S.mute[S.micCh]) d -= 3; else if (o < 0.3) d -= 2.5; else if (o > 0.9) d -= 2.5; else if (inZone(o)) d += 1.2; else d += 0.2;
+      const quiet = S.t - (S.faultAt || 0);
+      if (!S.micOk) d -= quiet < 5 ? 0.3 : quiet < 15 ? 1.5 : 3;     // all'inizio il pubblico aspetta
+      else if (S.mute[S.micCh]) d -= 3; else if (o < 0.3) d -= 2.5; else if (o > 0.9) d -= 2.5; else if (inZone(o)) d += 1.2; else d += 0.2;
       if (chOut(PC) > 0.3) d -= 1.5;               // musica sopra il discorso
       if (S.t > 10 && !lightsWhite()) d -= 0.8;
     }
@@ -657,6 +675,7 @@
     const cap = $('#caption');
     if (S.jingle) cap.innerHTML = '<b>♪ TRAMP TRAMP TRAMP ♪</b><small>(la sua sigla)</small>';
     else if (!speaking()) cap.innerHTML = '';
+    else if (!S.micOk && S.t - S.faultAt > 5) cap.innerHTML = '<b>«Tramp? TRAMP?»</b><small>(batte sul microfono: non si sente niente)</small>';
     else if (o < 0.05) cap.innerHTML = '<b>…</b><small>(il preside parla ma non si sente niente)</small>';
     else cap.innerHTML = `<b style="font-size:${o > 0.9 ? 21 : o < 0.3 ? 13 : 17}px">«${trampify(LINES[li])}»</b><small>(${LINES[li]})</small>`;
 
@@ -680,6 +699,7 @@
     else notes.push([S.larsens ? 'Larsen: ' + S.larsens + '.' : '', S.pops ? 'Colpi nelle casse: ' + S.pops + '.' : ''].join(' '));
     if (S.grad >= 70) { beers++; notes.push('🍺 Pubblico contento (almeno 70%).'); }
     if (S.drunk) notes.push('Birre bevute durante il discorso: ' + S.drunk + '.');
+    if (S.micCh !== 1) { S.repDelta -= 2; S.notes.push('Il microfono è rimasto sull\'ingresso ' + S.micCh + ' invece del CH1 (−2 reputazione).'); }
     notes.push(...S.notes);
     const rep = 5 + Math.round((S.grad - 60) / 10) - S.larsens * 5 + S.repDelta;
     $('#outro-title').textContent = S.grad >= 70 ? '«TRAMP TRAMP!» (il miglior tecnico della storia)' : S.grad >= 40 ? 'Applausi tiepidi.' : '«TRAMP!» (siete licenziati)';
