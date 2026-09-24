@@ -1596,6 +1596,62 @@ function drawStyledName (ctx, style, text, cx, cy, maxW, h, accent) {
   ctx.restore();
 }
 
+/* logo coerente col nome: le parole del nome scelgono simbolo, colore e
+   stile della scritta ("Luci" → faro, "Power" → fulmine, "Rossi" → rosso,
+   "Neon" → scritta al neon…). Quello che il nome non dice lo decide il
+   nome stesso in modo fisso, così lo stesso nome dà sempre lo stesso logo;
+   "variant" propone altre idee sulla stessa base. */
+const NAME_HINTS = {
+  icon: [
+    ['fulmine', ['power', 'elettr', 'volt', 'energ', 'thunder', 'fulmin', 'spark', 'watt', 'ampere', 'flash', 'saetta']],
+    ['faro', ['luc', 'light', 'lux', 'lamp', 'fari', 'faro', 'spot', 'beam', 'ragg', 'lumen']],
+    ['cassa', ['sound', 'suon', 'audio', 'acust', 'bass', 'boom', 'speaker', 'cass', 'woof', 'decibel', 'rumor', 'noise', 'volume']],
+    ['onda', ['wave', 'onda', 'onde', 'freq', 'echo', 'vibe', 'radio', 'sonic', 'sonor', 'eco']],
+    ['stella', ['star', 'stell', 'show', 'galax', 'nova', 'super', 'vip', 'gold', 'oro', 'festa', 'party']],
+    ['fader', ['mix', 'fader', 'live', 'studio', 'console', 'regia', 'tech', 'pro', 'sistem', 'system']]
+  ],
+  bg: [
+    ['#e0503f', ['ross', 'red', 'fuoco', 'fire', 'rock', 'inferno', 'lava', 'rubin']],
+    ['#3b7bff', ['blu', 'blue', 'azzurr', 'mare', 'sea', 'sky', 'ciel', 'ice', 'ghiacc', 'ocean']],
+    ['#49b06a', ['verd', 'green', 'bosc', 'forest', 'smerald', 'lime']],
+    ['#f2c53d', ['oro', 'gold', 'sole', 'sun', 'giall', 'yellow', 'ambra']],
+    ['#9b5de5', ['viola', 'purple', 'magic', 'mistic', 'lilla', 'violet']],
+    ['#1c1d22', ['ner', 'black', 'dark', 'night', 'nott', 'buio', 'shadow', 'ombra']],
+    ['#eee9df', ['bianc', 'white', 'neve', 'snow', 'luna', 'moon']],
+    ['#f2a541', ['arancio', 'orange', 'tramont', 'sunset']]
+  ],
+  style: [
+    ['neon', ['neon', 'night', 'nott', 'club', 'disco', 'dance', 'electro']],
+    ['led', ['led', 'digit', 'pixel', 'tech', 'screen', 'video', 'matrix']],
+    ['tour', ['rock', 'metal', 'tour', 'band', 'star', 'road']],
+    ['stencil', ['crew', 'case', 'stage', 'palco', 'work', 'tecnic', 'truck', 'camion', 'furgon']],
+    ['fasci', ['luc', 'light', 'show', 'lux', 'gold', 'oro', 'festa', 'party', 'event']],
+    ['gaffer', ['garage', 'nastro', 'tape', 'gaffer', 'artigian', 'bottega', 'fai da te']]
+  ]
+};
+function logoFromName (name, variant) {
+  variant = variant || 0;
+  // parole del nome, senza accenti e senza la parola "service" (la hanno tutti);
+  // una parola chiave vale se una parola del nome comincia così ("luc" → Luci)
+  const words = String(name || '').toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '')
+    .split(/[^a-z0-9]+/).filter(w => w && w !== 'service');
+  const rand = seededRand(words.join(' ') + '#' + variant);
+  const pickHint = list => {
+    const hit = list.filter(([, keys]) => keys.some(k => words.some(w => w.startsWith(k))));
+    return hit.length ? hit[variant % hit.length][0] : null;
+  };
+  const pick = arr => arr[Math.floor(rand() * arr.length)];
+  const icon = pickHint(NAME_HINTS.icon) || (variant % 2 ? pick(Object.keys(LOGO_ICONS)) : 'iniziali');
+  const bg = pickHint(NAME_HINTS.bg) || pick(LOGO_COLORS.filter(c => c !== '#eee9df'));
+  // simbolo in contrasto col fondo: su fondo scuro un colore acceso,
+  // su fondo acceso il bianco o il nero
+  const dark = bg === '#1c1d22' || bg === '#9b5de5' || bg === '#3b7bff' || bg === '#e0503f';
+  const fg = bg === '#1c1d22' ? pick(['#f2a541', '#f2c53d', '#49b06a', '#3b7bff', '#e0503f'])
+    : dark ? pick(['#eee9df', '#f2c53d'].filter(c => c !== bg)) : pick(['#1c1d22', '#1c1d22', '#e0503f'].filter(c => c !== bg));
+  const style = pickHint(NAME_HINTS.style) || pick(Object.keys(BRAND_STYLES));
+  return { shape: pick(Object.keys(LOGO_SHAPES)), icon, bg, fg, style };
+}
+
 // immagine del logo (SVG) pronta per il canvas, con una piccola memoria
 const logoImages = new Map();
 function logoImage (logo, name) {
@@ -1731,7 +1787,8 @@ function whenScene (fn) {
 }
 // nuova partita in preparazione (nome e logo non ancora confermati) e
 // logo che si sta modificando nella pagina del logo
-let draft = { name: '', logo: defaultLogo() };
+// auto: il logo segue il nome mentre lo si scrive (finché non lo si ritocca a mano)
+let draft = { name: '', logo: defaultLogo(), auto: true, variant: 0 };
 let logoEdit = null;
 
 function showMenuPage (page, keep) {
@@ -1745,7 +1802,11 @@ function showMenuPage (page, keep) {
   el('#set-logo-row').hidden = !gameActive;
   if (page === 'new') {
     const i = el('#service-input');
-    if (!keep) { draft = { name: Profile.data.service, logo: { ...serviceLogo() } }; i.value = draft.name; setTimeout(() => i.focus(), 30); }
+    if (!keep) {
+      const auto = !Profile.data.service;
+      draft = { name: Profile.data.service, logo: auto ? logoFromName('') : { ...serviceLogo() }, auto, variant: 0 };
+      i.value = draft.name; setTimeout(() => i.focus(), 30);
+    }
     brandPreview(el('#new-logo'), draft.logo, draft.name, 300, 90);
   }
   if (page === 'logo') renderLogoEditor();
@@ -1767,7 +1828,7 @@ function renderLogoEditor () {
     const b = document.createElement('button');
     b.type = 'button'; b.className = 'logo-opt' + (sel ? ' sel' : '') + (extra ? ' ' + extra : '');
     b.innerHTML = html;
-    b.addEventListener('click', () => { SFX.button(); fn(); logoChanged(); });
+    b.addEventListener('click', () => { SFX.button(); fn(); if (logoEdit.back === 'new') draft.auto = false; logoChanged(); });
     return b;
   };
   const fill = (id, items) => { const row = el(id); row.innerHTML = ''; items.forEach(b => row.appendChild(b)); };
@@ -1802,6 +1863,13 @@ function renderLogoEditor () {
     b.style.background = c; b.dataset.color = c; return b;
   })));
 }
+// logo dal nome: la prima idea, o una nuova a ogni tocco di "Un'altra idea"
+function logoFromNameInEditor (next) {
+  logoEdit.variant = next ? (logoEdit.variant || 0) + 1 : 0;
+  Object.assign(logoEdit.logo, logoFromName(logoEdit.name(), logoEdit.variant));
+  if (logoEdit.back === 'new') { draft.auto = !next; draft.variant = logoEdit.variant; }
+  logoChanged();
+}
 function logoChanged () {
   renderLogoEditor();
   // dalle impostazioni il logo cambia subito anche in testata e sul furgone
@@ -1825,7 +1893,7 @@ const cleanName = s => String(s || '').replace(/\s+/g, ' ').trim().slice(0, SERV
 
 function startNewGame (name, logo) {
   Profile.data.service = cleanName(name);
-  Profile.data.logo = { ...(logo || serviceLogo()) };
+  Profile.data.logo = { ...(logo || logoFromName(Profile.data.service)) };
   Profile.data.reputation = defaultProfile().reputation;   // nuovo service, reputazione da costruire
   whenScene(scene => {
     gameActive = true;
@@ -1853,11 +1921,12 @@ el('#new-cancel').addEventListener('click', () => { SFX.button(); showMenuPage('
 el('#new-form').addEventListener('submit', ev => { ev.preventDefault(); SFX.button(); startNewGame(el('#service-input').value, draft.logo); });
 el('#service-input').addEventListener('input', ev => {
   draft.name = ev.target.value;
+  if (draft.auto) draft.logo = logoFromName(draft.name, draft.variant);
   brandPreview(el('#new-logo'), draft.logo, draft.name, 300, 90);   // nome e iniziali seguono quello che si scrive
 });
 el('#new-logo-btn').addEventListener('click', () => {
   SFX.button();
-  logoEdit = { logo: draft.logo, name: () => draft.name, back: 'new' };
+  logoEdit = { logo: draft.logo, name: () => draft.name, back: 'new', variant: draft.variant };
   showMenuPage('logo');
 });
 el('#set-logo-btn').addEventListener('click', () => {
@@ -1866,6 +1935,8 @@ el('#set-logo-btn').addEventListener('click', () => {
   logoEdit = { logo: Profile.data.logo, name: () => Profile.data.service, back: 'settings', live: true };
   showMenuPage('logo');
 });
+el('#logo-from-name').addEventListener('click', () => { SFX.button(); logoFromNameInEditor(false); });
+el('#logo-another').addEventListener('click', () => { SFX.button(); logoFromNameInEditor(true); });
 el('#logo-done').addEventListener('click', () => { SFX.button(); showMenuPage(logoEdit.back, true); });
 el('#settings-back').addEventListener('click', () => { SFX.button(); Profile.flush(); showMenuPage('main'); });
 el('#set-volume').addEventListener('input', ev => { settings().volume = ev.target.value / 100; SFX.setVolume(settings().volume); Profile.save(); });

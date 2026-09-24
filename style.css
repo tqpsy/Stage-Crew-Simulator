@@ -647,3 +647,5 @@
   .logo-opt.swatch{ width:34px; height:34px; padding:0; }
   .logo-opt.style-opt{ display:flex; flex-direction:column; align-items:center; gap:2px; padding:4px 4px 3px; line-height:1; background:#0b0c0f; }
   .logo-opt.style-opt span{ font-size:10.5px; color:var(--text-muted); }
+  .logo-auto{ display:flex; gap:8px; }
+  .logo-auto .menu-btn{ flex:1; font-size:15px; padding:8px 6px; }

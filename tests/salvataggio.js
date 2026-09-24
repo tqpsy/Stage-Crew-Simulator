@@ -26,6 +26,13 @@ const path = require('path');
   await open();
   check(await p.isVisible('#service-input'), 'al primo avvio manca il campo del nome');
   check(!(await p.isVisible('#menu-resume')), 'al primo avvio c\'è Continua senza partita');
+  // il logo segue il nome mentre lo si scrive: "Luci Verdi" → faro verde
+  await p.type('#service-input', 'Luci Verdi');
+  const auto = await ev(() => ({ icon: draft.logo.icon, bg: draft.logo.bg, same: JSON.stringify(draft.logo) === JSON.stringify(logoFromName('Luci Verdi')) }));
+  check(auto.icon === 'faro' && auto.bg === '#49b06a' && auto.same, 'il logo non segue il nome: ' + JSON.stringify(auto));
+  check(await ev(() => logoFromName('Service Rossi').bg) === '#e0503f', '"Rossi" non dà il rosso');
+  check(await ev(() => logoFromName('Neon Night').style) === 'neon', '"Neon" non dà la scritta al neon');
+  check(await ev(() => logoFromName('Power').icon) === 'fulmine', '"Power" non dà il fulmine');
   await p.fill('#service-input', '');
   await p.type('#service-input', 'Service Wasd');      // W, A, S, D non devono sparire
   check(await p.inputValue('#service-input') === 'Service Wasd', 'nel nome non si scrivono tutte le lettere: ' + await p.inputValue('#service-input'));
@@ -35,6 +42,7 @@ const path = require('path');
   await p.click('#logo-icons [data-icon="iniziali"]');
   await p.click('#logo-bg [data-color="#3b7bff"]');
   await p.click('#logo-styles [data-style="neon"]');
+  check(await ev(() => draft.auto) === false, 'dopo un ritocco a mano il logo segue ancora il nome');
   check(await ev(() => />W</.test(logoSVG(draft.logo, draft.name, 96))), 'le iniziali del logo non seguono il nome (senza la parola Service)');
   check(await p.$$eval('#logo-styles canvas', cs => cs.length) === 6, 'mancano le anteprime dei 6 stili della scritta');
   check(await p.$eval('#logo-styles [data-style="neon"]', b => b.classList.contains('sel')), 'stile scelto non evidenziato');
