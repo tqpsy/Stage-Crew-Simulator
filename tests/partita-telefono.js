@@ -75,6 +75,10 @@ const OUT = process.env.SHOTS || null;
   await place('audio', 'top', []); // la testa si tocca sopra il sub
   for (const sid of ['sub_1', 'sub_2']) { const before = await p.evaluate(() => gameState.stock.top); await tapAt(await devPt(sid)); if (await p.evaluate(() => gameState.stock.top) !== before - 1) problems.push('testa su ' + sid + ' non montata: ' + await toast()); }
   await place('audio', 'mixer', [[7, 5]]);
+  // asta microfonica sul palco, poi il microfono si tocca sopra l'asta
+  await place('audio', 'asta', [[3, 6]]);
+  await place('audio', 'mic', []);
+  { const before = await p.evaluate(() => gameState.stock.mic); await tapAt(await devPt('asta_1')); if (await p.evaluate(() => gameState.stock.mic) !== before - 1) problems.push('microfono su asta_1 non montato: ' + await toast()); }
   await place('regia', 'ampli', [[6, 4]]);
   await place('regia', 'pc', [[4, 13]]);
   await place('regia', 'scheda', [[5, 13]]);
@@ -99,6 +103,8 @@ const OUT = process.env.SHOTS || null;
   await wire('xlr', 'mixer_1', 'main_L', 'ampli_1', 'in_L'); await wire('xlr', 'mixer_1', 'main_R', 'ampli_1', 'in_R');
   await wire('speakon', 'ampli_1', 'out_L', 'sub_1', 'spk_in'); await wire('speakon', 'ampli_1', 'out_R', 'sub_2', 'spk_in');
   await wire('speakon', 'sub_1', 'spk_thru', 'top_1', 'spk_in'); await wire('speakon', 'sub_2', 'spk_thru', 'top_2', 'spk_in');
+  await wire('xlr', 'mic_1', 'out', 'mixer_1', 'in_1');
+  if (await p.evaluate(() => micChannel()) !== 1) problems.push('microfono non risulta sul CH 1');
   log.push('cavi: ' + (taps - t0) + ' tocchi, contatore ' + await p.evaluate(() => el('#conn-val').textContent) + ', cavi=' + await p.evaluate(() => gameState.edges.length));
   await shot('cavi');
   // ---------- accensione
