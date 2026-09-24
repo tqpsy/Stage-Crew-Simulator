@@ -1347,28 +1347,35 @@ document.querySelectorAll('.tab-btn').forEach(btn => {
    numero di versione: se un giorno il formato cambia si converte, invece
    di perdere la partita. "Nuova partita" azzera il livello ma tiene
    impostazioni e record.
-   Il valore principale del service è la REPUTAZIONE, che non cala mai:
-   ogni livello porta la reputazione del suo miglior collaudo, quindi
-   rifare un livello non la gonfia, ma rifarlo meglio la fa crescere della
-   differenza. Un nuovo service (Nuova partita) riparte da zero.
+   Il valore principale del service è la REPUTAZIONE (vedi addReputation):
+   parte da 0, sale con le fasi completate, i guasti gestiti bene e le
+   birre rifiutate, scende se un guasto è gestito male. Un nuovo service
+   (Nuova partita) riparte da zero.
    I record preparano gli highscore: per ogni collaudo riuscito si tengono
    i dati grezzi (tempo di gioco, test fatti e falliti, scatti, colpi nelle
-   casse) e la reputazione che vale.
+   casse).
    --------------------------------------------------------------------- */
 const SAVE_KEY = 'scs-save';
-const SAVE_VERSION = 1;
+const SAVE_VERSION = 2;
 const LEVEL_ID = 1;
 const RECORDS_KEEP = 20;       // record tenuti per livello
 const SERVICE_MAX = 24;        // caratteri del nome del service
 
 function defaultProfile () {
-  return { v: SAVE_VERSION, service: '', settings: { volume: 0.8, reducedFx: false, skipShow: false }, logo: null, level: null, records: {}, reputation: { total: 0, byLevel: {} } };
+  return { v: SAVE_VERSION, service: '', settings: { volume: 0.8, reducedFx: false, skipShow: false }, logo: null, level: null, records: {}, reputation: { total: 0, earned: {}, log: [] } };
 }
 const Profile = (() => {
   let data = defaultProfile();
   try {
     const raw = localStorage.getItem(SAVE_KEY);
     const d = raw ? JSON.parse(raw) : null;
+    // versione 1: la reputazione era 100-150 per livello collaudato; ora
+    // un collaudo è una fase completata e vale REP.phaseDone
+    if (d && d.v === 1) {
+      const done = Object.keys((d.reputation && d.reputation.byLevel) || {}).filter(l => d.reputation.byLevel[l] > 0);
+      d.reputation = { total: done.length * 5, earned: Object.fromEntries(done.map(l => ['L' + l + ':collaudo', 5])), log: [] };
+      d.v = 2;
+    }
     if (d && d.v === SAVE_VERSION) data = { ...defaultProfile(), ...d, settings: { ...defaultProfile().settings, ...d.settings }, reputation: { ...defaultProfile().reputation, ...d.reputation } };
     else if (!raw && localStorage.getItem('scs-muted') === '1') data.settings.volume = 0;   // vecchio tasto muto
   } catch (e) { /* memoria non disponibile o salvataggio illeggibile: si parte da zero */ }
@@ -1758,19 +1765,45 @@ function saveLevel () {
   Profile.save();
 }
 
-/* reputazione di un collaudo riuscito: 100 per l'impianto che funziona,
-   più fino a 50 per la procedura pulita (ogni test fallito, scatto del
-   Quadro o del salvavita costa 10, ogni colpo nelle casse 5) */
-const REP_BASE = 100, REP_CLEAN = 50;
-function collaudoReputation (r) {
-  const slips = (r.failedTests + r.trips + r.rcdTrips) * 10 + r.pops * 5;
-  return REP_BASE + Math.max(0, REP_CLEAN - slips);
-}
+/* REPUTAZIONE — misura la professionalità, non la sfortuna:
+   - sale: fase completata, guasto gestito bene, birra rifiutata;
+   - scende: guasto gestito male (risolto dal bidello, larsen, microfono
+     lasciato sull'ingresso sbagliato) o cambio palco così lento da finire
+     la pazienza del pubblico;
+   - apparecchio rotto: 0, non è colpa del giocatore.
+   Parte da 0 e non va sotto lo 0. Ogni fase (e ogni richiesta extra) conta
+   una volta sola per service: rifarla non aggiunge altro. I numeri sono
+   quelli del documento di design e del prototipo del preside. */
+const REP = {
+  phaseDone: 5,        // fase completata (oggi: il collaudo dell'impianto)
+  faultFixedFast: 3,   // guasto risolto in fretta
+  beerRefused: 5,      // birra rifiutata in una richiesta extra
+  faultByJanitor: -5,  // guasto trovato dal bidello al posto tuo
+  feedback: -5,        // larsen
+  wrongInput: -2,      // microfono lasciato su un altro ingresso
+  slowChange: -5,      // pazienza del pubblico finita per un cambio palco lento
+  deviceBroken: 0      // apparecchio rotto: non è colpa del giocatore
+};
+const REP_LOG_KEEP = 50;
 const reputation = () => Profile.data.reputation.total;
+// aggiunge (o toglie) reputazione e dice di quanto è cambiata davvero;
+// con onceKey un evento conta una volta sola (es. 'L1:collaudo')
+function addReputation (amount, reason, onceKey) {
+  const R = Profile.data.reputation;
+  if (onceKey && onceKey in R.earned) return 0;
+  const before = R.total;
+  R.total = Math.max(0, R.total + amount);
+  const delta = R.total - before;
+  if (onceKey) R.earned[onceKey] = delta;
+  R.log = [{ at: Date.now(), amount: delta, reason }].concat(R.log || []).slice(0, REP_LOG_KEEP);
+  Profile.save();
+  applySettings();
+  return delta;
+}
 
-// un collaudo riuscito entra nei record del livello (i migliori per primi)
-// e fa crescere la reputazione se batte il miglior collaudo del livello;
-// restituisce quanta reputazione ha guadagnato (0 se non ha fatto meglio)
+// un collaudo riuscito entra nei record del livello (i migliori per primi:
+// meno errori, poi meno tempo) e, la prima volta, vale una fase completata;
+// restituisce quanta reputazione ha portato
 function addRecord () {
   const st = gameState.stats;
   const rec = {
@@ -1779,18 +1812,12 @@ function addRecord () {
     trips: gameState.trips || 0, rcdTrips: gameState.rcdTrips || 0,
     pops: (gameState.procErrors || []).filter(x => x === 'pop').length
   };
-  rec.reputation = collaudoReputation(rec);
-  const list = (Profile.data.records[LEVEL_ID] || []).concat(rec)
-    .sort((a, b) => b.reputation - a.reputation || a.playMs - b.playMs)
+  const slips = r => r.failedTests + r.trips + r.rcdTrips + r.pops;
+  Profile.data.records[LEVEL_ID] = (Profile.data.records[LEVEL_ID] || []).concat(rec)
+    .sort((a, b) => slips(a) - slips(b) || a.playMs - b.playMs)
     .slice(0, RECORDS_KEEP);
-  Profile.data.records[LEVEL_ID] = list;
-  const R = Profile.data.reputation, best = R.byLevel[LEVEL_ID] || 0;
-  const gain = Math.max(0, rec.reputation - best);
-  R.byLevel[LEVEL_ID] = best + gain;
-  R.total += gain;
   Profile.save();
-  applySettings();
-  return gain;
+  return addReputation(REP.phaseDone, 'Collaudo del livello ' + LEVEL_ID, 'L' + LEVEL_ID + ':collaudo');
 }
 
 // tempo di gioco: conta solo con la pagina in vista e il menù chiuso
@@ -5540,7 +5567,7 @@ class StageScene extends Phaser.Scene {
       : ' Prossimo: arriva il preside. Monta l\'asta sul palco, il microfono sulla giraffa e collegalo con un XLR a un ingresso MIC del mixer.';
     this.repGain = gameActive ? addRecord() : 0;
     showToast('Impianto collaudato, si va in scena! ' + (tip ? 'Piccolo consiglio: ' + tip : 'Procedura perfetta.')
-      + (this.repGain ? ' Reputazione +' + this.repGain + '.' : gameActive ? ' Reputazione invariata: hai già fatto di meglio.' : '') + next, 'ok');
+      + (this.repGain ? ' Reputazione +' + this.repGain + '.' : gameActive ? ' Fase già completata: la reputazione non cambia.' : '') + next, 'ok');
     saveLevel();
     this.playSuccessSequence();
   }
