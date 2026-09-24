@@ -1,0 +1,563 @@
+<title>Discorso del Preside Tramp</title>
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@600;700&family=Permanent+Marker&family=Inter:wght@400;500;600;700&display=swap">
+<style>
+  /* Prototipo della fase di spettacolo: stessi colori e caratteri del gioco (solo tema scuro, come il gioco). */
+  :root{
+    color-scheme: dark;
+    --bg-deck:#141519; --bg-panel:#1c1d22; --bg-raised:#24252b; --hairline:#34363e;
+    --text:#eee9df; --muted:#8b8e98; --amber:#f2a541; --green:#49b06a; --red:#e0503f; --yellow:#f2c53d;
+    --display:'Barlow Condensed', 'Arial Narrow', sans-serif;
+    --ui:'Inter', system-ui, sans-serif;
+    --marker:'Permanent Marker', 'Comic Sans MS', cursive;
+  }
+  *{box-sizing:border-box}
+  [hidden]{display:none!important}
+  html,body{height:100%}
+  body{margin:0;background:var(--bg-deck);color:var(--text);font-family:var(--ui);overflow:hidden;-webkit-tap-highlight-color:transparent;user-select:none;-webkit-user-select:none}
+  button{font:inherit;color:inherit;cursor:pointer}
+  button:focus-visible,.fader:focus-visible{outline:2px solid var(--amber);outline-offset:2px}
+  #app{height:100%;display:grid;grid-template-rows:auto 1fr auto;max-width:1200px;margin:0 auto}
+
+  /* ---- header ---- */
+  header{padding:8px 16px;background:var(--bg-panel);border-bottom:1px solid var(--hairline);display:grid;gap:6px}
+  .row{display:flex;align-items:center;gap:10px}
+  .face-mini{width:34px;height:34px;border-radius:50%;background:var(--bg-raised);border:1px solid var(--hairline);overflow:hidden;flex:none}
+  .who{font-family:var(--display);font-size:18px;letter-spacing:.03em;line-height:1;white-space:nowrap}
+  .who small{display:block;font-family:var(--ui);font-size:11px;color:var(--muted);letter-spacing:0;margin-top:2px}
+  .timeline{flex:1;height:8px;background:var(--bg-raised);border-radius:4px;overflow:hidden;min-width:40px}
+  .timeline i{display:block;height:100%;width:0;background:var(--amber)}
+  .clock{font-family:var(--display);font-size:20px;font-variant-numeric:tabular-nums}
+  .stat{display:flex;align-items:center;gap:6px;font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:.06em}
+  .bar{width:70px;height:8px;background:var(--bg-raised);border-radius:4px;overflow:hidden}
+  .bar i{display:block;height:100%;width:50%;transition:width .3s,background .3s}
+  .stat.grad{flex:1}.stat.grad .bar{flex:1;width:auto}
+  .pill{border:1px solid var(--hairline);background:var(--bg-raised);border-radius:999px;padding:4px 10px;font-size:14px;line-height:1.2;white-space:nowrap}
+  .pill:active{transform:scale(.96)}
+
+  /* ---- palco ---- */
+  #stage{position:relative;overflow:hidden;background:#0c0d10;min-height:180px}
+  #stage svg{position:absolute;inset:0;width:100%;height:100%}
+  #caption{position:absolute;left:16px;right:16px;bottom:8px;text-align:center;font-size:13px;color:#fff;text-shadow:0 1px 3px #000;pointer-events:none;min-height:1.2em}
+  #toast{position:absolute;left:50%;top:10px;transform:translateX(-50%);background:var(--bg-raised);border:1px solid var(--hairline);padding:6px 12px;border-radius:8px;font-size:13px;opacity:0;transition:opacity .25s;pointer-events:none;max-width:calc(100% - 32px);text-align:center}
+  #toast.show{opacity:1}#toast.ok{border-color:var(--green)}#toast.bad{border-color:var(--red)}
+  #pausa{position:absolute;inset:0;background:rgba(8,8,10,.85);display:grid;place-items:center;font-family:var(--display);font-size:34px;letter-spacing:.1em}
+  .bubble{cursor:pointer}
+
+  /* ---- banco regia ---- */
+  #desk{background:var(--bg-panel);border-top:1px solid var(--hairline);padding:8px 16px calc(10px + env(safe-area-inset-bottom,0px));display:grid;gap:8px;height:44vh;max-height:330px;grid-template-rows:auto 1fr}
+  .tabs{display:flex;gap:6px}
+  .tab{flex:1;background:var(--bg-raised);border:1px solid var(--hairline);border-radius:8px;padding:6px;font-family:var(--display);font-size:17px;letter-spacing:.08em}
+  .tab[aria-selected=true]{border-color:var(--amber);color:var(--amber)}
+  .panel{min-height:0;display:flex;gap:10px}
+  .panel[hidden]{display:none!important}
+  .strip{flex:1;min-width:0;background:var(--bg-raised);border:1px solid var(--hairline);border-radius:10px;padding:6px 4px;display:grid;grid-template-rows:auto 1fr auto;gap:6px;justify-items:center}
+  .strip.off{opacity:.38}
+  .strip.pulse{animation:pulse .5s ease-in-out 4}
+  @keyframes pulse{50%{border-color:var(--amber);box-shadow:0 0 0 3px rgba(242,165,65,.35)}}
+  .strip-name{font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:.06em;display:flex;align-items:center;gap:4px;white-space:nowrap}
+  .strip-name .face-mini{width:20px;height:20px}
+  .fadewrap{display:flex;gap:6px;height:100%;min-height:0}
+  .fader{position:relative;width:26px;height:100%;touch-action:none;cursor:ns-resize}
+  .fader .track{position:absolute;left:11px;width:4px;top:6px;bottom:6px;background:#0c0d10;border-radius:2px}
+  .fader .knob{position:absolute;left:0;width:26px;height:16px;margin-top:-8px;background:linear-gradient(#d8d4cb,#8f8b84);border-radius:3px;box-shadow:0 2px 4px #000}
+  .fader .knob::after{content:"";position:absolute;left:3px;right:3px;top:7px;height:2px;background:#222}
+  .meter{position:relative;width:8px;height:100%;background:#0c0d10;border-radius:2px;overflow:hidden}
+  .meter .zone{position:absolute;left:0;right:0;background:rgba(73,176,106,.28)}
+  .meter i{position:absolute;left:0;right:0;bottom:0;height:0;background:var(--green)}
+  .mute{width:100%;max-width:64px;border:1px solid var(--hairline);background:#15161a;border-radius:6px;font-size:11px;font-weight:700;padding:5px 0;letter-spacing:.06em}
+  .mute[aria-pressed=true]{background:var(--red);border-color:var(--red);color:#fff}
+
+  .lights{flex-direction:column}
+  .pars{display:flex;gap:10px;justify-content:space-around}
+  .par{display:grid;justify-items:center;gap:4px;background:none;border:0;padding:0;font-size:11px;color:var(--muted)}
+  .par span.dot{width:42px;height:42px;border-radius:50%;border:3px solid #2c2d33;box-shadow:0 0 16px currentColor}
+  .lights-bottom{display:flex;gap:10px;flex:1;min-height:0}
+  .mems{flex:1;display:grid;grid-template-columns:repeat(2,1fr);gap:6px}
+  .mem{background:var(--bg-raised);border:1px solid var(--hairline);border-radius:8px;padding:4px 8px;text-align:left;display:flex;flex-direction:column;justify-content:center;gap:2px}
+  .mem b{font-family:var(--display);font-size:16px;letter-spacing:.04em}
+  .mem small{font-size:10px;color:var(--muted)}
+  .mem[aria-pressed=true]{border-color:var(--amber);box-shadow:inset 0 0 0 1px var(--amber)}
+  .mem.pulse,.lights.pulse .mems{animation:pulse .5s ease-in-out 4}
+  .dimmer{display:grid;grid-template-rows:auto 1fr;gap:4px;justify-items:center;font-size:10px;color:var(--muted);text-transform:uppercase}
+  .hint{font-size:11px;color:var(--muted)}
+
+  /* ---- schede iniziale e finale ---- */
+  .overlay{position:fixed;inset:0;background:rgba(10,10,12,.88);display:grid;place-items:center;padding:16px;z-index:10}
+  .card{width:min(420px,100%);background:var(--bg-panel);border:1px solid var(--hairline);border-radius:14px;padding:18px;display:grid;gap:12px;max-height:100%;overflow:auto}
+  .card-top{display:flex;gap:14px;align-items:center}
+  .portrait{width:96px;height:96px;border-radius:12px;background:linear-gradient(#2a3a5a,#1a2233);flex:none;overflow:hidden;border:2px solid var(--amber)}
+  .card h2{margin:0;font-family:var(--marker);font-weight:400;font-size:26px;line-height:1.1;color:var(--amber);text-wrap:balance}
+  .card .tag{font-size:11px;letter-spacing:.08em;text-transform:uppercase;color:var(--muted)}
+  .card p{margin:0;font-size:14px;line-height:1.5}
+  .card ul{margin:0;padding-left:18px;font-size:14px;line-height:1.5}
+  .cta{background:var(--amber);color:#1a1206;border:0;border-radius:10px;padding:12px;font-family:var(--display);font-size:22px;letter-spacing:.06em}
+  .results{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;text-align:center}
+  .results div{background:var(--bg-raised);border-radius:10px;padding:8px 4px}
+  .results b{display:block;font-family:var(--display);font-size:26px;font-variant-numeric:tabular-nums}
+  .results span{font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:.06em}
+
+  @media (min-width:900px){
+    #app{grid-template-columns:1fr 380px;grid-template-rows:auto 1fr}
+    header{grid-column:1 / -1}
+    #desk{height:auto;max-height:none;border-top:0;border-left:1px solid var(--hairline)}
+  }
+  @media (prefers-reduced-motion:reduce){.strip.pulse,.mem.pulse{animation:none;border-color:var(--amber)}}
+</style>
+
+<svg width="0" height="0" style="position:absolute" aria-hidden="true">
+  <defs>
+    <!-- Preside Tramp, caricatura vettoriale: ciuffo giallo, abbronzatura arancio, cravatta rossa lunghissima -->
+    <symbol id="tramp" viewBox="0 0 100 140">
+      <path d="M14 140 L20 92 Q50 78 80 92 L86 140 Z" fill="#1d2b4a"/>
+      <path d="M40 88 L50 104 L60 88 Z" fill="#f4f1ea"/>
+      <path d="M47 92 L53 92 L56 136 L50 140 L44 136 Z" fill="#d6392f"/>
+      <rect x="42" y="72" width="16" height="16" rx="4" fill="#e8964f"/>
+      <ellipse cx="50" cy="52" rx="24" ry="28" fill="#f0a35a"/>
+      <ellipse cx="38" cy="54" rx="6" ry="4" fill="#f7d7b0"/>
+      <ellipse cx="62" cy="54" rx="6" ry="4" fill="#f7d7b0"/>
+      <circle cx="39" cy="54" r="2" fill="#2a1d12"/><circle cx="61" cy="54" r="2" fill="#2a1d12"/>
+      <path d="M32 47 Q38 43 44 46 M56 46 Q62 43 68 47" stroke="#e9d27a" stroke-width="2.5" fill="none" stroke-linecap="round"/>
+      <ellipse cx="50" cy="69" rx="5" ry="3.5" fill="#b8573a"/>
+      <path d="M22 44 Q20 16 52 18 Q84 18 80 40 Q70 26 54 30 Q40 24 30 34 Q26 38 22 44 Z" fill="#f4d35e"/>
+      <path d="M48 20 Q70 12 84 26 Q78 22 66 24 Z" fill="#e9c23f"/>
+    </symbol>
+  </defs>
+</svg>
+
+<div id="app">
+  <header>
+    <div class="row">
+      <div class="face-mini"><svg viewBox="12 10 76 76" width="34" height="34"><use href="#tramp"/></svg></div>
+      <div class="who">PRESIDE TRAMP<small>Discorso di benvenuto</small></div>
+      <div class="timeline" aria-label="Avanzamento del discorso"><i id="tl"></i></div>
+      <div class="clock" id="clock">21:00</div>
+    </div>
+    <div class="row">
+      <div class="stat grad">Pubblico <div class="bar"><i id="grad-bar"></i></div></div>
+      <div class="stat">Stanchezza <div class="bar"><i id="fat-bar"></i></div></div>
+      <button class="pill" id="beer" title="Bevi una birra: meno stanchezza">🍺 <span id="beer-n">1</span></button>
+      <button class="pill" id="pause-btn" title="Pausa">⏸</button>
+    </div>
+  </header>
+
+  <div id="stage">
+    <svg id="scene" viewBox="0 0 400 250" preserveAspectRatio="xMidYMid meet">
+      <rect width="400" height="250" fill="#0f1116"/>
+      <rect y="0" width="400" height="150" fill="#16181f"/>
+      <path d="M0 0 H400 V14 H0 Z" fill="#2a2c33"/>
+      <g id="beams"></g>
+      <rect y="150" width="400" height="12" fill="#2b2320"/>
+      <rect y="162" width="400" height="88" fill="#101116"/>
+      <!-- casse -->
+      <g id="spk-l"><rect x="14" y="80" width="46" height="72" rx="3" fill="#1b1c21" stroke="#34363e"/><circle cx="37" cy="100" r="8" fill="#0a0a0c"/><circle cx="37" cy="130" r="16" fill="#0a0a0c" stroke="#2a2b30"/></g>
+      <g id="spk-r"><rect x="340" y="80" width="46" height="72" rx="3" fill="#1b1c21" stroke="#34363e"/><circle cx="363" cy="100" r="8" fill="#0a0a0c"/><circle cx="363" cy="130" r="16" fill="#0a0a0c" stroke="#2a2b30"/></g>
+      <!-- leggio e asta -->
+      <g id="stand"><line x1="200" y1="150" x2="200" y2="96" stroke="#555" stroke-width="2"/><line x1="200" y1="96" x2="190" y2="90" stroke="#555" stroke-width="2"/><rect x="185" y="86" width="8" height="6" rx="2" fill="#777"/><path d="M200 150 Q230 158 250 162" stroke="#a3acb8" stroke-width="1.5" fill="none" id="cable"/></g>
+      <g id="preside" transform="translate(172 72)"><use href="#tramp" width="56" height="78"/></g>
+      <path d="M170 150 L230 150 L222 112 L178 112 Z" fill="#3a2a1e" stroke="#4d3927"/>
+      <text x="200" y="136" text-anchor="middle" font-family="Barlow Condensed" font-size="10" fill="#c8a36a">LICEO</text>
+      <g id="pars"></g>
+      <g id="crowd"></g>
+      <g id="bubbles"></g>
+    </svg>
+    <div id="caption"></div>
+    <div id="toast"></div>
+    <div id="pausa" hidden>PAUSA</div>
+  </div>
+
+  <section id="desk" aria-label="Banco regia">
+    <div class="tabs" role="tablist">
+      <button class="tab" role="tab" id="tab-mixer" aria-selected="true">MIXER</button>
+      <button class="tab" role="tab" id="tab-luci" aria-selected="false">LUCI</button>
+    </div>
+    <div class="panel" id="panel-mixer"></div>
+    <div class="panel lights" id="panel-luci" hidden>
+      <div class="pars" id="par-btns"></div>
+      <div class="lights-bottom">
+        <div class="mems" id="mems"></div>
+        <div class="dimmer">Dimmer<div class="fadewrap" id="dimmer-wrap"></div></div>
+      </div>
+      <div class="hint">Tocca un PAR per cambiargli colore · tocca una memoria per richiamarla, tienila premuta per salvarci le luci di adesso.</div>
+    </div>
+  </section>
+</div>
+
+<div class="overlay" id="intro">
+  <div class="card">
+    <div class="card-top">
+      <div class="portrait"><svg viewBox="8 8 84 84" width="96" height="96"><use href="#tramp"/></svg></div>
+      <div><div class="tag">Obiettivo 1 · 21:00</div><h2>Il discorso del Preside Tramp</h2></div>
+    </div>
+    <p>«Farò il discorso più bello della storia delle scuole. Tutti lo dicono.» Parla un quarto d'ora e vuole essere sentito fino al parcheggio.</p>
+    <ul>
+      <li>Tieni la sua voce nella <b>zona verde</b> col fader CH1.</li>
+      <li><b>Luce bianca piena</b> su di lui.</li>
+      <li>Occhio al <b>larsen</b> se si avvicina alle casse.</li>
+      <li>Tocca i fumetti sul palco: ti portano al comando giusto.</li>
+    </ul>
+    <button class="cta" id="start">Inizia il discorso</button>
+  </div>
+</div>
+
+<div class="overlay" id="outro" hidden>
+  <div class="card">
+    <div class="card-top">
+      <div class="portrait"><svg viewBox="8 8 84 84" width="96" height="96"><use href="#tramp"/></svg></div>
+      <div><div class="tag">Obiettivo 1 · fine</div><h2 id="outro-title">Applausi!</h2></div>
+    </div>
+    <div class="results">
+      <div><b id="r-grad">0%</b><span>Pubblico</span></div>
+      <div><b id="r-beer">0</b><span>Birre</span></div>
+      <div><b id="r-rep">+0</b><span>Reputazione</span></div>
+    </div>
+    <ul id="r-notes"></ul>
+    <button class="cta" id="again">Rifai il discorso</button>
+  </div>
+</div>
+
+<script>
+(() => {
+  const $ = s => document.querySelector(s);
+  const NS = 'http://www.w3.org/2000/svg';
+  const mk = (tag, attrs, parent) => { const e = document.createElementNS(NS, tag); for (const k in attrs) e.setAttribute(k, attrs[k]); if (parent) parent.appendChild(e); return e; };
+
+  const DURATION = 90;            // secondi reali = 15 minuti di discorso
+  const ZONE = [0.5, 0.8];        // zona verde sul meter del CH1
+  const COLORS = { bianco: '#f4f1ea', rosso: '#e0503f', blu: '#3f7fe0', verde: '#49b06a', ambra: '#f2a541', viola: '#b36bff' };
+  const LINES = [
+    'Benvenuti alla festa della scuola più grande, la più bella. Tremenda.',
+    'Abbiamo i banchi migliori. Tutti mi chiedono: come fa ad avere questi banchi?',
+    'La mensa? Fantastica. Gli spaghetti più lunghi della storia.',
+    'Costruiremo una palestra enorme. E la pagherà il liceo di fronte.',
+    'I voti quest\'anno sono altissimi. Record. Nessuno ha mai visto voti così.',
+    'Qualcuno dice che il discorso è lungo. Fake news. È perfetto.',
+    'E ora vi lascio alla musica. Musica bellissima, l\'ho scelta io.'
+  ];
+
+  let S;
+  function fresh () {
+    return {
+      t: 0, running: false, paused: false, grad: 60, fatigue: 30, beers: 1, drunk: 0,
+      fader: 0.55, mute: false, dimmer: 0.3, pars: ['viola', 'blu', 'viola', 'blu'], mem: 2,
+      voiceK: 1, disconnected: false, walking: false, larsens: 0, pops: 0,
+      events: [], done: new Set(), notes: [], going: null, lastLine: -1,
+      mems: {
+        1: { name: 'Bianco pieno', pars: ['bianco', 'bianco', 'bianco', 'bianco'], dimmer: 1 },
+        2: { name: 'Festa', pars: ['viola', 'blu', 'viola', 'blu'], dimmer: 0.3 },
+        3: { name: 'Caldo', pars: ['ambra', 'ambra', 'ambra', 'ambra'], dimmer: 0.8 },
+        4: { name: 'Buio', pars: ['bianco', 'bianco', 'bianco', 'bianco'], dimmer: 0 }
+      }
+    };
+  }
+
+  /* ---------- copione: eventi fissi + uno pescato a caso ---------- */
+  function script () {
+    const random = Math.random() < 0.5 ? cableEvent(66) : tapEvent(66);
+    return [
+      { id: 'luce', at: 1.5, win: 9, target: 'preside', text: 'Luce su di me!', tab: 'luci', icon: '💡',
+        ok: () => lightsWhite(), fail: () => hit(-10, 'Il preside è rimasto al buio colorato.') },
+      { id: 'piano', at: 13, win: 7, target: 'preside', text: 'Parla piano…', tab: 'mixer', icon: '🔉',
+        start: () => { S.voiceK = 0.6; }, endAt: 28, end: () => { S.voiceK = 1; },
+        ok: () => inZone(), fail: () => hit(-8, 'In fondo alla palestra non si sentiva niente.') },
+      { id: 'mangia', at: 31, win: 6, target: 'preside', text: 'Mangia il microfono!', tab: 'mixer', icon: '📢',
+        start: () => { S.voiceK = 1.8; }, endAt: 44, end: () => { S.voiceK = 1; },
+        ok: () => inZone(), fail: () => hit(-8, 'Voce distorta: la gente si tappa le orecchie.') },
+      { id: 'larsen', at: 49, win: 4, target: 'spk-r', text: 'Va verso le casse!', tab: 'mixer', icon: '⚠️',
+        start: () => { S.walking = true; }, endAt: 58, end: () => { S.walking = false; toast('È tornato al leggio: riporta su il CH1.'); },
+        ok: () => S.mute || output() < 0.35,
+        fail: () => { S.larsens++; sfx.larsen(); hit(-20, 'LARSEN! Fischio in tutta la palestra.'); } },
+      random,
+      { id: 'finale', at: 80, win: 8, target: 'preside', text: 'Ha finito: luci Festa!', tab: 'luci', icon: '👏',
+        ok: () => !lightsWhite() && S.dimmer >= 0.25 && !S.pars.every(p => p === 'bianco'), fail: () => hit(-4, 'Finale spento: niente luci da festa.') }
+    ];
+  }
+  function cableEvent (at) {
+    return { id: 'cavo', at, win: 10, target: 'stand', text: 'Cavo staccato! Tocca e vai', icon: '🔌', onsite: 2.5,
+      start: () => { S.disconnected = true; }, ok: () => !S.disconnected,
+      fail: () => { hit(-15, 'Dieci secondi di preside muto.'); S.disconnected = false; } };
+  }
+  function tapEvent (at) {
+    return { id: 'tap', at, win: 3.5, target: 'preside', text: '«Si sente?» Batte sul mic!', tab: 'mixer', icon: '👊',
+      ok: () => S.mute || output() < 0.2,
+      fail: () => { S.pops++; sfx.pop(); hit(-8, 'BUM BUM nelle casse.'); }, after: 'Ora riapri il CH1!' };
+  }
+
+  /* ---------- livelli ---------- */
+  function voice (t) {
+    if (S.disconnected) return 0;
+    const syll = 0.88 + 0.12 * Math.sin(t * 9.1) * Math.sin(t * 3.3);
+    return 0.62 * S.voiceK * syll;
+  }
+  function jitter () { return (S.fatigue / 100) * 0.12 * Math.sin(S.t * 5.7) * Math.sin(S.t * 1.9); }
+  function output () { return S.mute ? 0 : voice(S.t) * Math.max(0, S.fader + jitter()) * 1.9; }
+  function inZone () { const o = output(); return o >= ZONE[0] && o <= ZONE[1]; }
+  function lightsWhite () { return S.pars.every(p => p === 'bianco') && S.dimmer >= 0.6; }
+  function hit (d, msg) { S.grad = clamp(S.grad + d); toast(msg, 'bad'); sfx.boo(); }
+  const clamp = v => Math.max(0, Math.min(100, v));
+
+  /* ---------- palco ---------- */
+  const beams = $('#beams'), parsG = $('#pars'), crowd = $('#crowd'), bubbles = $('#bubbles');
+  const PAR_X = [70, 150, 250, 330];
+  const beamEls = PAR_X.map(x => mk('path', { d: `M${x - 6} 18 L${x + 6} 18 L${x + 55} 162 L${x - 55} 162 Z`, opacity: 0 }, beams));
+  const parEls = PAR_X.map(x => { mk('rect', { x: x - 8, y: 10, width: 16, height: 10, rx: 3, fill: '#222' }, parsG); return mk('circle', { cx: x, cy: 20, r: 5 }, parsG); });
+  const heads = [];
+  for (let r = 0; r < 4; r++) for (let i = 0; i < 16; i++) {
+    const x = 12 + i * 25 + (r % 2) * 12 + (Math.random() * 6 - 3), y = 186 + r * 18;
+    const g = mk('g', {}, crowd);
+    mk('rect', { x: x - 9, y: y + 6, width: 18, height: 20, rx: 6, fill: ['#384152', '#4a3a3a', '#2f4a3a', '#4b4458'][(i + r) % 4] }, g);
+    const h = mk('circle', { cx: x, cy: y, r: 7, fill: '#d9a57a' }, g);
+    heads.push({ g, h, ph: Math.random() * 6 });
+  }
+
+  function drawStage () {
+    S.pars.forEach((c, i) => {
+      const col = COLORS[c];
+      parEls[i].setAttribute('fill', S.dimmer > 0.02 ? col : '#333');
+      beamEls[i].setAttribute('fill', col);
+      beamEls[i].setAttribute('opacity', (0.28 * S.dimmer).toFixed(3));
+    });
+    const px = S.walking ? Math.min(292, 172 + (S.t - 49) * 60) : (S.t > 58 && S.t < 60 ? 172 : 172);
+    $('#preside').setAttribute('transform', `translate(${px} ${72 + Math.sin(S.t * 4) * 1.2})`);
+    $('#cable').setAttribute('d', S.disconnected ? 'M200 150 Q214 166 226 170' : 'M200 150 Q230 158 250 162');
+    const mood = S.grad / 100;
+    heads.forEach((o, i) => {
+      const bob = S.running && !S.paused ? Math.sin(S.t * (2 + mood * 4) + o.ph) * mood * 3 : 0;
+      o.g.setAttribute('transform', `translate(0 ${bob.toFixed(2)})`);
+      o.h.setAttribute('fill', mood < 0.35 ? '#8d8f96' : '#d9a57a');
+    });
+  }
+
+  /* ---------- fumetti ---------- */
+  const TARGET_XY = { preside: () => [S.walking ? 300 : 200, 58], 'spk-r': () => [340, 62], stand: () => [215, 150] };
+  function renderBubbles () {
+    bubbles.textContent = '';
+    S.events.filter(e => e.live).forEach(e => {
+      const [x, y] = TARGET_XY[e.target]();
+      const w = Math.min(170, 30 + e.text.length * 5.4);
+      const bx = Math.max(4, Math.min(396 - w, x - w / 2));
+      const g = mk('g', { class: 'bubble', role: 'button', 'aria-label': e.text }, bubbles);
+      mk('rect', { x: bx, y: y - 34, width: w, height: 26, rx: 8, fill: '#f4f1ea', stroke: '#1a1a1a' }, g);
+      mk('path', { d: `M${x - 5} ${y - 9} L${x} ${y - 1} L${x + 5} ${y - 9} Z`, fill: '#f4f1ea' }, g);
+      const left = e.going ? 1 - e.going : Math.max(0, (e.deadline - S.t) / e.win);
+      const col = e.going ? '#49b06a' : left > 0.5 ? '#f2c53d' : '#e0503f';
+      mk('circle', { cx: bx + 14, cy: y - 21, r: 8, fill: 'none', stroke: '#ddd', 'stroke-width': 3 }, g);
+      mk('circle', { cx: bx + 14, cy: y - 21, r: 8, fill: 'none', stroke: col, 'stroke-width': 3, 'stroke-dasharray': `${(left * 50.3).toFixed(1)} 60`, transform: `rotate(-90 ${bx + 14} ${y - 21})` }, g);
+      const tx = mk('text', { x: bx + 27, y: y - 17, 'font-size': 10.5, 'font-family': 'Inter, sans-serif', 'font-weight': 600, fill: '#141519' }, g);
+      tx.textContent = e.going ? 'Sto andando…' : e.text;
+      g.addEventListener('pointerdown', ev => { ev.stopPropagation(); tapBubble(e); });
+    });
+  }
+  function tapBubble (e) {
+    if (e.onsite) {
+      if (e.going) return;
+      e.going = 0.001; toast('Stai andando al leggio…');
+      return;
+    }
+    showTab(e.tab);
+    if (e.tab === 'mixer') pulse($('#strip-1'));
+    else pulse(e.id === 'finale' ? $('#mem-2') : $('#mem-1'));
+  }
+  function pulse (el) { el.classList.remove('pulse'); void el.offsetWidth; el.classList.add('pulse'); }
+
+  /* ---------- banco regia ---------- */
+  function showTab (which) {
+    $('#tab-mixer').setAttribute('aria-selected', which === 'mixer');
+    $('#tab-luci').setAttribute('aria-selected', which === 'luci');
+    $('#panel-mixer').hidden = which !== 'mixer';
+    $('#panel-luci').hidden = which !== 'luci';
+  }
+  $('#tab-mixer').onclick = () => showTab('mixer');
+  $('#tab-luci').onclick = () => showTab('luci');
+
+  function makeFader (parent, get, set, zone) {
+    const wrap = document.createElement('div'); wrap.className = 'fadewrap';
+    const f = document.createElement('div'); f.className = 'fader'; f.tabIndex = 0; f.setAttribute('role', 'slider');
+    f.innerHTML = '<div class="track"></div><div class="knob"></div>';
+    wrap.appendChild(f);
+    let meter = null;
+    if (zone) {
+      meter = document.createElement('div'); meter.className = 'meter';
+      meter.innerHTML = `<div class="zone" style="bottom:${ZONE[0] * 100}%;height:${(ZONE[1] - ZONE[0]) * 100}%"></div><i></i>`;
+      wrap.appendChild(meter);
+    }
+    parent.appendChild(wrap);
+    const knob = f.querySelector('.knob');
+    const paint = () => { knob.style.top = `calc(6px + (100% - 12px) * ${1 - get()})`; f.setAttribute('aria-valuenow', Math.round(get() * 100)); };
+    const fromY = y => { const r = f.getBoundingClientRect(); set(Math.max(0, Math.min(1, 1 - (y - r.top - 6) / (r.height - 12)))); paint(); };
+    f.addEventListener('pointerdown', e => { f.setPointerCapture(e.pointerId); fromY(e.clientY); });
+    f.addEventListener('pointermove', e => { if (f.hasPointerCapture(e.pointerId)) fromY(e.clientY); });
+    f.addEventListener('keydown', e => { if (e.key === 'ArrowUp') set(Math.min(1, get() + 0.05)); else if (e.key === 'ArrowDown') set(Math.max(0, get() - 0.05)); else return; e.preventDefault(); paint(); });
+    paint();
+    return { paint, meter: meter && meter.querySelector('i') };
+  }
+
+  let ch1, dimmerF;
+  function buildDesk () {
+    const pm = $('#panel-mixer'); pm.textContent = '';
+    const strips = [
+      { id: 1, name: 'CH1', face: true }, { id: 2, name: 'CH2' }, { id: 3, name: 'CH3' }, { id: 4, name: 'CH4' }, { id: 5, name: 'PC' }
+    ];
+    strips.forEach(s => {
+      const d = document.createElement('div'); d.className = 'strip' + (s.face ? '' : ' off'); d.id = 'strip-' + s.id;
+      d.innerHTML = `<div class="strip-name">${s.face ? '<span class="face-mini"><svg viewBox="12 10 76 76" width="20" height="20"><use href="#tramp"/></svg></span>' : ''}${s.name}</div>`;
+      pm.appendChild(d);
+      if (s.face) ch1 = makeFader(d, () => S.fader, v => { S.fader = v; }, true);
+      else makeFader(d, () => 0, () => {}, true);
+      const m = document.createElement('button'); m.className = 'mute'; m.textContent = 'MUTE'; m.setAttribute('aria-pressed', 'false');
+      if (s.face) { m.id = 'mute-1'; m.onclick = () => { S.mute = !S.mute; m.setAttribute('aria-pressed', S.mute); }; }
+      d.appendChild(m);
+    });
+
+    const pb = $('#par-btns'); pb.textContent = '';
+    S.pars.forEach((_, i) => {
+      const b = document.createElement('button'); b.className = 'par'; b.id = 'par-' + i;
+      b.innerHTML = `<span class="dot"></span>PAR ${i + 1}`;
+      b.onclick = () => { const keys = Object.keys(COLORS); S.pars[i] = keys[(keys.indexOf(S.pars[i]) + 1) % keys.length]; S.mem = null; paintLights(); };
+      pb.appendChild(b);
+    });
+    const ms = $('#mems'); ms.textContent = '';
+    [1, 2, 3, 4].forEach(n => {
+      const b = document.createElement('button'); b.className = 'mem'; b.id = 'mem-' + n;
+      let timer = null, saved = false;
+      b.addEventListener('pointerdown', () => { saved = false; timer = setTimeout(() => { saved = true; S.mems[n] = { name: 'Mia ' + n, pars: [...S.pars], dimmer: S.dimmer }; S.mem = n; paintLights(); toast('Memoria ' + n + ' salvata.', 'ok'); }, 600); });
+      b.addEventListener('pointerup', () => { clearTimeout(timer); if (!saved) recall(n); });
+      b.addEventListener('pointerleave', () => clearTimeout(timer));
+      ms.appendChild(b);
+    });
+    const dw = $('#dimmer-wrap'); dw.textContent = '';
+    dimmerF = makeFader(dw, () => S.dimmer, v => { S.dimmer = v; S.mem = null; paintLights(); }, false);
+    showTab('mixer');
+    paintLights();
+  }
+  function recall (n) { const m = S.mems[n]; S.pars = [...m.pars]; S.dimmer = m.dimmer; S.mem = n; dimmerF.paint(); paintLights(); }
+  function paintLights () {
+    S.pars.forEach((c, i) => { const d = $('#par-' + i + ' .dot'); d.style.background = COLORS[c]; d.style.color = COLORS[c]; d.style.opacity = 0.35 + 0.65 * S.dimmer; });
+    [1, 2, 3, 4].forEach(n => { const b = $('#mem-' + n); b.innerHTML = `<b>${n} · ${S.mems[n].name}</b><small>${S.mems[n].pars.map(p => p).join(' ')}</small>`; b.setAttribute('aria-pressed', S.mem === n); });
+    drawStage();
+  }
+
+  /* ---------- header ---------- */
+  function paintHeader () {
+    $('#tl').style.width = (S.t / DURATION * 100) + '%';
+    const mins = Math.floor(S.t / DURATION * 15);
+    $('#clock').textContent = '21:' + String(mins).padStart(2, '0');
+    const gb = $('#grad-bar'); gb.style.width = S.grad + '%';
+    gb.style.background = S.grad < 35 ? 'var(--red)' : S.grad < 65 ? 'var(--yellow)' : 'var(--green)';
+    const fb = $('#fat-bar'); fb.style.width = S.fatigue + '%'; fb.style.background = S.fatigue > 70 ? 'var(--red)' : '#8b8e98';
+    $('#beer-n').textContent = S.beers;
+  }
+  $('#beer').onclick = () => {
+    if (!S.running) return;
+    if (S.beers <= 0) { toast('Niente birre in tasca.'); return; }
+    S.beers--; S.drunk++; S.fatigue = Math.max(0, S.fatigue - 30); sfx.beer(); toast('Glu glu. Stanchezza giù.', 'ok'); paintHeader();
+  };
+  $('#pause-btn').onclick = () => { if (!S.running) return; S.paused = !S.paused; $('#pausa').hidden = !S.paused; $('#pause-btn').textContent = S.paused ? '▶' : '⏸'; };
+
+  let toastT;
+  function toast (msg, kind) { const t = $('#toast'); t.textContent = msg; t.className = 'show ' + (kind || ''); clearTimeout(toastT); toastT = setTimeout(() => t.className = '', 2600); }
+
+  /* ---------- ciclo di gioco ---------- */
+  let last = 0, hold = 0;
+  function tick (now) {
+    const dt = Math.min(0.1, (now - last) / 1000 || 0); last = now;
+    if (S.running && !S.paused) step(dt);
+    requestAnimationFrame(tick);
+  }
+  function step (dt) {
+    S.t += dt;
+    S.fatigue = Math.min(100, S.fatigue + dt * 0.35);
+    const k = 1 - S.fatigue / 250;   // stanco = finestre di reazione più corte
+
+    // eventi: partono, si risolvono o scadono
+    S.events.forEach(e => {
+      if (!e.started && S.t >= e.at) { e.started = true; e.live = true; e.deadline = S.t + e.win * k; e.start && e.start(); sfx.ding(); }
+      if (e.live) {
+        if (e.going) { e.going += dt / (e.onsite * (1 + S.fatigue / 100)); if (e.going >= 1) { S.disconnected = false; } }
+        if (e.ok()) { e.hold = (e.hold || 0) + dt; if (e.hold > (e.id === 'piano' || e.id === 'mangia' ? 1 : 0.15)) { e.live = false; S.grad = clamp(S.grad + 4); toast('Fatto! ' + (e.after || ''), 'ok'); sfx.ok(); } }
+        else e.hold = 0;
+        if (e.live && S.t > e.deadline && !(e.going > 0 && e.going < 1)) { e.live = false; e.fail(); }
+      }
+      if (e.endAt && !e.ended && S.t >= e.endAt) { e.ended = true; e.end(); }
+    });
+
+    // gradimento continuo
+    const o = output();
+    let d = 0;
+    if (S.mute || S.disconnected) d -= 3; else if (o < 0.35) d -= 2; else if (o > 0.9) d -= 2.5; else if (inZone()) d += 1.2; else d += 0.2;
+    if (S.t < 80 && !lightsWhite()) d -= 0.8;
+    S.grad = clamp(S.grad + d * dt);
+
+    // sottotitoli
+    const li = Math.min(LINES.length - 1, Math.floor(S.t / (DURATION / LINES.length)));
+    if (li !== S.lastLine) { S.lastLine = li; }
+    $('#caption').textContent = S.disconnected || S.mute ? '(…il preside parla ma non si sente niente…)' : '«' + LINES[li] + '»';
+
+    if (ch1.meter) { ch1.meter.style.height = Math.min(100, o * 100) + '%'; ch1.meter.style.background = o > 0.9 ? 'var(--red)' : inZone() ? 'var(--green)' : 'var(--yellow)'; }
+    ch1.paint();
+    sfx.voice(S.mute || S.disconnected ? 0 : o, S.t);
+    drawStage(); renderBubbles(); paintHeader();
+    if (S.t >= DURATION) finish();
+  }
+
+  function finish () {
+    S.running = false; sfx.voice(0); sfx.applause(S.grad);
+    let beers = 0; const notes = [];
+    if (!S.larsens && !S.pops) { beers++; notes.push('🍺 Nessun larsen e nessun colpo nelle casse.'); }
+    else notes.push((S.larsens ? 'Larsen: ' + S.larsens + '. ' : '') + (S.pops ? 'Colpi nelle casse: ' + S.pops + '.' : ''));
+    if (S.grad >= 70) { beers++; notes.push('🍺 Pubblico contento (almeno 70%).'); }
+    if (S.drunk) notes.push('Birre bevute durante il discorso: ' + S.drunk + '.');
+    const rep = 5 + Math.round((S.grad - 60) / 10) - S.larsens * 5;
+    $('#outro-title').textContent = S.grad >= 70 ? 'Applausi! «Il miglior tecnico della storia.»' : S.grad >= 40 ? 'Applausi tiepidi.' : '«Siete licenziati!»';
+    $('#r-grad').textContent = Math.round(S.grad) + '%';
+    $('#r-beer').textContent = '+' + beers;
+    $('#r-rep').textContent = (rep >= 0 ? '+' : '') + rep;
+    $('#r-notes').innerHTML = notes.map(n => `<li>${n}</li>`).join('');
+    setTimeout(() => { $('#outro').hidden = false; }, 1800);
+  }
+
+  function start () {
+    S = fresh(); S.events = script();
+    buildDesk(); $('#pausa').hidden = true; $('#pause-btn').textContent = '⏸';
+    $('#intro').hidden = true; $('#outro').hidden = true;
+    sfx.init(); S.running = true;
+  }
+  $('#start').onclick = start;
+  $('#again').onclick = start;
+
+  /* ---------- suoni sintetizzati (partono solo dopo il tocco su Inizia) ---------- */
+  const sfx = (() => {
+    let ac, vo, vg, noiseBuf;
+    const env = (g, a, peak, rel, t0) => { g.gain.setValueAtTime(0.0001, t0); g.gain.exponentialRampToValueAtTime(peak, t0 + a); g.gain.exponentialRampToValueAtTime(0.0001, t0 + a + rel); };
+    const tone = (f, dur, type, vol) => { if (!ac) return; const o = ac.createOscillator(), g = ac.createGain(); o.type = type || 'sine'; o.frequency.value = f; o.connect(g).connect(ac.destination); env(g, 0.01, vol || 0.15, dur, ac.currentTime); o.start(); o.stop(ac.currentTime + dur + 0.05); };
+    const noise = (dur, vol, fl) => { if (!ac) return; const s = ac.createBufferSource(); s.buffer = noiseBuf; const f = ac.createBiquadFilter(); f.type = 'bandpass'; f.frequency.value = fl || 1500; const g = ac.createGain(); s.connect(f).connect(g).connect(ac.destination); env(g, 0.3, vol, dur, ac.currentTime); s.start(); s.stop(ac.currentTime + dur + 0.4); };
+    return {
+      init () {
+        if (ac) return;
+        try { ac = new (window.AudioContext || window.webkitAudioContext)(); } catch (e) { return; }
+        noiseBuf = ac.createBuffer(1, ac.sampleRate * 2, ac.sampleRate);
+        const d = noiseBuf.getChannelData(0); for (let i = 0; i < d.length; i++) d[i] = Math.random() * 2 - 1;
+        vo = ac.createOscillator(); vo.type = 'sawtooth'; vo.frequency.value = 120;
+        const f = ac.createBiquadFilter(); f.type = 'bandpass'; f.frequency.value = 700; f.Q.value = 2;
+        vg = ac.createGain(); vg.gain.value = 0; vo.connect(f).connect(vg).connect(ac.destination); vo.start();
+      },
+      voice (level, t) {
+        if (!vg) return;
+        const syl = t == null ? 0 : Math.max(0, Math.sin(t * 11) * Math.sin(t * 2.7));
+        vg.gain.setTargetAtTime(Math.min(0.12, level * 0.09) * syl, ac.currentTime, 0.03);
+        if (t != null) vo.frequency.setTargetAtTime(110 + 30 * Math.sin(t * 1.3) + (level > 0.9 ? 60 : 0), ac.currentTime, 0.05);
+      },
+      larsen () { if (!ac) return; const o = ac.createOscillator(), g = ac.createGain(); o.frequency.value = 2750; o.connect(g).connect(ac.destination); g.gain.setValueAtTime(0.001, ac.currentTime); g.gain.exponentialRampToValueAtTime(0.18, ac.currentTime + 1.2); g.gain.exponentialRampToValueAtTime(0.001, ac.currentTime + 2.4); o.start(); o.stop(ac.currentTime + 2.5); },
+      pop () { tone(55, 0.25, 'sine', 0.5); setTimeout(() => tone(55, 0.25, 'sine', 0.5), 280); },
+      ding () { tone(880, 0.15, 'triangle', 0.08); },
+      ok () { tone(660, 0.1, 'triangle', 0.08); setTimeout(() => tone(990, 0.15, 'triangle', 0.08), 90); },
+      boo () { noise(0.9, 0.12, 300); },
+      beer () { noise(0.5, 0.08, 3000); },
+      applause (g) { noise(2.5, 0.05 + g / 100 * 0.25, 2500); }
+    };
+  })();
+
+  S = fresh(); buildDesk(); drawStage(); paintHeader();
+  requestAnimationFrame(tick);
+})();
+</script>
