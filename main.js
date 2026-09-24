@@ -1323,7 +1323,7 @@ const RECORDS_KEEP = 20;       // record tenuti per livello
 const SERVICE_MAX = 24;        // caratteri del nome del service
 
 function defaultProfile () {
-  return { v: SAVE_VERSION, service: '', settings: { volume: 0.8, reducedFx: false, skipShow: false }, level: null, records: {}, reputation: { total: 0, byLevel: {} } };
+  return { v: SAVE_VERSION, service: '', settings: { volume: 0.8, reducedFx: false, skipShow: false }, logo: null, level: null, records: {}, reputation: { total: 0, byLevel: {} } };
 }
 const Profile = (() => {
   let data = defaultProfile();
@@ -1350,6 +1350,54 @@ window.addEventListener('pagehide', () => Profile.flush());
 const settings = () => Profile.data.settings;
 const reducedFx = () => !!settings().reducedFx;
 const serviceName = () => Profile.data.service || 'Il tuo service';
+
+/* ---------------- logo del service ----------------
+   Si sceglie uno dei loghi pronti o se ne crea uno: forma, simbolo e due
+   colori. È un disegno vettoriale (SVG), quindi resta nitido a ogni
+   misura: in testata, nel menù e dipinto sulla fiancata del furgone. */
+const LOGO_SHAPES = {
+  cerchio: '<circle cx="50" cy="50" r="46"/>',
+  quadrato: '<rect x="5" y="5" width="90" height="90" rx="18"/>',
+  scudo: '<path d="M50 3 L93 17 V48 C93 73 74 90 50 97 C26 90 7 73 7 48 V17 Z"/>',
+  esagono: '<polygon points="50,3 91,26 91,74 50,97 9,74 9,26"/>'
+};
+const LOGO_ICONS = {
+  iniziali: null,   // le iniziali del nome del service
+  cassa: '<rect x="30" y="20" width="40" height="60" rx="5"/><circle cx="50" cy="36" r="7" fill="BG"/><circle cx="50" cy="60" r="13" fill="BG"/><circle cx="50" cy="60" r="5"/>',
+  faro: '<circle cx="50" cy="42" r="22"/><circle cx="50" cy="42" r="12" fill="BG"/><circle cx="50" cy="42" r="5"/><rect x="46" y="63" width="8" height="12"/><rect x="32" y="74" width="36" height="7" rx="3"/>',
+  fulmine: '<polygon points="57,12 27,56 47,56 41,88 73,42 53,42"/>',
+  onda: '<path d="M18 50 C24 26 30 26 36 50 S48 74 54 50 S66 26 72 50 S80 66 84 58" fill="none" stroke="FG" stroke-width="8" stroke-linecap="round"/>',
+  stella: '<polygon points="50,14 59,39 86,39 64,55 72,81 50,65 28,81 36,55 14,39 41,39"/>',
+  fader: '<rect x="26" y="18" width="6" height="64" rx="3"/><rect x="47" y="18" width="6" height="64" rx="3"/><rect x="68" y="18" width="6" height="64" rx="3"/><rect x="19" y="56" width="20" height="11" rx="2"/><rect x="40" y="30" width="20" height="11" rx="2"/><rect x="61" y="46" width="20" height="11" rx="2"/>'
+};
+const LOGO_COLORS = ['#f2a541', '#e0503f', '#3b7bff', '#49b06a', '#9b5de5', '#f2c53d', '#eee9df', '#1c1d22'];
+const LOGO_PRESETS = [
+  { shape: 'cerchio', icon: 'cassa', bg: '#1c1d22', fg: '#f2a541' },
+  { shape: 'scudo', icon: 'fulmine', bg: '#e0503f', fg: '#eee9df' },
+  { shape: 'esagono', icon: 'faro', bg: '#3b7bff', fg: '#f2c53d' },
+  { shape: 'quadrato', icon: 'fader', bg: '#eee9df', fg: '#1c1d22' },
+  { shape: 'cerchio', icon: 'onda', bg: '#9b5de5', fg: '#eee9df' },
+  { shape: 'scudo', icon: 'iniziali', bg: '#f2a541', fg: '#1c1d22' }
+];
+const defaultLogo = () => ({ ...LOGO_PRESETS[0] });
+function serviceInitials (name) {
+  const words = String(name || '').split(/\s+/).filter(w => w && !/^service$/i.test(w));
+  const ini = words.slice(0, 2).map(w => w[0]).join('').toUpperCase();
+  return ini || 'SC';
+}
+function logoSVG (logo, name, px) {
+  const lg = { ...defaultLogo(), ...logo };
+  const shape = LOGO_SHAPES[lg.shape] || LOGO_SHAPES.cerchio;
+  const ini = serviceInitials(name);
+  const icon = lg.icon === 'iniziali' || !LOGO_ICONS[lg.icon]
+    ? `<text x="50" y="53" text-anchor="middle" dominant-baseline="middle" font-family="Barlow Condensed, Arial Narrow, sans-serif" font-weight="700" font-size="${ini.length > 1 ? 46 : 56}">${escapeHtml(ini)}</text>`
+    : LOGO_ICONS[lg.icon].replace(/BG/g, lg.bg).replace(/FG/g, lg.fg);
+  return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100" width="${px}" height="${px}">`
+    + `<g fill="${lg.bg}">${shape}</g>`
+    + `<g fill="none" stroke="${lg.fg}" stroke-width="3" transform="translate(50 50) scale(.86) translate(-50 -50)">${shape}</g>`
+    + `<g fill="${lg.fg}" transform="translate(50 50) scale(.8) translate(-50 -50)">${icon}</g></svg>`;
+}
+const serviceLogo = () => Profile.data.logo || defaultLogo();
 
 // la partita è "in corso" dopo Nuova partita o Continua: prima non si salva
 // niente, così la schermata iniziale non sovrascrive il salvataggio
@@ -1416,6 +1464,8 @@ function applySettings () {
   if (tag) tag.textContent = gameActive || Profile.data.service
     ? (Profile.data.service || serviceName()).toUpperCase() + ' · REPUTAZIONE ' + reputation()
     : 'STAGE CREW SIMULATOR';
+  const logo = el('#service-logo');
+  if (logo) logo.innerHTML = gameActive || Profile.data.service ? logoSVG(serviceLogo(), Profile.data.service, 30) : '';
   if (window.__scene) window.__scene.paintServiceName();
 }
 
@@ -1434,7 +1484,12 @@ function sceneKeyboard (on) {
 function whenScene (fn) {
   if (window.__scene) fn(window.__scene); else setTimeout(() => whenScene(fn), 50);
 }
-function showMenuPage (page) {
+// nuova partita in preparazione (nome e logo non ancora confermati) e
+// logo che si sta modificando nella pagina del logo
+let draft = { name: '', logo: defaultLogo() };
+let logoEdit = null;
+
+function showMenuPage (page, keep) {
   document.querySelectorAll('#menu-modal .menu-page').forEach(p => { p.hidden = p.dataset.page !== page; });
   const canResume = gameActive || !!Profile.data.level;
   el('#menu-resume').hidden = !canResume;
@@ -1442,13 +1497,58 @@ function showMenuPage (page) {
   el('#menu-new').classList.toggle('primary', !canResume);
   el('#new-warning').hidden = !Profile.data.level;
   el('#set-service-row').hidden = !gameActive;
-  if (page === 'new') { const i = el('#service-input'); i.value = Profile.data.service; setTimeout(() => i.focus(), 30); }
+  el('#set-logo-row').hidden = !gameActive;
+  if (page === 'new') {
+    const i = el('#service-input');
+    if (!keep) { draft = { name: Profile.data.service, logo: { ...serviceLogo() } }; i.value = draft.name; setTimeout(() => i.focus(), 30); }
+    el('#new-logo').innerHTML = logoSVG(draft.logo, draft.name, 56);
+  }
+  if (page === 'logo') renderLogoEditor();
   if (page === 'settings') {
     el('#set-volume').value = Math.round(settings().volume * 100);
     el('#set-reduced').checked = !!settings().reducedFx;
     el('#set-skipshow').checked = !!settings().skipShow;
     el('#set-service').value = Profile.data.service;
+    el('#set-logo').innerHTML = logoSVG(serviceLogo(), Profile.data.service, 56);
   }
+}
+
+/* pagina del logo: loghi pronti, forma, simbolo e colori. Fondo e simbolo
+   non possono avere lo stesso colore: se succede si scambiano. */
+function renderLogoEditor () {
+  const { logo } = logoEdit, name = logoEdit.name();
+  el('#logo-preview').innerHTML = logoSVG(logo, name, 96);
+  const opt = (html, sel, fn, extra) => {
+    const b = document.createElement('button');
+    b.type = 'button'; b.className = 'logo-opt' + (sel ? ' sel' : '') + (extra ? ' ' + extra : '');
+    b.innerHTML = html;
+    b.addEventListener('click', () => { SFX.button(); fn(); logoChanged(); });
+    return b;
+  };
+  const fill = (id, items) => { const row = el(id); row.innerHTML = ''; items.forEach(b => row.appendChild(b)); };
+  const same = (a, b) => ['shape', 'icon', 'bg', 'fg'].every(k => a[k] === b[k]);
+  fill('#logo-presets', LOGO_PRESETS.map((pr, i) => {
+    const b = opt(logoSVG(pr, name, 38), same(pr, logo), () => Object.assign(logo, pr));
+    b.dataset.preset = i; return b;
+  }));
+  fill('#logo-shapes', Object.keys(LOGO_SHAPES).map(k => {
+    const b = opt(logoSVG({ ...logo, shape: k }, name, 38), logo.shape === k, () => { logo.shape = k; });
+    b.title = k; b.dataset.shape = k; return b;
+  }));
+  fill('#logo-icons', Object.keys(LOGO_ICONS).map(k => {
+    const b = opt(logoSVG({ ...logo, icon: k }, name, 38), logo.icon === k, () => { logo.icon = k; });
+    b.title = k; b.dataset.icon = k; return b;
+  }));
+  const setColor = (key, other, c) => { if (logo[other] === c) logo[other] = logo[key]; logo[key] = c; };
+  ['bg', 'fg'].forEach(key => fill('#logo-' + key, LOGO_COLORS.map(c => {
+    const b = opt('', logo[key] === c, () => setColor(key, key === 'bg' ? 'fg' : 'bg', c), 'swatch');
+    b.style.background = c; b.dataset.color = c; return b;
+  })));
+}
+function logoChanged () {
+  renderLogoEditor();
+  // dalle impostazioni il logo cambia subito anche in testata e sul furgone
+  if (logoEdit.live) { Profile.save(); applySettings(); }
 }
 function openMenu (page) {
   menuOpen = true;
@@ -1466,8 +1566,9 @@ function closeMenu () {
 }
 const cleanName = s => String(s || '').replace(/\s+/g, ' ').trim().slice(0, SERVICE_MAX);
 
-function startNewGame (name) {
+function startNewGame (name, logo) {
   Profile.data.service = cleanName(name);
+  Profile.data.logo = { ...(logo || serviceLogo()) };
   Profile.data.reputation = defaultProfile().reputation;   // nuovo service, reputazione da costruire
   whenScene(scene => {
     gameActive = true;
@@ -1492,7 +1593,23 @@ el('#menu-resume').addEventListener('click', () => { SFX.button(); continueGame(
 el('#menu-new').addEventListener('click', () => { SFX.button(); showMenuPage('new'); });
 el('#menu-settings').addEventListener('click', () => { SFX.button(); showMenuPage('settings'); });
 el('#new-cancel').addEventListener('click', () => { SFX.button(); showMenuPage('main'); });
-el('#new-form').addEventListener('submit', ev => { ev.preventDefault(); SFX.button(); startNewGame(el('#service-input').value); });
+el('#new-form').addEventListener('submit', ev => { ev.preventDefault(); SFX.button(); startNewGame(el('#service-input').value, draft.logo); });
+el('#service-input').addEventListener('input', ev => {
+  draft.name = ev.target.value;
+  el('#new-logo').innerHTML = logoSVG(draft.logo, draft.name, 56);   // le iniziali seguono il nome
+});
+el('#new-logo-btn').addEventListener('click', () => {
+  SFX.button();
+  logoEdit = { logo: draft.logo, name: () => draft.name, back: 'new' };
+  showMenuPage('logo');
+});
+el('#set-logo-btn').addEventListener('click', () => {
+  SFX.button();
+  Profile.data.logo = { ...serviceLogo() };
+  logoEdit = { logo: Profile.data.logo, name: () => Profile.data.service, back: 'settings', live: true };
+  showMenuPage('logo');
+});
+el('#logo-done').addEventListener('click', () => { SFX.button(); showMenuPage(logoEdit.back, true); });
 el('#settings-back').addEventListener('click', () => { SFX.button(); Profile.flush(); showMenuPage('main'); });
 el('#set-volume').addEventListener('input', ev => { settings().volume = ev.target.value / 100; SFX.setVolume(settings().volume); Profile.save(); });
 el('#set-volume').addEventListener('change', () => SFX.button());
@@ -3351,25 +3468,62 @@ class StageScene extends Phaser.Scene {
     return { P, boxStart, lz };
   }
 
-  /* nome del service scritto sulla fiancata del mezzo, sopra la fascia
-     arancio e dopo la porta scorrevole; cambia col nome nelle impostazioni */
+  /* livrea del service sulla fiancata del mezzo: il logo nel pannello dopo
+     la porta scorrevole, il nome sotto la fascia arancio. Si disegnano su
+     una tela già deformata come la fiancata in isometria (così sembrano
+     dipinti sul furgone, non appoggiati sopra) e a risoluzione tripla, per
+     restare nitidi anche con lo zoom. Si ridipinge quando cambiano nome o
+     logo. */
   paintServiceName () {
     if (!this.van) return;
     const { vp, P, boxStart, lz, v } = this.van;
-    const b0 = boxStart + (v.sideDoor ? 16 + v.sideDoor : 8), b1 = v.B - 6;
-    const z = (lz + 9 + v.Z - 5) / 2;
-    const e0 = P(-0.5, b0, z), e1 = P(-0.5, b1, z);
-    let ang = Math.atan2(e1.y - e0.y, e1.x - e0.x);
-    if (ang > Math.PI / 2) ang -= Math.PI; else if (ang < -Math.PI / 2) ang += Math.PI;
-    const room = Math.hypot(e1.x - e0.x, e1.y - e0.y) * 0.92;
-    if (!this.vanName) {
-      this.vanName = this.add.text(0, 0, '', {
-        fontFamily: 'Barlow Condensed, sans-serif', fontSize: '20px', fontStyle: 'bold', color: '#26282e'
-      }).setOrigin(0.5).setDepth(1.05);
-    }
-    this.vanName.setText(Profile.data.service.toUpperCase()).setScale(1)
-      .setPosition(vp.x + (e0.x + e1.x) / 2, vp.y + (e0.y + e1.y) / 2).setRotation(ang);
-    if (this.vanName.width > room) this.vanName.setScale(room / this.vanName.width);
+    const name = (Profile.data.service || '').toUpperCase();
+    const logo = gameActive || Profile.data.service ? serviceLogo() : null;
+    const token = this.liverySeq = (this.liverySeq || 0) + 1;
+    const RES = 3;
+    // fiancata: coordinate u lungo il mezzo, w dall'alto verso il basso
+    const O = P(-0.5, 0, 0), ub = { x: P(-0.5, 1, 0).x - O.x, y: P(-0.5, 1, 0).y - O.y };
+    const uz = { x: P(-0.5, 0, 1).x - O.x, y: P(-0.5, 0, 1).y - O.y };
+    const top = { x: O.x + v.Z * uz.x, y: O.y + v.Z * uz.y };
+    const corners = [[boxStart, v.chassis], [v.B, v.chassis], [boxStart, v.Z], [v.B, v.Z]].map(([b, z]) => P(-0.5, b, z));
+    const bx = Math.floor(Math.min(...corners.map(c => c.x))), by = Math.floor(Math.min(...corners.map(c => c.y)));
+    const bw = Math.ceil(Math.max(...corners.map(c => c.x))) - bx, bh = Math.ceil(Math.max(...corners.map(c => c.y))) - by;
+    const paint = img => {
+      if (token !== this.liverySeq) return;       // nel frattempo è cambiato di nuovo
+      const canvas = document.createElement('canvas');
+      canvas.width = bw * RES; canvas.height = bh * RES;
+      const ctx = canvas.getContext('2d');
+      ctx.setTransform(RES * ub.x, RES * ub.y, -RES * uz.x, -RES * uz.y, RES * (top.x - bx), RES * (top.y - by));
+      // logo nel pannello tra la porta e il retro, sopra la fascia
+      if (img) {
+        const u0 = boxStart + (v.sideDoor ? 16 + v.sideDoor : 8), u1 = v.B - 6;
+        const w0 = 5, w1 = v.Z - (lz + 10);
+        const size = Math.min(u1 - u0, w1 - w0) - 2;
+        ctx.drawImage(img, (u0 + u1 - size) / 2, (w0 + w1 - size) / 2, size, size);
+      }
+      // nome sotto la fascia, lungo tutta la fiancata
+      if (name) {
+        const u0 = boxStart + 6, u1 = v.B - 6, w0 = v.Z - (lz - 2), w1 = v.Z - (v.chassis + 12);
+        let size = w1 - w0;
+        ctx.font = `700 ${size}px "Barlow Condensed", "Arial Narrow", sans-serif`;
+        const wide = ctx.measureText(name).width;
+        if (wide > u1 - u0) { size *= (u1 - u0) / wide; ctx.font = `700 ${size}px "Barlow Condensed", "Arial Narrow", sans-serif`; }
+        ctx.fillStyle = '#26282e'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+        ctx.fillText(name, (u0 + u1) / 2, (w0 + w1) / 2);
+      }
+      const key = 'livery-' + token;
+      this.textures.addCanvas(key, canvas);
+      const old = this.liveryImg && this.liveryImg.texture.key;
+      if (!this.liveryImg) this.liveryImg = this.add.image(vp.x + bx, vp.y + by, key).setOrigin(0).setScale(1 / RES).setDepth(1.05);
+      else this.liveryImg.setTexture(key);
+      if (old && old !== key) this.textures.remove(old);
+      this.livery = { name, logo };
+    };
+    if (!logo) { paint(null); return; }
+    const img = new Image();
+    img.onload = () => paint(img);
+    img.onerror = () => paint(null);
+    img.src = 'data:image/svg+xml;charset=utf-8,' + encodeURIComponent(logoSVG(logo, Profile.data.service, 256));
   }
 
   /* flight case da tour: guscio nero in multistrato, profili e angolari in

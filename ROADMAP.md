@@ -45,8 +45,9 @@ Idee e richieste già decise, da sviluppare nei prossimi livelli.
 
 ## Partita, menù e highscore
 
-- Già fatto: menù di gioco (☰), nome del service (testata, fiancata del
-  furgone, scritta finale), salvataggio automatico in un solo slot,
+- Già fatto: menù di gioco (☰), nome e logo del service (testata,
+  livrea dipinta sulla fiancata del furgone, scritta finale; logo pronto o
+  creato con forma, simbolo e due colori), salvataggio automatico in un solo slot,
   impostazioni (volume, effetti ridotti, salta lo show).
 - Il salvataggio è un oggetto `scs-save` con `v` (versione): se il formato
   cambia, scrivere una conversione dalla versione vecchia invece di
@@ -66,5 +67,7 @@ Idee e richieste già decise, da sviluppare nei prossimi livelli.
   data), i migliori 20. Resta da decidere la formula del punteggio (per
   esempio stelle per livello) e la schermata della classifica, da aprire
   dal menù e alla fine dello show.
+- Logo: più avanti anche sui flight case, sulle magliette della crew e
+  sui mezzi più grandi; eventualmente un logo caricato come immagine.
 - Più avanti, con più livelli: più slot di salvataggio, scelta del livello
   e livelli sbloccati, esporta/importa il salvataggio.

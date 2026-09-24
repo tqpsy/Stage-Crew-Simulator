@@ -29,10 +29,23 @@ const path = require('path');
   await p.fill('#service-input', '');
   await p.type('#service-input', 'Service Wasd');      // W, A, S, D non devono sparire
   check(await p.inputValue('#service-input') === 'Service Wasd', 'nel nome non si scrivono tutte le lettere: ' + await p.inputValue('#service-input'));
+  // logo: uno pronto, poi personalizzato (iniziali, fondo blu)
+  await p.click('#new-logo-btn');
+  await p.click('#logo-presets [data-preset="1"]');
+  await p.click('#logo-icons [data-icon="iniziali"]');
+  await p.click('#logo-bg [data-color="#3b7bff"]');
+  check(/>W</.test(await p.innerHTML('#logo-preview')), 'le iniziali del logo non seguono il nome (senza la parola Service)');
+  await p.click('#logo-done');
+  check(await p.inputValue('#service-input') === 'Service Wasd', 'tornando dal logo il nome si è perso');
+  check(/#3b7bff/.test(await p.innerHTML('#new-logo')), 'anteprima del logo non aggiornata');
   await p.click('#new-start');
   check(!(await p.isVisible('#menu-modal')), 'il menù resta aperto dopo Inizia');
+  const logo1 = await ev(() => Profile.data.logo);
+  check(JSON.stringify(logo1) === JSON.stringify({ shape: 'scudo', icon: 'iniziali', bg: '#3b7bff', fg: '#eee9df' }), 'logo scelto non salvato: ' + JSON.stringify(logo1));
+  check(/#3b7bff/.test(await p.innerHTML('#service-logo')), 'logo non in testata');
   check(await p.textContent('#service-tag') === 'SERVICE WASD · REPUTAZIONE 0', 'nome del service o reputazione non in testata: ' + await p.textContent('#service-tag'));
-  check(await ev(() => window.__scene.vanName.text) === 'SERVICE WASD', 'nome del service non sul furgone');
+  await p.waitForFunction(() => window.__scene.livery && window.__scene.livery.name === 'SERVICE WASD');
+  check(await ev(() => window.__scene.livery.logo.bg) === '#3b7bff', 'logo non sul furgone');
 
   // ---- un po' di impianto: pezzi, un cavo, Quadro armato, mixer acceso
   await ev(() => {
@@ -56,6 +69,11 @@ const path = require('path');
   await p.check('#set-reduced');
   await p.fill('#set-service', 'Service Prova');
   await p.press('#set-service', 'Tab');
+  // il logo cambiato dalle impostazioni si vede subito
+  await p.click('#set-logo-btn');
+  await p.click('#logo-shapes [data-shape="esagono"]');
+  check(/polygon points="50,3 91,26/.test(await p.innerHTML('#service-logo')), 'logo in testata non aggiornato subito');
+  await p.click('#logo-done');
   await p.click('#settings-back');
   await p.click('#menu-resume');
   check(/^SERVICE PROVA/.test(await p.textContent('#service-tag')), 'rinomina non applicata');
@@ -76,7 +94,8 @@ const path = require('path');
   check(await p.isVisible('#menu-resume'), 'dopo la ricarica manca Continua');
   check(/Service Prova · ★ 150/.test(await p.textContent('#menu-resume')), 'Continua non dice nome e reputazione: ' + await p.textContent('#menu-resume'));
   await p.click('#menu-resume');
-  const after = await ev(() => ({ placed: Object.keys(gameState.placed).sort(), edges: gameState.edges.length, on: placedOfType('mixer')[0].on, prot: { ...findQuadro().prot, tripped: undefined }, tests: gameState.stats.tests, failed: gameState.stats.failedTests, playMs: gameState.stats.playMs, vol: SFX.volume, reduced: reducedFx(), undo: el('#undo-btn').disabled, conn: el('#conn-val').textContent, van: window.__scene.vanName.text }));
+  const after = await ev(() => ({ placed: Object.keys(gameState.placed).sort(), edges: gameState.edges.length, on: placedOfType('mixer')[0].on, prot: { ...findQuadro().prot, tripped: undefined }, tests: gameState.stats.tests, failed: gameState.stats.failedTests, playMs: gameState.stats.playMs, vol: SFX.volume, reduced: reducedFx(), undo: el('#undo-btn').disabled, conn: el('#conn-val').textContent, logo: Profile.data.logo }));
+  await p.waitForFunction(() => window.__scene.livery && window.__scene.livery.name === 'SERVICE PROVA');
   check(JSON.stringify(after.placed) === JSON.stringify(before.placed), 'pezzi diversi dopo la ricarica: ' + after.placed);
   check(after.edges === before.edges, 'cavi diversi dopo la ricarica');
   check(after.on === true, 'mixer spento dopo la ricarica');
@@ -84,7 +103,7 @@ const path = require('path');
   check(after.tests === 1 && after.failed === 1 && after.playMs >= 1000, 'statistiche perse: ' + JSON.stringify(after));
   check(after.vol === 0.3 && after.reduced, 'impostazioni perse');
   check(after.undo, 'dopo la ricarica si può annullare oltre il salvataggio');
-  check(after.van === 'SERVICE PROVA', 'nome sul furgone perso');
+  check(after.logo.shape === 'esagono' && after.logo.bg === '#3b7bff', 'logo perso dopo la ricarica: ' + JSON.stringify(after.logo));
 
   // ---- Nuova partita: livello da capo, impostazioni e record restano
   await p.click('#menu-btn');
