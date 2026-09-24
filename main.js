@@ -160,8 +160,8 @@ function isoDepth (screenY) { return 10 + screenY / 10000; }
 // sale verso il fondo del palco (+a, -b: dritta in su sullo schermo), dove sta
 // chi parla girato verso il pubblico. Il microfono si monta sulla punta.
 const ASTA_ISO = isoFrame(40, 40, 3);
-const ASTA_POLE = 96;                     // unità iso: ~1,25 m
-const ASTA_TIP = [48, 12, 110];           // punta della giraffa (a, b, z): bocca di chi parla
+const ASTA_POLE = 46;                     // alla scala dello stativo luci (barra a T a 64)
+const ASTA_TIP = [40, 14, 56];           // punta della giraffa (a, b, z): bocca di chi parla
 function micOffset () { const t = ASTA_ISO(...ASTA_TIP), c = ASTA_ISO(20, 20, 0); return { x: t.x - c.x, y: t.y }; }
 
 function standBarY () { return STAND_ISO(STAND_ISO.A / 2, STAND_ISO.B / 2, 0).y - STAND_POLE; }
@@ -3460,7 +3460,7 @@ class StageScene extends Phaser.Scene {
   }
 
   /* ---------------- disegno di un componente: forma dedicata per tipo ---------------- */
-  drawComponentBody (g, def, rot) {
+  drawComponentBody (g, def, rot, id) {
     const w = def.body.w, h = def.body.h;
     switch (def.shape) {
       case 'sub': {
@@ -3552,34 +3552,68 @@ class StageScene extends Phaser.Scene {
         break;
       }
       case 'par': {
-        // PAR LED su staffa: corpo cilindrico nero, lente frontale con i LED,
-        // forcella con le manopole. Sullo stativo gira verso il palco: se la
-        // lente guarda lontano da chi osserva si vede il retro del fusto.
-        const P = rotFrame(PAR_ISO, rot), k = this.isoKit(g, P);
-        const zc = 24, bc = 17, r = 14, aF = 3, aR = 34;
-        const lensSeen = rot === 0 || rot === 3;
-        k.box(6, 32, 4, 30, 0, 2.5, ISO_GREY);                       // piastra
-        k.box(17, 21, 2, 4.5, 2.5, zc + 1, ISO_GREY);                 // forcella
-        const ring = (a, rad) => Array.from({ length: 32 }, (_, i) => {
-          const t = i / 32 * Math.PI * 2;
-          return P(a, bc + rad * Math.cos(t), zc + rad * Math.sin(t));
-        });
-        const lens = () => {
-          k.poly(ring(aF, r), 0x0c0d10);                               // anello frontale
-          k.poly(ring(aF - 0.6, r - 2), 0x3b3423);                     // lente
-          [[0, 0], [5.5, 0], [-5.5, 0], [2.7, 4.8], [-2.7, 4.8], [2.7, -4.8], [-2.7, -4.8]].forEach(([db, dz]) => {
-            k.discA(aF - 0.8, bc + db, zc + dz, 1.9, 0xf6e7a8);
+        // PAR LED: fusto cilindrico ("lattina") puntato davvero verso dove
+        // illumina (vedi parAim), inclinato in giù, tenuto da una forcella a U
+        // sulla piastra dello stativo. Se la lente guarda lontano da chi
+        // osserva si vedono il retro e le alette di raffreddamento.
+        const P = PAR_ISO, k = this.isoKit(g, P);
+        const stand = id && mountBase(gameState.placed[id]), aim = id && parAim(id);
+        let [da, db] = rotDir(rot, -1, 0);
+        if (stand && aim) { const sc = compCenter(stand); da = -(aim.gy - sc.gy); db = aim.gx - sc.gx; }
+        // un filo girato verso chi guarda (-a, +b): la lente resta tonda e
+        // leggibile anche quando il faro punta di lato
+        // (o via da chi guarda, se il faro gli dà le spalle: si vede tondo il retro)
+        let hl = Math.hypot(da, db) || 1; da /= hl; db /= hl;
+        const sg = -da + db >= 0 ? 1 : -1; da -= 0.4 * sg; db += 0.4 * sg;
+        hl = Math.hypot(da, db) || 1;
+        const tilt = 0.12;                                           // appena verso il basso
+        const d = [da / hl * Math.cos(tilt), db / hl * Math.cos(tilt), -Math.sin(tilt)];
+        const cross = (x, y) => [x[1] * y[2] - x[2] * y[1], x[2] * y[0] - x[0] * y[2], x[0] * y[1] - x[1] * y[0]];
+        const norm = x => { const l = Math.hypot(...x) || 1; return x.map(c => c / l); };
+        const u = norm(cross(d, [0, 0, 1])), v = norm(cross(u, d));  // u orizzontale, v "in su" sulla lente
+        const C = [19, 17, 25], r = 12.5;
+        const at = (c, t, rad) => P(c[0] + rad * (Math.cos(t) * u[0] + Math.sin(t) * v[0]),
+          c[1] + rad * (Math.cos(t) * u[1] + Math.sin(t) * v[1]), c[2] + rad * (Math.cos(t) * u[2] + Math.sin(t) * v[2]));
+        const along = s0 => C.map((c, n) => c + d[n] * s0);
+        const ring = (s0, rad, n = 36) => Array.from({ length: n }, (_, i) => at(along(s0), i / n * Math.PI * 2, rad));
+        const F = 11, Bk = -13;                                         // lente davanti, tappo dietro
+        // verso chi guarda (vedi isoFrame): -a, +b, +z
+        const facing = -d[0] + d[1] + 0.686 * d[2] > 0;
+        // forcella: piastra sulla barra a T e due bracci fino ai perni sui fianchi
+        k.box(8, 30, 6, 28, 0, 2.5, ISO_GREY);
+        const pivots = [1, -1].map(sg => P(C[0] + u[0] * (r + 2.5) * sg, C[1] + u[1] * (r + 2.5) * sg, C[2]));
+        const feet = [1, -1].map(sg => P(19 + u[0] * (r + 2.5) * sg, 17 + u[1] * (r + 2.5) * sg, 2.5));
+        const arm = n => { g.lineStyle(3.2, 0x55585f, 1); g.lineBetween(feet[n].x, feet[n].y, pivots[n].x, pivots[n].y); };
+        // il braccio più lontano va dietro al fusto
+        const far = pivots[0].y < pivots[1].y ? 0 : 1;
+        arm(far);
+        // fusto: sagoma dei due cerchi, poi la metà in luce (dall'alto a sinistra)
+        const front = ring(F, r), back = ring(Bk, r);
+        k.poly(convexHull(front.concat(back)), 0x17181c);
+        const lit = t => Math.sin(t) * 0.9 - Math.cos(t) * 0.35 > 0.25;
+        const litPts = [];
+        for (let i = 0; i < 36; i++) { const t = i / 36 * Math.PI * 2; if (lit(t)) litPts.push(at(along(F), t, r), at(along(Bk), t, r)); }
+        if (litPts.length > 2) k.poly(convexHull(litPts), 0x2b2d34);
+        // alette di raffreddamento sul fusto
+        g.lineStyle(1, 0x0c0d10, 0.9);
+        [-9, -5, -1, 3].forEach(s0 => g.strokePoints(ring(s0, r + 0.3), true));
+        if (facing) {
+          k.poly(ring(F, r + 0.6), 0x0c0d10);                            // ghiera frontale
+          k.poly(ring(F + 0.3, r - 1.6), 0x3b3423);                      // lente
+          k.poly(ring(F + 0.4, r - 4.5), 0x4a412b);
+          [[0, 0], [5.8, 0], [-5.8, 0], [2.9, 5], [-2.9, 5], [2.9, -5], [-2.9, -5]].forEach(([x, y]) => {
+            const t = Math.atan2(y, x), rad = Math.hypot(x, y);
+            const c0 = rad ? at(along(F + 0.5), t, rad) : P(...along(F + 0.5));
+            g.fillStyle(0xf6e7a8, 1); g.fillCircle(c0.x, c0.y, 1.7);
           });
-          g.lineStyle(1.4, def.body.accent, 0.9); g.strokePoints(ring(aF, r), true);
-        };
-        if (!lensSeen) lens();
-        k.poly(convexHull(ring(aR, r).concat(ring(aF, r))), 0x1c1d22);  // fusto
-        g.lineStyle(1, 0x3a3d45, 1);                                   // alette di raffreddamento
-        [12, 18, 24, 30].forEach(a => { g.strokePoints(ring(a, r).slice(4, 20), false); });
-        if (lensSeen) lens();
-        else { k.poly(ring(aR, r), 0x26282e); g.lineStyle(1, 0x3a3d45, 1); g.strokePoints(ring(aR, r), true); }
-        k.box(17, 21, 29.5, 32, 2.5, zc + 1, ISO_GREY);               // braccio destro
-        k.discB(32, 19, zc, 3.2, 0x8a8e98);                            // manopola
+          g.lineStyle(1.4, def.body.accent, 0.9); g.strokePoints(ring(F, r + 0.6), true);
+        } else {
+          k.poly(ring(Bk, r), 0x222429);                                   // tappo posteriore
+          g.lineStyle(1, 0x3a3d45, 1); g.strokePoints(ring(Bk, r), true);
+          k.poly(ring(Bk - 0.2, 4.5), 0x2e3037);                           // passacavo
+        }
+        arm(1 - far);
+        pivots.forEach(pv => { g.fillStyle(0x8a8e98, 1); g.fillCircle(pv.x, pv.y, 3); g.fillStyle(0x3a3d45, 1); g.fillCircle(pv.x, pv.y, 1.4); });
         break;
       }
       case 'ampli': {
@@ -3900,7 +3934,7 @@ class StageScene extends Phaser.Scene {
     const body = this.add.graphics();
     // il PAR guarda il palco dal suo stativo; gli altri seguono orientK
     const rot = def.shape === 'par' ? parRot(id) : orientK(def, x, y);
-    this.drawComponentBody(body, def, rot);
+    this.drawComponentBody(body, def, rot, id);
     // punti di aggancio dei cavi e LED, ruotati insieme al dispositivo
     const frame = def.frame ? rotFrame(def.frame, rot) : null;
     const portPos = {};
