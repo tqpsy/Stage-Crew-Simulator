@@ -630,12 +630,12 @@
   .service-logo:empty{ display:none; }
   .service-logo svg{ width:30px; height:30px; display:block; }
   .level-wrap{ display:flex; align-items:center; gap:8px; }
-  .logo-pick{ display:flex; align-items:center; gap:12px; }
+  .logo-pick{ display:flex; flex-direction:column; align-items:stretch; gap:8px; }
   .logo-pick[hidden]{ display:none; }
   .logo-pick .menu-btn{ flex:1; font-size:16px; padding:9px 10px; }
-  .logo-preview svg{ width:56px; height:56px; display:block; }
-  .logo-preview.big{ align-self:center; }
-  .logo-preview.big svg{ width:96px; height:96px; }
+  .logo-preview{ display:flex; justify-content:center; padding:6px 0; border-radius:8px;
+    background:radial-gradient(ellipse at 50% 40%, #2a2c34, #101114 75%); }
+  .logo-preview canvas{ display:block; max-width:100%; }
   .logo-label{ font-size:12px; color:var(--text-muted); margin-bottom:-4px; }
   .logo-row{ display:flex; flex-wrap:wrap; gap:6px; }
   .logo-opt{
@@ -645,3 +645,5 @@
   .logo-opt svg{ width:38px; height:38px; }
   .logo-opt.sel{ border-color:var(--amber); }
   .logo-opt.swatch{ width:34px; height:34px; padding:0; }
+  .logo-opt.style-opt{ display:flex; flex-direction:column; align-items:center; gap:2px; padding:4px 4px 3px; line-height:1; background:#0b0c0f; }
+  .logo-opt.style-opt span{ font-size:10.5px; color:var(--text-muted); }

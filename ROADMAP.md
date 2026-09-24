@@ -47,7 +47,8 @@ Idee e richieste già decise, da sviluppare nei prossimi livelli.
 
 - Già fatto: menù di gioco (☰), nome e logo del service (testata,
   livrea dipinta sulla fiancata del furgone, scritta finale; logo pronto o
-  creato con forma, simbolo e due colori), salvataggio automatico in un solo slot,
+  creato con forma, simbolo e due colori; la scritta del nome in 6 stili
+  da service: Tour, Neon, Stencil, LED wall, Gaffer, Fasci di luce), salvataggio automatico in un solo slot,
   impostazioni (volume, effetti ridotti, salta lo show).
 - Il salvataggio è un oggetto `scs-save` con `v` (versione): se il formato
   cambia, scrivere una conversione dalla versione vecchia invece di

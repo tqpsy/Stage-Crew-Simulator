@@ -1372,12 +1372,12 @@ const LOGO_ICONS = {
 };
 const LOGO_COLORS = ['#f2a541', '#e0503f', '#3b7bff', '#49b06a', '#9b5de5', '#f2c53d', '#eee9df', '#1c1d22'];
 const LOGO_PRESETS = [
-  { shape: 'cerchio', icon: 'cassa', bg: '#1c1d22', fg: '#f2a541' },
-  { shape: 'scudo', icon: 'fulmine', bg: '#e0503f', fg: '#eee9df' },
-  { shape: 'esagono', icon: 'faro', bg: '#3b7bff', fg: '#f2c53d' },
-  { shape: 'quadrato', icon: 'fader', bg: '#eee9df', fg: '#1c1d22' },
-  { shape: 'cerchio', icon: 'onda', bg: '#9b5de5', fg: '#eee9df' },
-  { shape: 'scudo', icon: 'iniziali', bg: '#f2a541', fg: '#1c1d22' }
+  { shape: 'cerchio', icon: 'cassa', bg: '#1c1d22', fg: '#f2a541', style: 'tour' },
+  { shape: 'scudo', icon: 'fulmine', bg: '#e0503f', fg: '#eee9df', style: 'stencil' },
+  { shape: 'esagono', icon: 'faro', bg: '#3b7bff', fg: '#f2c53d', style: 'fasci' },
+  { shape: 'quadrato', icon: 'fader', bg: '#1c1d22', fg: '#49b06a', style: 'led' },
+  { shape: 'cerchio', icon: 'onda', bg: '#9b5de5', fg: '#eee9df', style: 'neon' },
+  { shape: 'scudo', icon: 'iniziali', bg: '#f2a541', fg: '#1c1d22', style: 'gaffer' }
 ];
 const defaultLogo = () => ({ ...LOGO_PRESETS[0] });
 function serviceInitials (name) {
@@ -1398,6 +1398,251 @@ function logoSVG (logo, name, px) {
     + `<g fill="${lg.fg}" transform="translate(50 50) scale(.8) translate(-50 -50)">${icon}</g></svg>`;
 }
 const serviceLogo = () => Profile.data.logo || defaultLogo();
+
+/* ---------------- marchio del service: logo + scritta del nome ----------------
+   La scritta ha gli stili del mondo dei service e dei concerti. Si disegna
+   su canvas (così usa i caratteri della pagina ed effetti di luce veri) e
+   la stessa funzione serve per il menù, la fiancata del furgone e la
+   scritta finale dello show. */
+const BRAND_STYLES = {
+  tour: 'Tour',
+  neon: 'Neon',
+  stencil: 'Stencil',
+  led: 'LED wall',
+  gaffer: 'Gaffer',
+  fasci: 'Fasci di luce'
+};
+const FONT_DISPLAY = '"Barlow Condensed", "Arial Narrow", sans-serif';
+const FONT_MARKER = '"Permanent Marker", "Comic Sans MS", cursive';
+const BRAND_TAGLINE = 'AUDIO · LUCI · SERVICE';
+let brandFontsReady = null;
+// i caratteri della pagina vanno caricati prima di disegnare sul canvas
+function brandFonts () {
+  if (!brandFontsReady) {
+    const load = document.fonts ? Promise.all([
+      document.fonts.load('700 40px "Barlow Condensed"'), document.fonts.load('40px "Permanent Marker"')
+    ]).catch(() => {}) : Promise.resolve();
+    brandFontsReady = Promise.race([load, new Promise(r => setTimeout(r, 1500))]);
+  }
+  return brandFontsReady;
+}
+// colore di punta del marchio: il più acceso dei due colori del logo
+// (a parità, quello del simbolo), mai il nero
+function colorPop (hex) {
+  const n = parseInt(hex.slice(1), 16), r = n >> 16, g = (n >> 8) & 255, b = n & 255;
+  return (Math.max(r, g, b) - Math.min(r, g, b)) + Math.max(r, g, b) * 0.2;
+}
+const brandAccent = logo => {
+  if (logo.fg === '#1c1d22') return logo.bg;
+  if (logo.bg === '#1c1d22') return logo.fg;
+  return colorPop(logo.bg) > colorPop(logo.fg) ? logo.bg : logo.fg;
+};
+// casuale ma sempre uguale per lo stesso nome (spruzzi, strappi del nastro)
+function seededRand (text) {
+  let st = 2166136261;
+  for (const ch of String(text)) st = Math.imul(st ^ ch.charCodeAt(0), 16777619);
+  return () => { st = Math.imul(st ^ (st >>> 15), 2246822507) >>> 0; st ^= st >>> 13; return (st >>> 0) / 4294967296; };
+}
+// dimensione del carattere perché il testo stia in larghezza e altezza
+function fitFont (ctx, text, font, h, maxW) {
+  let size = h;
+  ctx.font = font(size);
+  const w = ctx.measureText(text).width;
+  if (w > maxW) { size *= maxW / w; ctx.font = font(size); }
+  return size;
+}
+
+// carattere 5×7 dei pannelli LED: 7 righe, 5 bit per riga (il più a sinistra in alto)
+const LED_FONT = {
+  'A': [0x0E, 0x11, 0x11, 0x1F, 0x11, 0x11, 0x11], 'B': [0x1E, 0x11, 0x11, 0x1E, 0x11, 0x11, 0x1E], 'C': [0x0E, 0x11, 0x10, 0x10, 0x10, 0x11, 0x0E], 'D': [0x1E, 0x11, 0x11, 0x11, 0x11, 0x11, 0x1E],
+  'E': [0x1F, 0x10, 0x10, 0x1E, 0x10, 0x10, 0x1F], 'F': [0x1F, 0x10, 0x10, 0x1E, 0x10, 0x10, 0x10], 'G': [0x0E, 0x11, 0x10, 0x17, 0x11, 0x11, 0x0F], 'H': [0x11, 0x11, 0x11, 0x1F, 0x11, 0x11, 0x11],
+  'I': [0x0E, 0x04, 0x04, 0x04, 0x04, 0x04, 0x0E], 'J': [0x07, 0x02, 0x02, 0x02, 0x02, 0x12, 0x0C], 'K': [0x11, 0x12, 0x14, 0x18, 0x14, 0x12, 0x11], 'L': [0x10, 0x10, 0x10, 0x10, 0x10, 0x10, 0x1F],
+  'M': [0x11, 0x1B, 0x15, 0x15, 0x11, 0x11, 0x11], 'N': [0x11, 0x11, 0x19, 0x15, 0x13, 0x11, 0x11], 'O': [0x0E, 0x11, 0x11, 0x11, 0x11, 0x11, 0x0E], 'P': [0x1E, 0x11, 0x11, 0x1E, 0x10, 0x10, 0x10],
+  'Q': [0x0E, 0x11, 0x11, 0x11, 0x15, 0x12, 0x0D], 'R': [0x1E, 0x11, 0x11, 0x1E, 0x14, 0x12, 0x11], 'S': [0x0F, 0x10, 0x10, 0x0E, 0x01, 0x01, 0x1E], 'T': [0x1F, 0x04, 0x04, 0x04, 0x04, 0x04, 0x04],
+  'U': [0x11, 0x11, 0x11, 0x11, 0x11, 0x11, 0x0E], 'V': [0x11, 0x11, 0x11, 0x11, 0x11, 0x0A, 0x04], 'W': [0x11, 0x11, 0x11, 0x15, 0x15, 0x15, 0x0A], 'X': [0x11, 0x11, 0x0A, 0x04, 0x0A, 0x11, 0x11],
+  'Y': [0x11, 0x11, 0x11, 0x0A, 0x04, 0x04, 0x04], 'Z': [0x1F, 0x01, 0x02, 0x04, 0x08, 0x10, 0x1F], '0': [0x0E, 0x11, 0x13, 0x15, 0x19, 0x11, 0x0E], '1': [0x04, 0x0C, 0x04, 0x04, 0x04, 0x04, 0x0E],
+  '2': [0x0E, 0x11, 0x01, 0x02, 0x04, 0x08, 0x1F], '3': [0x1F, 0x02, 0x04, 0x02, 0x01, 0x11, 0x0E], '4': [0x02, 0x06, 0x0A, 0x12, 0x1F, 0x02, 0x02], '5': [0x1F, 0x10, 0x1E, 0x01, 0x01, 0x11, 0x0E],
+  '6': [0x06, 0x08, 0x10, 0x1E, 0x11, 0x11, 0x0E], '7': [0x1F, 0x01, 0x02, 0x04, 0x08, 0x08, 0x08], '8': [0x0E, 0x11, 0x11, 0x0E, 0x11, 0x11, 0x0E], '9': [0x0E, 0x11, 0x11, 0x0F, 0x01, 0x02, 0x0C],
+  '-': [0x00, 0x00, 0x00, 0x1F, 0x00, 0x00, 0x00], '.': [0x00, 0x00, 0x00, 0x00, 0x00, 0x0C, 0x0C], "'": [0x0C, 0x04, 0x08, 0x00, 0x00, 0x00, 0x00], '&': [0x0C, 0x12, 0x14, 0x08, 0x15, 0x12, 0x0D],
+  '!': [0x04, 0x04, 0x04, 0x04, 0x04, 0x00, 0x04], '?': [0x0E, 0x11, 0x01, 0x02, 0x04, 0x00, 0x04]
+};
+/* la scritta del nome, centrata in (cx, cy), alta al massimo h e larga al
+   massimo maxW, nello stile scelto */
+function drawStyledName (ctx, style, text, cx, cy, maxW, h, accent) {
+  const rand = seededRand(text + style);
+  ctx.save();
+  ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+  const bold = s => `700 ${s}px ${FONT_DISPLAY}`;
+  if (style === 'neon') {
+    // tubi di luce: alone largo del colore, poi il tubo, poi l'anima bianca
+    const size = fitFont(ctx, text, s => `600 ${s}px ${FONT_DISPLAY}`, h * 0.9, maxW * 0.94);
+    ctx.lineJoin = 'round';
+    [[size * 0.5, 0.35], [size * 0.25, 0.6]].forEach(([blur, a]) => {
+      ctx.shadowColor = accent; ctx.shadowBlur = blur; ctx.globalAlpha = a;
+      ctx.strokeStyle = accent; ctx.lineWidth = size * 0.09; ctx.strokeText(text, cx, cy);
+    });
+    ctx.globalAlpha = 1; ctx.shadowBlur = size * 0.12;
+    ctx.strokeStyle = accent; ctx.lineWidth = size * 0.07; ctx.strokeText(text, cx, cy);
+    ctx.shadowBlur = 0; ctx.strokeStyle = '#ffffff'; ctx.lineWidth = size * 0.022; ctx.strokeText(text, cx, cy);
+  } else if (style === 'stencil') {
+    // lettering da flight case: pieno, taglio orizzontale dello stencil e
+    // spruzzi di vernice intorno
+    const size = fitFont(ctx, text, bold, h * 0.92, maxW * 0.96);
+    const w = ctx.measureText(text).width;
+    const layer = document.createElement('canvas');
+    layer.width = Math.ceil(w + size); layer.height = Math.ceil(size * 1.4);
+    const lc = layer.getContext('2d');
+    lc.font = bold(size); lc.textAlign = 'center'; lc.textBaseline = 'middle'; lc.fillStyle = accent;
+    const lx = layer.width / 2, ly = layer.height / 2;
+    lc.fillText(text, lx, ly);
+    lc.globalCompositeOperation = 'destination-out';
+    lc.fillRect(0, ly - size * 0.04, layer.width, size * 0.08);
+    for (let i = 0; i < text.length * 3; i++) lc.fillRect(lx - w / 2 + rand() * w, ly - size * 0.5 + rand() * size, size * 0.03, size * 0.03);
+    lc.globalCompositeOperation = 'source-over'; lc.fillStyle = accent;
+    for (let i = 0; i < text.length * 14; i++) {
+      const x = lx - w / 2 - size * 0.1 + rand() * (w + size * 0.2), y = ly + (rand() - 0.5) * size * 1.15;
+      lc.globalAlpha = 0.15 + rand() * 0.4; lc.beginPath(); lc.arc(x, y, size * (0.006 + rand() * 0.014), 0, Math.PI * 2); lc.fill();
+    }
+    ctx.drawImage(layer, cx - lx, cy - ly);
+  } else if (style === 'led') {
+    // LED wall: carattere a matrice 5×7 come i pannelli veri, LED accesi
+    // col bagliore e quelli spenti appena visibili sul fondo nero
+    const chars = [...text.normalize('NFD').replace(/[\u0300-\u036f]/g, '')];
+    const cols = chars.reduce((n, ch) => n + (ch === ' ' ? 3 : 6), 0) - 1;
+    const pitch = Math.min(maxW / (cols + 2), h / 9);
+    const W = (cols + 2) * pitch, H = 9 * pitch, x0 = cx - W / 2, y0 = cy - H / 2;
+    ctx.fillStyle = '#07080b'; ctx.fillRect(x0, y0, W, H);
+    const lit = new Set();
+    let col = 1;
+    chars.forEach(ch => {
+      if (ch === ' ') { col += 3; return; }
+      const rows = LED_FONT[ch.toUpperCase()] || LED_FONT['?'];
+      rows.forEach((bits, r) => { for (let c = 0; c < 5; c++) if (bits & (16 >> c)) lit.add((col + c) + ',' + (r + 1)); });
+      col += 6;
+    });
+    for (let r = 0; r < 9; r++) {
+      for (let c = 0; c < cols + 2; c++) {
+        const on = lit.has(c + ',' + r);
+        ctx.globalAlpha = on ? 1 : 0.14;
+        ctx.fillStyle = on ? accent : '#5a5e66';
+        ctx.shadowColor = accent; ctx.shadowBlur = on ? pitch * 0.9 : 0;
+        ctx.beginPath(); ctx.arc(x0 + (c + 0.5) * pitch, y0 + (r + 0.5) * pitch, pitch * 0.38, 0, Math.PI * 2); ctx.fill();
+      }
+    }
+  } else if (style === 'gaffer') {
+    // nastro gaffer nero, strappato a mano, scritto a pennarello
+    const size = fitFont(ctx, text, s => `${s}px ${FONT_MARKER}`, h * 0.62, maxW * 0.82);
+    const w = Math.min(maxW, ctx.measureText(text).width + size * 1.2), th = h * 0.92;
+    ctx.translate(cx, cy); ctx.rotate(-0.035);
+    ctx.shadowColor = 'rgba(0,0,0,.55)'; ctx.shadowBlur = h * 0.12; ctx.shadowOffsetY = h * 0.05;
+    ctx.fillStyle = '#23242a';
+    ctx.beginPath();
+    const tear = (x, dir) => { for (let y = -th / 2; y <= th / 2; y += th / 6) ctx.lineTo(x + dir * rand() * th * 0.08, y); };
+    ctx.moveTo(-w / 2, -th / 2); ctx.lineTo(w / 2, -th / 2); tear(w / 2, 1);
+    ctx.lineTo(-w / 2, th / 2);
+    for (let y = th / 2; y >= -th / 2; y -= th / 6) ctx.lineTo(-w / 2 - rand() * th * 0.08, y);
+    ctx.closePath(); ctx.fill();
+    ctx.shadowColor = 'transparent';
+    ctx.strokeStyle = 'rgba(255,255,255,.05)'; ctx.lineWidth = 1;
+    for (let x = -w / 2; x < w / 2; x += Math.max(2, th / 14)) { ctx.beginPath(); ctx.moveTo(x, -th / 2); ctx.lineTo(x + th * 0.1, th / 2); ctx.stroke(); }
+    ctx.fillStyle = '#f4f2ea';
+    ctx.font = `${size}px ${FONT_MARKER}`;
+    ctx.fillText(text, 0, size * 0.04);
+  } else if (style === 'fasci') {
+    // fasci di luce dietro le lettere e scritta dorata
+    ctx.save();
+    ctx.globalCompositeOperation = 'lighter';
+    const ox = cx, oy = cy + h * 0.9, n = 9;
+    for (let i = 0; i < n; i++) {
+      const a = -Math.PI / 2 + (i - (n - 1) / 2) * 0.24, len = h * 2.2, spread = 0.05;
+      const g = ctx.createLinearGradient(ox, oy, ox + Math.cos(a) * len, oy + Math.sin(a) * len);
+      g.addColorStop(0, accent); g.addColorStop(1, 'rgba(0,0,0,0)');
+      ctx.fillStyle = g; ctx.globalAlpha = 0.35;
+      ctx.beginPath(); ctx.moveTo(ox, oy);
+      ctx.lineTo(ox + Math.cos(a - spread) * len, oy + Math.sin(a - spread) * len);
+      ctx.lineTo(ox + Math.cos(a + spread) * len, oy + Math.sin(a + spread) * len);
+      ctx.closePath(); ctx.fill();
+    }
+    ctx.restore();
+    const size = fitFont(ctx, text, bold, h * 0.95, maxW * 0.94);
+    const g = ctx.createLinearGradient(0, cy - size / 2, 0, cy + size / 2);
+    g.addColorStop(0, '#fffbe6'); g.addColorStop(0.45, '#f2c53d'); g.addColorStop(0.55, '#b07a12'); g.addColorStop(1, '#f7d56a');
+    ctx.lineJoin = 'round';
+    ctx.shadowColor = accent; ctx.shadowBlur = size * 0.35;
+    ctx.strokeStyle = '#1a1206'; ctx.lineWidth = size * 0.1; ctx.strokeText(text, cx, cy);
+    ctx.shadowBlur = 0; ctx.fillStyle = g; ctx.fillText(text, cx, cy);
+  } else {
+    // tour: cromato, inclinato, bordo scuro, sottolineatura di colore e scintilla
+    const size = fitFont(ctx, text, bold, h * 0.95, maxW * 0.9);
+    const w = ctx.measureText(text).width;
+    ctx.translate(cx, cy); ctx.transform(1, 0, -0.2, 1, 0, 0);
+    ctx.lineJoin = 'round';
+    ctx.shadowColor = 'rgba(0,0,0,.7)'; ctx.shadowOffsetY = size * 0.06; ctx.shadowBlur = size * 0.08;
+    ctx.strokeStyle = '#0e0f12'; ctx.lineWidth = size * 0.13; ctx.strokeText(text, 0, 0);
+    ctx.shadowColor = 'transparent';
+    ctx.strokeStyle = accent; ctx.lineWidth = size * 0.04; ctx.strokeText(text, 0, 0);
+    const g = ctx.createLinearGradient(0, -size / 2, 0, size / 2);
+    g.addColorStop(0, '#ffffff'); g.addColorStop(0.46, '#cfd3da'); g.addColorStop(0.5, '#4a4f58'); g.addColorStop(0.56, '#eef0f3'); g.addColorStop(1, '#8e949e');
+    ctx.fillStyle = g; ctx.fillText(text, 0, 0);
+    // sottolineatura a colpo di pennello, che si assottiglia
+    ctx.fillStyle = accent;
+    ctx.beginPath(); ctx.moveTo(-w / 2, size * 0.5); ctx.lineTo(w / 2 + size * 0.2, size * 0.46); ctx.lineTo(w / 2 + size * 0.2, size * 0.5); ctx.lineTo(-w / 2 + size * 0.1, size * 0.58); ctx.closePath(); ctx.fill();
+    // scintilla sul primo carattere
+    const sx = -w / 2 + size * 0.12, sy = -size * 0.36, r = size * 0.22;
+    ctx.fillStyle = '#ffffff'; ctx.shadowColor = '#ffffff'; ctx.shadowBlur = size * 0.2;
+    ctx.beginPath(); ctx.moveTo(sx, sy - r); ctx.lineTo(sx + r * 0.16, sy - r * 0.16); ctx.lineTo(sx + r, sy); ctx.lineTo(sx + r * 0.16, sy + r * 0.16);
+    ctx.lineTo(sx, sy + r); ctx.lineTo(sx - r * 0.16, sy + r * 0.16); ctx.lineTo(sx - r, sy); ctx.lineTo(sx - r * 0.16, sy - r * 0.16); ctx.closePath(); ctx.fill();
+  }
+  ctx.restore();
+}
+
+// immagine del logo (SVG) pronta per il canvas, con una piccola memoria
+const logoImages = new Map();
+function logoImage (logo, name) {
+  const svg = logoSVG(logo, name, 256);
+  if (!logoImages.has(svg)) {
+    logoImages.set(svg, new Promise(resolve => {
+      const img = new Image();
+      img.onload = () => resolve(img); img.onerror = () => resolve(null);
+      img.src = 'data:image/svg+xml;charset=utf-8,' + encodeURIComponent(svg);
+    }));
+    if (logoImages.size > 60) logoImages.delete(logoImages.keys().next().value);
+  }
+  return logoImages.get(svg);
+}
+
+/* marchio completo su un canvas W×H: logo a sinistra, nome nello stile
+   scelto e sotto la riga AUDIO · LUCI · SERVICE */
+async function renderBrand (canvas, logo, name, W, H) {
+  const lg = { ...defaultLogo(), ...logo };
+  const [img] = await Promise.all([logoImage(lg, name), brandFonts()]);
+  canvas.width = W; canvas.height = H;
+  const ctx = canvas.getContext('2d');
+  ctx.clearRect(0, 0, W, H);
+  const ls = H * 0.84, pad = H * 0.08;
+  if (img) {
+    ctx.save(); ctx.shadowColor = 'rgba(0,0,0,.6)'; ctx.shadowBlur = H * 0.08; ctx.shadowOffsetY = H * 0.03;
+    ctx.drawImage(img, pad, (H - ls) / 2, ls, ls); ctx.restore();
+  }
+  const tx = pad * 2 + ls, tw = W - tx - pad, text = (name || 'Il tuo service').toUpperCase();
+  const accent = brandAccent(lg);
+  drawStyledName(ctx, lg.style || 'tour', text, tx + tw / 2, H * 0.42, tw, H * 0.5, accent);
+  ctx.save();
+  ctx.fillStyle = 'rgba(238,233,223,.75)'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+  const ts = fitFont(ctx, BRAND_TAGLINE, s => `600 ${s}px ${FONT_DISPLAY}`, H * 0.12, tw * 0.8);
+  if ('letterSpacing' in ctx) ctx.letterSpacing = (ts * 0.25) + 'px';
+  ctx.fillText(BRAND_TAGLINE, tx + tw / 2, H * 0.84);
+  ctx.restore();
+  return canvas;
+}
+// anteprima del marchio in un elemento del menù, nitida anche sugli schermi densi
+function brandPreview (box, logo, name, w, h) {
+  let c = box.querySelector('canvas');
+  if (!c) { box.innerHTML = ''; c = document.createElement('canvas'); box.appendChild(c); }
+  c.style.width = w + 'px'; c.style.height = h + 'px';
+  const dpr = Math.min(3, window.devicePixelRatio || 1);
+  return renderBrand(c, logo, name, Math.round(w * dpr), Math.round(h * dpr));
+}
 
 // la partita è "in corso" dopo Nuova partita o Continua: prima non si salva
 // niente, così la schermata iniziale non sovrascrive il salvataggio
@@ -1501,7 +1746,7 @@ function showMenuPage (page, keep) {
   if (page === 'new') {
     const i = el('#service-input');
     if (!keep) { draft = { name: Profile.data.service, logo: { ...serviceLogo() } }; i.value = draft.name; setTimeout(() => i.focus(), 30); }
-    el('#new-logo').innerHTML = logoSVG(draft.logo, draft.name, 56);
+    brandPreview(el('#new-logo'), draft.logo, draft.name, 300, 90);
   }
   if (page === 'logo') renderLogoEditor();
   if (page === 'settings') {
@@ -1509,7 +1754,7 @@ function showMenuPage (page, keep) {
     el('#set-reduced').checked = !!settings().reducedFx;
     el('#set-skipshow').checked = !!settings().skipShow;
     el('#set-service').value = Profile.data.service;
-    el('#set-logo').innerHTML = logoSVG(serviceLogo(), Profile.data.service, 56);
+    brandPreview(el('#set-logo'), serviceLogo(), Profile.data.service, 300, 90);
   }
 }
 
@@ -1517,7 +1762,7 @@ function showMenuPage (page, keep) {
    non possono avere lo stesso colore: se succede si scambiano. */
 function renderLogoEditor () {
   const { logo } = logoEdit, name = logoEdit.name();
-  el('#logo-preview').innerHTML = logoSVG(logo, name, 96);
+  brandPreview(el('#logo-preview'), logo, name, 300, 96);
   const opt = (html, sel, fn, extra) => {
     const b = document.createElement('button');
     b.type = 'button'; b.className = 'logo-opt' + (sel ? ' sel' : '') + (extra ? ' ' + extra : '');
@@ -1526,7 +1771,7 @@ function renderLogoEditor () {
     return b;
   };
   const fill = (id, items) => { const row = el(id); row.innerHTML = ''; items.forEach(b => row.appendChild(b)); };
-  const same = (a, b) => ['shape', 'icon', 'bg', 'fg'].every(k => a[k] === b[k]);
+  const same = (a, b) => ['shape', 'icon', 'bg', 'fg', 'style'].every(k => (a[k] || 'tour') === (b[k] || 'tour'));
   fill('#logo-presets', LOGO_PRESETS.map((pr, i) => {
     const b = opt(logoSVG(pr, name, 38), same(pr, logo), () => Object.assign(logo, pr));
     b.dataset.preset = i; return b;
@@ -1538,6 +1783,18 @@ function renderLogoEditor () {
   fill('#logo-icons', Object.keys(LOGO_ICONS).map(k => {
     const b = opt(logoSVG({ ...logo, icon: k }, name, 38), logo.icon === k, () => { logo.icon = k; });
     b.title = k; b.dataset.icon = k; return b;
+  }));
+  // stili della scritta: ognuno con l'anteprima del nome
+  const text = (name || 'Il tuo service').toUpperCase();
+  fill('#logo-styles', Object.entries(BRAND_STYLES).map(([k, label]) => {
+    const b = opt('', (logo.style || 'tour') === k, () => { logo.style = k; }, 'style-opt');
+    b.dataset.style = k;
+    const c = document.createElement('canvas'), dpr = Math.min(3, window.devicePixelRatio || 1);
+    c.width = 136 * dpr; c.height = 40 * dpr; c.style.width = '136px'; c.style.height = '40px';
+    b.appendChild(c);
+    const cap = document.createElement('span'); cap.textContent = label; b.appendChild(cap);
+    brandFonts().then(() => drawStyledName(c.getContext('2d'), k, text, c.width / 2, c.height / 2, c.width * 0.94, c.height * 0.72, brandAccent(logo)));
+    return b;
   }));
   const setColor = (key, other, c) => { if (logo[other] === c) logo[other] = logo[key]; logo[key] = c; };
   ['bg', 'fg'].forEach(key => fill('#logo-' + key, LOGO_COLORS.map(c => {
@@ -1596,7 +1853,7 @@ el('#new-cancel').addEventListener('click', () => { SFX.button(); showMenuPage('
 el('#new-form').addEventListener('submit', ev => { ev.preventDefault(); SFX.button(); startNewGame(el('#service-input').value, draft.logo); });
 el('#service-input').addEventListener('input', ev => {
   draft.name = ev.target.value;
-  el('#new-logo').innerHTML = logoSVG(draft.logo, draft.name, 56);   // le iniziali seguono il nome
+  brandPreview(el('#new-logo'), draft.logo, draft.name, 300, 90);   // nome e iniziali seguono quello che si scrive
 });
 el('#new-logo-btn').addEventListener('click', () => {
   SFX.button();
@@ -3501,15 +3758,13 @@ class StageScene extends Phaser.Scene {
         const size = Math.min(u1 - u0, w1 - w0) - 2;
         ctx.drawImage(img, (u0 + u1 - size) / 2, (w0 + w1 - size) / 2, size, size);
       }
-      // nome sotto la fascia, lungo tutta la fiancata
+      // nome sotto la fascia, lungo tutta la fiancata, nello stile del marchio
       if (name) {
         const u0 = boxStart + 6, u1 = v.B - 6, w0 = v.Z - (lz - 2), w1 = v.Z - (v.chassis + 12);
-        let size = w1 - w0;
-        ctx.font = `700 ${size}px "Barlow Condensed", "Arial Narrow", sans-serif`;
-        const wide = ctx.measureText(name).width;
-        if (wide > u1 - u0) { size *= (u1 - u0) / wide; ctx.font = `700 ${size}px "Barlow Condensed", "Arial Narrow", sans-serif`; }
-        ctx.fillStyle = '#26282e'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
-        ctx.fillText(name, (u0 + u1) / 2, (w0 + w1) / 2);
+        const lg = logo || defaultLogo();
+        // sul bianco del furgone il colore chiaro non si leggerebbe
+        const accent = ['#eee9df', '#f2c53d'].includes(brandAccent(lg)) ? (lg.bg === '#eee9df' ? '#1c1d22' : lg.bg) : brandAccent(lg);
+        drawStyledName(ctx, lg.style || 'tour', name, (u0 + u1) / 2, (w0 + w1) / 2, u1 - u0, w1 - w0, accent);
       }
       const key = 'livery-' + token;
       this.textures.addCanvas(key, canvas);
@@ -3519,11 +3774,23 @@ class StageScene extends Phaser.Scene {
       if (old && old !== key) this.textures.remove(old);
       this.livery = { name, logo };
     };
-    if (!logo) { paint(null); return; }
-    const img = new Image();
-    img.onload = () => paint(img);
-    img.onerror = () => paint(null);
-    img.src = 'data:image/svg+xml;charset=utf-8,' + encodeURIComponent(logoSVG(logo, Profile.data.service, 256));
+    Promise.all([logo ? logoImage(logo, Profile.data.service) : null, brandFonts()]).then(([img]) => paint(img));
+    this.paintBrandTexture();
+  }
+
+  /* marchio grande per la scritta finale dello show, preparato in anticipo
+     (il disegno è asincrono: logo e caratteri devono essere pronti) */
+  paintBrandTexture () {
+    const token = this.brandSeq = (this.brandSeq || 0) + 1;
+    if (!gameActive && !Profile.data.service) return;
+    renderBrand(document.createElement('canvas'), serviceLogo(), Profile.data.service, 960, 300).then(canvas => {
+      if (token !== this.brandSeq) return;
+      const key = 'brand-' + token, old = this.brandKey;
+      this.textures.addCanvas(key, canvas);
+      this.brandKey = key;
+      // il vecchio si toglie solo quando nessuno show lo sta usando
+      if (old && !this.fx) this.textures.remove(old);
+    });
   }
 
   /* flight case da tour: guscio nero in multistrato, profili e angolari in
@@ -5282,12 +5549,32 @@ class StageScene extends Phaser.Scene {
      Alla fine torna il giorno e l'impianto resta com'era. */
   // "IMPIANTO COLLAUDATO" col nome del service sotto
   showBanner () {
-    const banner = this.fxObj(this.add.text(GAME_W / 2, GAME_H / 2, 'IMPIANTO COLLAUDATO\n' + serviceName().toUpperCase() + (this.repGain ? '\n+' + this.repGain + ' REPUTAZIONE' : ''), {
+    const brand = this.brandKey && this.textures.exists(this.brandKey);
+    const title = this.fxObj(this.add.text(GAME_W / 2, GAME_H / 2 - (brand ? 150 : 0), 'IMPIANTO COLLAUDATO' + (brand ? '' : '\n' + serviceName().toUpperCase()), {
       fontFamily: 'Barlow Condensed, sans-serif', fontSize: '44px', fontStyle: 'bold',
       color: '#f2a541', align: 'center', lineSpacing: 2, wordWrap: { width: GAME_W - 80 }
     }).setOrigin(0.5).setDepth(100).setAlpha(0).setScale(0.85).setScrollFactor(0));
-    this.fxTween({ targets: banner, alpha: 1, scale: 1, duration: 380, ease: 'Back.Out' });
-    this.fxTween({ targets: banner, alpha: 0, delay: 1400, duration: 400 });
+    const parts = [title];
+    if (brand) {
+      // il marchio del service entra in grande, con un lampo di luce
+      const img = this.fxObj(this.add.image(GAME_W / 2, GAME_H / 2 + 10, this.brandKey).setDepth(100).setScrollFactor(0).setAlpha(0));
+      const fit = Math.min(1, (GAME_W - 120) / img.width);
+      img.setScale(fit * 0.6);
+      this.fxTween({ targets: img, alpha: 1, scale: fit, duration: 520, ease: 'Back.Out' });
+      if (!reducedFx()) {
+        const flash = this.fxObj(this.add.rectangle(GAME_W / 2, GAME_H / 2 + 10, img.width * fit, img.height * fit, 0xffffff, 0)
+          .setDepth(101).setScrollFactor(0).setBlendMode(Phaser.BlendModes.ADD));
+        this.fxTween({ targets: flash, fillAlpha: { from: 0.55, to: 0 }, delay: 300, duration: 450 });
+      }
+      parts.push(img);
+    }
+    if (this.repGain) {
+      parts.push(this.fxObj(this.add.text(GAME_W / 2, GAME_H / 2 + (brand ? 180 : 110), '+' + this.repGain + ' REPUTAZIONE', {
+        fontFamily: 'Barlow Condensed, sans-serif', fontSize: '34px', fontStyle: 'bold', color: '#49b06a'
+      }).setOrigin(0.5).setDepth(100).setAlpha(0).setScrollFactor(0)));
+    }
+    this.fxTween({ targets: parts.filter(o => o !== parts[1] || !brand), alpha: 1, scale: 1, duration: 380, ease: 'Back.Out' });
+    this.fxTween({ targets: parts, alpha: 0, delay: 1800, duration: 400 });
   }
 
   playSuccessSequence () {
@@ -5296,7 +5583,7 @@ class StageScene extends Phaser.Scene {
     // show saltato dalle impostazioni: solo la scritta
     if (settings().skipShow) {
       this.showBanner();
-      this.fxLater(2300, () => this.stopFx());
+      this.fxLater(2600, () => this.stopFx());
       return;
     }
     const BPM = 120, BEATS = 14, BEAT_MS = 60000 / BPM;
@@ -5339,7 +5626,7 @@ class StageScene extends Phaser.Scene {
 
     // disegno a ~30 fps: i fasci non si muovono, pulsano col beat e
     // cambiano colore ogni due battute
-    this.fxEvery(33, Math.ceil((T_DAY + 800) / 33), () => {
+    this.fxEvery(33, Math.ceil((T_DAY + 1300) / 33), () => {
       st.kick *= 0.86; st.flash *= 0.8;
       beams.clear();
       const colors = PALETTE[Math.floor(st.beat / 2) % PALETTE.length];
@@ -5368,8 +5655,8 @@ class StageScene extends Phaser.Scene {
     }));
 
     // finale: la scritta, poi torna il giorno
-    this.fxLater(T_END - 200, () => this.showBanner());
-    this.fxLater(T_DAY + 800, () => this.stopFx());
+    this.fxLater(T_END - 800, () => this.showBanner());
+    this.fxLater(T_DAY + 1300, () => this.stopFx());
   }
 
   /* ---------------- reset ---------------- */

@@ -29,23 +29,27 @@ const path = require('path');
   await p.fill('#service-input', '');
   await p.type('#service-input', 'Service Wasd');      // W, A, S, D non devono sparire
   check(await p.inputValue('#service-input') === 'Service Wasd', 'nel nome non si scrivono tutte le lettere: ' + await p.inputValue('#service-input'));
-  // logo: uno pronto, poi personalizzato (iniziali, fondo blu)
+  // marchio: uno pronto, poi personalizzato (iniziali, fondo blu, scritta neon)
   await p.click('#new-logo-btn');
   await p.click('#logo-presets [data-preset="1"]');
   await p.click('#logo-icons [data-icon="iniziali"]');
   await p.click('#logo-bg [data-color="#3b7bff"]');
-  check(/>W</.test(await p.innerHTML('#logo-preview')), 'le iniziali del logo non seguono il nome (senza la parola Service)');
+  await p.click('#logo-styles [data-style="neon"]');
+  check(await ev(() => />W</.test(logoSVG(draft.logo, draft.name, 96))), 'le iniziali del logo non seguono il nome (senza la parola Service)');
+  check(await p.$$eval('#logo-styles canvas', cs => cs.length) === 6, 'mancano le anteprime dei 6 stili della scritta');
+  check(await p.$eval('#logo-styles [data-style="neon"]', b => b.classList.contains('sel')), 'stile scelto non evidenziato');
   await p.click('#logo-done');
   check(await p.inputValue('#service-input') === 'Service Wasd', 'tornando dal logo il nome si è perso');
-  check(/#3b7bff/.test(await p.innerHTML('#new-logo')), 'anteprima del logo non aggiornata');
+  check(await p.$eval('#new-logo canvas', c => c.width > 0), 'anteprima del marchio assente');
   await p.click('#new-start');
   check(!(await p.isVisible('#menu-modal')), 'il menù resta aperto dopo Inizia');
   const logo1 = await ev(() => Profile.data.logo);
-  check(JSON.stringify(logo1) === JSON.stringify({ shape: 'scudo', icon: 'iniziali', bg: '#3b7bff', fg: '#eee9df' }), 'logo scelto non salvato: ' + JSON.stringify(logo1));
+  check(JSON.stringify(logo1) === JSON.stringify({ shape: 'scudo', icon: 'iniziali', bg: '#3b7bff', fg: '#eee9df', style: 'neon' }), 'logo scelto non salvato: ' + JSON.stringify(logo1));
   check(/#3b7bff/.test(await p.innerHTML('#service-logo')), 'logo non in testata');
   check(await p.textContent('#service-tag') === 'SERVICE WASD · REPUTAZIONE 0', 'nome del service o reputazione non in testata: ' + await p.textContent('#service-tag'));
   await p.waitForFunction(() => window.__scene.livery && window.__scene.livery.name === 'SERVICE WASD');
   check(await ev(() => window.__scene.livery.logo.bg) === '#3b7bff', 'logo non sul furgone');
+  await p.waitForFunction(() => window.__scene.brandKey && window.__scene.textures.exists(window.__scene.brandKey));
 
   // ---- un po' di impianto: pezzi, un cavo, Quadro armato, mixer acceso
   await ev(() => {
