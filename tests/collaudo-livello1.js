@@ -37,12 +37,19 @@ const N = parseInt(process.argv[2] || '40', 10), SEED0 = parseInt(process.argv[3
       if (rng() < 0.5) P('mixer', 7, 5); else P('mixer', 6, 13);
       P('ampli', 6, 4);
       if (rng() < 0.5) P('controller', 7, 7); else P('controller', 7, 13);
-      shuffle([[2, 5], [3, 5], [4, 5], [5, 5]]).forEach(s => P('par', ...s));
+      // stativi: un frontale per lato nel Pit, un taglio per lato del palco,
+      // in posizioni a caso; poi un PAR montato su ciascuno (in ordine a caso)
+      const standAt = [pick([[0, 8], [0, 9], [2, 9], [3, 9]]), pick([[5, 9], [6, 9], [8, 9], [9, 9]]),
+        pick([[0, 4], [1, 5], [0, 6], [1, 7]]), pick([[6, 5], [6, 6], [6, 7]])];
+      shuffle(standAt).forEach(s => P('stativo', ...s));
+      const mountPar = st => { const v = S.compVisuals[st.id].container; S.placeComponentAt('par', v.x, v.y); };
+      shuffle(placedOfType('stativo')).forEach(mountPar);
       P('quadro', 4, 2); P('ciabatta_cee', 6, 2); P('ciabatta', 3, 13); P('pc', 4, 13); P('scheda', 5, 13);
       if (rng() < 0.5) {
-        const ty = pick(['par', 'mixer', 'pc', 'scheda', 'ampli', 'controller']);
-        const c = pick(placedOfType(ty)); const g = [c.gx, c.gy];
-        S.deleteComponent(c.id); P(ty, g[0], g[1]);
+        const ty = pick(['par', 'stativo', 'mixer', 'pc', 'scheda', 'ampli', 'controller']);
+        const c = pick(placedOfType(ty));
+        if (ty === 'par') { const st = mountBase(c); S.deleteComponent(c.id); mountPar(st); }
+        else { const g = [c.gx, c.gy]; S.deleteComponent(c.id); P(ty, g[0], g[1]); if (ty === 'stativo') mountPar(placedOfType('stativo').find(x => !x.hasPar)); }
       }
       const left = Object.entries(gameState.stock).filter(([k, v]) => v > 0);
       if (left.length) { out.wireFail.push(seed + ' stock ' + JSON.stringify(left)); continue; }
@@ -160,7 +167,7 @@ const N = parseInt(process.argv[2] || '40', 10), SEED0 = parseInt(process.argv[3
       if (el('#conn-val').textContent !== '24 / 24') out.validFail.push(seed + ' contatore ' + el('#conn-val').textContent);
       out.valid++;
       // ---- una mutazione
-      const muts = ['cut', 'stereo', 'off', 'overlap', 'group', 'mcbUsed', 'mcbUnused', 'otherUni', 'aux'];
+      const muts = ['cut', 'stereo', 'off', 'overlap', 'group', 'mcbUsed', 'mcbUnused', 'otherUni', 'aux', 'lights'];
       const m = pick(muts);
       let expect = 'fail', expectMsg = null;
       if (m === 'cut') {
@@ -183,6 +190,16 @@ const N = parseInt(process.argv[2] || '40', 10), SEED0 = parseInt(process.argv[3
         us[1][0].dmx = { addr: us[0][0].dmx.addr + 1, mode: us[0][0].dmx.mode };
         us[1].forEach((x, i) => { if (i) x.dmx.addr = 400 + i * 10; });
         expect = 'pass';
+      } else if (m === 'lights') {
+        // uno stativo frontale spostato di lato (o un taglio portato nel Pit)
+        const st = pick(placedOfType('stativo'));
+        const to = standRole(st) === 'front' ? pick([[1, 4], [0, 7], [6, 7]]) : pick([[4, 9], [1, 9], [7, 9]]);
+        const n0 = st.gx + ',' + st.gy;
+        S.enterAssembly(st.id, true); S.moveSelected = st.id;
+        const w = gridToScreen(to[0] + .5, to[1] + .5); S.attemptMoveTo(w.x, w.y); S.exitAssembly();
+        if (st.gx + ',' + st.gy === n0) continue;
+        expectMsg = /frontale|frontali|tagli/;
+        // spostarlo può anche togliere la corrente sotto carico: basta che bocci
       } else if (m === 'aux') {
         // le mandate AUX sono jack: verso il finale (XLR) non c'è cavo che entri
         const n0 = gameState.edges.length;
