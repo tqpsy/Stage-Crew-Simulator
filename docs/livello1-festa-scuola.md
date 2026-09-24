@@ -177,12 +177,16 @@ Giro del livello: **Montaggio → Test impianto → [cambio palco → spettacolo
 - **Fine fase**: animazione illustrata di 10 s sopra il palco, poi un mini-verbale
   (gradimento, birre, reputazione).
 
-## Da decidere
+## Decisi (proposte accettate)
 
-1. Personaggi definitivi.
-2. Quali richieste extra tenere nel livello 1.
-3. Pausa durante lo spettacolo: sì o no?
-4. Caricature: disegnate in vettoriale nel codice (come i dispositivi) o
-   illustrazioni fatte a parte?
-5. Salvataggio della reputazione tra una partita e l'altra.
-6. Valori di reputazione, stress, pazienza e gradimento (da tarare giocando).
+- Personaggi: Preside Tramp, DJ E=mc² (Einstein), Dante unplugged, Gerry Scotti bidello.
+- Richieste extra del livello 1: monitor per Dante, telefono del bidello, macchina del fumo.
+- Pausa: sì, con il palco oscurato.
+- Caricature: vettoriali disegnate nel codice, come i dispositivi.
+- Reputazione salvata nel browser del giocatore.
+- I numeri (gradimento, stress, pazienza) si tarano giocando.
+
+## Prototipo
+
+`prototipi/spettacolo-preside.html`: la fase del discorso del preside, cliccabile,
+per provare il ritmo prima di portarla nel gioco.
