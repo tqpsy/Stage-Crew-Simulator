@@ -4178,9 +4178,14 @@ class StageScene extends Phaser.Scene {
     this.setGlow(v, true, 0xf2a541);
     this.assemblyTween = this.tweens.add({ targets: v.container, angle: { from: -1.6, to: 1.6 }, duration: 110, yoyo: true, repeat: -1 });
     if (navigator.vibrate) navigator.vibrate(25);
-    const hx = v.container.x + (-v.def.body.w / 2 - 4) * v.container.scaleX;
-    const hy = v.container.y + (-v.def.body.h / 2 - 4) * v.container.scaleY;
-    const handle = this.add.container(hx, hy).setDepth(70);
+    // la ✕ resta toccabile (≈26px) a qualunque zoom, appena fuori
+    // dall'angolo del dispositivo così non lo copre
+    const rc = this.game.canvas.getBoundingClientRect();
+    const k = this.cameras.main.zoom * (rc.width / GAME_W);
+    const hs = Math.max(1, 13 / (12 * k));
+    const hx = v.container.x + (-v.def.body.w / 2) * v.container.scaleX - 11 * hs;
+    const hy = v.container.y + (-v.def.body.h / 2) * v.container.scaleY - 11 * hs;
+    const handle = this.add.container(hx, hy).setDepth(70).setScale(hs);
     const bg = this.add.circle(0, 0, 12, 0xe0503f, 1).setStrokeStyle(2, 0xffffff, 0.9).setInteractive({ useHandCursor: true });
     handle.add(bg);
     handle.add(this.add.text(0, 0, '✕', { fontFamily: 'Inter, sans-serif', fontSize: '13px', fontStyle: 'bold', color: '#ffffff' }).setOrigin(0.5));
