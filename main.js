@@ -459,43 +459,51 @@ function subsLeftToRight () {
 
 function buildExpectedConnections () {
   const one = t => placedOfType(t)[0] || null;
-  const slot = (ok, ...cs) => ({ ok: !!ok, ids: cs.filter(Boolean).map(c => c.id) });
+  const L = c => c ? compLabel(c.id) : null;
+  const missing = t => COMPONENT_TYPES[t].label + ' da posare';
+  // ogni posto dice a parole cosa serve, per il messaggio del Test impianto
+  const slot = (ok, what, ...cs) => ({ ok: !!ok, what, ids: cs.filter(Boolean).map(c => c.id) });
   const list = [];
   const mixer = one('mixer'), ampli = one('ampli'), pc = one('pc'), scheda = one('scheda');
 
   // corrente
   const allaccio = one('allaccio'), quadro = one('quadro');
-  list.push(slot(allaccio && quadro && portEdgeExists(allaccio.id, 'out', quadro.id, 'in', 'cee_tri'), quadro));
+  list.push(slot(allaccio && quadro && portEdgeExists(allaccio.id, 'out', quadro.id, 'in', 'cee_tri'),
+    quadro ? 'Allaccio → ' + L(quadro) + ' (CEE 400V)' : missing('quadro'), quadro));
   Object.entries(REQUIRED_POWER).forEach(([t, n]) => {
     const cs = placedOfType(t);
-    for (let i = 0; i < n; i++) list.push(slot(cs[i] && wiredToQuadro(cs[i].id), cs[i]));
+    for (let i = 0; i < n; i++) list.push(slot(cs[i] && wiredToQuadro(cs[i].id), cs[i] ? 'corrente a ' + L(cs[i]) : missing(t), cs[i]));
   });
 
   // audio: PC -> scheda
-  list.push(slot(pc && scheda && portEdgeExists(pc.id, 'usb', scheda.id, 'usb', 'usbc'), pc, scheda));
+  list.push(slot(pc && scheda && portEdgeExists(pc.id, 'usb', scheda.id, 'usb', 'usbc'),
+    pc && scheda ? 'USB-C da ' + L(scheda) + ' a ' + L(pc) : missing(pc ? 'scheda' : 'pc'), pc, scheda));
   // scheda out L/R -> un ingresso jack del mixer ciascuna
   ['out_L', 'out_R'].forEach(out => {
     const e = scheda && gameState.edges.find(x => x.a === scheda.id && x.aPort === out && x.signal === 'jack');
-    list.push(slot(e && mixer && e.b === mixer.id, scheda, mixer));
+    list.push(slot(e && mixer && e.b === mixer.id,
+      scheda && mixer ? L(scheda) + ' OUT ' + out.slice(-1) + ' → ' + L(mixer) + ' (jack)' : missing(scheda ? 'mixer' : 'scheda'), scheda, mixer));
   });
   // MAIN L/R -> un ingresso del finale ciascuna
   ['main_L', 'main_R'].forEach(out => {
     const e = mixer && gameState.edges.find(x => x.a === mixer.id && x.aPort === out && x.signal === 'xlr');
-    list.push(slot(e && ampli && e.b === ampli.id, mixer, ampli));
+    list.push(slot(e && ampli && e.b === ampli.id,
+      mixer && ampli ? L(mixer) + ' MAIN ' + out.slice(-1) + ' → ' + L(ampli) + ' (XLR)' : missing(mixer ? 'ampli' : 'mixer'), mixer, ampli));
   });
 
   // DMX: ogni PAR in catena dalla consolle
   const pars = placedOfType('par');
-  for (let i = 0; i < 4; i++) list.push(slot(pars[i] && dmxUniverse(pars[i].id) != null, pars[i]));
+  for (let i = 0; i < 4; i++) list.push(slot(pars[i] && dmxUniverse(pars[i].id) != null, pars[i] ? 'DMX dalla consolle a ' + L(pars[i]) : missing('par'), pars[i]));
 
   // finale -> ogni Sub, ogni Sub -> la testa agganciata sopra
   const subs = subsLeftToRight();
   for (let i = 0; i < 2; i++) {
     const sub = subs[i];
     const e = sub && edgeInto(sub.id, 'spk_in', 'speakon');
-    list.push(slot(e && ampli && e.a === ampli.id, ampli, sub));
+    list.push(slot(e && ampli && e.a === ampli.id, sub ? (ampli ? L(ampli) : 'finale') + ' → ' + L(sub) + ' (Speakon)' : missing('sub'), ampli, sub));
     const top = sub && sub.hasTop ? gameState.placed[sub.hasTop] : null;
-    list.push(slot(sub && top && portEdgeExists(sub.id, 'spk_thru', top.id, 'spk_in', 'speakon'), sub, top));
+    list.push(slot(sub && top && portEdgeExists(sub.id, 'spk_thru', top.id, 'spk_in', 'speakon'),
+      sub && top ? L(sub) + ' LINK → ' + L(top) + ' (Speakon)' : (sub ? 'testa da montare su ' + L(sub) : missing('sub')), sub, top));
   }
 
   return list;
@@ -1023,16 +1031,24 @@ function portHasConnection (componentId, portId) {
   );
 }
 
+// "a; b; c e altri 2"
+function listShort (items, max) {
+  if (items.length <= max) return items.join('; ');
+  return items.slice(0, max).join('; ') + ' e altri ' + (items.length - max);
+}
+
 function runValidation () {
   const expected = buildExpectedConnections();
   const failedComponents = new Set();
   let allFound = true;
   let madeCount = 0;
 
+  const missingList = [];
   expected.forEach(exp => {
     if (exp.ok) madeCount++;
     else {
       allFound = false;
+      missingList.push(exp.what);
       exp.ids.forEach(i => failedComponents.add(i));
     }
   });
@@ -1051,7 +1067,7 @@ function runValidation () {
 
   return {
     pass: allFound && !overBudget && allSubsTopsPlaced && !overPhase,
-    failedComponents, overBudget, usedW, madeCount, totalCount: expected.length,
+    failedComponents, missingList, overBudget, usedW, madeCount, totalCount: expected.length,
     phaseLoads, overloadedPhases, overPhase
   };
 }
@@ -1106,7 +1122,8 @@ function showToast (msg, kind) {
   if (kind === 'ok') toast.classList.add('ok');
   toast.classList.add('show');
   clearTimeout(toastTimer);
-  toastTimer = setTimeout(() => toast.classList.remove('show'), 3200);
+  // i messaggi lunghi restano più a lungo: il tempo di leggerli
+  toastTimer = setTimeout(() => toast.classList.remove('show'), Math.max(3200, msg.length * 60));
 }
 
 function updateStockUI () {
@@ -4307,7 +4324,7 @@ class StageScene extends Phaser.Scene {
       } else {
         showToast(result.overBudget
           ? 'Potenza richiesta oltre il limite disponibile.'
-          : 'Cablaggio incompleto: i dispositivi evidenziati in rosso non sono collegati come serve.');
+          : 'Cablaggio incompleto (' + result.madeCount + '/' + result.totalCount + '). Manca: ' + listShort([...new Set(result.missingList)], 3) + '.');
         glow([...result.failedComponents]);
       }
       return;
@@ -4329,7 +4346,7 @@ class StageScene extends Phaser.Scene {
     if (notRunning.length) {
       setCircuitStatus('error');
       SFX.fail();
-      showToast('Alcuni dispositivi sono spenti o senza corrente: accendili dal loro pannello (in rosso).');
+      showToast('Spenti o senza corrente: ' + listShort(notRunning.map(compLabel), 4) + '. Accendili dal loro pannello; se sono accesi, controlla che arrivi corrente.');
       glow(notRunning);
       return;
     }
