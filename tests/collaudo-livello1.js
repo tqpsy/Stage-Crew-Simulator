@@ -164,7 +164,7 @@ const N = parseInt(process.argv[2] || '40', 10), SEED0 = parseInt(process.argv[3
       else if (m === 'stereo') {
         gameState.edges.filter(e => e.a === SC && e.signal === 'jack').forEach(e => { S.selectedEdgeId = e.id; S.deleteSelectedEdge(); });
         wire('jack', SC, 'out_L', MX, s1 ? 'in_5' : 'in_6'); wire('jack', SC, 'out_R', MX, s1 ? 'in_6' : 'in_5'); expectMsg = /Stereo invertito/;
-      } else if (m === 'off') { toggleDevicePower(pick(sw).id); expectMsg = /spenti o senza corrente|salvavita|TUMP/; }
+      } else if (m === 'off') { toggleDevicePower(pick(sw).id); expectMsg = /spenti o senza corrente|salvavita|TUMP/i; }
       else if (m === 'overlap' || m === 'group') {
         const list = Object.values(byU).find(l => l.length >= 2);
         if (!list) continue;

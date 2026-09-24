@@ -1858,6 +1858,9 @@ function renderStripPanel (ctx, comp, def, panel) {
   return svg + `</svg>`;
 }
 
+// scala minima del disegno di un pannello (pixel per unità): sotto questa
+// le scritte delle prese non si leggono più
+const REAR_MIN_SCALE = 0.56;
 function renderRearPanel () {
   const id = rearPanelId;
   const comp = gameState.placed[id];
@@ -1938,7 +1941,19 @@ function renderRearPanel () {
     svg += `</svg>`;
   }
 
-  el('#rear-svg').innerHTML = svg;
+  const wrap = el('#rear-svg');
+  const keepScroll = wrap.scrollLeft;
+  wrap.innerHTML = svg;
+  // sul telefono un pannello largo (mixer, finale...) diventerebbe troppo
+  // piccolo per leggerlo: lo si mostra più grande e scorre di lato
+  const svgEl = wrap.querySelector('svg');
+  const vbW = svgEl ? svgEl.viewBox.baseVal.width : 0;
+  const avail = wrap.clientWidth - 32;
+  const big = vbW && avail > 0 && avail / vbW < REAR_MIN_SCALE;
+  wrap.classList.toggle('scroll-x', !!big);
+  if (svgEl) svgEl.style.width = big ? Math.round(vbW * REAR_MIN_SCALE) + 'px' : '';
+  if (big) wrap.insertAdjacentHTML('afterbegin', '<div class="rear-scroll-hint">↔ scorri di lato per vedere tutto il pannello</div>');
+  wrap.scrollLeft = big ? keepScroll : 0;
   el('#rear-svg').querySelectorAll('.rp-port').forEach(node => {
     node.addEventListener('click', () => onRearPortClick(id, node.dataset.port));
   });
@@ -2098,8 +2113,10 @@ function openRearPanel (compId) {
   if (!REAR_PANELS[(gameState.placed[compId] || {}).type]) return;
   rearPanelId = compId;
   el('#rear-detail').innerHTML = '';
-  renderRearPanel();
+  // prima visibile, poi disegnato: serve la larghezza vera del riquadro
   el('#rear-modal').classList.add('show');
+  el('#rear-svg').scrollLeft = 0;
+  renderRearPanel();
   setSceneInput(false);
 }
 function closeRearPanel () {

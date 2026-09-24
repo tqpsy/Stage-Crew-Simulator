@@ -312,6 +312,9 @@
   .rear-svg{ width:100%; height:auto; display:block; max-height:58vh; }
   .rear-svg.round{ max-height:74vh; }
   .rear-svg.tall{ max-height:70vh; }
+  .rear-svg-wrap.scroll-x{ overflow-x:auto; -webkit-overflow-scrolling:touch; }
+  .rear-svg-wrap.scroll-x .rear-svg{ max-width:none; max-height:none; }
+  .rear-scroll-hint{ position:sticky; left:0; font-size:12.5px; color:var(--amber); padding:0 0 6px; white-space:nowrap; }
   .rear-svg .rp-btn:hover rect{ fill:#55585f; }
   .rear-svg .rp-port:hover > g:first-of-type{ filter:brightness(1.15); }
   .rear-detail:empty{ display:none; }
