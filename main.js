@@ -4777,6 +4777,7 @@ class StageScene extends Phaser.Scene {
     const zone = isStageCell(cx, cy) ? 'stage' : 'ground';
     gameState.placed[id] = { id, type, gx: cx, gy: cy, foot: spot.foot, cells: spot.keys, screen: pos, zone };
     if (MOUNT_ON[type]) gameState.placed[id][MOUNTS[MOUNT_ON[type]].link] = null;   // base libera
+    updatePowerMeter();   // ora il pezzo conta nella potenza impegnata
     this.compVisuals[id] = this.buildComponentVisual(id, def, pos.x, pos.y);
 
     this.updateQuadroVisual();
@@ -4833,6 +4834,7 @@ class StageScene extends Phaser.Scene {
     base[m.link] = id;
     gameState.placed[id] = { id, type, [m.back]: base.id, zone: base.zone, screen: pos };
     if (type === 'par') gameState.placed[id].dmx = { addr: 1, mode: 1 };   // indirizzo/modalità DMX dal display
+    updatePowerMeter();   // ora il pezzo conta nella potenza impegnata
     const visual = this.buildComponentVisual(id, COMPONENT_TYPES[type], pos.x, pos.y);
     visual.container.setDepth(at.depth);
     this.compVisuals[id] = visual;
