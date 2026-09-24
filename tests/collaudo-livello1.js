@@ -19,6 +19,9 @@ const N = parseInt(process.argv[2] || '40', 10), SEED0 = parseInt(process.argv[3
   const errs = []; p.on('pageerror', e => errs.push(e.message));
   await p.goto('file://' + path.join(__dirname, '..', 'index.html'));
   await p.waitForFunction(() => window.__scene, null, { timeout: 20000 });
+  // partita vera, così ogni azione passa anche dal salvataggio automatico
+  await p.evaluate(() => startNewGame('Collaudo'));
+  await p.waitForFunction(() => !menuOpen);
   const res = await p.evaluate(async ({ N, SEED0 }) => {
     const sleep = ms => new Promise(r => setTimeout(r, ms));
     const out = { valid: 0, validFail: [], mut: {}, mutBad: [], wireFail: [] };

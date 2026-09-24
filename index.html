@@ -14,9 +14,12 @@
 <div id="app">
 
   <header>
-    <div class="level-id">
-      <span class="tag">STAGE CREW SIMULATOR</span>
-      <h1>Livello 1: Festa della scuola</h1>
+    <div class="level-wrap">
+      <span class="service-logo" id="service-logo"></span>
+      <div class="level-id">
+        <span class="tag" id="service-tag">STAGE CREW SIMULATOR</span>
+        <h1>Livello 1: Festa della scuola</h1>
+      </div>
     </div>
 
     <div class="meters">
@@ -38,12 +41,71 @@
         </div>
       </div>
 
-      <button class="reset-btn history-btn" id="sound-btn" title="Disattiva i suoni">🔊</button>
+      <button class="reset-btn history-btn" id="menu-btn" title="Menù: partita e impostazioni">☰</button>
       <button class="reset-btn history-btn" id="undo-btn" title="Annulla ultima azione" disabled>↶</button>
       <button class="reset-btn history-btn" id="redo-btn" title="Ripeti azione" disabled>↷</button>
       <button class="reset-btn" id="reset-btn">Reset livello</button>
     </div>
   </header>
+
+  <div class="modal-overlay" id="menu-modal">
+    <div class="modal-box menu-box">
+      <div class="menu-head">
+        <span class="tag">STAGE CREW SIMULATOR</span>
+        <h2>Livello 1: Festa della scuola</h2>
+      </div>
+
+      <div class="menu-page" data-page="main">
+        <button class="menu-btn primary" id="menu-resume">Continua</button>
+        <button class="menu-btn" id="menu-new">Nuova partita</button>
+        <button class="menu-btn" id="menu-settings">Impostazioni</button>
+      </div>
+
+      <form class="menu-page" data-page="new" id="new-form" hidden>
+        <label class="menu-field">Come si chiama il tuo service?
+          <input id="service-input" maxlength="24" autocomplete="off" placeholder="es. Service Rossi">
+        </label>
+        <div class="logo-pick">
+          <span class="logo-preview" id="new-logo"></span>
+          <button class="menu-btn" id="new-logo-btn" type="button">Scegli o crea il marchio</button>
+        </div>
+        <p class="menu-note" id="new-warning">Il service salvato lascia il posto al nuovo, che parte da reputazione 0. Impostazioni e record restano.</p>
+        <button class="menu-btn primary" id="new-start" type="submit">Inizia</button>
+        <button class="menu-btn" id="new-cancel" type="button">Indietro</button>
+      </form>
+
+      <div class="menu-page" data-page="settings" hidden>
+        <label class="menu-field" id="set-service-row">Nome del service
+          <input id="set-service" maxlength="24" autocomplete="off" placeholder="es. Service Rossi">
+        </label>
+        <div class="logo-pick" id="set-logo-row">
+          <span class="logo-preview" id="set-logo"></span>
+          <button class="menu-btn" id="set-logo-btn" type="button">Cambia il marchio</button>
+        </div>
+        <label class="menu-field">Volume
+          <input type="range" id="set-volume" min="0" max="100" step="5">
+        </label>
+        <label class="menu-check"><input type="checkbox" id="set-reduced"> Effetti ridotti: niente strobo, lampi o scossoni</label>
+        <label class="menu-check"><input type="checkbox" id="set-skipshow"> Salta lo show dopo il collaudo</label>
+        <button class="menu-btn" id="settings-back" type="button">Indietro</button>
+      </div>
+
+      <div class="menu-page" data-page="logo" hidden>
+        <span class="logo-preview big" id="logo-preview"></span>
+        <div class="logo-auto">
+          <button class="menu-btn" id="logo-from-name" type="button">✨ Dal nome</button>
+          <button class="menu-btn" id="logo-another" type="button">↻ Un'altra idea</button>
+        </div>
+        <div class="logo-label">Loghi pronti</div><div class="logo-row" id="logo-presets"></div>
+        <div class="logo-label">Scritta del nome</div><div class="logo-row" id="logo-styles"></div>
+        <div class="logo-label">Forma</div><div class="logo-row" id="logo-shapes"></div>
+        <div class="logo-label">Simbolo</div><div class="logo-row" id="logo-icons"></div>
+        <div class="logo-label">Colore di fondo</div><div class="logo-row" id="logo-bg"></div>
+        <div class="logo-label">Colore del simbolo</div><div class="logo-row" id="logo-fg"></div>
+        <button class="menu-btn primary" id="logo-done" type="button">Fatto</button>
+      </div>
+    </div>
+  </div>
 
   <div class="modal-overlay" id="quadro-modal">
     <div class="modal-box">

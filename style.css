@@ -595,3 +595,57 @@
   }
   #run-btn:active{ transform:translateY(2px); box-shadow:0 1px 0 var(--amber-dim); }
   #run-btn:hover{ filter:brightness(1.08); }
+
+  /* ---------- MENÙ DI GIOCO ---------- */
+  #menu-modal{ z-index:120; }
+  .modal-box.menu-box{ width:min(380px, 92vw); padding:18px 18px 16px; }
+  .menu-head{ display:flex; flex-direction:column; margin-bottom:14px; }
+  .menu-head .tag{ font-family:var(--font-ui); font-size:10px; letter-spacing:.08em; color:var(--text-muted); }
+  .menu-head h2{ font-family:var(--font-display); font-size:22px; margin:2px 0 0; }
+  .menu-page{ display:flex; flex-direction:column; gap:10px; }
+  .menu-page[hidden]{ display:none; }
+  .menu-btn{
+    font-family:var(--font-display); font-size:18px; letter-spacing:.03em;
+    padding:11px 14px; border-radius:6px; cursor:pointer;
+    background:none; border:1px solid var(--hairline); color:var(--text-main);
+  }
+  .menu-btn:hover{ border-color:var(--text-muted); }
+  .menu-btn.primary{ background:var(--amber); border-color:var(--amber); color:#1a1408; font-weight:700; }
+  .menu-btn[hidden]{ display:none; }
+  .menu-field{ display:flex; flex-direction:column; gap:6px; font-size:13px; color:var(--text-muted); }
+  .menu-field[hidden]{ display:none; }
+  .menu-field input[type=text], .menu-field input:not([type]){
+    font-family:var(--font-ui); font-size:16px; padding:9px 10px; border-radius:6px;
+    background:#101114; border:1px solid var(--hairline); color:var(--text-main);
+  }
+  .menu-field input:focus{ outline:none; border-color:var(--amber); }
+  .menu-field input[type=range]{ accent-color:var(--amber); }
+  .menu-check{ display:flex; align-items:center; gap:8px; font-size:13px; color:var(--text-main); }
+  .menu-check input{ accent-color:var(--amber); width:18px; height:18px; }
+  .menu-note{ margin:0; font-size:12px; color:var(--text-muted); }
+  .menu-note[hidden]{ display:none; }
+
+  /* ---------- LOGO DEL SERVICE ---------- */
+  .service-logo{ display:flex; align-items:center; flex-shrink:0; }
+  .service-logo:empty{ display:none; }
+  .service-logo svg{ width:30px; height:30px; display:block; }
+  .level-wrap{ display:flex; align-items:center; gap:8px; }
+  .logo-pick{ display:flex; flex-direction:column; align-items:stretch; gap:8px; }
+  .logo-pick[hidden]{ display:none; }
+  .logo-pick .menu-btn{ flex:1; font-size:16px; padding:9px 10px; }
+  .logo-preview{ display:flex; justify-content:center; padding:6px 0; border-radius:8px;
+    background:radial-gradient(ellipse at 50% 40%, #2a2c34, #101114 75%); }
+  .logo-preview canvas{ display:block; max-width:100%; }
+  .logo-label{ font-size:12px; color:var(--text-muted); margin-bottom:-4px; }
+  .logo-row{ display:flex; flex-wrap:wrap; gap:6px; }
+  .logo-opt{
+    background:#101114; border:2px solid var(--hairline); border-radius:8px;
+    padding:3px; cursor:pointer; line-height:0;
+  }
+  .logo-opt svg{ width:38px; height:38px; }
+  .logo-opt.sel{ border-color:var(--amber); }
+  .logo-opt.swatch{ width:34px; height:34px; padding:0; }
+  .logo-opt.style-opt{ display:flex; flex-direction:column; align-items:center; gap:2px; padding:4px 4px 3px; line-height:1; background:#0b0c0f; }
+  .logo-opt.style-opt span{ font-size:10.5px; color:var(--text-muted); }
+  .logo-auto{ display:flex; gap:8px; }
+  .logo-auto .menu-btn{ flex:1; font-size:15px; padding:8px 6px; }

@@ -42,3 +42,33 @@ Idee e richieste già decise, da sviluppare nei prossimi livelli.
   crearne uno per il livello) e `tests/partita-telefono.js`, così ogni
   soluzione reale viene promossa e ogni errore bocciato col messaggio
   giusto.
+
+## Partita, menù e highscore
+
+- Già fatto: menù di gioco (☰), nome e logo del service (testata,
+  livrea dipinta sulla fiancata del furgone, scritta finale; logo pronto o
+  creato con forma, simbolo e due colori; la scritta del nome in 6 stili
+  da service: Tour, Neon, Stencil, LED wall, Gaffer, Fasci di luce), salvataggio automatico in un solo slot,
+  impostazioni (volume, effetti ridotti, salta lo show).
+- Il salvataggio è un oggetto `scs-save` con `v` (versione): se il formato
+  cambia, scrivere una conversione dalla versione vecchia invece di
+  azzerare la partita.
+- **Reputazione** (il valore principale del service): non cala mai.
+  Ogni livello porta la reputazione del suo miglior collaudo (oggi 100 per
+  l'impianto che funziona + fino a 50 per la procedura pulita: −10 per test
+  fallito, scatto del magnetotermico o del salvavita, −5 per colpo nelle
+  casse). Rifare un livello uguale non aggiunge nulla, rifarlo meglio
+  aggiunge la differenza. Nuova partita = nuovo service, da 0.
+  Da sviluppare: livelli (e mezzi, materiale, venue più grandi) che si
+  aprono a soglie di reputazione; reputazione anche dagli obiettivi dopo
+  il test (soundcheck, richieste del light designer).
+- **Highscore**: per ogni collaudo riuscito `Profile.data.records[livello]`
+  tiene già i dati grezzi (tempo di gioco, test fatti e falliti, scatti del
+  magnetotermico e del salvavita, colpi nelle casse, nome del service,
+  data), i migliori 20. Resta da decidere la formula del punteggio (per
+  esempio stelle per livello) e la schermata della classifica, da aprire
+  dal menù e alla fine dello show.
+- Logo: più avanti anche sui flight case, sulle magliette della crew e
+  sui mezzi più grandi; eventualmente un logo caricato come immagine.
+- Più avanti, con più livelli: più slot di salvataggio, scelta del livello
+  e livelli sbloccati, esporta/importa il salvataggio.
