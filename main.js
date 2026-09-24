@@ -2535,6 +2535,18 @@ const STAGE_ORIGIN_X = 2, STAGE_ORIGIN_Y = 4;
 
 // bande dal retro del locale verso il pubblico (righe di griglia, gy crescente)
 const CARICO_ROWS = 2;      // gy 0-1: carico e scarico (furgone, case — solo scenografia)
+
+/* mezzi del service, in unità isometriche (una cella = 102): A larghezza,
+   B lunghezza, Z altezza, cabina lunga cabL e alta cabZ, telaio a quota
+   chassis, ruote alle posizioni wheels lungo la fiancata. Crescono coi
+   livelli: il livello 1 arriva col furgone. */
+const VEHICLES = {
+  furgone: { A: 78, B: 210, Z: 92, chassis: 18, cabL: 56, cabZ: 70, wheels: [36, 170], wheelR: 11, sideDoor: 50 },
+  camion:  { A: 96, B: 330, Z: 150, chassis: 26, cabL: 78, cabZ: 104, gap: 5, wheels: [44, 250, 290], wheelR: 15, spoiler: true, cabColor: 0xd9dbde },
+  bilico:  { A: 100, B: 560, Z: 160, chassis: 30, cabL: 90, cabZ: 118, gap: 12, wheels: [48, 110, 440, 480, 520], wheelR: 16, spoiler: true, cabColor: 0xc9ccd1 }
+};
+const LEVEL_VEHICLE = 'furgone';
+const CASE_ISO = isoFrame(46, 64, 44);   // flight case dei cavi
 const BACKSTAGE_ROWS = 2;   // gy 2-3: allaccio venue + quadro elettrico
 // palco: gy STAGE_ORIGIN_Y .. +STAGE_H (righe 4-7)
 const PIT_ROWS = 2;         // subito davanti al palco: impianto audio principale
@@ -2878,80 +2890,28 @@ class StageScene extends Phaser.Scene {
     this.drawZoneOutline([[0, fohStart], [VENUE_W, fohStart], [VENUE_W, VENUE_H], [0, VENUE_H]], 'Regia di sala (FOH)');
   }
 
-  /* scenografia non interattiva in Carico e Scarico: un furgone e alcuni case,
-     disegnati con più dettaglio (non solo scatole) per leggersi a colpo
-     d'occhio come "furgone da service" e "flight case", pur restando
-     un'icona vettoriale piatta come tutto il resto del gioco. */
+  /* Carico e scarico: il mezzo del service e i flight case, nella stessa
+     prospettiva isometrica dei dispositivi. Il mezzo cresce coi livelli
+     (LEVEL_VEHICLE: furgone -> camion -> bilico); il retro guarda i case,
+     il muso sta verso il fondo. I primi due case sono i bauli dei cavi. */
   drawLoadingDock () {
-    const g = this.add.graphics().setDepth(1);
-    const van = gridToScreen(2.2, 0.9);
-    const vw = 104, vh = 40;
-    const cargoW = vw * 0.66;
-    const cabX = van.x - vw / 2 + cargoW;
+    const v = VEHICLES[LEVEL_VEHICLE];
+    const vp = gridToScreen(0.5 + v.B / 204, 1.0);
+    const vg = this.add.graphics().setDepth(1).setPosition(vp.x, vp.y);
+    this.drawVehicle(vg, v);
 
-    // paraurti/base scura, ruote
-    g.fillStyle(0x1c1d22, 1);
-    g.fillRoundedRect(van.x - vw / 2, van.y + vh * 0.32, vw, 7, 3);
-    g.fillStyle(0x121317, 1);
-    g.fillCircle(van.x - vw * 0.28, van.y + vh / 2, 8);
-    g.fillCircle(cabX + vw * 0.09, van.y + vh / 2, 8);
-    g.fillStyle(0x54575f, 1);
-    g.fillCircle(van.x - vw * 0.28, van.y + vh / 2, 3);
-    g.fillCircle(cabX + vw * 0.09, van.y + vh / 2, 3);
-
-    // cassone di carico (bianco)
-    g.fillStyle(0xd8dadd, 1); g.lineStyle(1.5, 0x9a9da3, 1);
-    g.fillRoundedRect(van.x - vw / 2, van.y - vh / 2, cargoW, vh, 5);
-    g.strokeRoundedRect(van.x - vw / 2, van.y - vh / 2, cargoW, vh, 5);
-    // striscia di livrea
-    g.fillStyle(0xf2a541, 1);
-    g.fillRect(van.x - vw / 2, van.y + vh * 0.06, cargoW, 4);
-    // linea del portellone laterale
-    g.lineStyle(1, 0x9a9da3, 0.7);
-    g.lineBetween(van.x - vw * 0.06, van.y - vh / 2 + 3, van.x - vw * 0.06, van.y + vh * 0.3);
-    // fanale posteriore
-    g.fillStyle(0xe0503f, 1);
-    g.fillRoundedRect(van.x - vw / 2 + 3, van.y - vh * 0.12, 4, 9, 1);
-
-    // cabina di guida (muso spiovente + parabrezza)
-    g.fillStyle(0xc9cad1, 1);
-    g.beginPath();
-    g.moveTo(cabX, van.y - vh * 0.12);
-    g.lineTo(cabX + vw * 0.22, van.y - vh * 0.12);
-    g.lineTo(cabX + vw * 0.3, van.y + vh / 2 - 4);
-    g.lineTo(cabX, van.y + vh / 2 - 4);
-    g.closePath(); g.fillPath();
-    g.lineStyle(1.3, 0x9a9da3, 1); g.strokePath();
-    g.fillStyle(0x3c4451, 0.9);
-    g.fillRoundedRect(cabX + 3, van.y - vh * 0.08, vw * 0.15, vh * 0.26, 2);
-
-    // i primi due case sono i bauli dei cavi: toccandoli si aprono
-    const caseSpots = [[6.2, 1.3, 'segnale'], [6.9, 1.6, 'corrente'], [6.4, 0.7, null]];
-    caseSpots.forEach(([gx, gy, caseName]) => {
+    // i due bauli dei cavi e un case di ricambio, in fila lungo la banchina
+    const caseSpots = [[5.9, 0.9, 'segnale'], [7.2, 0.9, 'corrente'], [8.5, 0.9, null]];
+    caseSpots.forEach(([gx, gy, caseName], i) => {
       const p = gridToScreen(gx, gy);
-      const cw = 34, ch = 24, corner = 5;
-      g.fillStyle(0x232428, 1);
-      g.fillRoundedRect(p.x - cw / 2, p.y - ch / 2, cw, ch, 3);
-      g.lineStyle(1.2, 0x54575f, 0.9);
-      g.strokeRoundedRect(p.x - cw / 2, p.y - ch / 2, cw, ch, 3);
-      // venatura orizzontale del pannello
-      g.lineStyle(0.8, 0x18191d, 0.7);
-      g.lineBetween(p.x - cw / 2 + 3, p.y - ch * 0.22, p.x + cw / 2 - 3, p.y - ch * 0.22);
-      g.lineBetween(p.x - cw / 2 + 3, p.y + ch * 0.22, p.x + cw / 2 - 3, p.y + ch * 0.22);
-      // angoli metallici (i tipici rinforzi da flight case)
-      g.fillStyle(0x9a9da3, 1);
-      g.fillRect(p.x - cw / 2, p.y - ch / 2, corner, corner);
-      g.fillRect(p.x + cw / 2 - corner, p.y - ch / 2, corner, corner);
-      g.fillRect(p.x - cw / 2, p.y + ch / 2 - corner, corner, corner);
-      g.fillRect(p.x + cw / 2 - corner, p.y + ch / 2 - corner, corner, corner);
-      // maniglia incassata
-      g.fillStyle(0x0c0d10, 1);
-      g.fillRoundedRect(p.x - 7, p.y - 2, 14, 4, 1.5);
+      const cg = this.add.graphics().setDepth(1.1 + gy / 100).setPosition(p.x, p.y);
+      const tape = caseName === 'segnale' ? 0xeaff2b : caseName === 'corrente' ? 0xff4fb4 : null;
+      this.drawFlightCase(cg, CASE_ISO, tape);
       if (!caseName) return;
-      this.add.text(p.x, p.y - ch / 2 - 7, CABLE_CASES[caseName].title, {
-        fontFamily: 'Barlow Condensed, sans-serif', fontSize: '10px', fontStyle: 'bold', color: '#e6e8eb'
+      this.add.text(p.x, p.y - 34, CABLE_CASES[caseName].title, {
+        fontFamily: 'Barlow Condensed, sans-serif', fontSize: '11px', fontStyle: 'bold', color: '#e6e8eb'
       }).setOrigin(0.5).setDepth(2);
-      const hit = this.add.rectangle(p.x, p.y, cw + 8, ch + 14, 0xffffff, 0.001).setDepth(2)
+      const hit = this.add.rectangle(p.x, p.y - 6, 58, 58, 0xffffff, 0.001).setDepth(2)
         .setInteractive({ useHandCursor: true });
       hit.on('pointerdown', (pointer, lx, ly, event) => {
         if (event && event.stopPropagation) event.stopPropagation();
@@ -2961,6 +2921,121 @@ class StageScene extends Phaser.Scene {
         openCase(caseName);
       });
     });
+  }
+
+  /* mezzo del service visto di tre quarti: fiancata (faccia a=0) verso il
+     pubblico, retro (faccia b=B) verso i case, cabina verso il fondo (b=0).
+     Stessa funzione per furgone, camion e bilico: cambiano le misure. */
+  drawVehicle (g, v) {
+    const P = isoFrame(v.A, v.B, v.Z), k = this.isoKit(g, P);
+    const { A, B, Z } = P;
+    const white = { top: 0xeef0f2, left: 0xd8dadd, right: 0xbfc2c7 };
+    const cabCol = { top: 0xe4e6e9, left: v.cabColor || 0xcfd2d6, right: 0xb4b7bc };
+    const glass = 0x3c4a5c;
+    const zc = v.chassis;                                  // piano del telaio
+    const cabEnd = v.cabL, boxStart = cabEnd + (v.gap || 0);
+    const hood = zc + (v.cabZ - zc) * 0.45;                // cofano
+    const ws0 = v.cabL * 0.12, ws1 = v.cabL * 0.36;        // piede e cima del parabrezza
+    // si disegna da dietro in avanti: ombra, telaio, cabina (sta dietro),
+    // cassone, dettagli del retro e della fiancata, ruote per ultime
+    k.quadZ(0, -8, A + 8, -8, B + 10, 0x000000, 0.28);
+    k.box(6, A - 6, 4, B - 2, zc - 7, zc, { top: 0x2a2c32, left: 0x1c1d22, right: 0x16171b });
+
+    // cabina: fianco col profilo (cofano, parabrezza inclinato, tetto)
+    k.poly([P(0, 0, zc), P(0, 0, hood), P(0, ws0, hood), P(0, ws1, v.cabZ), P(0, cabEnd, v.cabZ), P(0, cabEnd, zc)], cabCol.left);
+    k.poly([P(0, cabEnd, zc), P(A, cabEnd, zc), P(A, cabEnd, v.cabZ), P(0, cabEnd, v.cabZ)], cabCol.right);
+    k.quadZ(hood, 0, A, 0, ws0, cabCol.top);                                   // cofano
+    k.poly([P(0, ws0, hood), P(A, ws0, hood), P(A, ws1, v.cabZ), P(0, ws1, v.cabZ)], glass);   // parabrezza
+    k.poly([P(0, ws0, hood), P(A * 0.3, ws0, hood), P(A * 0.3, ws1, v.cabZ), P(0, ws1, v.cabZ)], 0xffffff, 0.1);
+    k.quadZ(v.cabZ, 0, A, ws1, cabEnd, cabCol.top);                             // tetto
+    g.lineStyle(0.8, 0x0c0d10, 0.8);
+    g.strokePoints([P(0, 0, zc), P(0, 0, hood), P(0, ws0, hood), P(0, ws1, v.cabZ), P(0, cabEnd, v.cabZ), P(A, cabEnd, v.cabZ), P(A, ws1, v.cabZ), P(A, ws0, hood), P(A, 0, hood), P(0, 0, hood)], false);
+    // finestrino della portiera (segue il parabrezza) e maniglia
+    const wz0 = hood + 3, wz1 = v.cabZ - 4;
+    const wb0 = ws0 + (ws1 - ws0) * ((wz0 - hood) / (v.cabZ - hood)) + 4;
+    k.poly([P(-0.2, wb0, wz0), P(-0.2, ws1 + 2, wz1), P(-0.2, cabEnd - 5, wz1), P(-0.2, cabEnd - 5, wz0)], glass);
+    k.quadA(-0.4, cabEnd - 15, cabEnd - 9, hood - 5, hood - 3, 0x55585f);
+    // fari e freccia sul muso
+    k.quadA(-0.3, 1, 5, hood - 9, hood - 3, 0xf4f1d0);
+    k.quadA(-0.3, 1, 5, hood - 12, hood - 10, 0xf2a541);
+    // specchietto sul montante
+    k.box(-7, 0, ws1 - 2, ws1 + 1, hood + 4, hood + 13, { top: 0x2a2c32, left: 0x1c1d22, right: 0x16171b });
+    // camion e bilico: spoiler sopra la cabina, verso il cassone più alto
+    if (v.spoiler) {
+      k.poly([P(0, cabEnd - 20, v.cabZ), P(0, cabEnd, Z - 8), P(0, cabEnd, v.cabZ)], 0xc9ccd1);
+      k.poly([P(0, cabEnd - 20, v.cabZ), P(A, cabEnd - 20, v.cabZ), P(A, cabEnd, Z - 8), P(0, cabEnd, Z - 8)], 0xe4e6e9);
+    }
+
+    // cassone
+    k.box(0, A, boxStart, B, zc, Z, white);
+    // livrea: fascia arancio sulla fiancata e sul retro
+    const lz = zc + (Z - zc) * 0.34;
+    k.quadA(-0.2, boxStart + 4, B - 2, lz, lz + 5, 0xf2a541);
+    k.quadA(-0.2, boxStart + 4, B - 2, lz + 7, lz + 8.5, 0xf2a541);
+    k.quadB(B + 0.2, 2, A - 2, lz, lz + 5, 0xf2a541);
+    // porta laterale scorrevole (furgone) o pannelli del cassone
+    g.lineStyle(1, 0x8a8e98, 0.9);
+    if (v.sideDoor) {
+      [boxStart + 10, boxStart + 10 + v.sideDoor].forEach(b => { const t0 = P(0, b, zc + 3), t1 = P(0, b, Z - 4); g.lineBetween(t0.x, t0.y, t1.x, t1.y); });
+      k.quadA(-0.3, boxStart + 10 + v.sideDoor - 9, boxStart + 10 + v.sideDoor - 3, zc + (Z - zc) * 0.52, zc + (Z - zc) * 0.52 + 2.5, 0x55585f);
+      k.quadA(-0.3, boxStart + 12, boxStart + 8 + v.sideDoor, zc + (Z - zc) * 0.62, Z - 8, glass, 0.85);
+    } else {
+      for (let b = boxStart + 40; b < B - 10; b += 40) { const t0 = P(0, b, zc + 2), t1 = P(0, b, Z - 2); g.lineBetween(t0.x, t0.y, t1.x, t1.y); }
+    }
+    // retro: due ante con cerniere, maniglie, fanali e targa
+    const mid = A / 2, rz = t => zc + (Z - zc) * t;
+    const s0 = P(mid, B, zc + 2), s1 = P(mid, B, Z - 3);
+    g.lineStyle(1.2, 0x7d828c, 1); g.lineBetween(s0.x, s0.y, s1.x, s1.y);
+    [[3, 6], [A - 6, A - 3]].forEach(([a0, a1]) => { k.quadB(B + 0.2, a0, a1, rz(0.2), rz(0.25), 0x7d828c); k.quadB(B + 0.2, a0, a1, rz(0.75), rz(0.8), 0x7d828c); });
+    k.quadB(B + 0.3, mid - 9, mid - 2, rz(0.45), rz(0.5), 0x3a3d45);
+    k.quadB(B + 0.3, mid + 2, mid + 9, rz(0.45), rz(0.5), 0x3a3d45);
+    [[2, 9], [A - 9, A - 2]].forEach(([a0, a1]) => { k.quadB(B + 0.3, a0, a1, zc - 7, zc + 5, 0xe0503f); k.quadB(B + 0.4, a0, a1, zc - 7, zc - 3, 0xf2a541); });
+    k.quadB(B + 0.5, mid - 14, mid + 14, zc - 6, zc - 1, 0xf4f5f6);         // targa
+    k.quadB(B + 0.6, mid - 14, mid - 11, zc - 6, zc - 1, 0x2f6fd6);
+
+    // ruote e passaruota sul fianco visibile
+    v.wheels.forEach(bw => {
+      k.discA(-0.2, bw, zc - 3, v.wheelR + 3, 0x1c1d22);
+      k.discA(-0.4, bw, v.wheelR, v.wheelR, 0x111215);
+      k.discA(-0.6, bw, v.wheelR, v.wheelR * 0.52, 0x8a8e98);
+      k.discA(-0.8, bw, v.wheelR, v.wheelR * 0.22, 0x3a3d45);
+    });
+  }
+
+  /* flight case da tour: guscio nero in multistrato, profili e angolari in
+     alluminio, chiusure a farfalla, maniglia, ruote pivottanti e nastro
+     fluo sul coperchio (lo stesso dei cavi nei bauli) */
+  drawFlightCase (g, P, tape) {
+    const k = this.isoKit(g, P);
+    const { A, B, Z } = P;
+    const alu = 0xc3c7ce, aluDk = 0x8a8e98;
+    k.quadZ(0, -3, A + 3, -3, B + 3, 0x000000, 0.3);
+    // ruote
+    [[3, 9, B - 9, B - 3], [3, 9, 3, 9], [A - 9, A - 3, B - 9, B - 3]].forEach(([a0, a1, b0, b1]) =>
+      k.box(a0, a1, b0, b1, 0, 6, { top: 0x2a2c32, left: 0x111215, right: 0x0c0d10 }));
+    const z0 = 6;
+    k.box(0, A, 0, B, z0, Z, { top: 0x2e3036, left: 0x232428, right: 0x1a1b1f });
+    // profilo di chiusura del coperchio
+    const zs = z0 + (Z - z0) * 0.7;
+    k.quadA(-0.2, 0, B, zs - 1.2, zs + 1.2, alu);
+    k.quadB(B + 0.2, 0, A, zs - 1.2, zs + 1.2, alu);
+    // profili sugli spigoli
+    k.quadA(-0.3, B - 2.5, B, z0, Z, alu);
+    k.quadA(-0.3, 0, 2.5, z0, Z, aluDk);
+    k.quadB(B + 0.3, A - 2.5, A, z0, Z, aluDk);
+    k.quadZ(Z + 0.2, 0, A, B - 2.5, B, alu);
+    k.quadZ(Z + 0.2, 0, 2.5, 0, B, alu);
+    // angolari a sfera
+    [[0, B], [0, 0]].forEach(([a, b]) => { k.discA(-0.5, b === 0 ? 3 : B - 3, Z - 3, 3.2, 0xdcdfe4); k.discA(-0.5, b === 0 ? 3 : B - 3, z0 + 3, 3.2, 0xdcdfe4); });
+    k.discB(B + 0.5, A - 3, Z - 3, 3.2, 0xdcdfe4); k.discB(B + 0.5, A - 3, z0 + 3, 3.2, 0xdcdfe4);
+    // chiusure a farfalla sul fianco e sul fronte
+    [B * 0.28, B * 0.72].forEach(b => k.quadA(-0.5, b - 4, b + 4, zs - 3.5, zs + 3.5, 0xd7dadd));
+    k.quadB(B + 0.5, A / 2 - 4, A / 2 + 4, zs - 3.5, zs + 3.5, 0xd7dadd);
+    // maniglie incassate
+    k.quadA(-0.5, B / 2 - 7, B / 2 + 7, z0 + (Z - z0) * 0.38, z0 + (Z - z0) * 0.46, 0x0c0d10);
+    k.quadB(B + 0.5, A / 2 - 6, A / 2 + 6, z0 + (Z - z0) * 0.38, z0 + (Z - z0) * 0.46, 0x0c0d10);
+    // nastro fluo sul coperchio
+    if (tape) k.quadZ(Z + 0.4, A * 0.25, A * 0.75, B * 0.2, B * 0.8, tape);
   }
 
   drawStagePlatform () {
