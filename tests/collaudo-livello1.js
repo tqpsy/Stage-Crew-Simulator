@@ -163,16 +163,20 @@ const N = parseInt(process.argv[2] || '40', 10), SEED0 = parseInt(process.argv[3
       const muts = ['cut', 'stereo', 'off', 'overlap', 'group', 'mcbUsed', 'mcbUnused', 'otherUni', 'aux'];
       const m = pick(muts);
       let expect = 'fail', expectMsg = null;
-      if (m === 'cut') { const e = pick(gameState.edges); S.selectedEdgeId = e.id; S.deleteSelectedEdge(); }
+      if (m === 'cut') {
+        // il test reagisce con l'effetto dell'impianto toccato
+        const e = pick(gameState.edges); S.selectedEdgeId = e.id; S.deleteSelectedEdge();
+        expectMsg = POWER_CABLE_IDS.has(e.signal) ? /^Scintille/ : e.signal === 'dmx' ? /^Le luci vanno in tilt/ : /^L'impianto gracchia/;
+      }
       else if (m === 'stereo') {
         gameState.edges.filter(e => e.a === SC && e.signal === 'jack').forEach(e => { S.selectedEdgeId = e.id; S.deleteSelectedEdge(); });
-        wire('jack', SC, 'out_L', MX, s1 ? 'in_5' : 'in_6'); wire('jack', SC, 'out_R', MX, s1 ? 'in_6' : 'in_5'); expectMsg = /Stereo invertito/;
-      } else if (m === 'off') { toggleDevicePower(pick(sw).id); expectMsg = /spenti o senza corrente|salvavita|TUMP/i; }
+        wire('jack', SC, 'out_L', MX, s1 ? 'in_5' : 'in_6'); wire('jack', SC, 'out_R', MX, s1 ? 'in_6' : 'in_5'); expectMsg = /scambiate/;
+      } else if (m === 'off') { toggleDevicePower(pick(sw).id); expectMsg = /spento|salvavita|TUMP/i; }
       else if (m === 'overlap' || m === 'group') {
         const list = Object.values(byU).find(l => l.length >= 2);
         if (!list) continue;
         const [a, c] = list;
-        if (m === 'overlap') { c.dmx = { addr: a.dmx.addr + 1, mode: a.dmx.mode }; expectMsg = /sovrapposti/; }
+        if (m === 'overlap') { c.dmx = { addr: a.dmx.addr + 1, mode: a.dmx.mode }; expectMsg = /indirizzo/; }
         else { c.dmx = { addr: a.dmx.addr, mode: a.dmx.mode }; list.forEach(x => { if (x !== a && x !== c) x.dmx.addr = 300 + list.indexOf(x) * 10; }); expect = 'pass'; }
       } else if (m === 'otherUni') {
         const us = Object.values(byU); if (us.length < 2) continue;
