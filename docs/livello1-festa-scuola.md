@@ -129,9 +129,60 @@ Livello 1:
 - **Una mamma**: "quelle luci colorate mi fanno venire mal di testa": un PAR
   in bianco fisso verso le sedie delle famiglie.
 
+## Fasi di spettacolo (deciso)
+
+Giro del livello: **Montaggio → Test impianto → [cambio palco → spettacolo] × 3 → verbale**.
+
+- Tempo di gioco accelerato: preside ~1:30, DJ ~3:00, cantante ~2:30, con un
+  orologio finto (21:00 → 21:15).
+- **Gradimento del pubblico**: sale con suono/luci giusti, scende con larsen,
+  silenzi, buio, volumi sbagliati. A fine fase diventa birre e reputazione.
+- Si interviene **dalla consolle** (fader, mute, memorie luci) o **sul posto**
+  con un tocco sul dispositivo: parte un'attesa ("stai andando…") che dura di
+  più se sei stanco. Nessun omino da muovere.
+- Ogni imprevisto si annuncia (fumetto sul personaggio), dà qualche secondo per
+  reagire, poi ha una conseguenza. Nel livello 1 al massimo 1-2 insieme.
+- Imprevisti **misti**: quelli principali a copione (si imparano) + 1-2 pescati a
+  caso per la rigiocabilità.
+- La **stanchezza** nello spettacolo: fader più tremolanti, finestre di reazione
+  più corte. La birra la fa scendere.
+- Il livello 1 perdona: lo spettacolo non si interrompe mai.
+
+| Fase | Insegna | Imprevisti |
+|------|---------|-----------|
+| Preside | il mixer | parla piano / mangia il mic; larsen vicino alle casse; batte sul mic; cavo del mic staccato |
+| DJ | luci e corrente | memoria luci al "drop"; volume in rosso; roba del DJ che sovraccarica una fase; fumo e rilevatore |
+| Cantante | il bilanciamento | voce coperta dalla chitarra; corda rotta → musica dal PC; "più voce in spia"; luce calda solo su di lui |
+
+## Grafica e interazione in spettacolo (proposta)
+
+- **Header**: barra del tempo con faccia del personaggio e orologio, misuratore
+  del gradimento, 🍺, stanchezza, reputazione.
+- **Palco isometrico**: resta la vista di gioco. Sopra compaiono i personaggi
+  (preside al microfono, DJ alla consolle, Dante sullo sgabello) e il pubblico
+  in platea: teste che si muovono a tempo, colore e fumetti che ne mostrano l'umore.
+- **Imprevisti**: fumetto sopra il personaggio o il dispositivo, con un anello
+  che si svuota (giallo → rosso). Toccare il fumetto apre direttamente il comando
+  giusto (fader, memoria, pannello), per giocare al volo anche sul telefono.
+  Esito: spunta verde e +gradimento, oppure suono del guaio e −gradimento.
+- **Banco regia**: la barra in basso del montaggio diventa un cassetto con due
+  schede, MIXER e LUCI (sul telefono occupa metà schermo sotto il palco; su
+  computer sta di lato).
+  - MIXER: una striscia per canale con fader verticale, meter con zona verde,
+    MUTE e nome del canale (con la faccina di chi ci è collegato).
+  - LUCI: un cerchio col colore reale di ogni PAR, fader dimmer, tavolozza
+    colori, tasti memoria 1-6 (tocco = richiama, tenere premuto = salva).
+- **Cambio palco**: si torna alla vista montaggio; la carta del prossimo
+  personaggio dice cosa collegare, i canali del mixer mostrano cosa è attaccato.
+- **Fine fase**: animazione illustrata di 10 s sopra il palco, poi un mini-verbale
+  (gradimento, birre, reputazione).
+
 ## Da decidere
 
 1. Personaggi definitivi.
-2. Valori di reputazione, stress e pazienza (da tarare giocando).
-3. Quali richieste extra tenere nel livello 1.
-4. Stanchezza: quali errori provoca in concreto.
+2. Quali richieste extra tenere nel livello 1.
+3. Pausa durante lo spettacolo: sì o no?
+4. Caricature: disegnate in vettoriale nel codice (come i dispositivi) o
+   illustrazioni fatte a parte?
+5. Salvataggio della reputazione tra una partita e l'altra.
+6. Valori di reputazione, stress, pazienza e gradimento (da tarare giocando).
