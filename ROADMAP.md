@@ -42,3 +42,20 @@ Idee e richieste già decise, da sviluppare nei prossimi livelli.
   crearne uno per il livello) e `tests/partita-telefono.js`, così ogni
   soluzione reale viene promossa e ogni errore bocciato col messaggio
   giusto.
+
+## Partita, menù e highscore
+
+- Già fatto: menù di gioco (☰), nome del service (testata, fiancata del
+  furgone, scritta finale), salvataggio automatico in un solo slot,
+  impostazioni (volume, effetti ridotti, salta lo show).
+- Il salvataggio è un oggetto `scs-save` con `v` (versione): se il formato
+  cambia, scrivere una conversione dalla versione vecchia invece di
+  azzerare la partita.
+- **Highscore**: per ogni collaudo riuscito `Profile.data.records[livello]`
+  tiene già i dati grezzi (tempo di gioco, test fatti e falliti, scatti del
+  magnetotermico e del salvavita, colpi nelle casse, nome del service,
+  data), i migliori 20. Resta da decidere la formula del punteggio (per
+  esempio stelle per livello) e la schermata della classifica, da aprire
+  dal menù e alla fine dello show.
+- Più avanti, con più livelli: più slot di salvataggio, scelta del livello
+  e livelli sbloccati, esporta/importa il salvataggio.

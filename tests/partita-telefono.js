@@ -20,6 +20,9 @@ const OUT = process.env.SHOTS || null;
   await p.waitForFunction(() => window.__scene, null, { timeout: 20000 });
   await p.waitForTimeout(300);
   let taps = 0, menus = 0; const log = []; const problems = [];
+  // menù iniziale: nome del service e via
+  await p.locator('#service-input').fill('Service Telefono');
+  taps++; await p.locator('#new-start').tap(); await p.waitForTimeout(150);
   const toast = () => p.evaluate(() => el('#toast').textContent);
   const shot = n => OUT ? p.screenshot({ path: path.join(OUT, 'telefono-' + n + '.png') }) : null;
   // mondo -> pagina
@@ -109,6 +112,10 @@ const OUT = process.env.SHOTS || null;
   log.push('accensione: ' + (taps - t1) + ' tocchi; scatti=' + await p.evaluate(() => (gameState.trips || 0) + '/' + (gameState.rcdTrips || 0)) + ' pops=' + await p.evaluate(() => (gameState.procErrors || []).length));
   await tapSel('#run-btn');
   log.push('TEST: ' + await toast() + ' | ' + await p.evaluate(() => el('#circuit-text').textContent));
+  // il collaudo riuscito entra nei record, per i futuri highscore
+  const recs = await p.evaluate(() => (Profile.data.records[LEVEL_ID] || []).map(r => r.service + ' test=' + r.tests));
+  log.push('record: ' + recs.join(', '));
+  if (recs.length !== 1 || !/Service Telefono test=1/.test(recs[0])) problems.push('record del collaudo mancante o sbagliato: ' + recs);
   log.push('TOTALE tocchi: ' + taps + ' (menu Quale?: ' + menus + ')');
   await shot('fine');
   console.log(log.join('\n')); console.log('PROBLEMI:', JSON.stringify(problems, null, 1)); console.log('ERRORI JS:', errs);

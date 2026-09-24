@@ -683,15 +683,14 @@ function computePhaseLoads () {
    --------------------------------------------------------------------- */
 const SFX = (() => {
   let ctx = null, master = null, noiseBuf = null;
-  let muted = false;
-  try { muted = localStorage.getItem('scs-muted') === '1'; } catch (e) { /* storage non disponibile */ }
+  let volume = 0.8;   // 0..1, dalle impostazioni della partita (0 = muto)
 
   function ac () {
     if (!ctx) {
       const AC = window.AudioContext || window.webkitAudioContext;
       if (!AC) return null;
       ctx = new AC();
-      master = ctx.createGain(); master.gain.value = 0.55; master.connect(ctx.destination);
+      master = ctx.createGain(); master.gain.value = 0.55 * volume; master.connect(ctx.destination);
       noiseBuf = ctx.createBuffer(1, ctx.sampleRate, ctx.sampleRate);
       const d = noiseBuf.getChannelData(0);
       for (let i = 0; i < d.length; i++) d[i] = Math.random() * 2 - 1;
@@ -723,7 +722,7 @@ const SFX = (() => {
     o.start(t0); o.stop(t0 + dur + 0.02);
   }
   const click = (t, gain, freq) => noise(t, 0.012, freq || 4000, 2, gain, 'highpass');
-  const play = fn => { if (muted) return; try { if (ac()) fn(); } catch (e) { /* audio non disponibile */ } };
+  const play = fn => { if (!volume) return; try { if (ac()) fn(); } catch (e) { /* audio non disponibile */ } };
 
   // famiglia di connettore per un segnale (gli adattatori usano il loro capo)
   const family = sig => ({ xlr: 'xlr', dmx: 'xlr', jack: 'jack', speakon: 'twist', powercon: 'twist', schuko: 'schuko',
@@ -768,7 +767,7 @@ const SFX = (() => {
      e sul 4, charleston in levare e un basso che gira su quattro note, a
      tutto volume su un'uscita propria (così si può zittire di colpo) */
   function beat (bpm, beats) {
-    const out = ctx.createGain(); out.gain.value = 1.6;
+    const out = ctx.createGain(); out.gain.value = 1.6 * volume;
     const comp = ctx.createDynamicsCompressor();
     comp.threshold.value = -10; comp.ratio.value = 6;
     out.connect(comp); comp.connect(ctx.destination);
@@ -810,7 +809,7 @@ const SFX = (() => {
   }
 
   return {
-    get muted () { return muted; },
+    get muted () { return !volume; },
     // restituisce la funzione che lo zittisce (anche se non è mai partito)
     beat: (bpm, beats) => { let stop = () => {}; play(() => { stop = beat(bpm, beats); }); return stop; },
     // impianto che gracchia: scariche, ronzio di massa e fischio che va e viene
@@ -822,10 +821,10 @@ const SFX = (() => {
     }),
     // PAR impazziti: ticchettio dei flash
     strobe: dur => play(() => { for (let t = 0; t < dur; t += 0.07) if (Math.random() < 0.6) click(t, 0.12, 6000); }),
-    toggleMute () {
-      muted = !muted;
-      try { localStorage.setItem('scs-muted', muted ? '1' : '0'); } catch (e) { /* storage non disponibile */ }
-      return muted;
+    get volume () { return volume; },
+    setVolume (v) {
+      volume = Math.max(0, Math.min(1, v));
+      if (master) master.gain.value = 0.55 * volume;
     },
     cableIn: sig => play(plugIn[family(sig)]),
     cableOut: sig => play(plugOut[family(sig)]),
@@ -1303,14 +1302,184 @@ document.querySelectorAll('.tab-btn').forEach(btn => {
   });
 });
 
-/* Audio on/off, ricordato tra una partita e l'altra */
-(function () {
-  const btn = el('#sound-btn');
-  if (!btn) return;
-  const paint = () => { btn.textContent = SFX.muted ? '🔇' : '🔊'; btn.title = SFX.muted ? 'Attiva i suoni' : 'Disattiva i suoni'; };
-  paint();
-  btn.addEventListener('click', () => { SFX.toggleMute(); paint(); SFX.button(); });
+/* ---------------------------------------------------------------------
+   PARTITA — nome del service, salvataggio automatico, impostazioni e
+   record. Tutto sta in un solo oggetto nella memoria del browser, con un
+   numero di versione: se un giorno il formato cambia si converte, invece
+   di perdere la partita. "Nuova partita" azzera il livello ma tiene
+   impostazioni e record.
+   I record preparano gli highscore: per ogni collaudo riuscito si tengono
+   i dati grezzi (tempo di gioco, test fatti e falliti, scatti, colpi nelle
+   casse). Il punteggio vero si deciderà quando ci saranno più livelli.
+   --------------------------------------------------------------------- */
+const SAVE_KEY = 'scs-save';
+const SAVE_VERSION = 1;
+const LEVEL_ID = 1;
+const RECORDS_KEEP = 20;       // record tenuti per livello
+const SERVICE_MAX = 24;        // caratteri del nome del service
+
+function defaultProfile () {
+  return { v: SAVE_VERSION, service: '', settings: { volume: 0.8, reducedFx: false, skipShow: false }, level: null, records: {} };
+}
+const Profile = (() => {
+  let data = defaultProfile();
+  try {
+    const raw = localStorage.getItem(SAVE_KEY);
+    const d = raw ? JSON.parse(raw) : null;
+    if (d && d.v === SAVE_VERSION) data = { ...defaultProfile(), ...d, settings: { ...defaultProfile().settings, ...d.settings } };
+    else if (!raw && localStorage.getItem('scs-muted') === '1') data.settings.volume = 0;   // vecchio tasto muto
+  } catch (e) { /* memoria non disponibile o salvataggio illeggibile: si parte da zero */ }
+  let timer = null;
+  const flush = () => {
+    clearTimeout(timer); timer = null;
+    try { localStorage.setItem(SAVE_KEY, JSON.stringify(data)); } catch (e) { /* memoria piena o non disponibile: si gioca senza salvare */ }
+  };
+  return {
+    get data () { return data; },
+    // salvataggio a raffica ma scritto una volta sola, poco dopo l'ultima azione
+    save () { clearTimeout(timer); timer = setTimeout(flush, 250); },
+    flush
+  };
 })();
+window.addEventListener('pagehide', () => Profile.flush());
+
+const settings = () => Profile.data.settings;
+const reducedFx = () => !!settings().reducedFx;
+const serviceName = () => Profile.data.service || 'Il tuo service';
+
+// la partita è "in corso" dopo Nuova partita o Continua: prima non si salva
+// niente, così la schermata iniziale non sovrascrive il salvataggio
+let gameActive = false;
+
+function freshStats () { return { playMs: 0, tests: 0, failedTests: 0 }; }
+gameState.stats = freshStats();
+
+function saveLevel () {
+  if (!gameActive) return;
+  Profile.data.level = {
+    id: LEVEL_ID,
+    placed: gameState.placed, edges: gameState.edges, stock: gameState.stock,
+    nextIndex: gameState.nextIndex, edgeSeq: gameState.edgeSeq,
+    trips: gameState.trips || 0, rcdTrips: gameState.rcdTrips || 0,
+    procErrors: gameState.procErrors || [], stats: gameState.stats
+  };
+  Profile.save();
+}
+
+// un collaudo riuscito entra nei record del livello (i migliori per primi)
+function addRecord () {
+  const st = gameState.stats;
+  const rec = {
+    at: Date.now(), service: Profile.data.service,
+    playMs: st.playMs, tests: st.tests, failedTests: st.failedTests,
+    trips: gameState.trips || 0, rcdTrips: gameState.rcdTrips || 0,
+    pops: (gameState.procErrors || []).filter(x => x === 'pop').length
+  };
+  const slips = r => r.failedTests + r.trips + r.rcdTrips + r.pops;
+  const list = (Profile.data.records[LEVEL_ID] || []).concat(rec)
+    .sort((a, b) => slips(a) - slips(b) || a.playMs - b.playMs)
+    .slice(0, RECORDS_KEEP);
+  Profile.data.records[LEVEL_ID] = list;
+  Profile.save();
+}
+
+// tempo di gioco: conta solo con la pagina in vista e il menù chiuso
+setInterval(() => {
+  if (gameActive && !menuOpen && !document.hidden) gameState.stats.playMs += 1000;
+}, 1000);
+
+function applySettings () {
+  SFX.setVolume(settings().volume);
+  const tag = el('#service-tag');
+  if (tag) tag.textContent = Profile.data.service ? Profile.data.service.toUpperCase() : 'STAGE CREW SIMULATOR';
+  if (window.__scene) window.__scene.paintServiceName();
+}
+
+/* ---------------- menù di gioco ----------------
+   All'avvio: Continua (se c'è una partita salvata), Nuova partita,
+   Impostazioni. Durante il gioco si apre col tasto ☰ in alto. */
+let menuOpen = false;
+// col menù aperto la tastiera serve ai campi di testo: la scena non deve
+// catturare frecce, WASD o Canc (altrimenti nel nome non si scrive la S)
+function sceneKeyboard (on) {
+  const kb = window.__scene && window.__scene.input.keyboard;
+  if (!kb) return;
+  kb.enabled = on;
+  if (on) kb.enableGlobalCapture(); else kb.disableGlobalCapture();
+}
+function whenScene (fn) {
+  if (window.__scene) fn(window.__scene); else setTimeout(() => whenScene(fn), 50);
+}
+function showMenuPage (page) {
+  document.querySelectorAll('#menu-modal .menu-page').forEach(p => { p.hidden = p.dataset.page !== page; });
+  const canResume = gameActive || !!Profile.data.level;
+  el('#menu-resume').hidden = !canResume;
+  el('#menu-resume').textContent = gameActive ? 'Riprendi' : 'Continua · ' + serviceName();
+  el('#menu-new').classList.toggle('primary', !canResume);
+  el('#new-warning').hidden = !Profile.data.level;
+  el('#set-service-row').hidden = !gameActive;
+  if (page === 'new') { const i = el('#service-input'); i.value = Profile.data.service; setTimeout(() => i.focus(), 30); }
+  if (page === 'settings') {
+    el('#set-volume').value = Math.round(settings().volume * 100);
+    el('#set-reduced').checked = !!settings().reducedFx;
+    el('#set-skipshow').checked = !!settings().skipShow;
+    el('#set-service').value = Profile.data.service;
+  }
+}
+function openMenu (page) {
+  menuOpen = true;
+  setSceneInput(false);
+  sceneKeyboard(false);
+  if (window.__scene) window.__scene.stopFx();
+  showMenuPage(page || 'main');
+  el('#menu-modal').classList.add('show');
+}
+function closeMenu () {
+  menuOpen = false;
+  el('#menu-modal').classList.remove('show');
+  setSceneInput(true);
+  sceneKeyboard(true);
+}
+const cleanName = s => String(s || '').replace(/\s+/g, ' ').trim().slice(0, SERVICE_MAX);
+
+function startNewGame (name) {
+  Profile.data.service = cleanName(name);
+  whenScene(scene => {
+    gameActive = true;
+    scene.resetLevel(true);      // azzera livello e statistiche e salva
+    applySettings();
+    closeMenu();
+    showToast('Benvenuti, ' + serviceName() + ': montate l\'impianto per la festa della scuola.', 'ok');
+  });
+}
+function continueGame () {
+  if (gameActive) { closeMenu(); return; }
+  whenScene(scene => {
+    gameActive = true;
+    if (Profile.data.level && Profile.data.level.id === LEVEL_ID) scene.loadLevel(Profile.data.level);
+    applySettings();
+    closeMenu();
+  });
+}
+
+el('#menu-btn').addEventListener('click', () => { SFX.button(); openMenu('main'); });
+el('#menu-resume').addEventListener('click', () => { SFX.button(); continueGame(); });
+el('#menu-new').addEventListener('click', () => { SFX.button(); showMenuPage('new'); });
+el('#menu-settings').addEventListener('click', () => { SFX.button(); showMenuPage('settings'); });
+el('#new-cancel').addEventListener('click', () => { SFX.button(); showMenuPage('main'); });
+el('#new-form').addEventListener('submit', ev => { ev.preventDefault(); SFX.button(); startNewGame(el('#service-input').value); });
+el('#settings-back').addEventListener('click', () => { SFX.button(); Profile.flush(); showMenuPage('main'); });
+el('#set-volume').addEventListener('input', ev => { settings().volume = ev.target.value / 100; SFX.setVolume(settings().volume); Profile.save(); });
+el('#set-volume').addEventListener('change', () => SFX.button());
+el('#set-reduced').addEventListener('change', ev => { settings().reducedFx = ev.target.checked; Profile.save(); });
+el('#set-skipshow').addEventListener('change', ev => { settings().skipShow = ev.target.checked; Profile.save(); });
+el('#set-service').addEventListener('change', ev => {
+  Profile.data.service = cleanName(ev.target.value);
+  ev.target.value = Profile.data.service;
+  applySettings(); Profile.save();
+});
+applySettings();
+openMenu(Profile.data.level ? 'main' : 'new');
 
 /* Reset */
 el('#reset-btn').addEventListener('click', () => {
@@ -2877,7 +3046,13 @@ class StageScene extends Phaser.Scene {
     this.history = [];
     this.historyIndex = -1;
     this.pushHistory();
+    this.paintServiceName();
+    // all'avvio c'è il menù davanti: la scena aspetta
+    if (menuOpen) { this.input.enabled = false; sceneKeyboard(false); }
   }
+
+  // scossone della vista, se non sono stati chiesti effetti ridotti
+  shake (ms, intensity) { if (!reducedFx()) this.cameras.main.shake(ms, intensity); }
 
   /* ---------------- movimento: zoom (rotellina/pizzico/pulsanti),
      pan (tasto destro o trascinamento sul vuoto), frecce/WASD ---------------- */
@@ -3046,7 +3221,7 @@ class StageScene extends Phaser.Scene {
     const v = VEHICLES[LEVEL_VEHICLE];
     const vp = gridToScreen(0.5 + v.B / 204, 1.0);
     const vg = this.add.graphics().setDepth(1).setPosition(vp.x, vp.y);
-    this.drawVehicle(vg, v);
+    this.van = { vp, v, ...this.drawVehicle(vg, v) };
 
     // i due bauli dei cavi e un case di ricambio, in fila lungo la banchina
     const caseSpots = [[5.9, 0.9, 'segnale'], [7.2, 0.9, 'corrente'], [8.5, 0.9, null]];
@@ -3148,6 +3323,28 @@ class StageScene extends Phaser.Scene {
       k.discA(-0.6, bw, v.wheelR, v.wheelR * 0.52, 0x8a8e98);
       k.discA(-0.8, bw, v.wheelR, v.wheelR * 0.22, 0x3a3d45);
     });
+    return { P, boxStart, lz };
+  }
+
+  /* nome del service scritto sulla fiancata del mezzo, sopra la fascia
+     arancio e dopo la porta scorrevole; cambia col nome nelle impostazioni */
+  paintServiceName () {
+    if (!this.van) return;
+    const { vp, P, boxStart, lz, v } = this.van;
+    const b0 = boxStart + (v.sideDoor ? 16 + v.sideDoor : 8), b1 = v.B - 6;
+    const z = (lz + 9 + v.Z - 5) / 2;
+    const e0 = P(-0.5, b0, z), e1 = P(-0.5, b1, z);
+    let ang = Math.atan2(e1.y - e0.y, e1.x - e0.x);
+    if (ang > Math.PI / 2) ang -= Math.PI; else if (ang < -Math.PI / 2) ang += Math.PI;
+    const room = Math.hypot(e1.x - e0.x, e1.y - e0.y) * 0.92;
+    if (!this.vanName) {
+      this.vanName = this.add.text(0, 0, '', {
+        fontFamily: 'Barlow Condensed, sans-serif', fontSize: '20px', fontStyle: 'bold', color: '#26282e'
+      }).setOrigin(0.5).setDepth(1.05);
+    }
+    this.vanName.setText(Profile.data.service.toUpperCase()).setScale(1)
+      .setPosition(vp.x + (e0.x + e1.x) / 2, vp.y + (e0.y + e1.y) / 2).setRotation(ang);
+    if (this.vanName.width > room) this.vanName.setScale(room / this.vanName.width);
   }
 
   /* flight case da tour: guscio nero in multistrato, profili e angolari in
@@ -4621,7 +4818,10 @@ class StageScene extends Phaser.Scene {
     const missing = cat => result.missingCats.has(cat);
     const toPlace = cat => result.toPlaceCats.has(cat);
 
+    gameState.stats.tests++;
     const fail = (kind, hint) => {
+      gameState.stats.failedTests++;
+      saveLevel();
       setCircuitStatus('error');
       if (kind === 'power') { showToast('Scintille! ' + hint); this.fxSparks(); }
       else if (kind === 'audio') { showToast('L\'impianto gracchia: ' + hint); this.fxCrackle(); }
@@ -4651,6 +4851,8 @@ class StageScene extends Phaser.Scene {
       : pops ? 'la prossima volta accendi finali e sub per ultimi.'
       : null;
     showToast('Impianto collaudato, si va in scena! ' + (tip ? 'Piccolo consiglio: ' + tip : 'Procedura perfetta.'), 'ok');
+    if (gameActive) addRecord();
+    saveLevel();
     this.playSuccessSequence();
   }
 
@@ -4707,7 +4909,7 @@ class StageScene extends Phaser.Scene {
     const src = q || gameState.placed.allaccio;
     const v = src && this.compVisuals[src.id];
     if (v) this.fxHold(v);
-    this.cameras.main.shake(260, 0.007);
+    this.shake(260, 0.007);
     this.fxEvery(170, 8, i => {
       if (!v) return;
       const ports = COMPONENT_TYPES[src.type].ports;
@@ -4809,18 +5011,20 @@ class StageScene extends Phaser.Scene {
     geo.forEach(b => this.fxHold(b.v));
     const rays = this.fxObj(this.add.graphics().setDepth(45).setBlendMode(Phaser.BlendModes.ADD));
     const COLORS = [0xff2d55, 0x2dff7a, 0x2d7bff, 0xffe12d, 0xff2dff, 0x2dfff0, 0xffffff];
-    this.fxEvery(70, Math.round(DUR * 1000 / 70), () => {
+    // con gli effetti ridotti: colori che cambiano piano, niente lampi
+    const calm = reducedFx(), STEP = calm ? 400 : 70;
+    this.fxEvery(STEP, Math.round(DUR * 1000 / STEP), () => {
       rays.clear();
-      const strobe = Math.random() < 0.18;   // lampo bianco di tutti insieme
+      const strobe = !calm && Math.random() < 0.18;   // lampo bianco di tutti insieme
       // il faro resta fermo: impazziscono solo colore, intensità e lampi
       geo.forEach(b => {
         const v = b.v, r = Math.min(v.def.body.w, v.def.body.h - 10) / 2;
         v.glow.clear();
-        if (!strobe && Math.random() < 0.35) { v.glow.setAlpha(0); return; }
+        if (!strobe && !calm && Math.random() < 0.35) { v.glow.setAlpha(0); return; }
         const col = strobe ? 0xffffff : COLORS[Math.floor(Math.random() * COLORS.length)];
         v.glow.setAlpha(1);
         v.glow.fillStyle(col, 0.85); v.glow.fillCircle(0, -4, r + 2);
-        this.drawParBeam(rays, b, col, strobe ? 1.3 : 0.4 + Math.random() * 0.6);
+        this.drawParBeam(rays, b, col, strobe ? 1.3 : calm ? 0.7 : 0.4 + Math.random() * 0.6);
       });
     }, () => this.stopFx());
   }
@@ -4842,7 +5046,7 @@ class StageScene extends Phaser.Scene {
   sparkQuadro (phases) {
     const q = findQuadro();
     if (!q) return;
-    this.cameras.main.shake(220, 0.006);
+    this.shake(220, 0.006);
     const def = COMPONENT_TYPES.quadro;
     const targets = phases.length ? phases.map(ph => def.ports.find(p => p.phase === ph).id) : [null];
     targets.forEach(pid => {
@@ -4896,9 +5100,25 @@ class StageScene extends Phaser.Scene {
      la scena, poi le casse partono con un beat a tutto volume: fasci che
      cambiano colore a ogni battuta, casse che pompano sulla cassa dritta.
      Alla fine torna il giorno e l'impianto resta com'era. */
+  // "IMPIANTO COLLAUDATO" col nome del service sotto
+  showBanner () {
+    const banner = this.fxObj(this.add.text(GAME_W / 2, GAME_H / 2, 'IMPIANTO COLLAUDATO\n' + serviceName().toUpperCase(), {
+      fontFamily: 'Barlow Condensed, sans-serif', fontSize: '44px', fontStyle: 'bold',
+      color: '#f2a541', align: 'center', lineSpacing: 2, wordWrap: { width: GAME_W - 80 }
+    }).setOrigin(0.5).setDepth(100).setAlpha(0).setScale(0.85).setScrollFactor(0));
+    this.fxTween({ targets: banner, alpha: 1, scale: 1, duration: 380, ease: 'Back.Out' });
+    this.fxTween({ targets: banner, alpha: 0, delay: 1400, duration: 400 });
+  }
+
   playSuccessSequence () {
     this.fxStart();
     SFX.success();
+    // show saltato dalle impostazioni: solo la scritta
+    if (settings().skipShow) {
+      this.showBanner();
+      this.fxLater(2300, () => this.stopFx());
+      return;
+    }
     const BPM = 120, BEATS = 14, BEAT_MS = 60000 / BPM;
     const T_LIGHTS = 1300, T_BEAT = 2300, T_END = T_BEAT + BEATS * BEAT_MS, T_DAY = T_END + 250;
 
@@ -4960,27 +5180,20 @@ class StageScene extends Phaser.Scene {
     this.fxLater(T_BEAT, () => { this.fx.stops.push(SFX.beat(BPM, BEATS)); });
     this.fxLater(T_BEAT + 50, () => this.fxEvery(BEAT_MS, BEATS, n => {
       st.kick = 1; st.beat = n + 1;
-      if (n % 4 === 0) st.flash = 1;
-      if (n % 4 === 0) this.cameras.main.shake(120, 0.002);
+      if (n % 4 === 0 && !reducedFx()) st.flash = 1;
+      if (n % 4 === 0) this.shake(120, 0.002);
       speakers.forEach(({ v, s }) => this.fxTween({
         targets: v.container, scaleX: s.sx * 1.09, scaleY: s.sy * 1.09, duration: 70, yoyo: true, ease: 'Quad.Out'
       }));
     }));
 
     // finale: la scritta, poi torna il giorno
-    this.fxLater(T_END - 200, () => {
-      const banner = this.fxObj(this.add.text(GAME_W / 2, GAME_H / 2, 'IMPIANTO COLLAUDATO', {
-        fontFamily: 'Barlow Condensed, sans-serif', fontSize: '44px', fontStyle: 'bold',
-        color: '#f2a541', align: 'center', wordWrap: { width: GAME_W - 80 }
-      }).setOrigin(0.5).setDepth(100).setAlpha(0).setScale(0.85).setScrollFactor(0));
-      this.fxTween({ targets: banner, alpha: 1, scale: 1, duration: 380, ease: 'Back.Out' });
-      this.fxTween({ targets: banner, alpha: 0, delay: 1000, duration: 400 });
-    });
+    this.fxLater(T_END - 200, () => this.showBanner());
     this.fxLater(T_DAY + 800, () => this.stopFx());
   }
 
   /* ---------------- reset ---------------- */
-  resetLevel () {
+  resetLevel (quiet) {
     this.stopFx();
     this.clearEdgeSelection();
     this.clearMoveSelection();
@@ -5002,6 +5215,7 @@ class StageScene extends Phaser.Scene {
     closeRearPanel();
     gameState.tested = false;
     gameState.trips = 0; gameState.rcdTrips = 0; gameState.procErrors = []; gameState.inrush = [];
+    gameState.stats = freshStats();
 
     updateCableHand();
     updateStockUI();
@@ -5012,7 +5226,7 @@ class StageScene extends Phaser.Scene {
 
     this.drawAllaccio();
     this.updateQuadroVisual();
-    showToast('Livello resettato.');
+    if (!quiet) showToast('Livello resettato.');
     this.pushHistory();
   }
 
@@ -5031,6 +5245,7 @@ class StageScene extends Phaser.Scene {
     });
     this.historyIndex = this.history.length - 1;
     this.updateHistoryButtons();
+    saveLevel();
   }
 
   undo () {
@@ -5079,6 +5294,23 @@ class StageScene extends Phaser.Scene {
     setCircuitStatus('untested');
     gameState.tested = false;
     this.updateHistoryButtons();
+    saveLevel();
+  }
+
+  /* partita salvata: l'impianto com'era, con scatti, procedura e tempo di
+     gioco; la cronologia di annulla/ripeti riparte da qui */
+  loadLevel (lv) {
+    this.restoreSnapshot(lv);
+    gameState.trips = lv.trips || 0;
+    gameState.rcdTrips = lv.rcdTrips || 0;
+    gameState.procErrors = (lv.procErrors || []).slice();
+    gameState.stats = { ...freshStats(), ...lv.stats };
+    this.history = [];
+    this.historyIndex = -1;
+    this.pushHistory();
+    this.refreshLive();
+    updateConnectionCounter();
+    updateCableHand();
   }
 
   updateHistoryButtons () {
