@@ -203,8 +203,8 @@ per provare il ritmo prima di portarla nel gioco.
   va ricollegato), cavo uscito dal mixer. Se lo ricolleghi all'ingresso
   sbagliato la voce arriva su un altro canale col fader giù.
 - **Lingua dei personaggi**: ognuno parla una lingua fatta solo del suo nome
-  (il preside dice solo "Tramp"). Sottotitoli nella sua lingua con la traduzione
-  sotto; la voce è sintesi vocale col volume che esce davvero dal mixer.
+  (il preside dice solo "Tramp"). La lingua si sente solo nella voce (sintesi vocale col
+  volume che esce davvero dal mixer); i sottotitoli e i fumetti sono in italiano chiaro.
 - **Rigiocabilità**: apertura e finale fissi; in mezzo 5 imprevisti pescati da
   7 a tempi variabili, che verso la fine si accavallano. Il volume del preside
   va e viene da solo (fader sempre da seguire). Il larsen cresce con volume ×

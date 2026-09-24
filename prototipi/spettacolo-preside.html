@@ -37,14 +37,19 @@
 
   /* ---- palco ---- */
   #stage{position:relative;overflow:hidden;background:#0c0d10;min-height:180px}
-  #stage svg{position:absolute;inset:0;width:100%;height:100%}
+  #scene{position:absolute;inset:0;width:100%;height:100%}
   #caption{position:absolute;left:16px;right:16px;bottom:6px;text-align:center;color:#fff;text-shadow:0 1px 3px #000,0 0 8px #000;pointer-events:none}
-  #caption b{display:block;font-family:var(--marker);font-weight:400;font-size:17px;letter-spacing:.02em}
-  #caption small{display:block;font-size:11px;opacity:.75;font-style:italic;margin-top:1px}
-  #toast{position:absolute;left:50%;top:10px;transform:translateX(-50%);background:var(--bg-raised);border:1px solid var(--hairline);padding:6px 12px;border-radius:8px;font-size:13px;opacity:0;transition:opacity .25s;pointer-events:none;max-width:calc(100% - 32px);text-align:center}
+  #caption b{display:block;font-weight:600;font-size:16px;line-height:1.3;transition:font-size .2s}
+  #caption small{display:block;font-size:13px;opacity:.85;font-style:italic;margin-top:2px}
+  #toast{position:absolute;left:50%;top:10px;transform:translateX(-50%);background:var(--bg-raised);border:2px solid var(--hairline);padding:10px 16px;border-radius:10px;font-size:16px;font-weight:600;line-height:1.3;box-shadow:0 6px 20px rgba(0,0,0,.5);z-index:3;opacity:0;transition:opacity .25s;pointer-events:none;max-width:calc(100% - 32px);text-align:center}
   #toast.show{opacity:1}#toast.ok{border-color:var(--green)}#toast.bad{border-color:var(--red)}
   #pausa{position:absolute;inset:0;background:rgba(8,8,10,.85);display:grid;place-items:center;font-family:var(--display);font-size:34px;letter-spacing:.1em}
-  .bubble{cursor:pointer}
+  #bubbles-html{position:absolute;inset:0;pointer-events:none;z-index:2}
+  .bub{position:absolute;pointer-events:auto;cursor:pointer;display:flex;gap:10px;align-items:center;background:#f4f1ea;color:#141519;border:2px solid #141519;border-radius:12px;padding:8px 12px 8px 8px;max-width:min(300px,calc(100% - 16px));box-shadow:0 4px 14px rgba(0,0,0,.45)}
+  .bub::after{content:"";position:absolute;left:var(--tail,50%);bottom:-9px;width:14px;height:14px;background:#f4f1ea;border-right:2px solid #141519;border-bottom:2px solid #141519;transform:translateX(-50%) rotate(45deg)}
+  .bub svg{flex:none}
+  .bub b{display:block;font-size:15px;line-height:1.25}
+  .bub small{display:block;font-size:13px;color:#7a5a1e;font-weight:600;margin-top:2px}
 
   /* ---- banco regia ---- */
   #desk{background:var(--bg-panel);border-top:1px solid var(--hairline);padding:8px 16px calc(10px + env(safe-area-inset-bottom,0px));display:grid;gap:8px;height:44vh;max-height:330px;grid-template-rows:auto 1fr}
@@ -58,7 +63,7 @@
   .strip{flex:1;min-width:0;background:var(--bg-raised);border:1px solid var(--hairline);border-radius:10px;padding:6px 4px;display:grid;grid-template-rows:auto 1fr auto;gap:6px;justify-items:center}
   .strip.pulse{animation:pulse .5s ease-in-out 4}
   @keyframes pulse{50%{border-color:var(--amber);box-shadow:0 0 0 3px rgba(242,165,65,.35)}}
-  .strip-name{font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:.06em;display:flex;align-items:center;gap:4px;white-space:nowrap}
+  .strip-name{font-size:12px;color:var(--muted);text-transform:uppercase;letter-spacing:.06em;display:flex;align-items:center;gap:4px;white-space:nowrap}
   .strip-name .face-mini{width:20px;height:20px}
   .fadewrap{display:flex;gap:6px;height:100%;min-height:0}
   .fader{position:relative;width:26px;height:100%;touch-action:none;cursor:ns-resize}
@@ -83,22 +88,22 @@
   .mem[aria-pressed=true]{border-color:var(--amber);box-shadow:inset 0 0 0 1px var(--amber)}
   .mem.pulse,.dimmer.pulse{animation:pulse .5s ease-in-out 4}
   .dimmer{display:grid;grid-template-rows:auto 1fr;gap:4px;justify-items:center;font-size:10px;color:var(--muted);text-transform:uppercase;border-radius:8px}
-  .hint{font-size:11px;color:var(--muted)}
+  .hint{font-size:13px;color:var(--muted);line-height:1.35}
 
   /* ---- guasto: la catena del microfono ---- */
   .fault{flex-direction:column;gap:8px;overflow:auto}
   .chain{display:grid;grid-template-columns:1fr auto 1fr auto 1fr;align-items:stretch;gap:4px}
   .chain .link{align-self:center;width:14px;height:3px;background:var(--hairline)}
   .node{background:var(--bg-raised);border:1px solid var(--hairline);border-radius:10px;padding:8px 6px;display:grid;gap:6px;align-content:start;text-align:center;font-size:12px}
-  .node b{font-family:var(--display);font-size:15px;letter-spacing:.05em}
-  .node .st{font-size:11px;color:var(--muted);min-height:2.6em}
+  .node b{font-family:var(--display);font-size:17px;letter-spacing:.05em}
+  .node .st{font-size:13px;color:var(--muted);min-height:2.6em;line-height:1.3}
   .node.ok{border-color:var(--green)}.node.ok .st{color:var(--green)}
   .node.bad{border-color:var(--red)}.node.bad .st{color:#ff9b8f}
-  .act{background:#15161a;border:1px solid var(--hairline);border-radius:6px;padding:6px 4px;font-size:12px;font-weight:600}
+  .act{background:#15161a;border:1px solid var(--hairline);border-radius:6px;padding:8px 4px;font-size:14px;font-weight:600}
   .act:disabled{opacity:.4;cursor:default}
   .act.go{border-color:var(--amber);color:var(--amber)}
   .prog{height:4px;background:#0c0d10;border-radius:2px;overflow:hidden}.prog i{display:block;height:100%;width:0;background:var(--amber)}
-  .patch{display:flex;gap:6px;align-items:center;font-size:12px;color:var(--muted);flex-wrap:wrap}
+  .patch{display:flex;gap:6px;align-items:center;font-size:14px;color:var(--muted);flex-wrap:wrap}
   .patch .act{flex:1;min-width:56px}
 
   /* ---- schede iniziale e finale ---- */
@@ -108,8 +113,8 @@
   .portrait{width:96px;height:96px;border-radius:12px;background:linear-gradient(#2a3a5a,#1a2233);flex:none;overflow:hidden;border:2px solid var(--amber)}
   .card h2{margin:0;font-family:var(--marker);font-weight:400;font-size:26px;line-height:1.1;color:var(--amber);text-wrap:balance}
   .card .tag{font-size:11px;letter-spacing:.08em;text-transform:uppercase;color:var(--muted)}
-  .card p{margin:0;font-size:14px;line-height:1.5}
-  .card ul{margin:0;padding-left:18px;font-size:14px;line-height:1.5}
+  .card p{margin:0;font-size:15px;line-height:1.5}
+  .card ul{margin:0;padding-left:18px;font-size:15px;line-height:1.5}
   .toggle{display:flex;align-items:center;justify-content:space-between;gap:10px;background:var(--bg-raised);border:1px solid var(--hairline);border-radius:10px;padding:8px 12px;font-size:13px}
   .toggle[aria-pressed=true] .sw{background:var(--green)}
   .sw{width:38px;height:22px;border-radius:11px;background:#3a3c44;position:relative;flex:none;transition:background .2s}
@@ -189,8 +194,8 @@
       <g id="clue-ing" display="none"><path d="M284 159 q6 -6 12 0 q6 6 12 0" stroke="#a3acb8" stroke-width="2.4" fill="none"/><rect x="306" y="153" width="12" height="9" rx="2" fill="#dfe2e8" stroke="#6b6f78"/></g>
       <g id="pars"></g>
       <g id="crowd"></g>
-      <g id="bubbles"></g>
     </svg>
+    <div id="bubbles-html"></div>
     <div id="caption"></div>
     <div id="toast"></div>
     <div id="pausa" hidden>PAUSA</div>
@@ -225,7 +230,7 @@
       <div class="portrait"><svg viewBox="8 8 84 84" width="96" height="96"><use href="#tramp"/></svg></div>
       <div><div class="tag">Obiettivo 1 · 21:00</div><h2>Il discorso del Preside Tramp</h2></div>
     </div>
-    <p>«Tramp tramp, tramp TRAMP tramp.» Nessuno capisce una parola, ma vuole essere sentito fino al parcheggio. Parla un quarto d'ora.</p>
+    <p>Parla un quarto d'ora e vuole essere sentito fino al parcheggio. Nessuno capisce una parola di quello che dice, ma guai se non si sente.</p>
     <ul>
       <li>Quando sale sul palco: <b>luce bianca</b>, <b>microfono aperto</b>, <b>musica giù</b>.</li>
       <li>Tieni la sua voce nella <b>zona verde</b>. Ogni sera è diversa: lui non parla mai uguale.</li>
@@ -268,7 +273,7 @@
   const PC = 5;                   // canale del PC (la musica di sala)
   const SPK_X = { l: 60, r: 290 }, LECTERN_X = 172;
   const COLORS = { bianco: '#f4f1ea', rosso: '#e0503f', blu: '#3f7fe0', verde: '#49b06a', ambra: '#f2a541', viola: '#b36bff' };
-  // cosa direbbe, se parlasse italiano: sotto i sottotitoli in lingua Tramp
+  // cosa dice (la voce dice solo "Tramp", i sottotitoli lo traducono)
   const LINES = [
     'Benvenuti alla festa della scuola più grande, la più bella. Tremenda.',
     'Abbiamo i banchi migliori. Tutti mi chiedono: come fa ad avere questi banchi?',
@@ -278,11 +283,6 @@
     'Qualcuno dice che il discorso è lungo. Fake news. È perfetto.',
     'E ora vi lascio alla musica. Musica bellissima, l\'ho scelta io.'
   ];
-  const trampify = line => line.split(' ').map(w => {
-    const p = (w.match(/[.,!?:…]+$/) || [''])[0];
-    const core = w.replace(/[.,!?:…]+$/, '');
-    return (core.length > 8 ? 'TRAMP' : /^[A-ZÈ]/.test(core) ? 'Tramp' : 'tramp') + p;
-  }).join(' ');
 
   let hints = store.get('tramp-hints', store.get('tramp-runs', 0) === 0);
   let S;
@@ -323,19 +323,19 @@
 
   /* ---------- copione: apertura e finale fissi, in mezzo 5 imprevisti pescati da 7, a tempi variabili ---------- */
   const POOL = {
-    piano: () => ({ win: 7, dur: 12, target: 'preside', icon: '🔉', text: 'si allontana dal microfono', hint: 'alza il suo fader', tab: 'mixer',
+    piano: () => ({ win: 7, dur: 12, target: 'preside', icon: '🔉', text: 'Si allontana dal microfono', hint: 'alza il suo fader', tab: 'mixer',
       start () { S.voiceK = rnd(0.55, 0.65); }, end () { S.voiceK = 1; }, hold: 1,
       ok: () => inZone(voiceOut()), fail: () => hit(-8, 'In fondo alla palestra non si sentiva niente.') }),
-    mangia: () => ({ win: 6, dur: 12, target: 'preside', icon: '📢', text: 'si mangia il microfono', hint: 'abbassa il suo fader', tab: 'mixer',
+    mangia: () => ({ win: 6, dur: 12, target: 'preside', icon: '📢', text: 'Si mangia il microfono', hint: 'abbassa il suo fader', tab: 'mixer',
       start () { S.voiceK = rnd(1.6, 1.9); }, end () { S.voiceK = 1; }, hold: 1,
       ok: () => inZone(voiceOut()), fail: () => hit(-8, 'Voce distorta: la gente si tappa le orecchie.') }),
-    casse: () => { const side = pick(['l', 'r']); return { win: 99, dur: 11, target: 'spk-' + side, icon: '🚶', text: 'scende verso la cassa ' + (side === 'l' ? 'sinistra' : 'destra'), hint: 'abbassa quanto basta', tab: 'mixer',
+    casse: () => { const side = pick(['l', 'r']); return { win: 99, dur: 11, target: 'spk-' + side, icon: '🚶', text: 'Va verso la cassa ' + (side === 'l' ? 'sinistra' : 'destra'), hint: 'abbassa quanto basta, non zittirlo', tab: 'mixer',
       start () { S.walkTo = SPK_X[side]; }, end () { S.walkTo = null; },
       ok: () => false, fail () {}, done () { if (!this.larsen) { S.grad = clamp(S.grad + 4); toast('Niente larsen. Pulito!', 'ok'); sfx.ok(); } } }; },
-    tap: () => ({ win: 3.5, dur: 5, target: 'preside', icon: '👊', text: '«Tramp?» batte sul microfono', hint: 'MUTE, poi riapri', tab: 'mixer',
+    tap: () => ({ win: 3.5, dur: 5, target: 'preside', icon: '👊', text: 'Batte sul microfono per provarlo', hint: 'premi MUTE, poi riapri il canale', tab: 'mixer',
       ok: () => S.mute[S.micCh] || voiceOut() < 0.2 || !S.micOk,
       fail () { S.pops++; sfx.pop(); hit(-8, 'BUM BUM nelle casse.'); }, after: 'Ora riapri il canale!' }),
-    cavo: () => ({ win: 24, dur: 24, target: 'preside', icon: '🔇', text: 'non si sente più niente', hint: 'guarda il palco, poi GUASTO', tab: 'guasto',
+    cavo: () => ({ win: 24, dur: 24, target: 'preside', icon: '🔇', text: 'Non si sente più niente!', hint: 'guarda il palco, poi apri GUASTO', tab: 'guasto',
       start () { startFault(); }, ok: () => S.micOk && voiceOut() > 0.3,
       onSolved () {
         const secs = Math.round(S.t - this.at);
@@ -343,10 +343,10 @@
         else S.notes.push('Guasto risolto in ' + secs + ' s.');
       },
       fail () { endFault(); S.micCh = 1; S.fad[1] = Math.max(S.fad[1], 0.55); S.repDelta -= 5; S.notes.push('Il guasto l\'ha trovato il bidello al posto tuo (−5 reputazione).'); hit(-10, 'Il bidello ha trovato il guasto prima di te. Figuraccia.'); } }),
-    sigla: () => ({ win: 5, dur: 8, target: 'preside', icon: '🎺', text: '«TRAMP TRAMP!» vuole la sua sigla', hint: 'su il PC, poi giù', tab: 'mixer',
+    sigla: () => ({ win: 5, dur: 8, target: 'preside', icon: '🎺', text: 'Vuole la sua sigla musicale', hint: 'alza il PC, poi riabbassalo', tab: 'mixer',
       start () { S.jingle = true; }, end () { S.jingle = false; }, hold: 0.5,
       ok: () => chOut(PC) >= 0.55, fail: () => hit(-6, 'Niente sigla: il preside è offeso.') }),
-    volume: () => ({ win: 7, dur: 7, target: 'preside', icon: '😠', text: '«PIÙ TRAMP!» vuole più volume', hint: 'accontentarlo o no? scegli tu', tab: 'mixer',
+    volume: () => ({ win: 7, dur: 7, target: 'preside', icon: '😠', text: 'Ti fa segno: vuole più volume', hint: 'accontentarlo o no? scegli tu', tab: 'mixer',
       ok: () => false, fail () {},
       done () {
         if (voiceOut() > 0.85) { S.repDelta += 3; S.notes.push('Hai accontentato il preside: +3 reputazione, ma il pubblico si è tappato le orecchie.'); toast('Il preside è felice. Il pubblico meno.', 'ok'); }
@@ -358,7 +358,7 @@
     // il guasto, se esce, va tra i primi due e ha la scena tutta per sé
     const ci = ids.indexOf('cavo');
     if (ci > 1) { ids.splice(ci, 1); ids.splice(Math.floor(Math.random() * 2), 0, 'cavo'); }
-    const evs = [{ id: 'apertura', at: 1, win: 9, target: 'preside', icon: '🎤', text: 'sale sul palco', hint: 'luce bianca, CH1 su, PC giù', tab: 'luci',
+    const evs = [{ id: 'apertura', at: 1, win: 9, target: 'preside', icon: '🎤', text: 'Sale sul palco', hint: 'luce bianca, CH1 su, musica PC giù', tab: 'luci',
       ok: () => lightsWhite() && S.fad[1] >= 0.3 && !S.mute[1] && chOut(PC) < 0.3, hold: 0.3,
       fail: () => hit(-10, 'Il preside ha cominciato al buio e sopra la musica.') }];
     let at = rnd(12, 15);
@@ -367,7 +367,7 @@
       at += id === 'cavo' ? 26 : i >= 2 ? rnd(6, 10) : rnd(10, 14);    // verso la fine si accavallano
       at = Math.min(at, 72);
     });
-    evs.push({ id: 'finale', at: 82, win: 7, target: 'preside', icon: '🎉', text: '«TRAMP!» ha finito', hint: 'luci Festa e musica su', tab: 'luci',
+    evs.push({ id: 'finale', at: 82, win: 7, target: 'preside', icon: '🎉', text: 'Ha finito il discorso', hint: 'memoria Festa e musica su', tab: 'luci',
       ok: () => !S.pars.every(p => p === 'bianco') && S.dimmer >= 0.25 && chOut(PC) >= 0.5, hold: 0.3,
       fail: () => hit(-6, 'Finale muto e spento.') });
     return evs;
@@ -443,7 +443,7 @@
   }
 
   /* ---------- palco ---------- */
-  const beams = $('#beams'), parsG = $('#pars'), crowd = $('#crowd'), bubbles = $('#bubbles');
+  const beams = $('#beams'), parsG = $('#pars'), crowd = $('#crowd');
   const PAR_X = [70, 150, 250, 330];
   const beamEls = PAR_X.map(x => mk('path', { d: `M${x - 6} 18 L${x + 6} 18 L${x + 55} 162 L${x - 55} 162 Z`, opacity: 0 }, beams));
   const parEls = PAR_X.map(x => { mk('rect', { x: x - 8, y: 10, width: 16, height: 10, rx: 3, fill: '#222' }, parsG); return mk('circle', { cx: x, cy: 20, r: 5 }, parsG); });
@@ -478,27 +478,39 @@
 
   /* ---------- fumetti ---------- */
   const TARGET_XY = { preside: () => [S.px + 28, 58], 'spk-l': () => [60, 62], 'spk-r': () => [340, 62], stand: () => [215, 150] };
+  // fumetti in HTML sopra il palco, così il testo resta leggibile anche sul telefono
+  const bubbleEls = new Map();
+  const scene = $('#scene'), layer = $('#bubbles-html');
+  function toStage (x, y) {
+    const m = scene.getScreenCTM(), r = $('#stage').getBoundingClientRect();
+    return [m.a * x + m.e - r.left, m.d * y + m.f - r.top];
+  }
   function renderBubbles () {
-    bubbles.textContent = '';
+    const live = new Set();
     S.events.filter(e => e.live).forEach(e => {
-      const [x, y] = TARGET_XY[e.target]();
-      const line1 = e.icon + ' ' + e.text, line2 = hints ? '→ ' + e.hint : '';
-      const w = Math.min(230, 34 + Math.max(line1.length, line2.length) * 5.2);
-      const h = line2 ? 38 : 26;
-      const bx = Math.max(4, Math.min(396 - w, x - w / 2)), by = y - 8 - h;
-      const g = mk('g', { class: 'bubble', role: 'button', 'aria-label': e.text }, bubbles);
-      mk('rect', { x: bx, y: by, width: w, height: h, rx: 8, fill: '#f4f1ea', stroke: '#1a1a1a' }, g);
-      mk('path', { d: `M${x - 5} ${y - 9} L${x} ${y - 1} L${x + 5} ${y - 9} Z`, fill: '#f4f1ea' }, g);
+      live.add(e);
+      let el = bubbleEls.get(e);
+      if (!el) {
+        el = document.createElement('div'); el.className = 'bub'; el.setAttribute('role', 'button');
+        el.innerHTML = '<svg width="26" height="26" viewBox="0 0 26 26"><circle cx="13" cy="13" r="10" fill="none" stroke="#ddd" stroke-width="4"/><circle class="arc" cx="13" cy="13" r="10" fill="none" stroke-width="4" transform="rotate(-90 13 13)"/></svg><div><b></b><small></small></div>';
+        el.addEventListener('pointerdown', ev => { ev.stopPropagation(); tapBubble(e); });
+        layer.appendChild(el); bubbleEls.set(e, el);
+      }
+      el.querySelector('b').textContent = e.icon + ' ' + e.text;
+      const sm = el.querySelector('small'); sm.textContent = hints ? '→ ' + e.hint : ''; sm.hidden = !hints;
       const timed = e.win < 90;
-      const left = timed ? Math.max(0, (e.deadline - S.t) / e.win) : 1 - (S.t - e.at) / e.dur;
-      const col = left > 0.5 ? '#f2c53d' : '#e0503f';
-      const cy = by + 13;
-      mk('circle', { cx: bx + 14, cy, r: 8, fill: 'none', stroke: '#ddd', 'stroke-width': 3 }, g);
-      mk('circle', { cx: bx + 14, cy, r: 8, fill: 'none', stroke: col, 'stroke-width': 3, 'stroke-dasharray': `${(left * 50.3).toFixed(1)} 60`, transform: `rotate(-90 ${bx + 14} ${cy})` }, g);
-      const t1 = mk('text', { x: bx + 27, y: by + 17, 'font-size': 10.5, 'font-family': 'Inter, sans-serif', 'font-weight': 600, fill: '#141519' }, g); t1.textContent = line1;
-      if (line2) { const t2 = mk('text', { x: bx + 27, y: by + 30, 'font-size': 9.5, 'font-family': 'Inter, sans-serif', fill: '#6a5a3a' }, g); t2.textContent = line2; }
-      g.addEventListener('pointerdown', ev => { ev.stopPropagation(); tapBubble(e); });
+      const left = timed ? Math.max(0, (e.deadline - S.t) / e.win) : Math.max(0, 1 - (S.t - e.at) / e.dur);
+      const arc = el.querySelector('.arc');
+      arc.setAttribute('stroke', left > 0.5 ? '#d9a21b' : '#e0503f');
+      arc.setAttribute('stroke-dasharray', `${(left * 62.8).toFixed(1)} 70`);
+      const [x, y] = TARGET_XY[e.target]();
+      const [px, py] = toStage(x, y);
+      const W = layer.clientWidth, w = el.offsetWidth, h = el.offsetHeight;
+      const lx = Math.max(8, Math.min(W - w - 8, px - w / 2));
+      el.style.left = lx + 'px'; el.style.top = Math.max(4, py - h - 10) + 'px';
+      el.style.setProperty('--tail', Math.max(16, Math.min(w - 16, px - lx)) + 'px');
     });
+    bubbleEls.forEach((el, e) => { if (!live.has(e)) { el.remove(); bubbleEls.delete(e); } });
   }
   function tapBubble (e) {
     showTab(e.tab === 'guasto' && !S.fault ? 'mixer' : e.tab);
@@ -670,14 +682,14 @@
     }
     S.grad = clamp(S.grad + d * dt);
 
-    // sottotitoli in lingua Tramp, con la traduzione sotto
+    // sottotitoli: più piccoli se si sente poco, più grandi se è troppo forte
     const li = Math.min(LINES.length - 1, Math.floor(S.t / (82 / LINES.length)));
     const cap = $('#caption');
-    if (S.jingle) cap.innerHTML = '<b>♪ TRAMP TRAMP TRAMP ♪</b><small>(la sua sigla)</small>';
+    if (S.jingle) cap.innerHTML = '<b>♪ La sigla del preside ♪</b>';
     else if (!speaking()) cap.innerHTML = '';
-    else if (!S.micOk && S.t - S.faultAt > 5) cap.innerHTML = '<b>«Tramp? TRAMP?»</b><small>(batte sul microfono: non si sente niente)</small>';
-    else if (o < 0.05) cap.innerHTML = '<b>…</b><small>(il preside parla ma non si sente niente)</small>';
-    else cap.innerHTML = `<b style="font-size:${o > 0.9 ? 21 : o < 0.3 ? 13 : 17}px">«${trampify(LINES[li])}»</b><small>(${LINES[li]})</small>`;
+    else if (!S.micOk && S.t - S.faultAt > 5) cap.innerHTML = '<b>Il preside batte sul microfono: non si sente niente!</b>';
+    else if (o < 0.05) cap.innerHTML = '<b>(il preside parla ma non si sente niente)</b>';
+    else cap.innerHTML = `<b style="font-size:${o > 0.9 ? 20 : o < 0.3 ? 13 : 16}px">«${LINES[li]}»</b>${o > 0.9 ? '<small>(troppo forte: distorce)</small>' : o < 0.3 ? '<small>(si sente appena)</small>' : ''}`;
 
     [1, 2, 3, 4, PC].forEach(n => {
       const v = chOut(n), m = chF[n].meter;
@@ -702,7 +714,7 @@
     if (S.micCh !== 1) { S.repDelta -= 2; S.notes.push('Il microfono è rimasto sull\'ingresso ' + S.micCh + ' invece del CH1 (−2 reputazione).'); }
     notes.push(...S.notes);
     const rep = 5 + Math.round((S.grad - 60) / 10) - S.larsens * 5 + S.repDelta;
-    $('#outro-title').textContent = S.grad >= 70 ? '«TRAMP TRAMP!» (il miglior tecnico della storia)' : S.grad >= 40 ? 'Applausi tiepidi.' : '«TRAMP!» (siete licenziati)';
+    $('#outro-title').textContent = S.grad >= 70 ? 'Il miglior tecnico della storia!' : S.grad >= 40 ? 'Applausi tiepidi.' : 'Siete licenziati!';
     $('#r-grad').textContent = Math.round(S.grad) + '%';
     $('#r-beer').textContent = '+' + beers;
     $('#r-rep').textContent = (rep >= 0 ? '+' : '') + rep;
