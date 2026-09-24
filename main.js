@@ -4552,30 +4552,74 @@ class StageScene extends Phaser.Scene {
     }, () => this.stopFx());
   }
 
+  /* fasci dei PAR: sono fari FISSI, non teste mobili. Ognuno punta dritto
+     verso il pubblico e disegna sul fronte del palco una pozza tonda, tutte
+     della stessa misura e alla stessa distanza; il ventaglio si apre in modo
+     speculare rispetto al centro della fila di PAR. La geometria si calcola
+     una volta sola: durante l'effetto cambiano solo colore e intensità. */
+  parBeamGeometry (parList) {
+    if (!parList.length) return [];
+    const mid = parList.reduce((sum, c) => sum + c.gx + 0.5, 0) / parList.length;
+    const floorY = STAGE_ORIGIN_Y + STAGE_H - 0.55;           // fronte del palco
+    const R = 30;                                            // raggio della pozza
+    const flat = TILE_H / TILE_W;                            // cerchio a terra, in isometria
+    return parList.map(c => {
+      const v = this.compVisuals[c.id];
+      const x = v.container.x, y = v.container.y - 6;
+      const t = gridToScreen(c.gx + 0.5 + (c.gx + 0.5 - mid) * 0.35, floorY);
+      // bordi del cono: tangenti all'ellisse della pozza viste dalla lente
+      const dx = t.x - x, dy = t.y - y, len = Math.hypot(dx, dy) || 1;
+      const nx = -dy / len, ny = dx / len, rx = R, ry = R * flat;
+      // punto dell'ellisse più lontano lungo la perpendicolare al fascio
+      const k = Math.hypot(nx * rx, ny * ry);
+      return { c, v, x, y, tx: t.x, ty: t.y, rx, ry, ex: rx * rx * nx / k, ey: ry * ry * ny / k };
+    });
+  }
+  drawParBeam (g, b, col, a) {
+    if (a <= 0.01) return;
+    const lx = b.tx + b.ex, ly = b.ty + b.ey, rx = b.tx - b.ex, ry = b.ty - b.ey;
+    // cono pieno, nucleo più chiaro e bordi netti
+    g.fillStyle(col, 0.22 * a); g.fillTriangle(b.x, b.y, lx, ly, rx, ry);
+    g.fillStyle(col, 0.14 * a); g.fillTriangle(b.x, b.y, b.tx + b.ex * 0.5, b.ty + b.ey * 0.5, b.tx - b.ex * 0.5, b.ty - b.ey * 0.5);
+    g.lineStyle(1.5, col, 0.55 * a);
+    g.lineBetween(b.x, b.y, lx, ly); g.lineBetween(b.x, b.y, rx, ry);
+    // pozza di luce a terra
+    g.fillStyle(col, 0.34 * a); g.fillEllipse(b.tx, b.ty, b.rx * 2, b.ry * 2);
+    g.fillStyle(col, 0.22 * a); g.fillEllipse(b.tx, b.ty, b.rx * 1.2, b.ry * 1.2);
+    g.lineStyle(1.5, col, 0.6 * a); g.strokeEllipse(b.tx, b.ty, b.rx * 2, b.ry * 2);
+    // lente accesa
+    g.fillStyle(col, 0.35 * a); g.fillCircle(b.x, b.y, 16);
+    g.fillStyle(0xffffff, 0.9 * a); g.fillCircle(b.x, b.y, 6);
+  }
+  // colori speculari: i PAR esterni un colore, quelli interni l'altro
+  parMirrorIndex (geo) {
+    const order = geo.map((b, i) => i).sort((i, j) => geo[i].x - geo[j].x);
+    const m = [];
+    order.forEach((gi, k) => { m[gi] = Math.min(k, order.length - 1 - k); });
+    return m;
+  }
+
   // luci: i PAR con corrente impazziscono, colori a caso e strobo
   fxLightsTilt () {
     this.fxStart();
     const DUR = 2.8;
     SFX.strobe(DUR);
-    const pars = placedOfType('par').filter(c => isRunning(c.id)).map(c => this.compVisuals[c.id]).filter(Boolean);
-    pars.forEach(v => this.fxHold(v));
+    const geo = this.parBeamGeometry(placedOfType('par').filter(c => isRunning(c.id) && this.compVisuals[c.id]));
+    geo.forEach(b => this.fxHold(b.v));
     const rays = this.fxObj(this.add.graphics().setDepth(45).setBlendMode(Phaser.BlendModes.ADD));
     const COLORS = [0xff2d55, 0x2dff7a, 0x2d7bff, 0xffe12d, 0xff2dff, 0x2dfff0, 0xffffff];
     this.fxEvery(70, Math.round(DUR * 1000 / 70), () => {
       rays.clear();
       const strobe = Math.random() < 0.18;   // lampo bianco di tutti insieme
-      pars.forEach(v => {
-        const r = Math.min(v.def.body.w, v.def.body.h - 10) / 2;
+      // il faro resta fermo: impazziscono solo colore, intensità e lampi
+      geo.forEach(b => {
+        const v = b.v, r = Math.min(v.def.body.w, v.def.body.h - 10) / 2;
         v.glow.clear();
         if (!strobe && Math.random() < 0.35) { v.glow.setAlpha(0); return; }
         const col = strobe ? 0xffffff : COLORS[Math.floor(Math.random() * COLORS.length)];
         v.glow.setAlpha(1);
         v.glow.fillStyle(col, 0.85); v.glow.fillCircle(0, -4, r + 2);
-        // fascio in una direzione a caso
-        const a = Math.random() * Math.PI * 2, len = 70 + Math.random() * 110, w = 0.18;
-        const x = v.container.x, y = v.container.y - 4;
-        rays.fillStyle(col, strobe ? 0.35 : 0.22);
-        rays.fillTriangle(x, y, x + Math.cos(a - w) * len, y + Math.sin(a - w) * len, x + Math.cos(a + w) * len, y + Math.sin(a + w) * len);
+        this.drawParBeam(rays, b, col, strobe ? 1.3 : 0.4 + Math.random() * 0.6);
       });
     }, () => this.stopFx());
   }
@@ -4681,38 +4725,26 @@ class StageScene extends Phaser.Scene {
     const beams = this.fxObj(this.add.graphics().setDepth(45).setBlendMode(Phaser.BlendModes.ADD));
     const waves = this.fxObj(this.add.graphics().setDepth(46));
     const PALETTE = [[0xff3b6b, 0x3b8bff], [0xffb13b, 0xff3bd1], [0x3bffb0, 0x3b8bff], [0xffffff, 0xffb13b], [0xb03bff, 0x3bfff2]];
-    const pars = placedOfType('par').filter(c => isRunning(c.id) && this.compVisuals[c.id])
-      .map((c, i) => ({ c, v: this.compVisuals[c.id], k: 0, i }));
+    const pars = this.parBeamGeometry(placedOfType('par').filter(c => isRunning(c.id) && this.compVisuals[c.id]));
+    const mirror = this.parMirrorIndex(pars);
+    pars.forEach(b => { b.k = 0; });
     const speakers = this.visualsOf('sub', 'top').map(v => ({ v, s: this.fxHold(v) }));
-    const st = { kick: 0, beat: 0, phase: 0, flash: 0 };
+    const st = { kick: 0, beat: 0, flash: 0 };
 
-    // i PAR si accendono uno alla volta
-    pars.forEach((p, i) => this.fxTween({ targets: p, k: 1, delay: T_LIGHTS + i * 200, duration: 350 }));
+    // i PAR si accendono a coppie speculari, dall'esterno verso il centro
+    pars.forEach((b, i) => this.fxTween({ targets: b, k: 1, delay: T_LIGHTS + mirror[i] * 350, duration: 300 }));
     this.fxTween({ targets: pars, k: 0, delay: T_END, duration: 600 });
 
-    // disegno dei fasci a ~30 fps: puntano sul fronte del palco e oscillano
+    // disegno a ~30 fps: i fasci non si muovono, pulsano col beat e
+    // cambiano colore ogni due battute
     this.fxEvery(33, Math.ceil((T_DAY + 800) / 33), () => {
-      st.phase += st.beat ? 0.07 : 0.02;
       st.kick *= 0.86; st.flash *= 0.8;
       beams.clear();
       const colors = PALETTE[Math.floor(st.beat / 2) % PALETTE.length];
       const pulse = 0.55 + 0.45 * st.kick;
-      pars.forEach(p => {
-        if (p.k <= 0.01) return;
-        const x = p.v.container.x, y = p.v.container.y - 6;
-        const col = st.flash > 0.3 ? 0xffffff : colors[p.i % 2];
-        const t = gridToScreen(p.c.gx + 0.5 + Math.sin(st.phase + p.i * 1.7) * 1.4, STAGE_ORIGIN_Y + STAGE_H - 0.9 + Math.cos(st.phase * 0.8 + p.i) * 0.7);
-        const dx = t.x - x, dy = t.y - y, len = Math.hypot(dx, dy) || 1;
-        const nx = -dy / len, ny = dx / len, half = 34 + 14 * st.kick;
-        const a = p.k * pulse;
-        beams.fillStyle(col, 0.28 * a);
-        beams.fillTriangle(x, y, t.x + nx * half, t.y + ny * half, t.x - nx * half, t.y - ny * half);
-        beams.fillStyle(col, 0.16 * a);
-        beams.fillTriangle(x, y, t.x + nx * half * 0.45, t.y + ny * half * 0.45, t.x - nx * half * 0.45, t.y - ny * half * 0.45);
-        beams.fillStyle(col, 0.38 * a); beams.fillEllipse(t.x, t.y, half * 2.4, half * 1.1);
-        // lente accesa
-        beams.fillStyle(col, 0.35 * p.k); beams.fillCircle(x, y, 20);
-        beams.fillStyle(0xffffff, 0.9 * p.k); beams.fillCircle(x, y, 7);
+      pars.forEach((b, i) => {
+        const col = st.flash > 0.3 ? 0xffffff : colors[mirror[i] % 2];
+        this.drawParBeam(beams, b, col, b.k * pulse);
       });
       // onde d'urto che escono dalle casse a ogni colpo di cassa
       waves.clear();
