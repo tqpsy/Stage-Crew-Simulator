@@ -138,7 +138,9 @@ function convexHull (pts) {
 const SUB_ISO   = isoFrame(48, 56, 46);   // cassa sub: baffle con il woofer sulla faccia a=0
 const TOP_ISO   = isoFrame(32, 36, 48);   // testa a due vie, su palo sopra il sub
 const TOP_POLE  = 18;                     // px: palo tra sub e testa
-const PAR_ISO   = isoFrame(38, 34, 42);   // PAR LED su staffa, puntato verso il pubblico
+const PAR_ISO   = isoFrame(38, 34, 42);   // PAR LED su staffa (lente sulla faccia a=0)
+const STAND_ISO = isoFrame(46, 46, 3);    // stativo luci: treppiede a terra
+const STAND_POLE = 64;                    // px: asta dello stativo fino alla barra a T
 const AMP_ISO   = isoFrame(80, 46, 16);   // finale a rack, pannello frontale sulla faccia b=B
 const CTRL_ISO  = isoFrame(56, 34, 10);   // consolle luci da tavolo, piano inclinato
 const QUADRO_ISO = isoFrame(112, 34, 46); // armadio di distribuzione, prese sul fronte b=B
@@ -152,6 +154,10 @@ const INTF_ISO  = isoFrame(46, 30, 12);   // scheda audio USB da tavolo
 
 // la testa sta sul sub: il fondo del suo palo tocca il centro del piano del sub
 function isoDepth (screenY) { return 10 + screenY / 10000; }
+
+// il PAR poggia con la sua piastra sulla barra a T in cima allo stativo
+function standBarY () { return STAND_ISO(STAND_ISO.A / 2, STAND_ISO.B / 2, 0).y - STAND_POLE; }
+function parOffsetY () { return standBarY() - PAR_ISO(19, 17, 0).y; }
 
 function topOffsetY () {
   const subTop = SUB_ISO(SUB_ISO.A / 2, SUB_ISO.B / 2, SUB_ISO.Z);
@@ -243,8 +249,14 @@ const COMPONENT_TYPES = {
       { id: 'out_R', signal: 'speakon',  dir: 'out', ...isoPort(AMP_ISO, 53, 38, 16) }
     ]
   },
+  // stativo luci con barra a T: nessuna presa, ci si monta sopra un PAR
+  stativo: {
+    label: 'STATIVO', category: 'luci', powerW: 0, zone: 'stativo', shape: 'stativo',
+    body: { w: 44, h: 30, fill: 0x1c1d22, accent: 0x55585f },
+    ports: []
+  },
   par: {
-    label: 'PAR', category: 'luci', powerW: 40, zone: 'stagecore', shape: 'par',
+    label: 'PAR', category: 'luci', powerW: 40, zone: 'stativo', shape: 'par',
     body: { w: 60, h: 54, fill: 0x1c1d22, accent: 0xf2c53d },
     ledPos: PAR_ISO(22, 31, 3),
     // connettori sul retro, a destra del fusto: la lente resta libera.
@@ -381,10 +393,71 @@ const COMPONENT_TYPES = {
 
 // la DI resta nel catalogo per gli strumenti sul palco dei livelli successivi,
 // ma nel livello 1 non serve: il PC entra nel mixer dalla scheda audio
-const AVAILABLE_STOCK = { sub: 2, top: 2, mixer: 1, par: 4, controller: 1, ampli: 1, quadro: 1, ciabatta: 1, ciabatta_cee: 1, pc: 1, scheda: 1, di: 0 };
+const AVAILABLE_STOCK = { sub: 2, top: 2, mixer: 1, stativo: 4, par: 4, controller: 1, ampli: 1, quadro: 1, ciabatta: 1, ciabatta_cee: 1, pc: 1, scheda: 1, di: 0 };
 
 const POWER_LIMIT_KW = 3.0;
 const TOP_ATTACH_RADIUS = 300; // px: quanto lontano può essere trascinata una Testa da un Sub libero
+
+/* pezzi che si montano sopra un altro: la testa sul palo del sub, il PAR
+   sulla barra a T dello stativo. base = tipo che lo regge, link = campo
+   della base col figlio montato, back = campo del figlio con la base. */
+const MOUNTS = {
+  top: { base: 'sub', link: 'hasTop', back: 'parentSubId', offsetY: () => topOffsetY(),
+    missing: 'Posa la testa sopra un sub libero per montarla sul palo.',
+    done: baseId => 'Testa montata sul palo di ' + compLabel(baseId) + '.' },
+  par: { base: 'stativo', link: 'hasPar', back: 'parentStandId', offsetY: () => parOffsetY(),
+    missing: 'Posa il PAR sopra uno stativo libero: si monta sulla barra a T.',
+    done: baseId => 'PAR montato su ' + compLabel(baseId) + ': si punta da solo verso il palco.' }
+};
+const MOUNT_ON = { sub: 'top', stativo: 'par' };   // base -> tipo che ci si monta sopra
+// figlio montato su una base (o null)
+function mountedOn (base) {
+  const t = base && MOUNT_ON[base.type];
+  return t ? (gameState.placed[base[MOUNTS[t].link]] || null) : null;
+}
+// base che regge un pezzo montato (o null)
+function mountBase (comp) {
+  const m = comp && MOUNTS[comp.type];
+  return m ? (gameState.placed[comp[m.back]] || null) : null;
+}
+
+/* ruolo di uno stativo luci dalla sua posizione: davanti al palco (Pit) fa
+   il frontale, ai lati del palco (a sinistra o in Off Stage) fa il taglio */
+function standRole (stand) {
+  if (!stand) return null;
+  if (isPitCell(stand.gx, stand.gy)) return 'front';
+  return stand.gx < STAGE_ORIGIN_X ? 'left' : 'right';
+}
+// verso del PAR sullo stativo: la lente guarda il palco
+function parRot (parId) {
+  const role = standRole(mountBase(gameState.placed[parId]));
+  return role === 'front' ? 2 : role === 'left' ? 3 : role === 'right' ? 1 : 0;
+}
+// dove punta il PAR: il frontale sul proscenio incrociando al centro, i
+// tagli sul centro del palco alla loro altezza
+function parAim (parId) {
+  const stand = mountBase(gameState.placed[parId]);
+  const role = standRole(stand);
+  const mid = STAGE_ORIGIN_X + STAGE_W / 2;
+  const sc = stand && compCenter(stand);
+  if (role === 'front') return { gx: mid - (sc.gx - mid) * 0.3, gy: STAGE_ORIGIN_Y + STAGE_H - 1.3 };
+  if (role === 'left' || role === 'right') return { gx: mid + (role === 'left' ? 0.5 : -0.5), gy: sc.gy };
+  return null;
+}
+/* luci del livello 1: due frontali (uno per lato) e due tagli (uno per
+   lato). Restituisce null se va bene, altrimenti messaggio e pezzi in rosso */
+function lightingCheck () {
+  const mid = STAGE_ORIGIN_X + STAGE_W / 2;
+  const onStand = placedOfType('par').map(p => ({ p, s: mountBase(p) })).filter(x => x.s);
+  const front = onStand.filter(x => standRole(x.s) === 'front');
+  const fl = front.filter(x => compCenter(x.s).gx < mid).length, fr = front.length - fl;
+  const tl = onStand.filter(x => standRole(x.s) === 'left').length;
+  const tr = onStand.filter(x => standRole(x.s) === 'right').length;
+  const ids = onStand.map(x => x.s.id);
+  if (!fl || !fr) return { msg: front.length ? 'i frontali vanno uno a sinistra e uno a destra del palco.' : 'manca il frontale davanti al palco: il preside resterebbe al buio.', ids };
+  if (!tl || !tr) return { msg: 'mancano i tagli, uno per lato del palco.', ids };
+  return null;
+}
 
 /* Il quadro del livello è forzato Trifase (16A, 3 prese: una per fase) anche se
    il carico reale resterebbe sotto la soglia Monofase — scelta didattica, per
@@ -457,8 +530,10 @@ function buildExpectedConnections () {
   const one = t => placedOfType(t)[0] || null;
   const L = c => c ? compLabel(c.id) : null;
   const missing = t => COMPONENT_TYPES[t].label + ' da posare';
-  // ogni posto dice a parole cosa serve, per il messaggio del Test impianto
-  const slot = (ok, what, ...cs) => ({ ok: !!ok, what, ids: cs.filter(Boolean).map(c => c.id) });
+  // ogni posto dice a parole cosa serve e a quale impianto appartiene
+  // (corrente, audio, luci): il Test impianto reagisce in modo diverso
+  let cat = 'power';
+  const slot = (ok, what, ...cs) => ({ ok: !!ok, what, cat, ids: cs.filter(Boolean).map(c => c.id) });
   const list = [];
   const mixer = one('mixer'), ampli = one('ampli'), pc = one('pc'), scheda = one('scheda');
 
@@ -472,6 +547,7 @@ function buildExpectedConnections () {
   });
 
   // audio: PC -> scheda
+  cat = 'audio';
   list.push(slot(pc && scheda && portEdgeExists(pc.id, 'usb', scheda.id, 'usb', 'usbc'),
     pc && scheda ? 'USB-C da ' + L(scheda) + ' a ' + L(pc) : missing(pc ? 'scheda' : 'pc'), pc, scheda));
   // scheda out L/R -> un ingresso jack del mixer ciascuna
@@ -488,10 +564,12 @@ function buildExpectedConnections () {
   });
 
   // DMX: ogni PAR in catena dalla consolle
+  cat = 'lights';
   const pars = placedOfType('par');
   for (let i = 0; i < 4; i++) list.push(slot(pars[i] && dmxUniverse(pars[i].id) != null, pars[i] ? 'DMX dalla consolle a ' + L(pars[i]) : missing('par'), pars[i]));
 
   // finale -> ogni Sub, ogni Sub -> la testa agganciata sopra
+  cat = 'audio';
   const subs = subsLeftToRight();
   for (let i = 0; i < 2; i++) {
     const sub = subs[i];
@@ -535,7 +613,7 @@ function stereoCheck () {
 const gameState = {
   placed: {},
   stock: { ...AVAILABLE_STOCK },
-  nextIndex: { sub: 1, top: 1, mixer: 1, par: 1, controller: 1, ampli: 1, quadro: 1, ciabatta: 1, ciabatta_cee: 1, pc: 1, scheda: 1, di: 1 },
+  nextIndex: { sub: 1, top: 1, mixer: 1, stativo: 1, par: 1, controller: 1, ampli: 1, quadro: 1, ciabatta: 1, ciabatta_cee: 1, pc: 1, scheda: 1, di: 1 },
   edges: [],              // { id, a, aPort, b, bPort, signal }
   edgeSeq: 0,
   selectedCable: null,
@@ -687,8 +765,64 @@ const SFX = (() => {
     scheda: () => { tone(0, 1175, 0.07, 0.07, 'sine'); tone(0.08, 1568, 0.09, 0.07, 'sine'); }
   };
 
+  /* beat da concerto per il collaudo riuscito: cassa dritta, rullante sul 2
+     e sul 4, charleston in levare e un basso che gira su quattro note, a
+     tutto volume su un'uscita propria (così si può zittire di colpo) */
+  function beat (bpm, beats) {
+    const out = ctx.createGain(); out.gain.value = 1.6;
+    const comp = ctx.createDynamicsCompressor();
+    comp.threshold.value = -10; comp.ratio.value = 6;
+    out.connect(comp); comp.connect(ctx.destination);
+    const t0 = ctx.currentTime + 0.05, step = 60 / bpm / 4;
+    const env = (node, t, gain, dur) => {
+      const g = ctx.createGain();
+      g.gain.setValueAtTime(gain, t); g.gain.exponentialRampToValueAtTime(0.0001, t + dur);
+      node.connect(g); g.connect(out);
+      return g;
+    };
+    const hit = (t, freq, dur, gain, type, filt, q) => {
+      const src = ctx.createBufferSource(); src.buffer = noiseBuf;
+      const f = ctx.createBiquadFilter(); f.type = type; f.frequency.value = freq; f.Q.value = q || 1;
+      src.connect(f); env(f, t, gain, dur);
+      src.start(t, Math.random() * 0.5); src.stop(t + dur + 0.02);
+    };
+    const riff = [55, 55, 65.4, 49];   // La, La, Do, Sol
+    for (let i = 0; i < beats * 4; i++) {
+      const t = t0 + i * step, bar = Math.floor(i / 16), s16 = i % 16;
+      if (s16 % 4 === 0) {                                    // cassa
+        const o = ctx.createOscillator(); o.type = 'sine';
+        o.frequency.setValueAtTime(150, t); o.frequency.exponentialRampToValueAtTime(42, t + 0.12);
+        env(o, t, 1.0, 0.32); o.start(t); o.stop(t + 0.34);
+        hit(t, 3000, 0.012, 0.25, 'highpass');
+      }
+      if (s16 === 4 || s16 === 12) { hit(t, 1800, 0.18, 0.55, 'bandpass', 0.8); hit(t, 180, 0.08, 0.35, 'lowpass'); } // rullante
+      hit(t, 8000, s16 % 4 === 2 ? 0.09 : 0.03, s16 % 4 === 2 ? 0.22 : 0.09, 'highpass');                            // charleston
+      if (s16 % 4 === 2 || s16 % 8 === 7) {                   // basso in levare
+        const o = ctx.createOscillator(); o.type = 'sawtooth';
+        o.frequency.value = riff[bar % riff.length];
+        const f = ctx.createBiquadFilter(); f.type = 'lowpass'; f.frequency.value = 420; f.Q.value = 6;
+        o.connect(f); env(f, t, 0.5, step * 1.8); o.start(t); o.stop(t + step * 2);
+      }
+    }
+    return () => {
+      try { out.gain.cancelScheduledValues(ctx.currentTime); out.gain.setTargetAtTime(0, ctx.currentTime, 0.03); } catch (e) { /* già chiuso */ }
+      setTimeout(() => { try { comp.disconnect(); } catch (e) { /* già staccato */ } }, 200);
+    };
+  }
+
   return {
     get muted () { return muted; },
+    // restituisce la funzione che lo zittisce (anche se non è mai partito)
+    beat: (bpm, beats) => { let stop = () => {}; play(() => { stop = beat(bpm, beats); }); return stop; },
+    // impianto che gracchia: scariche, ronzio di massa e fischio che va e viene
+    crackle: dur => play(() => {
+      tone(0, 50, dur, 0.35, 'square', 50, 0.02);
+      tone(0, 100, dur, 0.15, 'sawtooth', 100, 0.02);
+      for (let i = 0; i < dur * 22; i++) noise(Math.random() * dur, 0.02 + Math.random() * 0.07, 800 + Math.random() * 5000, 0.7, 0.3 + Math.random() * 0.5);
+      tone(dur * 0.3, 2900, dur * 0.4, 0.05, 'sine', 3300, 0.2);
+    }),
+    // PAR impazziti: ticchettio dei flash
+    strobe: dur => play(() => { for (let t = 0; t < dur; t += 0.07) if (Math.random() < 0.6) click(t, 0.12, 6000); }),
     toggleMute () {
       muted = !muted;
       try { localStorage.setItem('scs-muted', muted ? '1' : '0'); } catch (e) { /* storage non disponibile */ }
@@ -708,7 +842,6 @@ const SFX = (() => {
     rcd: () => play(() => { noise(0, 0.04, 1800, 1, 0.6); tone(0.01, 140, 0.12, 0.35, 'square', 90); for (let i = 0; i < 6; i++) click(0.03 + Math.random() * 0.2, 0.25, 4000); }),
     tump: () => play(() => { tone(0, 55, 0.35, 0.8, 'sine', 35); noise(0, 0.08, 200, 1, 0.3, 'lowpass'); }),
     success: () => play(() => { [523, 659, 784, 1047].forEach((f, i) => tone(i * 0.11, f, 0.45, 0.1, 'triangle')); }),
-    fail: () => play(() => { tone(0, 110, 0.35, 0.12, 'square'); tone(0.02, 116, 0.33, 0.08, 'square'); }),
     caseOpen: () => play(() => { click(0, 0.45, 2000); click(0.08, 0.45, 2200); noise(0.14, 0.3, 300, 0.8, 0.12, 'lowpass'); }),
     pick: () => play(() => { noise(0, 0.18, 1200, 0.7, 0.1); }),
     place: () => play(() => { tone(0, 120, 0.1, 0.3, 'sine', 70); noise(0, 0.05, 600, 1, 0.1); }),
@@ -1040,11 +1173,14 @@ function runValidation () {
   let madeCount = 0;
 
   const missingList = [];
+  const missingCats = new Set(), toPlaceCats = new Set();
   expected.forEach(exp => {
     if (exp.ok) madeCount++;
     else {
       allFound = false;
       missingList.push(exp.what);
+      missingCats.add(exp.cat);
+      if (/ da (posare|montare)/.test(exp.what)) toPlaceCats.add(exp.cat);
       exp.ids.forEach(i => failedComponents.add(i));
     }
   });
@@ -1063,7 +1199,7 @@ function runValidation () {
 
   return {
     pass: allFound && !overBudget && allSubsTopsPlaced && !overPhase,
-    failedComponents, missingList, overBudget, usedW, madeCount, totalCount: expected.length,
+    failedComponents, missingList, missingCats, toPlaceCats, allSubsTopsPlaced, overBudget, usedW, madeCount, totalCount: expected.length,
     phaseLoads, overloadedPhases, overPhase
   };
 }
@@ -1107,7 +1243,11 @@ function setCircuitStatus (state) {
   lamp.classList.remove('ok', 'error');
   if (state === 'ok') { lamp.classList.add('ok'); text.textContent = 'IMPIANTO OK'; }
   else if (state === 'error') { lamp.classList.add('error'); text.textContent = 'GUASTO IN CATENA'; }
-  else { text.textContent = 'DA TESTARE'; }
+  else {
+    text.textContent = 'DA TESTARE';
+    // l'impianto è cambiato: qualunque effetto del test in corso si ferma
+    if (window.__scene && window.__scene.stopFx) window.__scene.stopFx();
+  }
 }
 
 let toastTimer = null;
@@ -2134,7 +2274,14 @@ function setSceneInput (on) {
   if (scene && scene.input) scene.input.enabled = on;
 }
 function openRearPanel (compId) {
-  if (!REAR_PANELS[(gameState.placed[compId] || {}).type]) return;
+  const t = (gameState.placed[compId] || {}).type;
+  if (t === 'stativo') {
+    const par = mountedOn(gameState.placed[compId]);
+    showToast(par ? compLabel(compId) + ' regge ' + compLabel(par.id) + ': tocca il faro per il suo pannello.'
+      : compLabel(compId) + ': monta un PAR sulla barra a T (scheda Luci, poi tocca lo stativo).');
+    return;
+  }
+  if (!REAR_PANELS[t]) return;
   rearPanelId = compId;
   el('#rear-detail').innerHTML = '';
   // prima visibile, poi disegnato: serve la larghezza vera del riquadro
@@ -2535,6 +2682,18 @@ const STAGE_ORIGIN_X = 2, STAGE_ORIGIN_Y = 4;
 
 // bande dal retro del locale verso il pubblico (righe di griglia, gy crescente)
 const CARICO_ROWS = 2;      // gy 0-1: carico e scarico (furgone, case — solo scenografia)
+
+/* mezzi del service, in unità isometriche (una cella = 102): A larghezza,
+   B lunghezza, Z altezza, cabina lunga cabL e alta cabZ, telaio a quota
+   chassis, ruote alle posizioni wheels lungo la fiancata. Crescono coi
+   livelli: il livello 1 arriva col furgone. */
+const VEHICLES = {
+  furgone: { A: 78, B: 210, Z: 92, chassis: 18, cabL: 56, cabZ: 70, wheels: [36, 170], wheelR: 11, sideDoor: 50 },
+  camion:  { A: 96, B: 330, Z: 150, chassis: 26, cabL: 78, cabZ: 104, gap: 5, wheels: [44, 250, 290], wheelR: 15, spoiler: true, cabColor: 0xd9dbde },
+  bilico:  { A: 100, B: 560, Z: 160, chassis: 30, cabL: 90, cabZ: 118, gap: 12, wheels: [48, 110, 440, 480, 520], wheelR: 16, spoiler: true, cabColor: 0xc9ccd1 }
+};
+const LEVEL_VEHICLE = 'furgone';
+const CASE_ISO = isoFrame(46, 64, 44);   // flight case dei cavi
 const BACKSTAGE_ROWS = 2;   // gy 2-3: allaccio venue + quadro elettrico
 // palco: gy STAGE_ORIGIN_Y .. +STAGE_H (righe 4-7)
 const PIT_ROWS = 2;         // subito davanti al palco: impianto audio principale
@@ -2548,14 +2707,42 @@ function gridToScreen (gx, gy) {
   };
 }
 
+/* Posa su celle da 50 cm. Tutte le coordinate restano in METRI (zone, palco,
+   gridToScreen): una cella di posa è un quadrato di CELL metri e la sua
+   posizione (cx, cy) è l'angolo in metri, multiplo di CELL. */
+const CELL = 0.5;
+// punto dello schermo -> cella di posa che lo contiene
 function screenToCell (px, py) {
   const relX = px - ORIGIN_X;
   const relY = py - ORIGIN_Y;
   const gxRaw = (relX / (TILE_W / 2) + relY / (TILE_H / 2)) / 2;
   const gyRaw = (relY / (TILE_H / 2) - relX / (TILE_W / 2)) / 2;
-  const cx = Math.min(VENUE_W - 1, Math.max(0, Math.floor(gxRaw)));
-  const cy = Math.min(VENUE_H - 1, Math.max(0, Math.floor(gyRaw)));
+  const cx = Math.min(VENUE_W - CELL, Math.max(0, Math.floor(gxRaw / CELL) * CELL));
+  const cy = Math.min(VENUE_H - CELL, Math.max(0, Math.floor(gyRaw / CELL) * CELL));
   return { cx, cy };
+}
+/* ingombro di ogni pezzo in celle da 50 cm, [lungo gx, lungo gy], dalla sua
+   misura reale nel disegno; se il pezzo è girato di un quarto (in FOH) si
+   scambia. I pezzi montati (testa, PAR) non occupano celle. */
+const FOOTPRINT = {
+  sub: [1, 1], mixer: [1, 2], ampli: [1, 2], controller: [1, 1], quadro: [1, 2],
+  ciabatta: [1, 2], ciabatta_cee: [1, 3], pc: [1, 1], scheda: [1, 1], di: [1, 1], stativo: [1, 1]
+};
+function footprint (type, rot) {
+  const f = FOOTPRINT[type] || [1, 1];
+  return rot % 2 ? [f[1], f[0]] : f;
+}
+// chiave di una cella (indici interi, niente errori di virgola)
+function cellKey (gx, gy) { return Math.round(gx / CELL) + ',' + Math.round(gy / CELL); }
+function footCells (gx, gy, f) {
+  const out = [];
+  for (let i = 0; i < f[0]; i++) for (let j = 0; j < f[1]; j++) out.push([gx + i * CELL, gy + j * CELL]);
+  return out;
+}
+// centro (in metri) di un pezzo posato
+function compCenter (c) {
+  const f = c.foot || [1, 1];
+  return { gx: c.gx + f[0] * CELL / 2, gy: c.gy + f[1] * CELL / 2 };
 }
 
 function isStageCoreCell (cx, cy) {
@@ -2589,7 +2776,9 @@ const ZONE_PREDICATES = {
   mixer: (cx, cy) => isOffStageCell(cx, cy) || isFohCell(cx, cy),
   controller: (cx, cy) => isOffStageCell(cx, cy) || isFohCell(cx, cy),
   ampli: isOffStageCell,
-  par: isStageCoreCell,
+  // stativi luci: davanti al palco (frontale) o ai suoi lati (taglio)
+  stativo: (cx, cy) => isPitCell(cx, cy) ||
+    (cy >= STAGE_ORIGIN_Y && cy < STAGE_ORIGIN_Y + STAGE_H && (cx < STAGE_ORIGIN_X || isOffStageCell(cx, cy))),
   sub: isPitCell,
   quadro: isBackstageCell,
   // le ciabatte portano corrente dove serve: sul palco, in Regia di palco
@@ -2814,6 +3003,15 @@ class StageScene extends Phaser.Scene {
     g.beginPath();
     g.moveTo(p0.x, p0.y); g.lineTo(p1.x, p1.y); g.lineTo(p2.x, p2.y); g.lineTo(p3.x, p3.y);
     g.closePath(); g.fillPath();
+    // griglia di posa leggera, celle da 50 cm (una linea più marcata ogni metro)
+    for (let x = CELL; x < VENUE_W; x += CELL) {
+      const a = gridToScreen(x, 0), b = gridToScreen(x, VENUE_H);
+      g.lineStyle(1, 0x484c58, x % 1 ? 0.35 : 0.6); g.lineBetween(a.x, a.y, b.x, b.y);
+    }
+    for (let y = CELL; y < VENUE_H; y += CELL) {
+      const a = gridToScreen(0, y), b = gridToScreen(VENUE_W, y);
+      g.lineStyle(1, 0x484c58, y % 1 ? 0.35 : 0.6); g.lineBetween(a.x, a.y, b.x, b.y);
+    }
     g.lineStyle(2, 0x484c58, 0.9);
     g.beginPath();
     g.moveTo(p0.x, p0.y); g.lineTo(p1.x, p1.y); g.lineTo(p2.x, p2.y); g.lineTo(p3.x, p3.y);
@@ -2878,80 +3076,28 @@ class StageScene extends Phaser.Scene {
     this.drawZoneOutline([[0, fohStart], [VENUE_W, fohStart], [VENUE_W, VENUE_H], [0, VENUE_H]], 'Regia di sala (FOH)');
   }
 
-  /* scenografia non interattiva in Carico e Scarico: un furgone e alcuni case,
-     disegnati con più dettaglio (non solo scatole) per leggersi a colpo
-     d'occhio come "furgone da service" e "flight case", pur restando
-     un'icona vettoriale piatta come tutto il resto del gioco. */
+  /* Carico e scarico: il mezzo del service e i flight case, nella stessa
+     prospettiva isometrica dei dispositivi. Il mezzo cresce coi livelli
+     (LEVEL_VEHICLE: furgone -> camion -> bilico); il retro guarda i case,
+     il muso sta verso il fondo. I primi due case sono i bauli dei cavi. */
   drawLoadingDock () {
-    const g = this.add.graphics().setDepth(1);
-    const van = gridToScreen(2.2, 0.9);
-    const vw = 104, vh = 40;
-    const cargoW = vw * 0.66;
-    const cabX = van.x - vw / 2 + cargoW;
+    const v = VEHICLES[LEVEL_VEHICLE];
+    const vp = gridToScreen(0.5 + v.B / 204, 1.0);
+    const vg = this.add.graphics().setDepth(1).setPosition(vp.x, vp.y);
+    this.drawVehicle(vg, v);
 
-    // paraurti/base scura, ruote
-    g.fillStyle(0x1c1d22, 1);
-    g.fillRoundedRect(van.x - vw / 2, van.y + vh * 0.32, vw, 7, 3);
-    g.fillStyle(0x121317, 1);
-    g.fillCircle(van.x - vw * 0.28, van.y + vh / 2, 8);
-    g.fillCircle(cabX + vw * 0.09, van.y + vh / 2, 8);
-    g.fillStyle(0x54575f, 1);
-    g.fillCircle(van.x - vw * 0.28, van.y + vh / 2, 3);
-    g.fillCircle(cabX + vw * 0.09, van.y + vh / 2, 3);
-
-    // cassone di carico (bianco)
-    g.fillStyle(0xd8dadd, 1); g.lineStyle(1.5, 0x9a9da3, 1);
-    g.fillRoundedRect(van.x - vw / 2, van.y - vh / 2, cargoW, vh, 5);
-    g.strokeRoundedRect(van.x - vw / 2, van.y - vh / 2, cargoW, vh, 5);
-    // striscia di livrea
-    g.fillStyle(0xf2a541, 1);
-    g.fillRect(van.x - vw / 2, van.y + vh * 0.06, cargoW, 4);
-    // linea del portellone laterale
-    g.lineStyle(1, 0x9a9da3, 0.7);
-    g.lineBetween(van.x - vw * 0.06, van.y - vh / 2 + 3, van.x - vw * 0.06, van.y + vh * 0.3);
-    // fanale posteriore
-    g.fillStyle(0xe0503f, 1);
-    g.fillRoundedRect(van.x - vw / 2 + 3, van.y - vh * 0.12, 4, 9, 1);
-
-    // cabina di guida (muso spiovente + parabrezza)
-    g.fillStyle(0xc9cad1, 1);
-    g.beginPath();
-    g.moveTo(cabX, van.y - vh * 0.12);
-    g.lineTo(cabX + vw * 0.22, van.y - vh * 0.12);
-    g.lineTo(cabX + vw * 0.3, van.y + vh / 2 - 4);
-    g.lineTo(cabX, van.y + vh / 2 - 4);
-    g.closePath(); g.fillPath();
-    g.lineStyle(1.3, 0x9a9da3, 1); g.strokePath();
-    g.fillStyle(0x3c4451, 0.9);
-    g.fillRoundedRect(cabX + 3, van.y - vh * 0.08, vw * 0.15, vh * 0.26, 2);
-
-    // i primi due case sono i bauli dei cavi: toccandoli si aprono
-    const caseSpots = [[6.2, 1.3, 'segnale'], [6.9, 1.6, 'corrente'], [6.4, 0.7, null]];
-    caseSpots.forEach(([gx, gy, caseName]) => {
+    // i due bauli dei cavi e un case di ricambio, in fila lungo la banchina
+    const caseSpots = [[5.9, 0.9, 'segnale'], [7.2, 0.9, 'corrente'], [8.5, 0.9, null]];
+    caseSpots.forEach(([gx, gy, caseName], i) => {
       const p = gridToScreen(gx, gy);
-      const cw = 34, ch = 24, corner = 5;
-      g.fillStyle(0x232428, 1);
-      g.fillRoundedRect(p.x - cw / 2, p.y - ch / 2, cw, ch, 3);
-      g.lineStyle(1.2, 0x54575f, 0.9);
-      g.strokeRoundedRect(p.x - cw / 2, p.y - ch / 2, cw, ch, 3);
-      // venatura orizzontale del pannello
-      g.lineStyle(0.8, 0x18191d, 0.7);
-      g.lineBetween(p.x - cw / 2 + 3, p.y - ch * 0.22, p.x + cw / 2 - 3, p.y - ch * 0.22);
-      g.lineBetween(p.x - cw / 2 + 3, p.y + ch * 0.22, p.x + cw / 2 - 3, p.y + ch * 0.22);
-      // angoli metallici (i tipici rinforzi da flight case)
-      g.fillStyle(0x9a9da3, 1);
-      g.fillRect(p.x - cw / 2, p.y - ch / 2, corner, corner);
-      g.fillRect(p.x + cw / 2 - corner, p.y - ch / 2, corner, corner);
-      g.fillRect(p.x - cw / 2, p.y + ch / 2 - corner, corner, corner);
-      g.fillRect(p.x + cw / 2 - corner, p.y + ch / 2 - corner, corner, corner);
-      // maniglia incassata
-      g.fillStyle(0x0c0d10, 1);
-      g.fillRoundedRect(p.x - 7, p.y - 2, 14, 4, 1.5);
+      const cg = this.add.graphics().setDepth(1.1 + gy / 100).setPosition(p.x, p.y);
+      const tape = caseName === 'segnale' ? 0xeaff2b : caseName === 'corrente' ? 0xff4fb4 : null;
+      this.drawFlightCase(cg, CASE_ISO, tape);
       if (!caseName) return;
-      this.add.text(p.x, p.y - ch / 2 - 7, CABLE_CASES[caseName].title, {
-        fontFamily: 'Barlow Condensed, sans-serif', fontSize: '10px', fontStyle: 'bold', color: '#e6e8eb'
+      this.add.text(p.x, p.y - 34, CABLE_CASES[caseName].title, {
+        fontFamily: 'Barlow Condensed, sans-serif', fontSize: '11px', fontStyle: 'bold', color: '#e6e8eb'
       }).setOrigin(0.5).setDepth(2);
-      const hit = this.add.rectangle(p.x, p.y, cw + 8, ch + 14, 0xffffff, 0.001).setDepth(2)
+      const hit = this.add.rectangle(p.x, p.y - 6, 58, 58, 0xffffff, 0.001).setDepth(2)
         .setInteractive({ useHandCursor: true });
       hit.on('pointerdown', (pointer, lx, ly, event) => {
         if (event && event.stopPropagation) event.stopPropagation();
@@ -2961,6 +3107,121 @@ class StageScene extends Phaser.Scene {
         openCase(caseName);
       });
     });
+  }
+
+  /* mezzo del service visto di tre quarti: fiancata (faccia a=0) verso il
+     pubblico, retro (faccia b=B) verso i case, cabina verso il fondo (b=0).
+     Stessa funzione per furgone, camion e bilico: cambiano le misure. */
+  drawVehicle (g, v) {
+    const P = isoFrame(v.A, v.B, v.Z), k = this.isoKit(g, P);
+    const { A, B, Z } = P;
+    const white = { top: 0xeef0f2, left: 0xd8dadd, right: 0xbfc2c7 };
+    const cabCol = { top: 0xe4e6e9, left: v.cabColor || 0xcfd2d6, right: 0xb4b7bc };
+    const glass = 0x3c4a5c;
+    const zc = v.chassis;                                  // piano del telaio
+    const cabEnd = v.cabL, boxStart = cabEnd + (v.gap || 0);
+    const hood = zc + (v.cabZ - zc) * 0.45;                // cofano
+    const ws0 = v.cabL * 0.12, ws1 = v.cabL * 0.36;        // piede e cima del parabrezza
+    // si disegna da dietro in avanti: ombra, telaio, cabina (sta dietro),
+    // cassone, dettagli del retro e della fiancata, ruote per ultime
+    k.quadZ(0, -8, A + 8, -8, B + 10, 0x000000, 0.28);
+    k.box(6, A - 6, 4, B - 2, zc - 7, zc, { top: 0x2a2c32, left: 0x1c1d22, right: 0x16171b });
+
+    // cabina: fianco col profilo (cofano, parabrezza inclinato, tetto)
+    k.poly([P(0, 0, zc), P(0, 0, hood), P(0, ws0, hood), P(0, ws1, v.cabZ), P(0, cabEnd, v.cabZ), P(0, cabEnd, zc)], cabCol.left);
+    k.poly([P(0, cabEnd, zc), P(A, cabEnd, zc), P(A, cabEnd, v.cabZ), P(0, cabEnd, v.cabZ)], cabCol.right);
+    k.quadZ(hood, 0, A, 0, ws0, cabCol.top);                                   // cofano
+    k.poly([P(0, ws0, hood), P(A, ws0, hood), P(A, ws1, v.cabZ), P(0, ws1, v.cabZ)], glass);   // parabrezza
+    k.poly([P(0, ws0, hood), P(A * 0.3, ws0, hood), P(A * 0.3, ws1, v.cabZ), P(0, ws1, v.cabZ)], 0xffffff, 0.1);
+    k.quadZ(v.cabZ, 0, A, ws1, cabEnd, cabCol.top);                             // tetto
+    g.lineStyle(0.8, 0x0c0d10, 0.8);
+    g.strokePoints([P(0, 0, zc), P(0, 0, hood), P(0, ws0, hood), P(0, ws1, v.cabZ), P(0, cabEnd, v.cabZ), P(A, cabEnd, v.cabZ), P(A, ws1, v.cabZ), P(A, ws0, hood), P(A, 0, hood), P(0, 0, hood)], false);
+    // finestrino della portiera (segue il parabrezza) e maniglia
+    const wz0 = hood + 3, wz1 = v.cabZ - 4;
+    const wb0 = ws0 + (ws1 - ws0) * ((wz0 - hood) / (v.cabZ - hood)) + 4;
+    k.poly([P(-0.2, wb0, wz0), P(-0.2, ws1 + 2, wz1), P(-0.2, cabEnd - 5, wz1), P(-0.2, cabEnd - 5, wz0)], glass);
+    k.quadA(-0.4, cabEnd - 15, cabEnd - 9, hood - 5, hood - 3, 0x55585f);
+    // fari e freccia sul muso
+    k.quadA(-0.3, 1, 5, hood - 9, hood - 3, 0xf4f1d0);
+    k.quadA(-0.3, 1, 5, hood - 12, hood - 10, 0xf2a541);
+    // specchietto sul montante
+    k.box(-7, 0, ws1 - 2, ws1 + 1, hood + 4, hood + 13, { top: 0x2a2c32, left: 0x1c1d22, right: 0x16171b });
+    // camion e bilico: spoiler sopra la cabina, verso il cassone più alto
+    if (v.spoiler) {
+      k.poly([P(0, cabEnd - 20, v.cabZ), P(0, cabEnd, Z - 8), P(0, cabEnd, v.cabZ)], 0xc9ccd1);
+      k.poly([P(0, cabEnd - 20, v.cabZ), P(A, cabEnd - 20, v.cabZ), P(A, cabEnd, Z - 8), P(0, cabEnd, Z - 8)], 0xe4e6e9);
+    }
+
+    // cassone
+    k.box(0, A, boxStart, B, zc, Z, white);
+    // livrea: fascia arancio sulla fiancata e sul retro
+    const lz = zc + (Z - zc) * 0.34;
+    k.quadA(-0.2, boxStart + 4, B - 2, lz, lz + 5, 0xf2a541);
+    k.quadA(-0.2, boxStart + 4, B - 2, lz + 7, lz + 8.5, 0xf2a541);
+    k.quadB(B + 0.2, 2, A - 2, lz, lz + 5, 0xf2a541);
+    // porta laterale scorrevole (furgone) o pannelli del cassone
+    g.lineStyle(1, 0x8a8e98, 0.9);
+    if (v.sideDoor) {
+      [boxStart + 10, boxStart + 10 + v.sideDoor].forEach(b => { const t0 = P(0, b, zc + 3), t1 = P(0, b, Z - 4); g.lineBetween(t0.x, t0.y, t1.x, t1.y); });
+      k.quadA(-0.3, boxStart + 10 + v.sideDoor - 9, boxStart + 10 + v.sideDoor - 3, zc + (Z - zc) * 0.52, zc + (Z - zc) * 0.52 + 2.5, 0x55585f);
+      k.quadA(-0.3, boxStart + 12, boxStart + 8 + v.sideDoor, zc + (Z - zc) * 0.62, Z - 8, glass, 0.85);
+    } else {
+      for (let b = boxStart + 40; b < B - 10; b += 40) { const t0 = P(0, b, zc + 2), t1 = P(0, b, Z - 2); g.lineBetween(t0.x, t0.y, t1.x, t1.y); }
+    }
+    // retro: due ante con cerniere, maniglie, fanali e targa
+    const mid = A / 2, rz = t => zc + (Z - zc) * t;
+    const s0 = P(mid, B, zc + 2), s1 = P(mid, B, Z - 3);
+    g.lineStyle(1.2, 0x7d828c, 1); g.lineBetween(s0.x, s0.y, s1.x, s1.y);
+    [[3, 6], [A - 6, A - 3]].forEach(([a0, a1]) => { k.quadB(B + 0.2, a0, a1, rz(0.2), rz(0.25), 0x7d828c); k.quadB(B + 0.2, a0, a1, rz(0.75), rz(0.8), 0x7d828c); });
+    k.quadB(B + 0.3, mid - 9, mid - 2, rz(0.45), rz(0.5), 0x3a3d45);
+    k.quadB(B + 0.3, mid + 2, mid + 9, rz(0.45), rz(0.5), 0x3a3d45);
+    [[2, 9], [A - 9, A - 2]].forEach(([a0, a1]) => { k.quadB(B + 0.3, a0, a1, zc - 7, zc + 5, 0xe0503f); k.quadB(B + 0.4, a0, a1, zc - 7, zc - 3, 0xf2a541); });
+    k.quadB(B + 0.5, mid - 14, mid + 14, zc - 6, zc - 1, 0xf4f5f6);         // targa
+    k.quadB(B + 0.6, mid - 14, mid - 11, zc - 6, zc - 1, 0x2f6fd6);
+
+    // ruote e passaruota sul fianco visibile
+    v.wheels.forEach(bw => {
+      k.discA(-0.2, bw, zc - 3, v.wheelR + 3, 0x1c1d22);
+      k.discA(-0.4, bw, v.wheelR, v.wheelR, 0x111215);
+      k.discA(-0.6, bw, v.wheelR, v.wheelR * 0.52, 0x8a8e98);
+      k.discA(-0.8, bw, v.wheelR, v.wheelR * 0.22, 0x3a3d45);
+    });
+  }
+
+  /* flight case da tour: guscio nero in multistrato, profili e angolari in
+     alluminio, chiusure a farfalla, maniglia, ruote pivottanti e nastro
+     fluo sul coperchio (lo stesso dei cavi nei bauli) */
+  drawFlightCase (g, P, tape) {
+    const k = this.isoKit(g, P);
+    const { A, B, Z } = P;
+    const alu = 0xc3c7ce, aluDk = 0x8a8e98;
+    k.quadZ(0, -3, A + 3, -3, B + 3, 0x000000, 0.3);
+    // ruote
+    [[3, 9, B - 9, B - 3], [3, 9, 3, 9], [A - 9, A - 3, B - 9, B - 3]].forEach(([a0, a1, b0, b1]) =>
+      k.box(a0, a1, b0, b1, 0, 6, { top: 0x2a2c32, left: 0x111215, right: 0x0c0d10 }));
+    const z0 = 6;
+    k.box(0, A, 0, B, z0, Z, { top: 0x2e3036, left: 0x232428, right: 0x1a1b1f });
+    // profilo di chiusura del coperchio
+    const zs = z0 + (Z - z0) * 0.7;
+    k.quadA(-0.2, 0, B, zs - 1.2, zs + 1.2, alu);
+    k.quadB(B + 0.2, 0, A, zs - 1.2, zs + 1.2, alu);
+    // profili sugli spigoli
+    k.quadA(-0.3, B - 2.5, B, z0, Z, alu);
+    k.quadA(-0.3, 0, 2.5, z0, Z, aluDk);
+    k.quadB(B + 0.3, A - 2.5, A, z0, Z, aluDk);
+    k.quadZ(Z + 0.2, 0, A, B - 2.5, B, alu);
+    k.quadZ(Z + 0.2, 0, 2.5, 0, B, alu);
+    // angolari a sfera
+    [[0, B], [0, 0]].forEach(([a, b]) => { k.discA(-0.5, b === 0 ? 3 : B - 3, Z - 3, 3.2, 0xdcdfe4); k.discA(-0.5, b === 0 ? 3 : B - 3, z0 + 3, 3.2, 0xdcdfe4); });
+    k.discB(B + 0.5, A - 3, Z - 3, 3.2, 0xdcdfe4); k.discB(B + 0.5, A - 3, z0 + 3, 3.2, 0xdcdfe4);
+    // chiusure a farfalla sul fianco e sul fronte
+    [B * 0.28, B * 0.72].forEach(b => k.quadA(-0.5, b - 4, b + 4, zs - 3.5, zs + 3.5, 0xd7dadd));
+    k.quadB(B + 0.5, A / 2 - 4, A / 2 + 4, zs - 3.5, zs + 3.5, 0xd7dadd);
+    // maniglie incassate
+    k.quadA(-0.5, B / 2 - 7, B / 2 + 7, z0 + (Z - z0) * 0.38, z0 + (Z - z0) * 0.46, 0x0c0d10);
+    k.quadB(B + 0.5, A / 2 - 6, A / 2 + 6, z0 + (Z - z0) * 0.38, z0 + (Z - z0) * 0.46, 0x0c0d10);
+    // nastro fluo sul coperchio
+    if (tape) k.quadZ(Z + 0.4, A * 0.25, A * 0.75, B * 0.2, B * 0.8, tape);
   }
 
   drawStagePlatform () {
@@ -2991,14 +3252,14 @@ class StageScene extends Phaser.Scene {
     top.closePath(); top.fillPath();
 
     // griglia + scacchiera SOLO sulla pedana spettacolo (area core, tono ambra)
-    top.lineStyle(1, 0x4a3f30, 0.9);
-    for (let i = 0; i <= STAGE_W; i++) {
+    // linee ogni 50 cm (celle di posa), più marcate ogni metro
+    for (let i = 0; i <= totalW; i += CELL) {
       const a = gridToScreen(gx0 + i, gy0), b = gridToScreen(gx0 + i, gy0 + H);
-      top.lineBetween(a.x, a.y, b.x, b.y);
+      top.lineStyle(1, 0x4a3f30, i % 1 ? 0.5 : 0.9); top.lineBetween(a.x, a.y, b.x, b.y);
     }
-    for (let j = 0; j <= H; j++) {
-      const a = gridToScreen(gx0, gy0 + j), b = gridToScreen(gx0 + STAGE_W, gy0 + j);
-      top.lineBetween(a.x, a.y, b.x, b.y);
+    for (let j = 0; j <= H; j += CELL) {
+      const a = gridToScreen(gx0, gy0 + j), b = gridToScreen(gx0 + totalW, gy0 + j);
+      top.lineStyle(1, 0x4a3f30, j % 1 ? 0.5 : 0.9); top.lineBetween(a.x, a.y, b.x, b.y);
     }
     for (let i = 0; i < STAGE_W; i++) {
       for (let j = 0; j < H; j++) {
@@ -3191,27 +3452,52 @@ class StageScene extends Phaser.Scene {
         k.quadB(B, 3, A - 3, 3, 22, 0x22242a);
         break;
       }
+      case 'stativo': {
+        // stativo luci: treppiede a terra, asta e barra a T in cima
+        const P = STAND_ISO, k = this.isoKit(g, P);
+        const c0 = P(P.A / 2, P.B / 2, 0), top = c0.y - STAND_POLE;
+        k.discZ(0, P.A / 2, P.B / 2, 20, 0x000000, 0.25);             // ombra
+        g.lineStyle(3, 0x1c1d22, 1);
+        [[P.A / 2, 0], [0, P.B], [P.A, P.B]].forEach(([a, b]) => {
+          const f = P(a, b, 0);
+          g.lineBetween(c0.x, c0.y - 14, f.x, f.y);                   // gambe
+          g.fillStyle(0x0c0d10, 1); g.fillCircle(f.x, f.y, 2.2);
+        });
+        g.fillStyle(0x2a2c32, 1); g.fillRect(c0.x - 2.5, top, 5, STAND_POLE - 12);      // asta
+        g.fillStyle(0x55585f, 1); g.fillRect(c0.x - 2.5, top, 1.4, STAND_POLE - 12);
+        g.fillStyle(0x3a3d45, 1); g.fillRect(c0.x - 4, c0.y - 30, 8, 5);              // manopola di serraggio
+        const b0 = P(P.A / 2, P.B / 2 - 16, 0), b1 = P(P.A / 2, P.B / 2 + 16, 0);     // barra a T
+        g.lineStyle(4, 0x1c1d22, 1); g.lineBetween(b0.x, b0.y - STAND_POLE, b1.x, b1.y - STAND_POLE);
+        g.lineStyle(1, 0x6a6e78, 1); g.lineBetween(b0.x, b0.y - STAND_POLE - 1.5, b1.x, b1.y - STAND_POLE - 1.5);
+        break;
+      }
       case 'par': {
-        // PAR LED su staffa a pavimento: corpo cilindrico nero puntato verso
-        // il pubblico, lente frontale con i LED, forcella con le manopole
-        const P = PAR_ISO, k = this.isoKit(g, P);
+        // PAR LED su staffa: corpo cilindrico nero, lente frontale con i LED,
+        // forcella con le manopole. Sullo stativo gira verso il palco: se la
+        // lente guarda lontano da chi osserva si vede il retro del fusto.
+        const P = rotFrame(PAR_ISO, rot), k = this.isoKit(g, P);
         const zc = 24, bc = 17, r = 14, aF = 3, aR = 34;
+        const lensSeen = rot === 0 || rot === 3;
         k.box(6, 32, 4, 30, 0, 2.5, ISO_GREY);                       // piastra
         k.box(17, 21, 2, 4.5, 2.5, zc + 1, ISO_GREY);                 // forcella
         const ring = (a, rad) => Array.from({ length: 32 }, (_, i) => {
           const t = i / 32 * Math.PI * 2;
           return P(a, bc + rad * Math.cos(t), zc + rad * Math.sin(t));
         });
+        const lens = () => {
+          k.poly(ring(aF, r), 0x0c0d10);                               // anello frontale
+          k.poly(ring(aF - 0.6, r - 2), 0x3b3423);                     // lente
+          [[0, 0], [5.5, 0], [-5.5, 0], [2.7, 4.8], [-2.7, 4.8], [2.7, -4.8], [-2.7, -4.8]].forEach(([db, dz]) => {
+            k.discA(aF - 0.8, bc + db, zc + dz, 1.9, 0xf6e7a8);
+          });
+          g.lineStyle(1.4, def.body.accent, 0.9); g.strokePoints(ring(aF, r), true);
+        };
+        if (!lensSeen) lens();
         k.poly(convexHull(ring(aR, r).concat(ring(aF, r))), 0x1c1d22);  // fusto
-        k.poly(ring(aR, r), 0x26282e);
         g.lineStyle(1, 0x3a3d45, 1);                                   // alette di raffreddamento
         [12, 18, 24, 30].forEach(a => { g.strokePoints(ring(a, r).slice(4, 20), false); });
-        k.poly(ring(aF, r), 0x0c0d10);                                 // anello frontale
-        k.poly(ring(aF - 0.6, r - 2), 0x3b3423);                       // lente
-        [[0, 0], [5.5, 0], [-5.5, 0], [2.7, 4.8], [-2.7, 4.8], [2.7, -4.8], [-2.7, -4.8]].forEach(([db, dz]) => {
-          k.discA(aF - 0.8, bc + db, zc + dz, 1.9, 0xf6e7a8);
-        });
-        g.lineStyle(1.4, def.body.accent, 0.9); g.strokePoints(ring(aF, r), true);
+        if (lensSeen) lens();
+        else { k.poly(ring(aR, r), 0x26282e); g.lineStyle(1, 0x3a3d45, 1); g.strokePoints(ring(aR, r), true); }
         k.box(17, 21, 29.5, 32, 2.5, zc + 1, ISO_GREY);               // braccio destro
         k.discB(32, 19, zc, 3.2, 0x8a8e98);                            // manopola
         break;
@@ -3532,7 +3818,8 @@ class StageScene extends Phaser.Scene {
     const c = this.add.container(x, y).setDepth(isoDepth(y));
 
     const body = this.add.graphics();
-    const rot = orientK(def, x, y);
+    // il PAR guarda il palco dal suo stativo; gli altri seguono orientK
+    const rot = def.shape === 'par' ? parRot(id) : orientK(def, x, y);
     this.drawComponentBody(body, def, rot);
     // punti di aggancio dei cavi e LED, ruotati insieme al dispositivo
     const frame = def.frame ? rotFrame(def.frame, rot) : null;
@@ -3564,7 +3851,7 @@ class StageScene extends Phaser.Scene {
     // isLedOn/refreshLive.
     // L'Allaccio è la sorgente fissa: non ha bisogno di un proprio LED.
     let led = null;
-    if (compType !== 'allaccio') {
+    if (compType !== 'allaccio' && def.ports.length) {
       led = this.add.graphics();
       c.add(led);
       this.drawLed(led, def, false, ledPos);
@@ -3681,19 +3968,31 @@ class StageScene extends Phaser.Scene {
     return this.cameras.main.getWorldPoint(localX, localY);
   }
 
-  nearestAllowedCell (type, wx, wy) {
+  /* posto per un pezzo vicino a un punto del mondo: tutte le sue celle nella
+     zona giusta e libere (ignoreId: il pezzo che si sta spostando). Prima si
+     prova la cella toccata, poi la più vicina. Restituisce origine, ingombro,
+     verso e centro sullo schermo, o null se non c'è posto. */
+  findSpot (type, wx, wy, ignoreId) {
+    const def = COMPONENT_TYPES[type];
     const pred = ZONE_PREDICATES[type] || (() => true);
     const raw = screenToCell(wx, wy);
-    if (pred(raw.cx, raw.cy)) return raw;
+    const target = { gx: raw.cx + CELL / 2, gy: raw.cy + CELL / 2 };
+    const free = k => !this.occupied[k] || this.occupied[k] === ignoreId;
     let best = null, bestDist = Infinity;
-    for (let gx = 0; gx < VENUE_W; gx++) {
-      for (let gy = 0; gy < VENUE_H; gy++) {
-        if (!pred(gx, gy)) continue;
-        const d = Math.hypot(gx - raw.cx, gy - raw.cy);
-        if (d < bestDist) { bestDist = d; best = { cx: gx, cy: gy }; }
+    for (let gx = 0; gx < VENUE_W; gx += CELL) {
+      for (let gy = 0; gy < VENUE_H; gy += CELL) {
+        // verso e ingombro dipendono da dove finisce (in FOH si gira)
+        const probe = gridToScreen(gx + CELL / 2, gy + CELL / 2);
+        const rot = orientK(def, probe.x, probe.y);
+        const f = footprint(type, rot);
+        const cells = footCells(gx, gy, f);
+        if (cells.some(([x, y]) => x >= VENUE_W || y >= VENUE_H || !pred(x, y) || !free(cellKey(x, y)))) continue;
+        const cgx = gx + f[0] * CELL / 2, cgy = gy + f[1] * CELL / 2;
+        const d = Math.hypot(cgx - target.gx, cgy - target.gy);
+        if (d < bestDist - 1e-9) { bestDist = d; best = { gx, gy, foot: f, keys: cells.map(([x, y]) => cellKey(x, y)), pos: gridToScreen(cgx, cgy) }; }
       }
     }
-    return best || raw;
+    return best;
   }
 
   /* ---------------- anteprima durante il trascinamento dalla toolbar ---------------- */
@@ -3704,30 +4003,23 @@ class StageScene extends Phaser.Scene {
   previewCellAt (type, world) {
     this.previewGraphics.clear();
 
-    if (type === 'top') {
-      let bestSub = null, bestDist = Infinity;
-      Object.values(gameState.placed).forEach(c => {
-        if (c.type === 'sub' && !c.hasTop) {
-          const v = this.compVisuals[c.id];
-          const d = Phaser.Math.Distance.Between(world.x, world.y, v.container.x, v.container.y);
-          if (d < bestDist) { bestDist = d; bestSub = c; }
-        }
-      });
-      if (bestSub && bestDist < TOP_ATTACH_RADIUS) {
-        const v = this.compVisuals[bestSub.id];
+    if (MOUNTS[type]) {
+      const base = this.nearestFreeBase(type, world);
+      if (base) {
+        const v = this.compVisuals[base.id];
         this.previewGraphics.lineStyle(3, 0x49b06a, 0.9);
         this.previewGraphics.strokeCircle(v.container.x, v.container.y, 34);
       }
       return;
     }
 
-    const { cx, cy } = type ? this.nearestAllowedCell(type, world.x, world.y) : screenToCell(world.x, world.y);
-    const key = cx + ',' + cy;
-    const occupied = !!this.occupied[key];
-    const p0 = gridToScreen(cx, cy), p1 = gridToScreen(cx + 1, cy),
-          p2 = gridToScreen(cx + 1, cy + 1), p3 = gridToScreen(cx, cy + 1);
-    this.previewGraphics.fillStyle(occupied ? 0xe0503f : 0x49b06a, 0.35);
-    this.previewGraphics.lineStyle(2, occupied ? 0xe0503f : 0x49b06a, 0.95);
+    const spot = type ? this.findSpot(type, world.x, world.y, null) : null;
+    const raw = screenToCell(world.x, world.y);
+    const gx = spot ? spot.gx : raw.cx, gy = spot ? spot.gy : raw.cy, f = spot ? spot.foot : [1, 1];
+    const p0 = gridToScreen(gx, gy), p1 = gridToScreen(gx + f[0] * CELL, gy),
+          p2 = gridToScreen(gx + f[0] * CELL, gy + f[1] * CELL), p3 = gridToScreen(gx, gy + f[1] * CELL);
+    this.previewGraphics.fillStyle(spot ? 0x49b06a : 0xe0503f, 0.35);
+    this.previewGraphics.lineStyle(2, spot ? 0x49b06a : 0xe0503f, 0.95);
     this.previewGraphics.beginPath();
     this.previewGraphics.moveTo(p0.x, p0.y); this.previewGraphics.lineTo(p1.x, p1.y);
     this.previewGraphics.lineTo(p2.x, p2.y); this.previewGraphics.lineTo(p3.x, p3.y);
@@ -3749,30 +4041,29 @@ class StageScene extends Phaser.Scene {
   placeComponentAt (type, worldX, worldY) {
     if (gameState.stock[type] <= 0) { showToast(type.toUpperCase() + ' esaurito per questo livello.'); return; }
 
-    if (type === 'top') { this.attachTopToNearestSub({ x: worldX, y: worldY }); return; }
+    if (MOUNTS[type]) { this.attachToNearestBase(type, { x: worldX, y: worldY }); return; }
 
-    const { cx, cy } = this.nearestAllowedCell(type, worldX, worldY);
-    const key = cx + ',' + cy;
-    if (this.occupied[key]) { showToast('Cella occupata: scegli una cella libera.'); return; }
+    const spot = this.findSpot(type, worldX, worldY, null);
+    if (!spot) { showToast('Non c\'è più posto per ' + COMPONENT_TYPES[type].label + ' nella sua zona: libera un po\' di spazio.'); return; }
+    const cx = spot.gx, cy = spot.gy;
 
     const idx = gameState.nextIndex[type]++;
     const id = `${type}_${idx}`;
     gameState.stock[type]--;
     updateStockUI();
 
-    const pos = gridToScreen(cx + 0.5, cy + 0.5);
+    const pos = spot.pos;
     const def = COMPONENT_TYPES[type];
-    const visual = this.buildComponentVisual(id, def, pos.x, pos.y);
-    this.compVisuals[id] = visual;
-    this.occupied[key] = id;
+    spot.keys.forEach(k => { this.occupied[k] = id; });
 
 
     // "sul palco" (instradamento cavi diretto) vale per QUALSIASI cella del
     // complesso palco, non solo la pedana spettacolo — include quindi anche
     // la fascia Off Stage, che è alla stessa quota.
     const zone = isStageCell(cx, cy) ? 'stage' : 'ground';
-    gameState.placed[id] = { id, type, gx: cx, gy: cy, screen: pos, zone, hasTop: type === 'sub' ? null : undefined };
-    if (type === 'par') gameState.placed[id].dmx = { addr: 1, mode: 1 };   // indirizzo/modalità DMX dal display
+    gameState.placed[id] = { id, type, gx: cx, gy: cy, foot: spot.foot, cells: spot.keys, screen: pos, zone };
+    if (MOUNT_ON[type]) gameState.placed[id][MOUNTS[MOUNT_ON[type]].link] = null;   // base libera
+    this.compVisuals[id] = this.buildComponentVisual(id, def, pos.x, pos.y);
 
     this.updateQuadroVisual();
     setCircuitStatus('untested');
@@ -3795,43 +4086,48 @@ class StageScene extends Phaser.Scene {
     if (gameState.stock[type] <= 0) disarmPiece();
   }
 
-  attachTopToNearestSub (world) {
-    let bestSub = null, bestDist = Infinity;
+  // base libera più vicina a un punto (sub per la testa, stativo per il PAR)
+  nearestFreeBase (type, world) {
+    const m = MOUNTS[type];
+    let best = null, bestDist = Infinity;
     Object.values(gameState.placed).forEach(c => {
-      if (c.type === 'sub' && !c.hasTop) {
-        const v = this.compVisuals[c.id];
-        const d = Phaser.Math.Distance.Between(world.x, world.y, v.container.x, v.container.y);
-        if (d < bestDist) { bestDist = d; bestSub = c; }
-      }
+      if (c.type !== m.base || c[m.link]) return;
+      const v = this.compVisuals[c.id];
+      const d = Phaser.Math.Distance.Between(world.x, world.y, v.container.x, v.container.y);
+      if (d < bestDist) { bestDist = d; best = c; }
     });
-    if (!bestSub || bestDist > TOP_ATTACH_RADIUS) {
-      showToast('Posa la testa sopra un sub libero per montarla sul palo.');
-      return;
-    }
+    return best && bestDist <= TOP_ATTACH_RADIUS ? best : null;
+  }
+  // posizione e profondità di un pezzo montato: sopra la sua base, davanti a lei
+  mountPos (type, base) {
+    const bv = this.compVisuals[base.id];
+    return { x: bv.container.x, y: bv.container.y + MOUNTS[type].offsetY(), depth: isoDepth(bv.container.y) + 0.001 };
+  }
 
-    const idx = gameState.nextIndex.top++;
-    const id = 'top_' + idx;
-    gameState.stock.top--;
+  attachToNearestBase (type, world) {
+    const m = MOUNTS[type];
+    const base = this.nearestFreeBase(type, world);
+    if (!base) { showToast(m.missing); return; }
+
+    const idx = gameState.nextIndex[type]++;
+    const id = type + '_' + idx;
+    gameState.stock[type]--;
     updateStockUI();
 
-    const subVisual = this.compVisuals[bestSub.id];
-    // la testa poggia sul palo piantato al centro del sub (vedi topOffsetY):
-    // le porte Speakon di sub e testa stanno sui fianchi, ben distanziate
-    const topDef = COMPONENT_TYPES.top;
-    const offY = topOffsetY();
-    const pos = { x: subVisual.container.x, y: subVisual.container.y + offY };
-
-    const visual = this.buildComponentVisual(id, topDef, pos.x, pos.y);
-    visual.container.setDepth(isoDepth(subVisual.container.y) + 0.001);
+    const at = this.mountPos(type, base);
+    const pos = { x: at.x, y: at.y };
+    base[m.link] = id;
+    gameState.placed[id] = { id, type, [m.back]: base.id, zone: base.zone, screen: pos };
+    if (type === 'par') gameState.placed[id].dmx = { addr: 1, mode: 1 };   // indirizzo/modalità DMX dal display
+    const visual = this.buildComponentVisual(id, COMPONENT_TYPES[type], pos.x, pos.y);
+    visual.container.setDepth(at.depth);
     this.compVisuals[id] = visual;
-    bestSub.hasTop = id;
-    gameState.placed[id] = { id, type: 'top', parentSubId: bestSub.id, zone: 'ground', screen: pos };
 
     this.updateQuadroVisual();
     setCircuitStatus('untested');
     gameState.tested = false;
     SFX.place();
-    showToast('Testa montata sul palo di ' + compLabel(bestSub.id) + '.', 'ok');
+    showToast(m.done(base.id), 'ok');
     this.pushHistory();
   }
 
@@ -3984,6 +4280,7 @@ class StageScene extends Phaser.Scene {
       const v = this.compVisuals[c.id];
       if (!v || !v.idLabel) return;
       const ports = v.def.ports;
+      if (!ports.length) return;                       // stativo: niente prese
       const used = ports.filter(p => edgesOnPort(c.id, p.id).length > 0).length;
       v.idLabel.setText(used + '/' + ports.length);
       v.idLabel.setColor(used === ports.length ? '#49b06a' : '#8b8e98');
@@ -4169,7 +4466,7 @@ class StageScene extends Phaser.Scene {
     }
     if (pr.moved && pr.long && this.assemblyId === pr.id) {
       const comp = gameState.placed[pr.id];
-      if (comp && comp.type !== 'top' && comp.type !== 'allaccio') {
+      if (comp && !MOUNTS[comp.type] && comp.type !== 'allaccio') {
         this.previewCellAt(comp.type, { x: pointer.worldX, y: pointer.worldY });
       }
       return true;
@@ -4187,7 +4484,7 @@ class StageScene extends Phaser.Scene {
       if (pr.moved && this.assemblyId === pr.id) {
         this.clearDropPreview();
         const comp = gameState.placed[pr.id];
-        if (comp && comp.type !== 'top' && comp.type !== 'allaccio') {
+        if (comp && !MOUNTS[comp.type] && comp.type !== 'allaccio') {
           this.moveSelected = pr.id;
           this.attemptMoveTo(pointer.worldX, pointer.worldY);
           this.enterAssembly(pr.id, true);   // resta in montaggio nella nuova posizione
@@ -4235,8 +4532,8 @@ class StageScene extends Phaser.Scene {
       this.deleteComponent(id);
     });
     this.assemblyHandle = handle;
-    if (!quiet) showToast(comp.type === 'top'
-      ? 'Montaggio: tocca la ✕ per togliere la testa dal palo. Tocca il pavimento per finire.'
+    if (!quiet) showToast(MOUNTS[comp.type]
+      ? 'Montaggio: tocca la ✕ per togliere ' + (comp.type === 'top' ? 'la testa dal palo' : 'il PAR dallo stativo') + '. Tocca il pavimento per finire.'
       : 'Montaggio: trascina per spostare, tocca la ✕ per togliere. Tocca il pavimento per finire.');
   }
 
@@ -4251,21 +4548,23 @@ class StageScene extends Phaser.Scene {
   }
 
   /* toglie un dispositivo: spariscono anche i suoi cavi (senza far scattare
-     nulla) e il pezzo torna nella barra; un Sub si porta via la sua Testa */
+     nulla) e il pezzo torna nella barra; un Sub si porta via la sua Testa,
+     uno stativo il suo PAR */
   deleteComponent (id) {
     const comp = gameState.placed[id];
     if (!comp) return;
     this.exitAssembly();
     const ids = [id];
-    if (comp.type === 'sub' && comp.hasTop) ids.push(comp.hasTop);
-    if (comp.type === 'top' && comp.parentSubId && gameState.placed[comp.parentSubId]) gameState.placed[comp.parentSubId].hasTop = null;
+    const child = mountedOn(comp), base = mountBase(comp);
+    if (child) ids.push(child.id);                                  // col sub va via la testa, con lo stativo il PAR
+    if (base) base[MOUNTS[comp.type].link] = null;
     const lost = gameState.edges.filter(e => ids.includes(e.a) || ids.includes(e.b)).length;
     const name = COMPONENT_TYPES[comp.type].label;
     applyPowerAction(() => {
       gameState.edges = gameState.edges.filter(e => !ids.includes(e.a) && !ids.includes(e.b));
       ids.forEach(did => {
         const c = gameState.placed[did];
-        if (c.gx != null) delete this.occupied[c.gx + ',' + c.gy];
+        (c.cells || []).forEach(k => { delete this.occupied[k]; });
         const v = this.compVisuals[did];
         if (v) v.container.destroy();
         delete this.compVisuals[did];
@@ -4294,17 +4593,18 @@ class StageScene extends Phaser.Scene {
   attemptMoveTo (worldX, worldY) {
     const id = this.moveSelected;
     const comp = gameState.placed[id];
-    if (!comp) { this.moveSelected = null; return; }
+    // un pezzo montato (testa, PAR) si sposta solo insieme alla sua base
+    if (!comp || MOUNTS[comp.type]) { this.moveSelected = null; return; }
 
-    const { cx, cy } = this.nearestAllowedCell(comp.type, worldX, worldY);
-    const key = cx + ',' + cy;
-    const oldKey = comp.gx + ',' + comp.gy;
-    if (key !== oldKey && this.occupied[key]) { showToast('Cella occupata: scegli una cella libera.'); return; }
+    const spot = this.findSpot(comp.type, worldX, worldY, id);
+    if (!spot) { showToast('Lì non c\'è posto: scegli uno spazio libero nella sua zona.'); return; }
+    const cx = spot.gx, cy = spot.gy;
 
-    delete this.occupied[oldKey];
-    this.occupied[key] = id;
-    comp.gx = cx; comp.gy = cy;
-    const pos = gridToScreen(cx + 0.5, cy + 0.5);
+    (comp.cells || []).forEach(k => { delete this.occupied[k]; });
+    spot.keys.forEach(k => { this.occupied[k] = id; });
+    comp.gx = cx; comp.gy = cy; comp.foot = spot.foot; comp.cells = spot.keys;
+    comp.zone = isStageCell(cx, cy) ? 'stage' : 'ground';   // per il percorso dei cavi
+    const pos = spot.pos;
     comp.screen = pos;
     this.compVisuals[id].container.setPosition(pos.x, pos.y).setDepth(isoDepth(pos.y));
     // PC e scheda audio cambiano verso tra quinta e FOH: si ridisegnano
@@ -4314,13 +4614,18 @@ class StageScene extends Phaser.Scene {
       this.compVisuals[id] = this.buildComponentVisual(id, def, pos.x, pos.y);
     }
 
-    if (comp.type === 'sub' && comp.hasTop) {
-      const topComp = gameState.placed[comp.hasTop];
-      const offY = topOffsetY();
-      const topPos = { x: pos.x, y: pos.y + offY };
-      topComp.screen = topPos;
-      // la testa sta SOPRA il sub: va disegnata subito davanti a lui
-      this.compVisuals[topComp.id].container.setPosition(topPos.x, topPos.y).setDepth(isoDepth(pos.y) + 0.001);
+    const child = mountedOn(comp);
+    if (child) {
+      // il pezzo montato segue la sua base e sta subito davanti a lei; il
+      // PAR si ridisegna perché cambia verso col ruolo dello stativo
+      const at = this.mountPos(child.type, comp);
+      child.screen = { x: at.x, y: at.y };
+      child.zone = comp.zone;
+      if (child.type === 'par') {
+        this.compVisuals[child.id].container.destroy();
+        this.compVisuals[child.id] = this.buildComponentVisual(child.id, COMPONENT_TYPES.par, at.x, at.y);
+      }
+      this.compVisuals[child.id].container.setPosition(at.x, at.y).setDepth(at.depth);
     }
 
     this.clearMoveSelection();
@@ -4334,8 +4639,16 @@ class StageScene extends Phaser.Scene {
 
   /* ---------------- TEST IMPIANTO: collaudo tecnico (potenza + segnale + PC di
      regia), prima ancora che arrivino i musicisti. Il vero soundcheck con gli
-     strumenti è una fase successiva, separata da questa. ---------------- */
+     strumenti è una fase successiva, separata da questa.
+     Il test non dice più cosa manca: lo fa VEDERE e SENTIRE, con un
+     piccolissimo suggerimento a parole.
+     - corrente: scintille dal Quadro;
+     - audio: l'impianto gracchia e le casse tremano;
+     - luci: i PAR con corrente vanno in tilt (colori a caso e strobo);
+     - tutto ok: cala la notte e parte lo show (10 secondi).
+     L'ordine conta: senza corrente non si può giudicare il resto. ---------------- */
   runSystemTest () {
+    this.stopFx();
     const result = runValidation();
     gameState.tested = true;
     Object.values(this.compVisuals).forEach(v => this.setGlow(v, false));
@@ -4344,76 +4657,220 @@ class StageScene extends Phaser.Scene {
     const q = findQuadro();
     const prot = q ? quadroProt(q) : null;
     // deve funzionare tutto ciò che serve: le utenze del livello, la scheda
-    // (alimentata dal PC) e le ciabatte solo se ci è attaccato qualcosa
+    // (alimentata dal PC) e le ciabatte solo se ci è attaccato qualcosa.
+    // Chi ha già un cavo mancante lo dirà il suo impianto (audio o luci).
     const inUse = c => !/^ciabatta/.test(c.type) || gameState.edges.some(e => e.a === c.id && POWER_CABLE_IDS.has(e.signal));
     const notRunning = Object.values(gameState.placed)
-      .filter(c => c.type !== 'allaccio' && (powerInPort(COMPONENT_TYPES[c.type]) || COMPONENT_TYPES[c.type].busPowered) && inUse(c) && !isRunning(c.id))
-      .map(c => c.id);
+      .filter(c => c.type !== 'allaccio' && (powerInPort(COMPONENT_TYPES[c.type]) || COMPONENT_TYPES[c.type].busPowered) && inUse(c) && !isRunning(c.id) && !result.failedComponents.has(c.id));
     // protezioni che servono davvero: generale, salvavita e le sole fasi usate
     const usedPhases = new Set(Object.keys(gameState.placed).map(id => phaseOf(id)).filter(Boolean));
     const needed = ['main', 'rcd', ...['L1', 'L2', 'L3'].filter(ph => usedPhases.has(ph))];
     const armed = !!prot && needed.every(k => prot[k]);
-    const stereo = result.pass ? stereoCheck() : null;
-    const clashes = dmxOverlaps();
-    const glow = ids => ids.forEach(id => {
-      const v = this.compVisuals[id];
-      if (!v) return;
-      this.setGlow(v, true, 0xe0503f);
-      this.tweens.add({ targets: v.container, angle: { from: -2, to: 2 }, duration: 90, yoyo: true, repeat: 3 });
-    });
+    const missing = cat => result.missingCats.has(cat);
+    const toPlace = cat => result.toPlaceCats.has(cat);
 
-    if (!result.pass) {
+    const fail = (kind, hint) => {
       setCircuitStatus('error');
-      SFX.fail();
-      if (result.overPhase) {
-        showToast('Fasi sbilanciate: con tutto acceso la fase ' + result.overloadedPhases.join(', ') + ' supererebbe i 3 kW. Sposta qualche utenza su un\'altra fase.');
-      } else {
-        showToast(result.overBudget
-          ? 'Potenza richiesta oltre il limite disponibile.'
-          : 'Cablaggio incompleto (' + result.madeCount + '/' + result.totalCount + '). Manca: ' + listShort([...new Set(result.missingList)], 3) + '.');
-        glow([...result.failedComponents]);
-      }
-      return;
-    }
-    if (stereo) {
-      setCircuitStatus('error');
-      SFX.fail();
-      showToast('Stereo invertito: la cassa di sinistra suona il canale destro e viceversa. Controlla L e R dalla scheda audio al mixer, al finale e alle casse.');
-      glow(stereo);
-      return;
-    }
-    if (!armed) {
-      setCircuitStatus('error');
-      SFX.fail();
-      showToast('Il Quadro non è armato: dal suo pannello alza l\'interruttore generale, il salvavita e le fasi che usi (' + needed.filter(k => /^L/.test(k)).join(', ') + ').');
-      if (q) glow([q.id]);
-      return;
-    }
-    if (notRunning.length) {
-      setCircuitStatus('error');
-      SFX.fail();
-      showToast('Spenti o senza corrente: ' + listShort(notRunning.map(compLabel), 4) + '. Accendili dal loro pannello; se sono accesi, controlla che arrivi corrente.');
-      glow(notRunning);
-      return;
-    }
-    if (clashes.length) {
-      setCircuitStatus('error');
-      SFX.fail();
-      showToast('Indirizzi DMX sovrapposti (' + clashes.map(([x, y]) => compLabel(x) + ' / ' + compLabel(y)).join(', ') + '): regolali dal display di ogni PAR.');
-      glow([...new Set(clashes.flat())]);
-      return;
-    }
+      if (kind === 'power') { showToast('Scintille! ' + hint); this.fxSparks(); }
+      else if (kind === 'audio') { showToast('L\'impianto gracchia: ' + hint); this.fxCrackle(); }
+      else { showToast('Le luci vanno in tilt: ' + hint); this.fxLightsTilt(); }
+    };
+
+    // corrente
+    if (result.overPhase) return fail('power', 'Una fase è troppo carica.');
+    if (result.overBudget) return fail('power', 'Chiedi troppa potenza.');
+    if (missing('power')) return fail('power', toPlace('power') ? 'Manca ancora un pezzo da posare.' : 'Qualcuno non arriva al Quadro.');
+    if (!armed) return fail('power', 'Il Quadro è davvero armato?');
+    if (notRunning.length) return fail('power', 'Qualcosa è ancora spento.');
+    // audio
+    if (missing('audio') || !result.allSubsTopsPlaced) return fail('audio', toPlace('audio') || !result.allSubsTopsPlaced ? 'manca ancora un pezzo da posare.' : 'il segnale si perde per strada.');
+    if (stereoCheck()) return fail('audio', 'destra e sinistra si sono scambiate.');
+    // luci
+    if (missing('lights')) return fail('lights', toPlace('lights') ? 'manca ancora un pezzo da posare.' : 'qualche PAR non sente la consolle.');
+    const lights = lightingCheck();
+    if (lights) return fail('lights', lights.msg);
+    if (dmxOverlaps().length) return fail('lights', 'due PAR si pestano i piedi sull\'indirizzo.');
 
     setCircuitStatus('ok');
-    SFX.success();
-    // la procedura conta: scatti e colpi nelle casse restano nel verbale
-    const notes = [];
-    if (gameState.trips) notes.push('magnetotermici scattati: ' + gameState.trips);
-    if (gameState.rcdTrips) notes.push('salvavita scattati: ' + gameState.rcdTrips);
+    // la procedura conta: un solo suggerimento, il primo inciampo
     const pops = (gameState.procErrors || []).filter(x => x === 'pop').length;
-    if (pops) notes.push('colpi nelle casse: ' + pops);
-    showToast('Impianto collaudato: tutto acceso, alimentazione e segnale integri.' + (notes.length ? ' Da migliorare — ' + notes.join(', ') + '.' : ' Procedura perfetta!'), 'ok');
+    const tip = gameState.trips ? 'la prossima volta accendi i pesanti uno alla volta.'
+      : gameState.rcdTrips ? 'la prossima volta cabla a impianto spento.'
+      : pops ? 'la prossima volta accendi finali e sub per ultimi.'
+      : null;
+    showToast('Impianto collaudato, si va in scena! ' + (tip ? 'Piccolo consiglio: ' + tip : 'Procedura perfetta.'), 'ok');
     this.playSuccessSequence();
+  }
+
+  /* ---------------- effetti del Test impianto ----------------
+     Tutto quello che crea un effetto (oggetti, timer, tween, suoni) passa da
+     qui, così un nuovo test, un reset o una modifica all'impianto lo fermano
+     di colpo e rimettono i dispositivi com'erano. */
+  fxStart () {
+    this.stopFx();
+    this.fx = { objs: [], timers: [], tweens: [], stops: [], restore: [] };
+    if (this.liveBeams) this.liveBeams.clear();
+    return this.fx;
+  }
+  fxLater (ms, fn) { const t = this.time.delayedCall(ms, fn); this.fx.timers.push(t); return t; }
+  fxEvery (ms, times, fn, onEnd) {
+    let n = 0;
+    const t = this.time.addEvent({ delay: ms, repeat: times - 1, callback: () => { fn(n++); if (n === times && onEnd) onEnd(); } });
+    this.fx.timers.push(t); return t;
+  }
+  fxTween (cfg) { const t = this.tweens.add(cfg); this.fx.tweens.push(t); return t; }
+  fxObj (o) { this.fx.objs.push(o); return o; }
+  // un dispositivo mosso da un effetto torna al suo posto alla fine
+  fxHold (v) {
+    const c = v.container, s = { x: c.x, y: c.y, sx: c.scaleX, sy: c.scaleY, a: c.angle };
+    this.fx.restore.push(() => {
+      if (!c.scene) return;
+      // se nel frattempo è stato spostato davvero, resta dov'è ora
+      if (Math.abs(c.x - s.x) < 10 && Math.abs(c.y - s.y) < 10) c.setPosition(s.x, s.y);
+      c.setScale(s.sx, s.sy).setAngle(s.a);
+      this.setGlow(v, false);
+    });
+    return s;
+  }
+  stopFx () {
+    const fx = this.fx;
+    if (!fx) return;
+    this.fx = null;
+    fx.timers.forEach(t => t.remove(false));
+    fx.tweens.forEach(t => t.stop());
+    fx.objs.forEach(o => { this.tweens.killTweensOf(o); o.destroy(); });
+    fx.restore.forEach(fn => fn());
+    fx.stops.forEach(fn => fn());
+    this.drawLiveBeams();
+  }
+  visualsOf (...types) {
+    return Object.values(gameState.placed).filter(c => types.includes(c.type)).map(c => this.compVisuals[c.id]).filter(Boolean);
+  }
+
+  // corrente: raffica di scintille dal Quadro (o dall'allaccio, se manca)
+  fxSparks () {
+    this.fxStart();
+    SFX.trip();
+    const q = findQuadro();
+    const src = q || gameState.placed.allaccio;
+    const v = src && this.compVisuals[src.id];
+    if (v) this.fxHold(v);
+    this.cameras.main.shake(260, 0.007);
+    this.fxEvery(170, 8, i => {
+      if (!v) return;
+      const ports = COMPONENT_TYPES[src.type].ports;
+      const pos = q ? this.getPortScreenPos(q.id, ports[Math.floor(Math.random() * ports.length)].id) : null;
+      const x = pos ? pos.x : v.container.x + (Math.random() - 0.5) * 30, y = pos ? pos.y : v.container.y - 10;
+      this.spawnSparks(x, y);
+      this.spawnSparks(x + (Math.random() - 0.5) * 24, y + (Math.random() - 0.5) * 16);
+      this.setGlow(v, i % 2 === 0, 0xe0503f);
+      if (i % 3 === 0) SFX.trip();
+    }, () => this.stopFx());
+  }
+
+  // audio: le casse gracchiano, tremano e sputano scariche
+  fxCrackle () {
+    this.fxStart();
+    const DUR = 2.4;
+    SFX.crackle(DUR);
+    const spk = this.visualsOf('sub', 'top').map(v => ({ v, s: this.fxHold(v) }));
+    const zap = this.fxObj(this.add.graphics().setDepth(60));
+    this.fxEvery(60, Math.round(DUR * 1000 / 60), () => {
+      zap.clear();
+      spk.forEach(({ v, s }) => {
+        const c = v.container;
+        c.x = s.x + (Math.random() - 0.5) * 5;
+        c.angle = s.a + (Math.random() - 0.5) * 3;
+        if (Math.random() < 0.55) {
+          // scarica a zig-zag che esce dalla cassa
+          let x = s.x + (Math.random() - 0.5) * 40, y = s.y - 20 - Math.random() * 30;
+          zap.lineStyle(2, Math.random() < 0.5 ? 0xffffff : 0x9fd3ff, 0.9);
+          zap.beginPath(); zap.moveTo(x, y);
+          for (let k = 0; k < 4; k++) { x += (Math.random() - 0.5) * 22; y -= 6 + Math.random() * 10; zap.lineTo(x, y); }
+          zap.strokePath();
+        }
+        this.setGlow(v, Math.random() < 0.3, 0x9fd3ff);
+      });
+    }, () => this.stopFx());
+  }
+
+  /* fasci dei PAR: sono fari FISSI (wash), non teste mobili. Ognuno punta
+     dove lo manda il suo stativo (vedi parAim): i frontali sul proscenio,
+     i tagli sul centro del palco. La geometria si calcola una volta sola:
+     durante gli effetti cambiano solo colore e intensità. */
+  parBeamGeometry (parList) {
+    const R = 64;                                            // raggio della pozza (wash: larga)
+    const flat = TILE_H / TILE_W;                            // cerchio a terra, in isometria
+    return parList.map(c => {
+      const aim = parAim(c.id);
+      if (!aim) return null;
+      const v = this.compVisuals[c.id];
+      const x = v.container.x, y = v.container.y - 6;
+      const t = gridToScreen(aim.gx, aim.gy);
+      // bordi del cono: tangenti all'ellisse della pozza viste dalla lente
+      const dx = t.x - x, dy = t.y - y, len = Math.hypot(dx, dy) || 1;
+      const nx = -dy / len, ny = dx / len, rx = R, ry = R * flat;
+      // punto dell'ellisse più lontano lungo la perpendicolare al fascio
+      const k = Math.hypot(nx * rx, ny * ry);
+      return { c, v, x, y, tx: t.x, ty: t.y, rx, ry, ex: rx * rx * nx / k, ey: ry * ry * ny / k };
+    }).filter(Boolean);
+  }
+  // fasci dei PAR accesi durante il gioco: luce bianca calda, ferma, così si
+  // vede cosa illumina ogni faro (durante gli effetti ci pensano loro)
+  drawLiveBeams () {
+    if (!this.liveBeams) this.liveBeams = this.add.graphics().setDepth(44).setBlendMode(Phaser.BlendModes.ADD);
+    const g = this.liveBeams;
+    g.clear();
+    if (this.fx) return;
+    this.parBeamGeometry(placedOfType('par').filter(c => isRunning(c.id) && this.compVisuals[c.id]))
+      .forEach(b => this.drawParBeam(g, b, 0xffe9c4, 0.5));
+  }
+  /* fascio di un PAR LED: è un wash, luce ampia e morbida. Cono largo che
+     sfuma verso i bordi (strati sovrapposti, niente contorni netti) e una
+     grande pozza tonda a terra che si fonde con quelle vicine. */
+  drawParBeam (g, b, col, a) {
+    if (a <= 0.01) return;
+    const cone = f => g.fillTriangle(b.x, b.y, b.tx + b.ex * f, b.ty + b.ey * f, b.tx - b.ex * f, b.ty - b.ey * f);
+    [[1, 0.07], [0.72, 0.07], [0.45, 0.08]].forEach(([f, al]) => { g.fillStyle(col, al * a); cone(f); });
+    // pozza a terra: anelli concentrici sempre più chiari verso il centro
+    [[1.15, 0.07], [0.9, 0.09], [0.65, 0.11], [0.4, 0.12]].forEach(([f, al]) => {
+      g.fillStyle(col, al * a); g.fillEllipse(b.tx, b.ty, b.rx * 2 * f, b.ry * 2 * f);
+    });
+    // lente accesa
+    g.fillStyle(col, 0.3 * a); g.fillCircle(b.x, b.y, 18);
+    g.fillStyle(0xffffff, 0.85 * a); g.fillCircle(b.x, b.y, 6);
+  }
+  // colori speculari: i PAR esterni un colore, quelli interni l'altro
+  parMirrorIndex (geo) {
+    const order = geo.map((b, i) => i).sort((i, j) => geo[i].x - geo[j].x);
+    const m = [];
+    order.forEach((gi, k) => { m[gi] = Math.min(k, order.length - 1 - k); });
+    return m;
+  }
+
+  // luci: i PAR con corrente impazziscono, colori a caso e strobo
+  fxLightsTilt () {
+    this.fxStart();
+    const DUR = 2.8;
+    SFX.strobe(DUR);
+    const geo = this.parBeamGeometry(placedOfType('par').filter(c => isRunning(c.id) && this.compVisuals[c.id]));
+    geo.forEach(b => this.fxHold(b.v));
+    const rays = this.fxObj(this.add.graphics().setDepth(45).setBlendMode(Phaser.BlendModes.ADD));
+    const COLORS = [0xff2d55, 0x2dff7a, 0x2d7bff, 0xffe12d, 0xff2dff, 0x2dfff0, 0xffffff];
+    this.fxEvery(70, Math.round(DUR * 1000 / 70), () => {
+      rays.clear();
+      const strobe = Math.random() < 0.18;   // lampo bianco di tutti insieme
+      // il faro resta fermo: impazziscono solo colore, intensità e lampi
+      geo.forEach(b => {
+        const v = b.v, r = Math.min(v.def.body.w, v.def.body.h - 10) / 2;
+        v.glow.clear();
+        if (!strobe && Math.random() < 0.35) { v.glow.setAlpha(0); return; }
+        const col = strobe ? 0xffffff : COLORS[Math.floor(Math.random() * COLORS.length)];
+        v.glow.setAlpha(1);
+        v.glow.fillStyle(col, 0.85); v.glow.fillCircle(0, -4, r + 2);
+        this.drawParBeam(rays, b, col, strobe ? 1.3 : 0.4 + Math.random() * 0.6);
+      });
+    }, () => this.stopFx());
   }
 
   /* ---------------- corrente dal vivo: LED, fasi, pannello aperto ---------------- */
@@ -4425,6 +4882,7 @@ class StageScene extends Phaser.Scene {
     });
     const q = findQuadro();
     if (q) this.updateQuadroPhaseBars(q.id);
+    this.drawLiveBeams();
     if (rearPanelId) renderRearPanel();
   }
 
@@ -4481,60 +4939,97 @@ class StageScene extends Phaser.Scene {
     }
   }
 
+  /* ---------------- lo show: 10 secondi di concerto a impianto collaudato ----------------
+     cala la notte sulla venue, i PAR si accendono uno alla volta e illuminano
+     la scena, poi le casse partono con un beat a tutto volume: fasci che
+     cambiano colore a ogni battuta, casse che pompano sulla cassa dritta.
+     Alla fine torna il giorno e l'impianto resta com'era. */
   playSuccessSequence () {
-    Object.entries(gameState.placed).forEach(([id, c]) => {
-      const v = this.compVisuals[id];
-      if (!v) return;
-      if (c.type === 'top' || c.type === 'sub') {
-        this.tweens.add({ targets: v.container, scale: { from: v.container.scaleX, to: v.container.scaleX * 1.1 }, yoyo: true, repeat: 4, duration: 140 });
-      }
-      if (c.type === 'par') {
-        let n = 0;
-        this.time.addEvent({
-          delay: 130, repeat: 9,
-          callback: () => { n++; this.setGlow(v, true, n % 2 === 0 ? 0xf2c53d : 0xffffff); }
-        });
-      }
+    this.fxStart();
+    SFX.success();
+    const BPM = 120, BEATS = 14, BEAT_MS = 60000 / BPM;
+    const T_LIGHTS = 1300, T_BEAT = 2300, T_END = T_BEAT + BEATS * BEAT_MS, T_DAY = T_END + 250;
+
+    // la telecamera va sul palco per lo show e poi torna dov'era
+    const cam = this.cameras.main;
+    const view = { x: cam.midPoint.x, y: cam.midPoint.y, z: cam.zoom };
+    const stage = gridToScreen(STAGE_ORIGIN_X + STAGE_W / 2, STAGE_ORIGIN_Y + STAGE_H / 2 + 1);
+    cam.pan(stage.x, stage.y, 1200, 'Sine.easeInOut');
+    cam.zoomTo(Math.max(view.z, DEFAULT_ZOOM * 1.7), 1200, 'Sine.easeInOut');
+    this.fxLater(T_DAY, () => {
+      cam.pan(view.x, view.y, 800, 'Sine.easeInOut', true);
+      cam.zoomTo(view.z, 800, 'Sine.easeInOut', true);
+    });
+    // a fine show, o interrotto a metà (reset, modifica, nuovo test): com'era
+    this.fx.restore.push(() => {
+      cam.panEffect.reset(); cam.zoomEffect.reset();
+      cam.setZoom(view.z); cam.centerOn(view.x, view.y);
     });
 
-    this.playBeep();
+    // notte: un velo blu scuro su tutta la venue, qualunque siano zoom e pan
+    const night = this.fxObj(this.add.rectangle(GAME_W / 2, GAME_H / 2, GAME_W * 8, GAME_H * 8, 0x03050d, 1)
+      .setScrollFactor(0).setDepth(40).setAlpha(0));
+    this.fxTween({ targets: night, alpha: 0.84, duration: 1200, ease: 'Sine.InOut' });
+    this.fxTween({ targets: night, alpha: 0, delay: T_DAY, duration: 700, ease: 'Sine.InOut' });
 
-    const banner = this.add.text(GAME_W / 2, GAME_H / 2, 'IMPIANTO COLLAUDATO', {
-      fontFamily: 'Barlow Condensed, sans-serif', fontSize: '40px', fontStyle: 'bold',
-      color: '#f2a541', align: 'center', wordWrap: { width: GAME_W - 80 }
-    }).setOrigin(0.5).setDepth(100).setAlpha(0).setScale(0.85).setScrollFactor(0);
+    const beams = this.fxObj(this.add.graphics().setDepth(45).setBlendMode(Phaser.BlendModes.ADD));
+    const waves = this.fxObj(this.add.graphics().setDepth(46));
+    const PALETTE = [[0xff3b6b, 0x3b8bff], [0xffb13b, 0xff3bd1], [0x3bffb0, 0x3b8bff], [0xffffff, 0xffb13b], [0xb03bff, 0x3bfff2]];
+    const pars = this.parBeamGeometry(placedOfType('par').filter(c => isRunning(c.id) && this.compVisuals[c.id]));
+    const mirror = this.parMirrorIndex(pars);
+    pars.forEach(b => { b.k = 0; });
+    const speakers = this.visualsOf('sub', 'top').map(v => ({ v, s: this.fxHold(v) }));
+    const st = { kick: 0, beat: 0, flash: 0 };
 
-    this.tweens.add({
-      targets: banner, alpha: 1, scale: 1, duration: 380, ease: 'Back.Out',
-      onComplete: () => {
-        this.tweens.add({ targets: banner, alpha: 0, delay: 1800, duration: 500, onComplete: () => banner.destroy() });
-      }
-    });
-  }
+    // i PAR si accendono a coppie speculari, dall'esterno verso il centro
+    pars.forEach((b, i) => this.fxTween({ targets: b, k: 1, delay: T_LIGHTS + mirror[i] * 350, duration: 300 }));
+    this.fxTween({ targets: pars, k: 0, delay: T_END, duration: 600 });
 
-  playBeep () {
-    try {
-      const AudioCtx = window.AudioContext || window.webkitAudioContext;
-      const ctx = new AudioCtx();
-      const notes = [440, 554, 659, 880];
-      notes.forEach((freq, i) => {
-        const osc = ctx.createOscillator();
-        const gain = ctx.createGain();
-        osc.type = 'square';
-        osc.frequency.value = freq;
-        gain.gain.value = 0.05;
-        osc.connect(gain).connect(ctx.destination);
-        const t0 = ctx.currentTime + i * 0.11;
-        osc.start(t0);
-        gain.gain.setValueAtTime(0.06, t0);
-        gain.gain.exponentialRampToValueAtTime(0.0001, t0 + 0.1);
-        osc.stop(t0 + 0.11);
+    // disegno a ~30 fps: i fasci non si muovono, pulsano col beat e
+    // cambiano colore ogni due battute
+    this.fxEvery(33, Math.ceil((T_DAY + 800) / 33), () => {
+      st.kick *= 0.86; st.flash *= 0.8;
+      beams.clear();
+      const colors = PALETTE[Math.floor(st.beat / 2) % PALETTE.length];
+      const pulse = 0.55 + 0.45 * st.kick;
+      pars.forEach((b, i) => {
+        const col = st.flash > 0.3 ? 0xffffff : colors[mirror[i] % 2];
+        this.drawParBeam(beams, b, col, b.k * pulse);
       });
-    } catch (e) { /* AudioContext non disponibile: nessun suono, non bloccante */ }
+      // onde d'urto che escono dalle casse a ogni colpo di cassa
+      waves.clear();
+      if (st.kick > 0.05) speakers.forEach(({ s }) => {
+        waves.lineStyle(2, 0xffffff, 0.5 * st.kick);
+        waves.strokeEllipse(s.x, s.y - 10, 60 + (1 - st.kick) * 90, 30 + (1 - st.kick) * 45);
+      });
+    });
+
+    // il beat: suono e movimento vanno insieme
+    this.fxLater(T_BEAT, () => { this.fx.stops.push(SFX.beat(BPM, BEATS)); });
+    this.fxLater(T_BEAT + 50, () => this.fxEvery(BEAT_MS, BEATS, n => {
+      st.kick = 1; st.beat = n + 1;
+      if (n % 4 === 0) st.flash = 1;
+      if (n % 4 === 0) this.cameras.main.shake(120, 0.002);
+      speakers.forEach(({ v, s }) => this.fxTween({
+        targets: v.container, scaleX: s.sx * 1.09, scaleY: s.sy * 1.09, duration: 70, yoyo: true, ease: 'Quad.Out'
+      }));
+    }));
+
+    // finale: la scritta, poi torna il giorno
+    this.fxLater(T_END - 200, () => {
+      const banner = this.fxObj(this.add.text(GAME_W / 2, GAME_H / 2, 'IMPIANTO COLLAUDATO', {
+        fontFamily: 'Barlow Condensed, sans-serif', fontSize: '44px', fontStyle: 'bold',
+        color: '#f2a541', align: 'center', wordWrap: { width: GAME_W - 80 }
+      }).setOrigin(0.5).setDepth(100).setAlpha(0).setScale(0.85).setScrollFactor(0));
+      this.fxTween({ targets: banner, alpha: 1, scale: 1, duration: 380, ease: 'Back.Out' });
+      this.fxTween({ targets: banner, alpha: 0, delay: 1000, duration: 400 });
+    });
+    this.fxLater(T_DAY + 800, () => this.stopFx());
   }
 
   /* ---------------- reset ---------------- */
   resetLevel () {
+    this.stopFx();
     this.clearEdgeSelection();
     this.clearMoveSelection();
     this.cancelPending();
@@ -4547,7 +5042,7 @@ class StageScene extends Phaser.Scene {
 
     gameState.placed = {};
     gameState.stock = { ...AVAILABLE_STOCK };
-    gameState.nextIndex = { sub: 1, top: 1, mixer: 1, par: 1, controller: 1, ampli: 1, quadro: 1, ciabatta: 1, ciabatta_cee: 1, pc: 1, scheda: 1, di: 1 };
+    gameState.nextIndex = { sub: 1, top: 1, mixer: 1, stativo: 1, par: 1, controller: 1, ampli: 1, quadro: 1, ciabatta: 1, ciabatta_cee: 1, pc: 1, scheda: 1, di: 1 };
     gameState.edges = [];
     gameState.edgeSeq = 0;
     gameState.selectedCable = null;
@@ -4599,6 +5094,7 @@ class StageScene extends Phaser.Scene {
   }
 
   restoreSnapshot (snap) {
+    this.stopFx();
     this.clearEdgeSelection();
     this.clearMoveSelection();
     this.cancelPending();
@@ -4617,12 +5113,11 @@ class StageScene extends Phaser.Scene {
       const def = COMPONENT_TYPES[c.type];
       if (!def) return;
       const visual = this.buildComponentVisual(c.id, def, c.screen.x, c.screen.y);
-      // (ripristino da annulla/ripeti) la testa resta davanti al suo sub
-      if (c.type === 'top' && c.parentSubId && gameState.placed[c.parentSubId]) {
-        visual.container.setDepth(isoDepth(gameState.placed[c.parentSubId].screen.y) + 0.001);
-      }
+      // (ripristino da annulla/ripeti) il pezzo montato resta davanti alla sua base
+      const base = mountBase(c);
+      if (base) visual.container.setDepth(isoDepth(base.screen.y) + 0.001);
       this.compVisuals[c.id] = visual;
-      if (c.gx != null && c.gy != null) this.occupied[c.gx + ',' + c.gy] = c.id;
+      (c.cells || []).forEach(k => { this.occupied[k] = c.id; });
     });
 
     this.updateQuadroVisual();
