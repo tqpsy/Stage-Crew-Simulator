@@ -1110,6 +1110,8 @@ function showToast (msg, kind) {
 }
 
 function updateStockUI () {
+  // la potenza impegnata segue i pezzi posati: si aggiorna a ogni posa
+  updatePowerMeter();
   Object.keys(AVAILABLE_STOCK).forEach(type => {
     const remaining = gameState.stock[type];
     const countEl = el('#count-' + type);
@@ -2446,6 +2448,8 @@ el('#run-btn').addEventListener('click', () => {
       + regia + ali laterali), tutta all'interno della stessa area di lavoro
    --------------------------------------------------------------------- */
 const GAME_W = 1400;
+// tolleranza del tocco sui dispositivi, in pixel di schermo (un dito ≈ 40px)
+const TOUCH_SLOP_PX = 22;
 // GAME_H non è più un numero fisso "indovinato": si misura la vera proporzione
 // del contenitore di gioco al caricamento della pagina, così il canvas
 // riempie sempre esattamente lo spazio disponibile su qualunque schermo,
@@ -2772,6 +2776,13 @@ class StageScene extends Phaser.Scene {
       // e un tocco sul pavimento vuoto chiude montaggio e cavo in attesa
       if (gameState.selectedPieceType) { this.placeArmedPieceAt(pointer.worldX, pointer.worldY); return; }
       if (this.assemblyId) { this.exitAssembly(); return; }
+      // sul telefono i dispositivi sono piccoli: un tocco che li sfiora apre
+      // comunque il pannello di quello più vicino
+      if (this.devicesNear(pointer.worldX, pointer.worldY, TOUCH_SLOP_PX).length) {
+        this.clearEdgeSelection();
+        this.openPanelAt(pointer.worldX, pointer.worldY, null);
+        return;
+      }
       const hitEdge = this.findEdgeAt(pointer.worldX, pointer.worldY);
       if (hitEdge) {
         if (this.selectedEdgeId === hitEdge.id) this.clearEdgeSelection();
@@ -3531,7 +3542,7 @@ class StageScene extends Phaser.Scene {
       if (pointer.rightButtonDown()) return;
       // un pezzo "armato" dalla barra si posa anche toccando sopra un dispositivo
       if (gameState.selectedPieceType) { this.placeArmedPieceAt(pointer.worldX, pointer.worldY); return; }
-      this.onDevicePress(id, pointer);
+      this.onDevicePress(this.pickDeviceAt(pointer.worldX, pointer.worldY, 0) || id, pointer);
     });
 
     let phaseBars = null;
@@ -4016,10 +4027,70 @@ class StageScene extends Phaser.Scene {
 
   /* ---------------- riposizionamento componenti già piazzati ---------------- */
   /* ---------------- tocco / pressione lunga su un dispositivo ---------------- */
+  /* dispositivi sotto o vicino a un punto del mondo, dal più vicino:
+     distanza dal loro disegno in pixel di schermo, entro slopPx */
+  devicesNear (wx, wy, slopPx) {
+    const cam = this.cameras.main;
+    const rc = this.game.canvas.getBoundingClientRect();
+    const k = cam.zoom * (rc.width / GAME_W);   // pixel CSS per unità di mondo
+    const out = [];
+    Object.keys(gameState.placed).forEach(id => {
+      const v = this.compVisuals[id];
+      if (!v || !v.def || !v.def.body) return;
+      const c = v.container;
+      const hw = (v.def.body.w / 2) * Math.abs(c.scaleX), hh = (v.def.body.h / 2) * Math.abs(c.scaleY);
+      const dx = Math.max(0, Math.abs(wx - c.x) - hw), dy = Math.max(0, Math.abs(wy - c.y) - hh);
+      const edge = Math.hypot(dx, dy) * k;
+      if (edge <= slopPx) out.push({ id, edge, center: Math.hypot(wx - c.x, wy - c.y) * k });
+    });
+    return out.sort((x, y) => x.edge - y.edge || x.center - y.center);
+  }
+  pickDeviceAt (wx, wy, slopPx) {
+    const c = this.devicesNear(wx, wy, slopPx + 8);
+    return c.length ? c[0].id : null;
+  }
+
+  /* tocco breve: apre il pannello del dispositivo toccato. Se il dito è
+     davvero a metà tra due o più dispositivi non si tira a indovinare:
+     compare un menu "Quale?" con i loro nomi. */
+  openPanelAt (wx, wy, fallbackId) {
+    const c = this.devicesNear(wx, wy, TOUCH_SLOP_PX + 8);
+    if (!c.length) { if (fallbackId) openRearPanel(fallbackId); return !!fallbackId; }
+    const first = c[0];
+    const close = c.filter(x => x.id !== first.id && (
+      first.edge > 0 ? x.edge - first.edge < 6 : (x.edge === 0 && x.center < first.center * 1.35 + 4)));
+    if (!close.length) { openRearPanel(first.id); return true; }
+    this.showPickMenu([first, ...close].slice(0, 4).map(x => x.id), wx, wy);
+    return true;
+  }
+  showPickMenu (ids, wx, wy) {
+    const cam = this.cameras.main, rc = this.game.canvas.getBoundingClientRect();
+    const px = rc.left + (wx - cam.worldView.x) * cam.zoom * rc.width / GAME_W;
+    const py = rc.top + (wy - cam.worldView.y) * cam.zoom * rc.height / GAME_H;
+    ids.forEach(id => { const v = this.compVisuals[id]; if (v) this.setGlow(v, true, 0x4aa3ff); });
+    const menu = el('#pick-menu');
+    const box = menu.querySelector('.pick-box');
+    box.innerHTML = '<div class="pick-title">Quale?</div>' + ids.map(id =>
+      `<button class="pick-opt" data-id="${id}">${escapeHtml(compLabel(id))}</button>`).join('');
+    menu.classList.add('show');
+    setSceneInput(false);
+    const bw = box.offsetWidth, bh = box.offsetHeight;
+    box.style.left = Math.max(8, Math.min(window.innerWidth - bw - 8, px - bw / 2)) + 'px';
+    box.style.top = Math.max(8, Math.min(window.innerHeight - bh - 8, py - bh - 18)) + 'px';
+    const done = id => {
+      menu.classList.remove('show');
+      ids.forEach(i => { const v = this.compVisuals[i]; if (v && i !== this.assemblyId) this.setGlow(v, false); });
+      setTimeout(() => { if (!rearPanelId && !openCaseName) setSceneInput(true); }, 0);
+      if (id) openRearPanel(id);
+    };
+    box.querySelectorAll('.pick-opt').forEach(b => b.addEventListener('click', ev => { ev.stopPropagation(); SFX.button(); done(b.dataset.id); }));
+    menu.onclick = ev => { if (ev.target === menu) done(null); };
+  }
+
   onDevicePress (id, pointer) {
     if (this.press && this.press.timer) clearTimeout(this.press.timer);
     const inAssembly = this.assemblyId === id;
-    this.press = { id, x: pointer.x, y: pointer.y, moved: false, long: inAssembly, timer: null };
+    this.press = { id, x: pointer.x, y: pointer.y, wx: pointer.worldX, wy: pointer.worldY, moved: false, long: inAssembly, timer: null };
     if (!inAssembly) {
       // timer del browser: non dipende dal ritmo dei fotogrammi del gioco
       this.press.timer = setTimeout(() => {
@@ -4067,9 +4138,9 @@ class StageScene extends Phaser.Scene {
       return;
     }
     if (pr.moved) return;
-    // tocco breve: pannello posteriore
+    // tocco breve: pannello posteriore (o "Quale?" se il tocco è ambiguo)
     if (this.assemblyId) this.exitAssembly();
-    openRearPanel(pr.id);
+    this.openPanelAt(pr.wx, pr.wy, pr.id);
   }
 
   /* modalità montaggio: il dispositivo ondeggia e mostra la ✕ per toglierlo;
