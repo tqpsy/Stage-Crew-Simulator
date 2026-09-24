@@ -11,6 +11,11 @@ Idee e richieste già decise, da sviluppare nei prossimi livelli.
   anche fari in gruppo con lo stesso indirizzo e boccia solo le
   sovrapposizioni parziali sullo stesso universo).
 - Obiettivi dopo il test che richiedono di comandare i fari uno per uno.
+- **Puntamento a mano dei PAR** (pan/tilt, zona da illuminare): nel
+  livello 1 il PAR sullo stativo si punta da solo in base al ruolo
+  (frontale dal Pit, taglio dai lati); il puntamento manuale arriverà
+  coi livelli del light designer.
+- Più avanti: americane (truss) oltre agli stativi, controluce, teste mobili.
 
 ## Audio
 

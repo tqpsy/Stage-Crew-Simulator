@@ -138,7 +138,9 @@ function convexHull (pts) {
 const SUB_ISO   = isoFrame(48, 56, 46);   // cassa sub: baffle con il woofer sulla faccia a=0
 const TOP_ISO   = isoFrame(32, 36, 48);   // testa a due vie, su palo sopra il sub
 const TOP_POLE  = 18;                     // px: palo tra sub e testa
-const PAR_ISO   = isoFrame(38, 34, 42);   // PAR LED su staffa, puntato verso il pubblico
+const PAR_ISO   = isoFrame(38, 34, 42);   // PAR LED su staffa (lente sulla faccia a=0)
+const STAND_ISO = isoFrame(46, 46, 3);    // stativo luci: treppiede a terra
+const STAND_POLE = 64;                    // px: asta dello stativo fino alla barra a T
 const AMP_ISO   = isoFrame(80, 46, 16);   // finale a rack, pannello frontale sulla faccia b=B
 const CTRL_ISO  = isoFrame(56, 34, 10);   // consolle luci da tavolo, piano inclinato
 const QUADRO_ISO = isoFrame(112, 34, 46); // armadio di distribuzione, prese sul fronte b=B
@@ -152,6 +154,10 @@ const INTF_ISO  = isoFrame(46, 30, 12);   // scheda audio USB da tavolo
 
 // la testa sta sul sub: il fondo del suo palo tocca il centro del piano del sub
 function isoDepth (screenY) { return 10 + screenY / 10000; }
+
+// il PAR poggia con la sua piastra sulla barra a T in cima allo stativo
+function standBarY () { return STAND_ISO(STAND_ISO.A / 2, STAND_ISO.B / 2, 0).y - STAND_POLE; }
+function parOffsetY () { return standBarY() - PAR_ISO(19, 17, 0).y; }
 
 function topOffsetY () {
   const subTop = SUB_ISO(SUB_ISO.A / 2, SUB_ISO.B / 2, SUB_ISO.Z);
@@ -243,8 +249,14 @@ const COMPONENT_TYPES = {
       { id: 'out_R', signal: 'speakon',  dir: 'out', ...isoPort(AMP_ISO, 53, 38, 16) }
     ]
   },
+  // stativo luci con barra a T: nessuna presa, ci si monta sopra un PAR
+  stativo: {
+    label: 'STATIVO', category: 'luci', powerW: 0, zone: 'stativo', shape: 'stativo',
+    body: { w: 44, h: 30, fill: 0x1c1d22, accent: 0x55585f },
+    ports: []
+  },
   par: {
-    label: 'PAR', category: 'luci', powerW: 40, zone: 'stagecore', shape: 'par',
+    label: 'PAR', category: 'luci', powerW: 40, zone: 'stativo', shape: 'par',
     body: { w: 60, h: 54, fill: 0x1c1d22, accent: 0xf2c53d },
     ledPos: PAR_ISO(22, 31, 3),
     // connettori sul retro, a destra del fusto: la lente resta libera.
@@ -381,10 +393,70 @@ const COMPONENT_TYPES = {
 
 // la DI resta nel catalogo per gli strumenti sul palco dei livelli successivi,
 // ma nel livello 1 non serve: il PC entra nel mixer dalla scheda audio
-const AVAILABLE_STOCK = { sub: 2, top: 2, mixer: 1, par: 4, controller: 1, ampli: 1, quadro: 1, ciabatta: 1, ciabatta_cee: 1, pc: 1, scheda: 1, di: 0 };
+const AVAILABLE_STOCK = { sub: 2, top: 2, mixer: 1, stativo: 4, par: 4, controller: 1, ampli: 1, quadro: 1, ciabatta: 1, ciabatta_cee: 1, pc: 1, scheda: 1, di: 0 };
 
 const POWER_LIMIT_KW = 3.0;
 const TOP_ATTACH_RADIUS = 300; // px: quanto lontano può essere trascinata una Testa da un Sub libero
+
+/* pezzi che si montano sopra un altro: la testa sul palo del sub, il PAR
+   sulla barra a T dello stativo. base = tipo che lo regge, link = campo
+   della base col figlio montato, back = campo del figlio con la base. */
+const MOUNTS = {
+  top: { base: 'sub', link: 'hasTop', back: 'parentSubId', offsetY: () => topOffsetY(),
+    missing: 'Posa la testa sopra un sub libero per montarla sul palo.',
+    done: baseId => 'Testa montata sul palo di ' + compLabel(baseId) + '.' },
+  par: { base: 'stativo', link: 'hasPar', back: 'parentStandId', offsetY: () => parOffsetY(),
+    missing: 'Posa il PAR sopra uno stativo libero: si monta sulla barra a T.',
+    done: baseId => 'PAR montato su ' + compLabel(baseId) + ': si punta da solo verso il palco.' }
+};
+const MOUNT_ON = { sub: 'top', stativo: 'par' };   // base -> tipo che ci si monta sopra
+// figlio montato su una base (o null)
+function mountedOn (base) {
+  const t = base && MOUNT_ON[base.type];
+  return t ? (gameState.placed[base[MOUNTS[t].link]] || null) : null;
+}
+// base che regge un pezzo montato (o null)
+function mountBase (comp) {
+  const m = comp && MOUNTS[comp.type];
+  return m ? (gameState.placed[comp[m.back]] || null) : null;
+}
+
+/* ruolo di uno stativo luci dalla sua posizione: davanti al palco (Pit) fa
+   il frontale, ai lati del palco (a sinistra o in Off Stage) fa il taglio */
+function standRole (stand) {
+  if (!stand) return null;
+  if (isPitCell(stand.gx, stand.gy)) return 'front';
+  return stand.gx < STAGE_ORIGIN_X ? 'left' : 'right';
+}
+// verso del PAR sullo stativo: la lente guarda il palco
+function parRot (parId) {
+  const role = standRole(mountBase(gameState.placed[parId]));
+  return role === 'front' ? 2 : role === 'left' ? 3 : role === 'right' ? 1 : 0;
+}
+// dove punta il PAR: il frontale sul proscenio incrociando al centro, i
+// tagli sul centro del palco alla loro altezza
+function parAim (parId) {
+  const stand = mountBase(gameState.placed[parId]);
+  const role = standRole(stand);
+  const mid = STAGE_ORIGIN_X + STAGE_W / 2;
+  if (role === 'front') return { gx: mid - (stand.gx + 0.5 - mid) * 0.3, gy: STAGE_ORIGIN_Y + STAGE_H - 1.3 };
+  if (role === 'left' || role === 'right') return { gx: mid + (role === 'left' ? 0.5 : -0.5), gy: stand.gy + 0.5 };
+  return null;
+}
+/* luci del livello 1: due frontali (uno per lato) e due tagli (uno per
+   lato). Restituisce null se va bene, altrimenti messaggio e pezzi in rosso */
+function lightingCheck () {
+  const mid = STAGE_ORIGIN_X + STAGE_W / 2;
+  const onStand = placedOfType('par').map(p => ({ p, s: mountBase(p) })).filter(x => x.s);
+  const front = onStand.filter(x => standRole(x.s) === 'front');
+  const fl = front.filter(x => x.s.gx + 0.5 < mid).length, fr = front.length - fl;
+  const tl = onStand.filter(x => standRole(x.s) === 'left').length;
+  const tr = onStand.filter(x => standRole(x.s) === 'right').length;
+  const ids = onStand.map(x => x.s.id);
+  if (!fl || !fr) return { msg: front.length ? 'i frontali vanno uno a sinistra e uno a destra del palco.' : 'manca il frontale davanti al palco: il preside resterebbe al buio.', ids };
+  if (!tl || !tr) return { msg: 'mancano i tagli, uno per lato del palco.', ids };
+  return null;
+}
 
 /* Il quadro del livello è forzato Trifase (16A, 3 prese: una per fase) anche se
    il carico reale resterebbe sotto la soglia Monofase — scelta didattica, per
@@ -540,7 +612,7 @@ function stereoCheck () {
 const gameState = {
   placed: {},
   stock: { ...AVAILABLE_STOCK },
-  nextIndex: { sub: 1, top: 1, mixer: 1, par: 1, controller: 1, ampli: 1, quadro: 1, ciabatta: 1, ciabatta_cee: 1, pc: 1, scheda: 1, di: 1 },
+  nextIndex: { sub: 1, top: 1, mixer: 1, stativo: 1, par: 1, controller: 1, ampli: 1, quadro: 1, ciabatta: 1, ciabatta_cee: 1, pc: 1, scheda: 1, di: 1 },
   edges: [],              // { id, a, aPort, b, bPort, signal }
   edgeSeq: 0,
   selectedCable: null,
@@ -2201,7 +2273,14 @@ function setSceneInput (on) {
   if (scene && scene.input) scene.input.enabled = on;
 }
 function openRearPanel (compId) {
-  if (!REAR_PANELS[(gameState.placed[compId] || {}).type]) return;
+  const t = (gameState.placed[compId] || {}).type;
+  if (t === 'stativo') {
+    const par = mountedOn(gameState.placed[compId]);
+    showToast(par ? compLabel(compId) + ' regge ' + compLabel(par.id) + ': tocca il faro per il suo pannello.'
+      : compLabel(compId) + ': monta un PAR sulla barra a T (scheda Luci, poi tocca lo stativo).');
+    return;
+  }
+  if (!REAR_PANELS[t]) return;
   rearPanelId = compId;
   el('#rear-detail').innerHTML = '';
   // prima visibile, poi disegnato: serve la larghezza vera del riquadro
@@ -2668,7 +2747,9 @@ const ZONE_PREDICATES = {
   mixer: (cx, cy) => isOffStageCell(cx, cy) || isFohCell(cx, cy),
   controller: (cx, cy) => isOffStageCell(cx, cy) || isFohCell(cx, cy),
   ampli: isOffStageCell,
-  par: isStageCoreCell,
+  // stativi luci: davanti al palco (frontale) o ai suoi lati (taglio)
+  stativo: (cx, cy) => isPitCell(cx, cy) ||
+    (cy >= STAGE_ORIGIN_Y && cy < STAGE_ORIGIN_Y + STAGE_H && (cx < STAGE_ORIGIN_X || isOffStageCell(cx, cy))),
   sub: isPitCell,
   quadro: isBackstageCell,
   // le ciabatte portano corrente dove serve: sul palco, in Regia di palco
@@ -3333,27 +3414,52 @@ class StageScene extends Phaser.Scene {
         k.quadB(B, 3, A - 3, 3, 22, 0x22242a);
         break;
       }
+      case 'stativo': {
+        // stativo luci: treppiede a terra, asta e barra a T in cima
+        const P = STAND_ISO, k = this.isoKit(g, P);
+        const c0 = P(P.A / 2, P.B / 2, 0), top = c0.y - STAND_POLE;
+        k.discZ(0, P.A / 2, P.B / 2, 20, 0x000000, 0.25);             // ombra
+        g.lineStyle(3, 0x1c1d22, 1);
+        [[P.A / 2, 0], [0, P.B], [P.A, P.B]].forEach(([a, b]) => {
+          const f = P(a, b, 0);
+          g.lineBetween(c0.x, c0.y - 14, f.x, f.y);                   // gambe
+          g.fillStyle(0x0c0d10, 1); g.fillCircle(f.x, f.y, 2.2);
+        });
+        g.fillStyle(0x2a2c32, 1); g.fillRect(c0.x - 2.5, top, 5, STAND_POLE - 12);      // asta
+        g.fillStyle(0x55585f, 1); g.fillRect(c0.x - 2.5, top, 1.4, STAND_POLE - 12);
+        g.fillStyle(0x3a3d45, 1); g.fillRect(c0.x - 4, c0.y - 30, 8, 5);              // manopola di serraggio
+        const b0 = P(P.A / 2, P.B / 2 - 16, 0), b1 = P(P.A / 2, P.B / 2 + 16, 0);     // barra a T
+        g.lineStyle(4, 0x1c1d22, 1); g.lineBetween(b0.x, b0.y - STAND_POLE, b1.x, b1.y - STAND_POLE);
+        g.lineStyle(1, 0x6a6e78, 1); g.lineBetween(b0.x, b0.y - STAND_POLE - 1.5, b1.x, b1.y - STAND_POLE - 1.5);
+        break;
+      }
       case 'par': {
-        // PAR LED su staffa a pavimento: corpo cilindrico nero puntato verso
-        // il pubblico, lente frontale con i LED, forcella con le manopole
-        const P = PAR_ISO, k = this.isoKit(g, P);
+        // PAR LED su staffa: corpo cilindrico nero, lente frontale con i LED,
+        // forcella con le manopole. Sullo stativo gira verso il palco: se la
+        // lente guarda lontano da chi osserva si vede il retro del fusto.
+        const P = rotFrame(PAR_ISO, rot), k = this.isoKit(g, P);
         const zc = 24, bc = 17, r = 14, aF = 3, aR = 34;
+        const lensSeen = rot === 0 || rot === 3;
         k.box(6, 32, 4, 30, 0, 2.5, ISO_GREY);                       // piastra
         k.box(17, 21, 2, 4.5, 2.5, zc + 1, ISO_GREY);                 // forcella
         const ring = (a, rad) => Array.from({ length: 32 }, (_, i) => {
           const t = i / 32 * Math.PI * 2;
           return P(a, bc + rad * Math.cos(t), zc + rad * Math.sin(t));
         });
+        const lens = () => {
+          k.poly(ring(aF, r), 0x0c0d10);                               // anello frontale
+          k.poly(ring(aF - 0.6, r - 2), 0x3b3423);                     // lente
+          [[0, 0], [5.5, 0], [-5.5, 0], [2.7, 4.8], [-2.7, 4.8], [2.7, -4.8], [-2.7, -4.8]].forEach(([db, dz]) => {
+            k.discA(aF - 0.8, bc + db, zc + dz, 1.9, 0xf6e7a8);
+          });
+          g.lineStyle(1.4, def.body.accent, 0.9); g.strokePoints(ring(aF, r), true);
+        };
+        if (!lensSeen) lens();
         k.poly(convexHull(ring(aR, r).concat(ring(aF, r))), 0x1c1d22);  // fusto
-        k.poly(ring(aR, r), 0x26282e);
         g.lineStyle(1, 0x3a3d45, 1);                                   // alette di raffreddamento
         [12, 18, 24, 30].forEach(a => { g.strokePoints(ring(a, r).slice(4, 20), false); });
-        k.poly(ring(aF, r), 0x0c0d10);                                 // anello frontale
-        k.poly(ring(aF - 0.6, r - 2), 0x3b3423);                       // lente
-        [[0, 0], [5.5, 0], [-5.5, 0], [2.7, 4.8], [-2.7, 4.8], [2.7, -4.8], [-2.7, -4.8]].forEach(([db, dz]) => {
-          k.discA(aF - 0.8, bc + db, zc + dz, 1.9, 0xf6e7a8);
-        });
-        g.lineStyle(1.4, def.body.accent, 0.9); g.strokePoints(ring(aF, r), true);
+        if (lensSeen) lens();
+        else { k.poly(ring(aR, r), 0x26282e); g.lineStyle(1, 0x3a3d45, 1); g.strokePoints(ring(aR, r), true); }
         k.box(17, 21, 29.5, 32, 2.5, zc + 1, ISO_GREY);               // braccio destro
         k.discB(32, 19, zc, 3.2, 0x8a8e98);                            // manopola
         break;
@@ -3674,7 +3780,8 @@ class StageScene extends Phaser.Scene {
     const c = this.add.container(x, y).setDepth(isoDepth(y));
 
     const body = this.add.graphics();
-    const rot = orientK(def, x, y);
+    // il PAR guarda il palco dal suo stativo; gli altri seguono orientK
+    const rot = def.shape === 'par' ? parRot(id) : orientK(def, x, y);
     this.drawComponentBody(body, def, rot);
     // punti di aggancio dei cavi e LED, ruotati insieme al dispositivo
     const frame = def.frame ? rotFrame(def.frame, rot) : null;
@@ -3706,7 +3813,7 @@ class StageScene extends Phaser.Scene {
     // isLedOn/refreshLive.
     // L'Allaccio è la sorgente fissa: non ha bisogno di un proprio LED.
     let led = null;
-    if (compType !== 'allaccio') {
+    if (compType !== 'allaccio' && def.ports.length) {
       led = this.add.graphics();
       c.add(led);
       this.drawLed(led, def, false, ledPos);
@@ -3846,17 +3953,10 @@ class StageScene extends Phaser.Scene {
   previewCellAt (type, world) {
     this.previewGraphics.clear();
 
-    if (type === 'top') {
-      let bestSub = null, bestDist = Infinity;
-      Object.values(gameState.placed).forEach(c => {
-        if (c.type === 'sub' && !c.hasTop) {
-          const v = this.compVisuals[c.id];
-          const d = Phaser.Math.Distance.Between(world.x, world.y, v.container.x, v.container.y);
-          if (d < bestDist) { bestDist = d; bestSub = c; }
-        }
-      });
-      if (bestSub && bestDist < TOP_ATTACH_RADIUS) {
-        const v = this.compVisuals[bestSub.id];
+    if (MOUNTS[type]) {
+      const base = this.nearestFreeBase(type, world);
+      if (base) {
+        const v = this.compVisuals[base.id];
         this.previewGraphics.lineStyle(3, 0x49b06a, 0.9);
         this.previewGraphics.strokeCircle(v.container.x, v.container.y, 34);
       }
@@ -3891,7 +3991,7 @@ class StageScene extends Phaser.Scene {
   placeComponentAt (type, worldX, worldY) {
     if (gameState.stock[type] <= 0) { showToast(type.toUpperCase() + ' esaurito per questo livello.'); return; }
 
-    if (type === 'top') { this.attachTopToNearestSub({ x: worldX, y: worldY }); return; }
+    if (MOUNTS[type]) { this.attachToNearestBase(type, { x: worldX, y: worldY }); return; }
 
     const { cx, cy } = this.nearestAllowedCell(type, worldX, worldY);
     const key = cx + ',' + cy;
@@ -3913,8 +4013,8 @@ class StageScene extends Phaser.Scene {
     // complesso palco, non solo la pedana spettacolo — include quindi anche
     // la fascia Off Stage, che è alla stessa quota.
     const zone = isStageCell(cx, cy) ? 'stage' : 'ground';
-    gameState.placed[id] = { id, type, gx: cx, gy: cy, screen: pos, zone, hasTop: type === 'sub' ? null : undefined };
-    if (type === 'par') gameState.placed[id].dmx = { addr: 1, mode: 1 };   // indirizzo/modalità DMX dal display
+    gameState.placed[id] = { id, type, gx: cx, gy: cy, screen: pos, zone };
+    if (MOUNT_ON[type]) gameState.placed[id][MOUNTS[MOUNT_ON[type]].link] = null;   // base libera
 
     this.updateQuadroVisual();
     setCircuitStatus('untested');
@@ -3937,43 +4037,48 @@ class StageScene extends Phaser.Scene {
     if (gameState.stock[type] <= 0) disarmPiece();
   }
 
-  attachTopToNearestSub (world) {
-    let bestSub = null, bestDist = Infinity;
+  // base libera più vicina a un punto (sub per la testa, stativo per il PAR)
+  nearestFreeBase (type, world) {
+    const m = MOUNTS[type];
+    let best = null, bestDist = Infinity;
     Object.values(gameState.placed).forEach(c => {
-      if (c.type === 'sub' && !c.hasTop) {
-        const v = this.compVisuals[c.id];
-        const d = Phaser.Math.Distance.Between(world.x, world.y, v.container.x, v.container.y);
-        if (d < bestDist) { bestDist = d; bestSub = c; }
-      }
+      if (c.type !== m.base || c[m.link]) return;
+      const v = this.compVisuals[c.id];
+      const d = Phaser.Math.Distance.Between(world.x, world.y, v.container.x, v.container.y);
+      if (d < bestDist) { bestDist = d; best = c; }
     });
-    if (!bestSub || bestDist > TOP_ATTACH_RADIUS) {
-      showToast('Posa la testa sopra un sub libero per montarla sul palo.');
-      return;
-    }
+    return best && bestDist <= TOP_ATTACH_RADIUS ? best : null;
+  }
+  // posizione e profondità di un pezzo montato: sopra la sua base, davanti a lei
+  mountPos (type, base) {
+    const bv = this.compVisuals[base.id];
+    return { x: bv.container.x, y: bv.container.y + MOUNTS[type].offsetY(), depth: isoDepth(bv.container.y) + 0.001 };
+  }
 
-    const idx = gameState.nextIndex.top++;
-    const id = 'top_' + idx;
-    gameState.stock.top--;
+  attachToNearestBase (type, world) {
+    const m = MOUNTS[type];
+    const base = this.nearestFreeBase(type, world);
+    if (!base) { showToast(m.missing); return; }
+
+    const idx = gameState.nextIndex[type]++;
+    const id = type + '_' + idx;
+    gameState.stock[type]--;
     updateStockUI();
 
-    const subVisual = this.compVisuals[bestSub.id];
-    // la testa poggia sul palo piantato al centro del sub (vedi topOffsetY):
-    // le porte Speakon di sub e testa stanno sui fianchi, ben distanziate
-    const topDef = COMPONENT_TYPES.top;
-    const offY = topOffsetY();
-    const pos = { x: subVisual.container.x, y: subVisual.container.y + offY };
-
-    const visual = this.buildComponentVisual(id, topDef, pos.x, pos.y);
-    visual.container.setDepth(isoDepth(subVisual.container.y) + 0.001);
+    const at = this.mountPos(type, base);
+    const pos = { x: at.x, y: at.y };
+    base[m.link] = id;
+    gameState.placed[id] = { id, type, [m.back]: base.id, zone: base.zone, screen: pos };
+    if (type === 'par') gameState.placed[id].dmx = { addr: 1, mode: 1 };   // indirizzo/modalità DMX dal display
+    const visual = this.buildComponentVisual(id, COMPONENT_TYPES[type], pos.x, pos.y);
+    visual.container.setDepth(at.depth);
     this.compVisuals[id] = visual;
-    bestSub.hasTop = id;
-    gameState.placed[id] = { id, type: 'top', parentSubId: bestSub.id, zone: 'ground', screen: pos };
 
     this.updateQuadroVisual();
     setCircuitStatus('untested');
     gameState.tested = false;
     SFX.place();
-    showToast('Testa montata sul palo di ' + compLabel(bestSub.id) + '.', 'ok');
+    showToast(m.done(base.id), 'ok');
     this.pushHistory();
   }
 
@@ -4126,6 +4231,7 @@ class StageScene extends Phaser.Scene {
       const v = this.compVisuals[c.id];
       if (!v || !v.idLabel) return;
       const ports = v.def.ports;
+      if (!ports.length) return;                       // stativo: niente prese
       const used = ports.filter(p => edgesOnPort(c.id, p.id).length > 0).length;
       v.idLabel.setText(used + '/' + ports.length);
       v.idLabel.setColor(used === ports.length ? '#49b06a' : '#8b8e98');
@@ -4311,7 +4417,7 @@ class StageScene extends Phaser.Scene {
     }
     if (pr.moved && pr.long && this.assemblyId === pr.id) {
       const comp = gameState.placed[pr.id];
-      if (comp && comp.type !== 'top' && comp.type !== 'allaccio') {
+      if (comp && !MOUNTS[comp.type] && comp.type !== 'allaccio') {
         this.previewCellAt(comp.type, { x: pointer.worldX, y: pointer.worldY });
       }
       return true;
@@ -4329,7 +4435,7 @@ class StageScene extends Phaser.Scene {
       if (pr.moved && this.assemblyId === pr.id) {
         this.clearDropPreview();
         const comp = gameState.placed[pr.id];
-        if (comp && comp.type !== 'top' && comp.type !== 'allaccio') {
+        if (comp && !MOUNTS[comp.type] && comp.type !== 'allaccio') {
           this.moveSelected = pr.id;
           this.attemptMoveTo(pointer.worldX, pointer.worldY);
           this.enterAssembly(pr.id, true);   // resta in montaggio nella nuova posizione
@@ -4377,8 +4483,8 @@ class StageScene extends Phaser.Scene {
       this.deleteComponent(id);
     });
     this.assemblyHandle = handle;
-    if (!quiet) showToast(comp.type === 'top'
-      ? 'Montaggio: tocca la ✕ per togliere la testa dal palo. Tocca il pavimento per finire.'
+    if (!quiet) showToast(MOUNTS[comp.type]
+      ? 'Montaggio: tocca la ✕ per togliere ' + (comp.type === 'top' ? 'la testa dal palo' : 'il PAR dallo stativo') + '. Tocca il pavimento per finire.'
       : 'Montaggio: trascina per spostare, tocca la ✕ per togliere. Tocca il pavimento per finire.');
   }
 
@@ -4393,14 +4499,16 @@ class StageScene extends Phaser.Scene {
   }
 
   /* toglie un dispositivo: spariscono anche i suoi cavi (senza far scattare
-     nulla) e il pezzo torna nella barra; un Sub si porta via la sua Testa */
+     nulla) e il pezzo torna nella barra; un Sub si porta via la sua Testa,
+     uno stativo il suo PAR */
   deleteComponent (id) {
     const comp = gameState.placed[id];
     if (!comp) return;
     this.exitAssembly();
     const ids = [id];
-    if (comp.type === 'sub' && comp.hasTop) ids.push(comp.hasTop);
-    if (comp.type === 'top' && comp.parentSubId && gameState.placed[comp.parentSubId]) gameState.placed[comp.parentSubId].hasTop = null;
+    const child = mountedOn(comp), base = mountBase(comp);
+    if (child) ids.push(child.id);                                  // col sub va via la testa, con lo stativo il PAR
+    if (base) base[MOUNTS[comp.type].link] = null;
     const lost = gameState.edges.filter(e => ids.includes(e.a) || ids.includes(e.b)).length;
     const name = COMPONENT_TYPES[comp.type].label;
     applyPowerAction(() => {
@@ -4436,7 +4544,8 @@ class StageScene extends Phaser.Scene {
   attemptMoveTo (worldX, worldY) {
     const id = this.moveSelected;
     const comp = gameState.placed[id];
-    if (!comp) { this.moveSelected = null; return; }
+    // un pezzo montato (testa, PAR) si sposta solo insieme alla sua base
+    if (!comp || MOUNTS[comp.type]) { this.moveSelected = null; return; }
 
     const { cx, cy } = this.nearestAllowedCell(comp.type, worldX, worldY);
     const key = cx + ',' + cy;
@@ -4446,6 +4555,7 @@ class StageScene extends Phaser.Scene {
     delete this.occupied[oldKey];
     this.occupied[key] = id;
     comp.gx = cx; comp.gy = cy;
+    comp.zone = isStageCell(cx, cy) ? 'stage' : 'ground';   // per il percorso dei cavi
     const pos = gridToScreen(cx + 0.5, cy + 0.5);
     comp.screen = pos;
     this.compVisuals[id].container.setPosition(pos.x, pos.y).setDepth(isoDepth(pos.y));
@@ -4456,13 +4566,18 @@ class StageScene extends Phaser.Scene {
       this.compVisuals[id] = this.buildComponentVisual(id, def, pos.x, pos.y);
     }
 
-    if (comp.type === 'sub' && comp.hasTop) {
-      const topComp = gameState.placed[comp.hasTop];
-      const offY = topOffsetY();
-      const topPos = { x: pos.x, y: pos.y + offY };
-      topComp.screen = topPos;
-      // la testa sta SOPRA il sub: va disegnata subito davanti a lui
-      this.compVisuals[topComp.id].container.setPosition(topPos.x, topPos.y).setDepth(isoDepth(pos.y) + 0.001);
+    const child = mountedOn(comp);
+    if (child) {
+      // il pezzo montato segue la sua base e sta subito davanti a lei; il
+      // PAR si ridisegna perché cambia verso col ruolo dello stativo
+      const at = this.mountPos(child.type, comp);
+      child.screen = { x: at.x, y: at.y };
+      child.zone = comp.zone;
+      if (child.type === 'par') {
+        this.compVisuals[child.id].container.destroy();
+        this.compVisuals[child.id] = this.buildComponentVisual(child.id, COMPONENT_TYPES.par, at.x, at.y);
+      }
+      this.compVisuals[child.id].container.setPosition(at.x, at.y).setDepth(at.depth);
     }
 
     this.clearMoveSelection();
@@ -4524,6 +4639,8 @@ class StageScene extends Phaser.Scene {
     if (stereoCheck()) return fail('audio', 'destra e sinistra si sono scambiate.');
     // luci
     if (missing('lights')) return fail('lights', toPlace('lights') ? 'manca ancora un pezzo da posare.' : 'qualche PAR non sente la consolle.');
+    const lights = lightingCheck();
+    if (lights) return fail('lights', lights.msg);
     if (dmxOverlaps().length) return fail('lights', 'due PAR si pestano i piedi sull\'indirizzo.');
 
     setCircuitStatus('ok');
@@ -4544,6 +4661,7 @@ class StageScene extends Phaser.Scene {
   fxStart () {
     this.stopFx();
     this.fx = { objs: [], timers: [], tweens: [], stops: [], restore: [] };
+    if (this.liveBeams) this.liveBeams.clear();
     return this.fx;
   }
   fxLater (ms, fn) { const t = this.time.delayedCall(ms, fn); this.fx.timers.push(t); return t; }
@@ -4575,6 +4693,7 @@ class StageScene extends Phaser.Scene {
     fx.objs.forEach(o => { this.tweens.killTweensOf(o); o.destroy(); });
     fx.restore.forEach(fn => fn());
     fx.stops.forEach(fn => fn());
+    this.drawLiveBeams();
   }
   visualsOf (...types) {
     return Object.values(gameState.placed).filter(c => types.includes(c.type)).map(c => this.compVisuals[c.id]).filter(Boolean);
@@ -4627,44 +4746,51 @@ class StageScene extends Phaser.Scene {
     }, () => this.stopFx());
   }
 
-  /* fasci dei PAR: sono fari FISSI, non teste mobili. Ognuno punta dritto
-     verso il pubblico e disegna sul fronte del palco una pozza tonda, tutte
-     della stessa misura e alla stessa distanza; il ventaglio si apre in modo
-     speculare rispetto al centro della fila di PAR. La geometria si calcola
-     una volta sola: durante l'effetto cambiano solo colore e intensità. */
+  /* fasci dei PAR: sono fari FISSI (wash), non teste mobili. Ognuno punta
+     dove lo manda il suo stativo (vedi parAim): i frontali sul proscenio,
+     i tagli sul centro del palco. La geometria si calcola una volta sola:
+     durante gli effetti cambiano solo colore e intensità. */
   parBeamGeometry (parList) {
-    if (!parList.length) return [];
-    const mid = parList.reduce((sum, c) => sum + c.gx + 0.5, 0) / parList.length;
-    const floorY = STAGE_ORIGIN_Y + STAGE_H - 0.55;           // fronte del palco
-    const R = 30;                                            // raggio della pozza
+    const R = 64;                                            // raggio della pozza (wash: larga)
     const flat = TILE_H / TILE_W;                            // cerchio a terra, in isometria
     return parList.map(c => {
+      const aim = parAim(c.id);
+      if (!aim) return null;
       const v = this.compVisuals[c.id];
       const x = v.container.x, y = v.container.y - 6;
-      const t = gridToScreen(c.gx + 0.5 + (c.gx + 0.5 - mid) * 0.35, floorY);
+      const t = gridToScreen(aim.gx, aim.gy);
       // bordi del cono: tangenti all'ellisse della pozza viste dalla lente
       const dx = t.x - x, dy = t.y - y, len = Math.hypot(dx, dy) || 1;
       const nx = -dy / len, ny = dx / len, rx = R, ry = R * flat;
       // punto dell'ellisse più lontano lungo la perpendicolare al fascio
       const k = Math.hypot(nx * rx, ny * ry);
       return { c, v, x, y, tx: t.x, ty: t.y, rx, ry, ex: rx * rx * nx / k, ey: ry * ry * ny / k };
-    });
+    }).filter(Boolean);
   }
+  // fasci dei PAR accesi durante il gioco: luce bianca calda, ferma, così si
+  // vede cosa illumina ogni faro (durante gli effetti ci pensano loro)
+  drawLiveBeams () {
+    if (!this.liveBeams) this.liveBeams = this.add.graphics().setDepth(44).setBlendMode(Phaser.BlendModes.ADD);
+    const g = this.liveBeams;
+    g.clear();
+    if (this.fx) return;
+    this.parBeamGeometry(placedOfType('par').filter(c => isRunning(c.id) && this.compVisuals[c.id]))
+      .forEach(b => this.drawParBeam(g, b, 0xffe9c4, 0.5));
+  }
+  /* fascio di un PAR LED: è un wash, luce ampia e morbida. Cono largo che
+     sfuma verso i bordi (strati sovrapposti, niente contorni netti) e una
+     grande pozza tonda a terra che si fonde con quelle vicine. */
   drawParBeam (g, b, col, a) {
     if (a <= 0.01) return;
-    const lx = b.tx + b.ex, ly = b.ty + b.ey, rx = b.tx - b.ex, ry = b.ty - b.ey;
-    // cono pieno, nucleo più chiaro e bordi netti
-    g.fillStyle(col, 0.22 * a); g.fillTriangle(b.x, b.y, lx, ly, rx, ry);
-    g.fillStyle(col, 0.14 * a); g.fillTriangle(b.x, b.y, b.tx + b.ex * 0.5, b.ty + b.ey * 0.5, b.tx - b.ex * 0.5, b.ty - b.ey * 0.5);
-    g.lineStyle(1.5, col, 0.55 * a);
-    g.lineBetween(b.x, b.y, lx, ly); g.lineBetween(b.x, b.y, rx, ry);
-    // pozza di luce a terra
-    g.fillStyle(col, 0.34 * a); g.fillEllipse(b.tx, b.ty, b.rx * 2, b.ry * 2);
-    g.fillStyle(col, 0.22 * a); g.fillEllipse(b.tx, b.ty, b.rx * 1.2, b.ry * 1.2);
-    g.lineStyle(1.5, col, 0.6 * a); g.strokeEllipse(b.tx, b.ty, b.rx * 2, b.ry * 2);
+    const cone = f => g.fillTriangle(b.x, b.y, b.tx + b.ex * f, b.ty + b.ey * f, b.tx - b.ex * f, b.ty - b.ey * f);
+    [[1, 0.07], [0.72, 0.07], [0.45, 0.08]].forEach(([f, al]) => { g.fillStyle(col, al * a); cone(f); });
+    // pozza a terra: anelli concentrici sempre più chiari verso il centro
+    [[1.15, 0.07], [0.9, 0.09], [0.65, 0.11], [0.4, 0.12]].forEach(([f, al]) => {
+      g.fillStyle(col, al * a); g.fillEllipse(b.tx, b.ty, b.rx * 2 * f, b.ry * 2 * f);
+    });
     // lente accesa
-    g.fillStyle(col, 0.35 * a); g.fillCircle(b.x, b.y, 16);
-    g.fillStyle(0xffffff, 0.9 * a); g.fillCircle(b.x, b.y, 6);
+    g.fillStyle(col, 0.3 * a); g.fillCircle(b.x, b.y, 18);
+    g.fillStyle(0xffffff, 0.85 * a); g.fillCircle(b.x, b.y, 6);
   }
   // colori speculari: i PAR esterni un colore, quelli interni l'altro
   parMirrorIndex (geo) {
@@ -4708,6 +4834,7 @@ class StageScene extends Phaser.Scene {
     });
     const q = findQuadro();
     if (q) this.updateQuadroPhaseBars(q.id);
+    this.drawLiveBeams();
     if (rearPanelId) renderRearPanel();
   }
 
@@ -4867,7 +4994,7 @@ class StageScene extends Phaser.Scene {
 
     gameState.placed = {};
     gameState.stock = { ...AVAILABLE_STOCK };
-    gameState.nextIndex = { sub: 1, top: 1, mixer: 1, par: 1, controller: 1, ampli: 1, quadro: 1, ciabatta: 1, ciabatta_cee: 1, pc: 1, scheda: 1, di: 1 };
+    gameState.nextIndex = { sub: 1, top: 1, mixer: 1, stativo: 1, par: 1, controller: 1, ampli: 1, quadro: 1, ciabatta: 1, ciabatta_cee: 1, pc: 1, scheda: 1, di: 1 };
     gameState.edges = [];
     gameState.edgeSeq = 0;
     gameState.selectedCable = null;
@@ -4938,10 +5065,9 @@ class StageScene extends Phaser.Scene {
       const def = COMPONENT_TYPES[c.type];
       if (!def) return;
       const visual = this.buildComponentVisual(c.id, def, c.screen.x, c.screen.y);
-      // (ripristino da annulla/ripeti) la testa resta davanti al suo sub
-      if (c.type === 'top' && c.parentSubId && gameState.placed[c.parentSubId]) {
-        visual.container.setDepth(isoDepth(gameState.placed[c.parentSubId].screen.y) + 0.001);
-      }
+      // (ripristino da annulla/ripeti) il pezzo montato resta davanti alla sua base
+      const base = mountBase(c);
+      if (base) visual.container.setDepth(isoDepth(base.screen.y) + 0.001);
       this.compVisuals[c.id] = visual;
       if (c.gx != null && c.gy != null) this.occupied[c.gx + ',' + c.gy] = c.id;
     });

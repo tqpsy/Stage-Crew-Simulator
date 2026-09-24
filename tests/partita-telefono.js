@@ -75,7 +75,11 @@ const OUT = process.env.SHOTS || null;
   await place('regia', 'ampli', [[6, 4]]);
   await place('regia', 'pc', [[4, 13]]);
   await place('regia', 'scheda', [[5, 13]]);
-  await place('luci', 'par', [[2, 5], [3, 5], [4, 5], [5, 5]]);
+  // stativi: frontali nel Pit (uno per lato), tagli ai lati del palco;
+  // poi il PAR si tocca sopra ogni stativo
+  await place('luci', 'stativo', [[2, 9], [6, 9], [1, 5], [6, 6]]);
+  await place('luci', 'par', []);
+  for (const sid of ['stativo_1', 'stativo_2', 'stativo_3', 'stativo_4']) { const before = await p.evaluate(() => gameState.stock.par); await tapAt(await devPt(sid)); if (await p.evaluate(() => gameState.stock.par) !== before - 1) problems.push('PAR su ' + sid + ' non montato: ' + await toast()); }
   await place('luci', 'controller', [[7, 7]]);
   log.push('posa: ' + taps + ' tocchi, stock=' + JSON.stringify(await p.evaluate(() => Object.fromEntries(Object.entries(gameState.stock).filter(([k, v]) => v)))));
   await shot('posa');
