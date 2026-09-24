@@ -53,12 +53,12 @@ Idee e richieste già decise, da sviluppare nei prossimi livelli.
 - Il salvataggio è un oggetto `scs-save` con `v` (versione): se il formato
   cambia, scrivere una conversione dalla versione vecchia invece di
   azzerare la partita.
-- **Reputazione** (il valore principale del service): non cala mai.
-  Ogni livello porta la reputazione del suo miglior collaudo (oggi 100 per
-  l'impianto che funziona + fino a 50 per la procedura pulita: −10 per test
-  fallito, scatto del magnetotermico o del salvavita, −5 per colpo nelle
-  casse). Rifare un livello uguale non aggiunge nulla, rifarlo meglio
-  aggiunge la differenza. Nuova partita = nuovo service, da 0.
+- **Reputazione** (il valore principale del service): regole in
+  `docs/livello1-festa-scuola.md`. Parte da 0, sale con fasi completate,
+  guasti gestiti bene e birre rifiutate, scende con i guasti gestiti male;
+  l'apparecchio rotto non conta. Ogni fase conta una volta sola. Oggi c'è
+  il collaudo (+5); `addReputation` è pronta per guasti e richieste extra.
+  Nuova partita = nuovo service, da 0.
   Da sviluppare: livelli (e mezzi, materiale, venue più grandi) che si
   aprono a soglie di reputazione; reputazione anche dagli obiettivi dopo
   il test (soundcheck, richieste del light designer).

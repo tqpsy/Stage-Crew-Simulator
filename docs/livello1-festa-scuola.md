@@ -41,8 +41,9 @@ berne una la toglie dal punteggio finale, quindi c'è una scelta da fare.
 - Ogni scatto di magnetotermico/salvavita e ogni colpo nelle casse stressa
   l'impianto. Dopo un certo numero (proposta: 3) **si rompe qualcosa** (es. il
   finale o un PAR).
-- Il livello si può comunque concludere, ma con un malus di **reputazione**,
-  che si porta ai livelli successivi.
+- Il livello si può comunque concludere. L'apparecchio rotto **non toglie
+  reputazione** (non è colpa del giocatore): la reputazione scende solo se il
+  guasto è gestito male (vedi sotto).
 
 ## Stanchezza — da sviluppare
 
@@ -99,13 +100,20 @@ disegnata e nome parodia.
 - Si può ripararlo con il **ricambio nel furgone** (zona carico): costa tempo e
   stanchezza. Oppure si va avanti così e si perde reputazione.
 
-## Reputazione (proposta)
+## Reputazione (decisa)
 
-Scala 0–100, si parte da 50 e si porta tra i livelli.
-- apparecchio rotto: −10
-- pazienza del pubblico finita: −5 per cambio palco
-- fase completata: +5
-- birra rifiutata in una richiesta extra: +5
+Si parte da **0** e si porta tra i livelli; non va sotto lo 0. Misura la
+professionalità, non la sfortuna.
+- **Sale** con: fase completata (+5), guasto gestito bene (+3), birra rifiutata
+  in una richiesta extra (+5).
+- **Scende** se un guasto è gestito male: trovato dal bidello al posto tuo (−5),
+  larsen (−5), microfono lasciato su un ingresso diverso dal CH1 (−2),
+  pazienza del pubblico finita per un cambio palco lento (−5).
+- **Apparecchio rotto: 0**, non è colpa del giocatore.
+- Ogni fase e ogni richiesta extra contano una volta sola per service: rifarle
+  non aggiunge altro.
+- Nel gioco oggi c'è la prima fase: il collaudo dell'impianto (+5). I numeri
+  sono in `REP` in `main.js`.
 
 ## Animazione di errore (proposta)
 
