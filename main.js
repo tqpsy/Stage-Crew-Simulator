@@ -457,8 +457,10 @@ function buildExpectedConnections () {
   const one = t => placedOfType(t)[0] || null;
   const L = c => c ? compLabel(c.id) : null;
   const missing = t => COMPONENT_TYPES[t].label + ' da posare';
-  // ogni posto dice a parole cosa serve, per il messaggio del Test impianto
-  const slot = (ok, what, ...cs) => ({ ok: !!ok, what, ids: cs.filter(Boolean).map(c => c.id) });
+  // ogni posto dice a parole cosa serve e a quale impianto appartiene
+  // (corrente, audio, luci): il Test impianto reagisce in modo diverso
+  let cat = 'power';
+  const slot = (ok, what, ...cs) => ({ ok: !!ok, what, cat, ids: cs.filter(Boolean).map(c => c.id) });
   const list = [];
   const mixer = one('mixer'), ampli = one('ampli'), pc = one('pc'), scheda = one('scheda');
 
@@ -472,6 +474,7 @@ function buildExpectedConnections () {
   });
 
   // audio: PC -> scheda
+  cat = 'audio';
   list.push(slot(pc && scheda && portEdgeExists(pc.id, 'usb', scheda.id, 'usb', 'usbc'),
     pc && scheda ? 'USB-C da ' + L(scheda) + ' a ' + L(pc) : missing(pc ? 'scheda' : 'pc'), pc, scheda));
   // scheda out L/R -> un ingresso jack del mixer ciascuna
@@ -488,10 +491,12 @@ function buildExpectedConnections () {
   });
 
   // DMX: ogni PAR in catena dalla consolle
+  cat = 'lights';
   const pars = placedOfType('par');
   for (let i = 0; i < 4; i++) list.push(slot(pars[i] && dmxUniverse(pars[i].id) != null, pars[i] ? 'DMX dalla consolle a ' + L(pars[i]) : missing('par'), pars[i]));
 
   // finale -> ogni Sub, ogni Sub -> la testa agganciata sopra
+  cat = 'audio';
   const subs = subsLeftToRight();
   for (let i = 0; i < 2; i++) {
     const sub = subs[i];
@@ -687,8 +692,64 @@ const SFX = (() => {
     scheda: () => { tone(0, 1175, 0.07, 0.07, 'sine'); tone(0.08, 1568, 0.09, 0.07, 'sine'); }
   };
 
+  /* beat da concerto per il collaudo riuscito: cassa dritta, rullante sul 2
+     e sul 4, charleston in levare e un basso che gira su quattro note, a
+     tutto volume su un'uscita propria (così si può zittire di colpo) */
+  function beat (bpm, beats) {
+    const out = ctx.createGain(); out.gain.value = 1.6;
+    const comp = ctx.createDynamicsCompressor();
+    comp.threshold.value = -10; comp.ratio.value = 6;
+    out.connect(comp); comp.connect(ctx.destination);
+    const t0 = ctx.currentTime + 0.05, step = 60 / bpm / 4;
+    const env = (node, t, gain, dur) => {
+      const g = ctx.createGain();
+      g.gain.setValueAtTime(gain, t); g.gain.exponentialRampToValueAtTime(0.0001, t + dur);
+      node.connect(g); g.connect(out);
+      return g;
+    };
+    const hit = (t, freq, dur, gain, type, filt, q) => {
+      const src = ctx.createBufferSource(); src.buffer = noiseBuf;
+      const f = ctx.createBiquadFilter(); f.type = type; f.frequency.value = freq; f.Q.value = q || 1;
+      src.connect(f); env(f, t, gain, dur);
+      src.start(t, Math.random() * 0.5); src.stop(t + dur + 0.02);
+    };
+    const riff = [55, 55, 65.4, 49];   // La, La, Do, Sol
+    for (let i = 0; i < beats * 4; i++) {
+      const t = t0 + i * step, bar = Math.floor(i / 16), s16 = i % 16;
+      if (s16 % 4 === 0) {                                    // cassa
+        const o = ctx.createOscillator(); o.type = 'sine';
+        o.frequency.setValueAtTime(150, t); o.frequency.exponentialRampToValueAtTime(42, t + 0.12);
+        env(o, t, 1.0, 0.32); o.start(t); o.stop(t + 0.34);
+        hit(t, 3000, 0.012, 0.25, 'highpass');
+      }
+      if (s16 === 4 || s16 === 12) { hit(t, 1800, 0.18, 0.55, 'bandpass', 0.8); hit(t, 180, 0.08, 0.35, 'lowpass'); } // rullante
+      hit(t, 8000, s16 % 4 === 2 ? 0.09 : 0.03, s16 % 4 === 2 ? 0.22 : 0.09, 'highpass');                            // charleston
+      if (s16 % 4 === 2 || s16 % 8 === 7) {                   // basso in levare
+        const o = ctx.createOscillator(); o.type = 'sawtooth';
+        o.frequency.value = riff[bar % riff.length];
+        const f = ctx.createBiquadFilter(); f.type = 'lowpass'; f.frequency.value = 420; f.Q.value = 6;
+        o.connect(f); env(f, t, 0.5, step * 1.8); o.start(t); o.stop(t + step * 2);
+      }
+    }
+    return () => {
+      try { out.gain.cancelScheduledValues(ctx.currentTime); out.gain.setTargetAtTime(0, ctx.currentTime, 0.03); } catch (e) { /* già chiuso */ }
+      setTimeout(() => { try { comp.disconnect(); } catch (e) { /* già staccato */ } }, 200);
+    };
+  }
+
   return {
     get muted () { return muted; },
+    // restituisce la funzione che lo zittisce (anche se non è mai partito)
+    beat: (bpm, beats) => { let stop = () => {}; play(() => { stop = beat(bpm, beats); }); return stop; },
+    // impianto che gracchia: scariche, ronzio di massa e fischio che va e viene
+    crackle: dur => play(() => {
+      tone(0, 50, dur, 0.35, 'square', 50, 0.02);
+      tone(0, 100, dur, 0.15, 'sawtooth', 100, 0.02);
+      for (let i = 0; i < dur * 22; i++) noise(Math.random() * dur, 0.02 + Math.random() * 0.07, 800 + Math.random() * 5000, 0.7, 0.3 + Math.random() * 0.5);
+      tone(dur * 0.3, 2900, dur * 0.4, 0.05, 'sine', 3300, 0.2);
+    }),
+    // PAR impazziti: ticchettio dei flash
+    strobe: dur => play(() => { for (let t = 0; t < dur; t += 0.07) if (Math.random() < 0.6) click(t, 0.12, 6000); }),
     toggleMute () {
       muted = !muted;
       try { localStorage.setItem('scs-muted', muted ? '1' : '0'); } catch (e) { /* storage non disponibile */ }
@@ -708,7 +769,6 @@ const SFX = (() => {
     rcd: () => play(() => { noise(0, 0.04, 1800, 1, 0.6); tone(0.01, 140, 0.12, 0.35, 'square', 90); for (let i = 0; i < 6; i++) click(0.03 + Math.random() * 0.2, 0.25, 4000); }),
     tump: () => play(() => { tone(0, 55, 0.35, 0.8, 'sine', 35); noise(0, 0.08, 200, 1, 0.3, 'lowpass'); }),
     success: () => play(() => { [523, 659, 784, 1047].forEach((f, i) => tone(i * 0.11, f, 0.45, 0.1, 'triangle')); }),
-    fail: () => play(() => { tone(0, 110, 0.35, 0.12, 'square'); tone(0.02, 116, 0.33, 0.08, 'square'); }),
     caseOpen: () => play(() => { click(0, 0.45, 2000); click(0.08, 0.45, 2200); noise(0.14, 0.3, 300, 0.8, 0.12, 'lowpass'); }),
     pick: () => play(() => { noise(0, 0.18, 1200, 0.7, 0.1); }),
     place: () => play(() => { tone(0, 120, 0.1, 0.3, 'sine', 70); noise(0, 0.05, 600, 1, 0.1); }),
@@ -1040,11 +1100,14 @@ function runValidation () {
   let madeCount = 0;
 
   const missingList = [];
+  const missingCats = new Set(), toPlaceCats = new Set();
   expected.forEach(exp => {
     if (exp.ok) madeCount++;
     else {
       allFound = false;
       missingList.push(exp.what);
+      missingCats.add(exp.cat);
+      if (/ da (posare|montare)/.test(exp.what)) toPlaceCats.add(exp.cat);
       exp.ids.forEach(i => failedComponents.add(i));
     }
   });
@@ -1063,7 +1126,7 @@ function runValidation () {
 
   return {
     pass: allFound && !overBudget && allSubsTopsPlaced && !overPhase,
-    failedComponents, missingList, overBudget, usedW, madeCount, totalCount: expected.length,
+    failedComponents, missingList, missingCats, toPlaceCats, allSubsTopsPlaced, overBudget, usedW, madeCount, totalCount: expected.length,
     phaseLoads, overloadedPhases, overPhase
   };
 }
@@ -1107,7 +1170,11 @@ function setCircuitStatus (state) {
   lamp.classList.remove('ok', 'error');
   if (state === 'ok') { lamp.classList.add('ok'); text.textContent = 'IMPIANTO OK'; }
   else if (state === 'error') { lamp.classList.add('error'); text.textContent = 'GUASTO IN CATENA'; }
-  else { text.textContent = 'DA TESTARE'; }
+  else {
+    text.textContent = 'DA TESTARE';
+    // l'impianto è cambiato: qualunque effetto del test in corso si ferma
+    if (window.__scene && window.__scene.stopFx) window.__scene.stopFx();
+  }
 }
 
 let toastTimer = null;
@@ -4409,8 +4476,16 @@ class StageScene extends Phaser.Scene {
 
   /* ---------------- TEST IMPIANTO: collaudo tecnico (potenza + segnale + PC di
      regia), prima ancora che arrivino i musicisti. Il vero soundcheck con gli
-     strumenti è una fase successiva, separata da questa. ---------------- */
+     strumenti è una fase successiva, separata da questa.
+     Il test non dice più cosa manca: lo fa VEDERE e SENTIRE, con un
+     piccolissimo suggerimento a parole.
+     - corrente: scintille dal Quadro;
+     - audio: l'impianto gracchia e le casse tremano;
+     - luci: i PAR con corrente vanno in tilt (colori a caso e strobo);
+     - tutto ok: cala la notte e parte lo show (10 secondi).
+     L'ordine conta: senza corrente non si può giudicare il resto. ---------------- */
   runSystemTest () {
+    this.stopFx();
     const result = runValidation();
     gameState.tested = true;
     Object.values(this.compVisuals).forEach(v => this.setGlow(v, false));
@@ -4419,76 +4494,209 @@ class StageScene extends Phaser.Scene {
     const q = findQuadro();
     const prot = q ? quadroProt(q) : null;
     // deve funzionare tutto ciò che serve: le utenze del livello, la scheda
-    // (alimentata dal PC) e le ciabatte solo se ci è attaccato qualcosa
+    // (alimentata dal PC) e le ciabatte solo se ci è attaccato qualcosa.
+    // Chi ha già un cavo mancante lo dirà il suo impianto (audio o luci).
     const inUse = c => !/^ciabatta/.test(c.type) || gameState.edges.some(e => e.a === c.id && POWER_CABLE_IDS.has(e.signal));
     const notRunning = Object.values(gameState.placed)
-      .filter(c => c.type !== 'allaccio' && (powerInPort(COMPONENT_TYPES[c.type]) || COMPONENT_TYPES[c.type].busPowered) && inUse(c) && !isRunning(c.id))
-      .map(c => c.id);
+      .filter(c => c.type !== 'allaccio' && (powerInPort(COMPONENT_TYPES[c.type]) || COMPONENT_TYPES[c.type].busPowered) && inUse(c) && !isRunning(c.id) && !result.failedComponents.has(c.id));
     // protezioni che servono davvero: generale, salvavita e le sole fasi usate
     const usedPhases = new Set(Object.keys(gameState.placed).map(id => phaseOf(id)).filter(Boolean));
     const needed = ['main', 'rcd', ...['L1', 'L2', 'L3'].filter(ph => usedPhases.has(ph))];
     const armed = !!prot && needed.every(k => prot[k]);
-    const stereo = result.pass ? stereoCheck() : null;
-    const clashes = dmxOverlaps();
-    const glow = ids => ids.forEach(id => {
-      const v = this.compVisuals[id];
-      if (!v) return;
-      this.setGlow(v, true, 0xe0503f);
-      this.tweens.add({ targets: v.container, angle: { from: -2, to: 2 }, duration: 90, yoyo: true, repeat: 3 });
-    });
+    const missing = cat => result.missingCats.has(cat);
+    const toPlace = cat => result.toPlaceCats.has(cat);
 
-    if (!result.pass) {
+    const fail = (kind, hint) => {
       setCircuitStatus('error');
-      SFX.fail();
-      if (result.overPhase) {
-        showToast('Fasi sbilanciate: con tutto acceso la fase ' + result.overloadedPhases.join(', ') + ' supererebbe i 3 kW. Sposta qualche utenza su un\'altra fase.');
-      } else {
-        showToast(result.overBudget
-          ? 'Potenza richiesta oltre il limite disponibile.'
-          : 'Cablaggio incompleto (' + result.madeCount + '/' + result.totalCount + '). Manca: ' + listShort([...new Set(result.missingList)], 3) + '.');
-        glow([...result.failedComponents]);
-      }
-      return;
-    }
-    if (stereo) {
-      setCircuitStatus('error');
-      SFX.fail();
-      showToast('Stereo invertito: la cassa di sinistra suona il canale destro e viceversa. Controlla L e R dalla scheda audio al mixer, al finale e alle casse.');
-      glow(stereo);
-      return;
-    }
-    if (!armed) {
-      setCircuitStatus('error');
-      SFX.fail();
-      showToast('Il Quadro non è armato: dal suo pannello alza l\'interruttore generale, il salvavita e le fasi che usi (' + needed.filter(k => /^L/.test(k)).join(', ') + ').');
-      if (q) glow([q.id]);
-      return;
-    }
-    if (notRunning.length) {
-      setCircuitStatus('error');
-      SFX.fail();
-      showToast('Spenti o senza corrente: ' + listShort(notRunning.map(compLabel), 4) + '. Accendili dal loro pannello; se sono accesi, controlla che arrivi corrente.');
-      glow(notRunning);
-      return;
-    }
-    if (clashes.length) {
-      setCircuitStatus('error');
-      SFX.fail();
-      showToast('Indirizzi DMX sovrapposti (' + clashes.map(([x, y]) => compLabel(x) + ' / ' + compLabel(y)).join(', ') + '): regolali dal display di ogni PAR.');
-      glow([...new Set(clashes.flat())]);
-      return;
-    }
+      if (kind === 'power') { showToast('Scintille! ' + hint); this.fxSparks(); }
+      else if (kind === 'audio') { showToast('L\'impianto gracchia: ' + hint); this.fxCrackle(); }
+      else { showToast('Le luci vanno in tilt: ' + hint); this.fxLightsTilt(); }
+    };
+
+    // corrente
+    if (result.overPhase) return fail('power', 'Una fase è troppo carica.');
+    if (result.overBudget) return fail('power', 'Chiedi troppa potenza.');
+    if (missing('power')) return fail('power', toPlace('power') ? 'Manca ancora un pezzo da posare.' : 'Qualcuno non arriva al Quadro.');
+    if (!armed) return fail('power', 'Il Quadro è davvero armato?');
+    if (notRunning.length) return fail('power', 'Qualcosa è ancora spento.');
+    // audio
+    if (missing('audio') || !result.allSubsTopsPlaced) return fail('audio', toPlace('audio') || !result.allSubsTopsPlaced ? 'manca ancora un pezzo da posare.' : 'il segnale si perde per strada.');
+    if (stereoCheck()) return fail('audio', 'destra e sinistra si sono scambiate.');
+    // luci
+    if (missing('lights')) return fail('lights', toPlace('lights') ? 'manca ancora un pezzo da posare.' : 'qualche PAR non sente la consolle.');
+    if (dmxOverlaps().length) return fail('lights', 'due PAR si pestano i piedi sull\'indirizzo.');
 
     setCircuitStatus('ok');
-    SFX.success();
-    // la procedura conta: scatti e colpi nelle casse restano nel verbale
-    const notes = [];
-    if (gameState.trips) notes.push('magnetotermici scattati: ' + gameState.trips);
-    if (gameState.rcdTrips) notes.push('salvavita scattati: ' + gameState.rcdTrips);
+    // la procedura conta: un solo suggerimento, il primo inciampo
     const pops = (gameState.procErrors || []).filter(x => x === 'pop').length;
-    if (pops) notes.push('colpi nelle casse: ' + pops);
-    showToast('Impianto collaudato: tutto acceso, alimentazione e segnale integri.' + (notes.length ? ' Da migliorare — ' + notes.join(', ') + '.' : ' Procedura perfetta!'), 'ok');
+    const tip = gameState.trips ? 'la prossima volta accendi i pesanti uno alla volta.'
+      : gameState.rcdTrips ? 'la prossima volta cabla a impianto spento.'
+      : pops ? 'la prossima volta accendi finali e sub per ultimi.'
+      : null;
+    showToast('Impianto collaudato, si va in scena! ' + (tip ? 'Piccolo consiglio: ' + tip : 'Procedura perfetta.'), 'ok');
     this.playSuccessSequence();
+  }
+
+  /* ---------------- effetti del Test impianto ----------------
+     Tutto quello che crea un effetto (oggetti, timer, tween, suoni) passa da
+     qui, così un nuovo test, un reset o una modifica all'impianto lo fermano
+     di colpo e rimettono i dispositivi com'erano. */
+  fxStart () {
+    this.stopFx();
+    this.fx = { objs: [], timers: [], tweens: [], stops: [], restore: [] };
+    return this.fx;
+  }
+  fxLater (ms, fn) { const t = this.time.delayedCall(ms, fn); this.fx.timers.push(t); return t; }
+  fxEvery (ms, times, fn, onEnd) {
+    let n = 0;
+    const t = this.time.addEvent({ delay: ms, repeat: times - 1, callback: () => { fn(n++); if (n === times && onEnd) onEnd(); } });
+    this.fx.timers.push(t); return t;
+  }
+  fxTween (cfg) { const t = this.tweens.add(cfg); this.fx.tweens.push(t); return t; }
+  fxObj (o) { this.fx.objs.push(o); return o; }
+  // un dispositivo mosso da un effetto torna al suo posto alla fine
+  fxHold (v) {
+    const c = v.container, s = { x: c.x, y: c.y, sx: c.scaleX, sy: c.scaleY, a: c.angle };
+    this.fx.restore.push(() => {
+      if (!c.scene) return;
+      // se nel frattempo è stato spostato davvero, resta dov'è ora
+      if (Math.abs(c.x - s.x) < 10 && Math.abs(c.y - s.y) < 10) c.setPosition(s.x, s.y);
+      c.setScale(s.sx, s.sy).setAngle(s.a);
+      this.setGlow(v, false);
+    });
+    return s;
+  }
+  stopFx () {
+    const fx = this.fx;
+    if (!fx) return;
+    this.fx = null;
+    fx.timers.forEach(t => t.remove(false));
+    fx.tweens.forEach(t => t.stop());
+    fx.objs.forEach(o => { this.tweens.killTweensOf(o); o.destroy(); });
+    fx.restore.forEach(fn => fn());
+    fx.stops.forEach(fn => fn());
+  }
+  visualsOf (...types) {
+    return Object.values(gameState.placed).filter(c => types.includes(c.type)).map(c => this.compVisuals[c.id]).filter(Boolean);
+  }
+
+  // corrente: raffica di scintille dal Quadro (o dall'allaccio, se manca)
+  fxSparks () {
+    this.fxStart();
+    SFX.trip();
+    const q = findQuadro();
+    const src = q || gameState.placed.allaccio;
+    const v = src && this.compVisuals[src.id];
+    if (v) this.fxHold(v);
+    this.cameras.main.shake(260, 0.007);
+    this.fxEvery(170, 8, i => {
+      if (!v) return;
+      const ports = COMPONENT_TYPES[src.type].ports;
+      const pos = q ? this.getPortScreenPos(q.id, ports[Math.floor(Math.random() * ports.length)].id) : null;
+      const x = pos ? pos.x : v.container.x + (Math.random() - 0.5) * 30, y = pos ? pos.y : v.container.y - 10;
+      this.spawnSparks(x, y);
+      this.spawnSparks(x + (Math.random() - 0.5) * 24, y + (Math.random() - 0.5) * 16);
+      this.setGlow(v, i % 2 === 0, 0xe0503f);
+      if (i % 3 === 0) SFX.trip();
+    }, () => this.stopFx());
+  }
+
+  // audio: le casse gracchiano, tremano e sputano scariche
+  fxCrackle () {
+    this.fxStart();
+    const DUR = 2.4;
+    SFX.crackle(DUR);
+    const spk = this.visualsOf('sub', 'top').map(v => ({ v, s: this.fxHold(v) }));
+    const zap = this.fxObj(this.add.graphics().setDepth(60));
+    this.fxEvery(60, Math.round(DUR * 1000 / 60), () => {
+      zap.clear();
+      spk.forEach(({ v, s }) => {
+        const c = v.container;
+        c.x = s.x + (Math.random() - 0.5) * 5;
+        c.angle = s.a + (Math.random() - 0.5) * 3;
+        if (Math.random() < 0.55) {
+          // scarica a zig-zag che esce dalla cassa
+          let x = s.x + (Math.random() - 0.5) * 40, y = s.y - 20 - Math.random() * 30;
+          zap.lineStyle(2, Math.random() < 0.5 ? 0xffffff : 0x9fd3ff, 0.9);
+          zap.beginPath(); zap.moveTo(x, y);
+          for (let k = 0; k < 4; k++) { x += (Math.random() - 0.5) * 22; y -= 6 + Math.random() * 10; zap.lineTo(x, y); }
+          zap.strokePath();
+        }
+        this.setGlow(v, Math.random() < 0.3, 0x9fd3ff);
+      });
+    }, () => this.stopFx());
+  }
+
+  /* fasci dei PAR: sono fari FISSI, non teste mobili. Ognuno punta dritto
+     verso il pubblico e disegna sul fronte del palco una pozza tonda, tutte
+     della stessa misura e alla stessa distanza; il ventaglio si apre in modo
+     speculare rispetto al centro della fila di PAR. La geometria si calcola
+     una volta sola: durante l'effetto cambiano solo colore e intensità. */
+  parBeamGeometry (parList) {
+    if (!parList.length) return [];
+    const mid = parList.reduce((sum, c) => sum + c.gx + 0.5, 0) / parList.length;
+    const floorY = STAGE_ORIGIN_Y + STAGE_H - 0.55;           // fronte del palco
+    const R = 30;                                            // raggio della pozza
+    const flat = TILE_H / TILE_W;                            // cerchio a terra, in isometria
+    return parList.map(c => {
+      const v = this.compVisuals[c.id];
+      const x = v.container.x, y = v.container.y - 6;
+      const t = gridToScreen(c.gx + 0.5 + (c.gx + 0.5 - mid) * 0.35, floorY);
+      // bordi del cono: tangenti all'ellisse della pozza viste dalla lente
+      const dx = t.x - x, dy = t.y - y, len = Math.hypot(dx, dy) || 1;
+      const nx = -dy / len, ny = dx / len, rx = R, ry = R * flat;
+      // punto dell'ellisse più lontano lungo la perpendicolare al fascio
+      const k = Math.hypot(nx * rx, ny * ry);
+      return { c, v, x, y, tx: t.x, ty: t.y, rx, ry, ex: rx * rx * nx / k, ey: ry * ry * ny / k };
+    });
+  }
+  drawParBeam (g, b, col, a) {
+    if (a <= 0.01) return;
+    const lx = b.tx + b.ex, ly = b.ty + b.ey, rx = b.tx - b.ex, ry = b.ty - b.ey;
+    // cono pieno, nucleo più chiaro e bordi netti
+    g.fillStyle(col, 0.22 * a); g.fillTriangle(b.x, b.y, lx, ly, rx, ry);
+    g.fillStyle(col, 0.14 * a); g.fillTriangle(b.x, b.y, b.tx + b.ex * 0.5, b.ty + b.ey * 0.5, b.tx - b.ex * 0.5, b.ty - b.ey * 0.5);
+    g.lineStyle(1.5, col, 0.55 * a);
+    g.lineBetween(b.x, b.y, lx, ly); g.lineBetween(b.x, b.y, rx, ry);
+    // pozza di luce a terra
+    g.fillStyle(col, 0.34 * a); g.fillEllipse(b.tx, b.ty, b.rx * 2, b.ry * 2);
+    g.fillStyle(col, 0.22 * a); g.fillEllipse(b.tx, b.ty, b.rx * 1.2, b.ry * 1.2);
+    g.lineStyle(1.5, col, 0.6 * a); g.strokeEllipse(b.tx, b.ty, b.rx * 2, b.ry * 2);
+    // lente accesa
+    g.fillStyle(col, 0.35 * a); g.fillCircle(b.x, b.y, 16);
+    g.fillStyle(0xffffff, 0.9 * a); g.fillCircle(b.x, b.y, 6);
+  }
+  // colori speculari: i PAR esterni un colore, quelli interni l'altro
+  parMirrorIndex (geo) {
+    const order = geo.map((b, i) => i).sort((i, j) => geo[i].x - geo[j].x);
+    const m = [];
+    order.forEach((gi, k) => { m[gi] = Math.min(k, order.length - 1 - k); });
+    return m;
+  }
+
+  // luci: i PAR con corrente impazziscono, colori a caso e strobo
+  fxLightsTilt () {
+    this.fxStart();
+    const DUR = 2.8;
+    SFX.strobe(DUR);
+    const geo = this.parBeamGeometry(placedOfType('par').filter(c => isRunning(c.id) && this.compVisuals[c.id]));
+    geo.forEach(b => this.fxHold(b.v));
+    const rays = this.fxObj(this.add.graphics().setDepth(45).setBlendMode(Phaser.BlendModes.ADD));
+    const COLORS = [0xff2d55, 0x2dff7a, 0x2d7bff, 0xffe12d, 0xff2dff, 0x2dfff0, 0xffffff];
+    this.fxEvery(70, Math.round(DUR * 1000 / 70), () => {
+      rays.clear();
+      const strobe = Math.random() < 0.18;   // lampo bianco di tutti insieme
+      // il faro resta fermo: impazziscono solo colore, intensità e lampi
+      geo.forEach(b => {
+        const v = b.v, r = Math.min(v.def.body.w, v.def.body.h - 10) / 2;
+        v.glow.clear();
+        if (!strobe && Math.random() < 0.35) { v.glow.setAlpha(0); return; }
+        const col = strobe ? 0xffffff : COLORS[Math.floor(Math.random() * COLORS.length)];
+        v.glow.setAlpha(1);
+        v.glow.fillStyle(col, 0.85); v.glow.fillCircle(0, -4, r + 2);
+        this.drawParBeam(rays, b, col, strobe ? 1.3 : 0.4 + Math.random() * 0.6);
+      });
+    }, () => this.stopFx());
   }
 
   /* ---------------- corrente dal vivo: LED, fasi, pannello aperto ---------------- */
@@ -4556,60 +4764,97 @@ class StageScene extends Phaser.Scene {
     }
   }
 
+  /* ---------------- lo show: 10 secondi di concerto a impianto collaudato ----------------
+     cala la notte sulla venue, i PAR si accendono uno alla volta e illuminano
+     la scena, poi le casse partono con un beat a tutto volume: fasci che
+     cambiano colore a ogni battuta, casse che pompano sulla cassa dritta.
+     Alla fine torna il giorno e l'impianto resta com'era. */
   playSuccessSequence () {
-    Object.entries(gameState.placed).forEach(([id, c]) => {
-      const v = this.compVisuals[id];
-      if (!v) return;
-      if (c.type === 'top' || c.type === 'sub') {
-        this.tweens.add({ targets: v.container, scale: { from: v.container.scaleX, to: v.container.scaleX * 1.1 }, yoyo: true, repeat: 4, duration: 140 });
-      }
-      if (c.type === 'par') {
-        let n = 0;
-        this.time.addEvent({
-          delay: 130, repeat: 9,
-          callback: () => { n++; this.setGlow(v, true, n % 2 === 0 ? 0xf2c53d : 0xffffff); }
-        });
-      }
+    this.fxStart();
+    SFX.success();
+    const BPM = 120, BEATS = 14, BEAT_MS = 60000 / BPM;
+    const T_LIGHTS = 1300, T_BEAT = 2300, T_END = T_BEAT + BEATS * BEAT_MS, T_DAY = T_END + 250;
+
+    // la telecamera va sul palco per lo show e poi torna dov'era
+    const cam = this.cameras.main;
+    const view = { x: cam.midPoint.x, y: cam.midPoint.y, z: cam.zoom };
+    const stage = gridToScreen(STAGE_ORIGIN_X + STAGE_W / 2, STAGE_ORIGIN_Y + STAGE_H / 2 + 1);
+    cam.pan(stage.x, stage.y, 1200, 'Sine.easeInOut');
+    cam.zoomTo(Math.max(view.z, DEFAULT_ZOOM * 1.7), 1200, 'Sine.easeInOut');
+    this.fxLater(T_DAY, () => {
+      cam.pan(view.x, view.y, 800, 'Sine.easeInOut', true);
+      cam.zoomTo(view.z, 800, 'Sine.easeInOut', true);
+    });
+    // a fine show, o interrotto a metà (reset, modifica, nuovo test): com'era
+    this.fx.restore.push(() => {
+      cam.panEffect.reset(); cam.zoomEffect.reset();
+      cam.setZoom(view.z); cam.centerOn(view.x, view.y);
     });
 
-    this.playBeep();
+    // notte: un velo blu scuro su tutta la venue, qualunque siano zoom e pan
+    const night = this.fxObj(this.add.rectangle(GAME_W / 2, GAME_H / 2, GAME_W * 8, GAME_H * 8, 0x03050d, 1)
+      .setScrollFactor(0).setDepth(40).setAlpha(0));
+    this.fxTween({ targets: night, alpha: 0.84, duration: 1200, ease: 'Sine.InOut' });
+    this.fxTween({ targets: night, alpha: 0, delay: T_DAY, duration: 700, ease: 'Sine.InOut' });
 
-    const banner = this.add.text(GAME_W / 2, GAME_H / 2, 'IMPIANTO COLLAUDATO', {
-      fontFamily: 'Barlow Condensed, sans-serif', fontSize: '40px', fontStyle: 'bold',
-      color: '#f2a541', align: 'center', wordWrap: { width: GAME_W - 80 }
-    }).setOrigin(0.5).setDepth(100).setAlpha(0).setScale(0.85).setScrollFactor(0);
+    const beams = this.fxObj(this.add.graphics().setDepth(45).setBlendMode(Phaser.BlendModes.ADD));
+    const waves = this.fxObj(this.add.graphics().setDepth(46));
+    const PALETTE = [[0xff3b6b, 0x3b8bff], [0xffb13b, 0xff3bd1], [0x3bffb0, 0x3b8bff], [0xffffff, 0xffb13b], [0xb03bff, 0x3bfff2]];
+    const pars = this.parBeamGeometry(placedOfType('par').filter(c => isRunning(c.id) && this.compVisuals[c.id]));
+    const mirror = this.parMirrorIndex(pars);
+    pars.forEach(b => { b.k = 0; });
+    const speakers = this.visualsOf('sub', 'top').map(v => ({ v, s: this.fxHold(v) }));
+    const st = { kick: 0, beat: 0, flash: 0 };
 
-    this.tweens.add({
-      targets: banner, alpha: 1, scale: 1, duration: 380, ease: 'Back.Out',
-      onComplete: () => {
-        this.tweens.add({ targets: banner, alpha: 0, delay: 1800, duration: 500, onComplete: () => banner.destroy() });
-      }
-    });
-  }
+    // i PAR si accendono a coppie speculari, dall'esterno verso il centro
+    pars.forEach((b, i) => this.fxTween({ targets: b, k: 1, delay: T_LIGHTS + mirror[i] * 350, duration: 300 }));
+    this.fxTween({ targets: pars, k: 0, delay: T_END, duration: 600 });
 
-  playBeep () {
-    try {
-      const AudioCtx = window.AudioContext || window.webkitAudioContext;
-      const ctx = new AudioCtx();
-      const notes = [440, 554, 659, 880];
-      notes.forEach((freq, i) => {
-        const osc = ctx.createOscillator();
-        const gain = ctx.createGain();
-        osc.type = 'square';
-        osc.frequency.value = freq;
-        gain.gain.value = 0.05;
-        osc.connect(gain).connect(ctx.destination);
-        const t0 = ctx.currentTime + i * 0.11;
-        osc.start(t0);
-        gain.gain.setValueAtTime(0.06, t0);
-        gain.gain.exponentialRampToValueAtTime(0.0001, t0 + 0.1);
-        osc.stop(t0 + 0.11);
+    // disegno a ~30 fps: i fasci non si muovono, pulsano col beat e
+    // cambiano colore ogni due battute
+    this.fxEvery(33, Math.ceil((T_DAY + 800) / 33), () => {
+      st.kick *= 0.86; st.flash *= 0.8;
+      beams.clear();
+      const colors = PALETTE[Math.floor(st.beat / 2) % PALETTE.length];
+      const pulse = 0.55 + 0.45 * st.kick;
+      pars.forEach((b, i) => {
+        const col = st.flash > 0.3 ? 0xffffff : colors[mirror[i] % 2];
+        this.drawParBeam(beams, b, col, b.k * pulse);
       });
-    } catch (e) { /* AudioContext non disponibile: nessun suono, non bloccante */ }
+      // onde d'urto che escono dalle casse a ogni colpo di cassa
+      waves.clear();
+      if (st.kick > 0.05) speakers.forEach(({ s }) => {
+        waves.lineStyle(2, 0xffffff, 0.5 * st.kick);
+        waves.strokeEllipse(s.x, s.y - 10, 60 + (1 - st.kick) * 90, 30 + (1 - st.kick) * 45);
+      });
+    });
+
+    // il beat: suono e movimento vanno insieme
+    this.fxLater(T_BEAT, () => { this.fx.stops.push(SFX.beat(BPM, BEATS)); });
+    this.fxLater(T_BEAT + 50, () => this.fxEvery(BEAT_MS, BEATS, n => {
+      st.kick = 1; st.beat = n + 1;
+      if (n % 4 === 0) st.flash = 1;
+      if (n % 4 === 0) this.cameras.main.shake(120, 0.002);
+      speakers.forEach(({ v, s }) => this.fxTween({
+        targets: v.container, scaleX: s.sx * 1.09, scaleY: s.sy * 1.09, duration: 70, yoyo: true, ease: 'Quad.Out'
+      }));
+    }));
+
+    // finale: la scritta, poi torna il giorno
+    this.fxLater(T_END - 200, () => {
+      const banner = this.fxObj(this.add.text(GAME_W / 2, GAME_H / 2, 'IMPIANTO COLLAUDATO', {
+        fontFamily: 'Barlow Condensed, sans-serif', fontSize: '44px', fontStyle: 'bold',
+        color: '#f2a541', align: 'center', wordWrap: { width: GAME_W - 80 }
+      }).setOrigin(0.5).setDepth(100).setAlpha(0).setScale(0.85).setScrollFactor(0));
+      this.fxTween({ targets: banner, alpha: 1, scale: 1, duration: 380, ease: 'Back.Out' });
+      this.fxTween({ targets: banner, alpha: 0, delay: 1000, duration: 400 });
+    });
+    this.fxLater(T_DAY + 800, () => this.stopFx());
   }
 
   /* ---------------- reset ---------------- */
   resetLevel () {
+    this.stopFx();
     this.clearEdgeSelection();
     this.clearMoveSelection();
     this.cancelPending();
@@ -4674,6 +4919,7 @@ class StageScene extends Phaser.Scene {
   }
 
   restoreSnapshot (snap) {
+    this.stopFx();
     this.clearEdgeSelection();
     this.clearMoveSelection();
     this.cancelPending();
