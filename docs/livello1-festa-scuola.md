@@ -190,3 +190,25 @@ Giro del livello: **Montaggio → Test impianto → [cambio palco → spettacolo
 
 `prototipi/spettacolo-preside.html`: la fase del discorso del preside, cliccabile,
 per provare il ritmo prima di portarla nel gioco.
+
+### Dopo la prima prova
+
+- **Grafica**: quella del prototipo non è definitiva. Nel gioco vero lo
+  spettacolo si svolge sul palco isometrico che c'è già; del prototipo restano
+  l'impianto dell'interfaccia (header, fumetti, banco regia).
+- **Guasti veri, non "tocca e risolvi"**: il cavo del microfono ora va
+  diagnosticato. Si segue la catena microfono → cavo → ingresso del mixer; ogni
+  controllo e ogni riparazione costa tempo, si fa una cosa alla volta. Tre cause
+  possibili: connettore sfilato, cavo schiacciato (serve un XLR dal baule e poi
+  va ricollegato), cavo uscito dal mixer. Se lo ricolleghi all'ingresso
+  sbagliato la voce arriva su un altro canale col fader giù.
+- **Lingua dei personaggi**: ognuno parla una lingua fatta solo del suo nome
+  (il preside dice solo "Tramp"). Sottotitoli nella sua lingua con la traduzione
+  sotto; la voce è sintesi vocale col volume che esce davvero dal mixer.
+- **Rigiocabilità**: apertura e finale fissi; in mezzo 5 imprevisti pescati da
+  7 a tempi variabili, che verso la fine si accavallano. Il volume del preside
+  va e viene da solo (fader sempre da seguire). Il larsen cresce con volume ×
+  vicinanza alla cassa e si sente arrivare: va abbassato quanto basta, non
+  zittito. Nuovi imprevisti: la sigla dal PC, e il dilemma "più volume!"
+  (accontentare il preside o il pubblico). Suggerimenti nei fumetti solo alla
+  prima partita (si possono riaccendere).

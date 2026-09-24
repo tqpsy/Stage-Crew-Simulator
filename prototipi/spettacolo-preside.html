@@ -38,7 +38,9 @@
   /* ---- palco ---- */
   #stage{position:relative;overflow:hidden;background:#0c0d10;min-height:180px}
   #stage svg{position:absolute;inset:0;width:100%;height:100%}
-  #caption{position:absolute;left:16px;right:16px;bottom:8px;text-align:center;font-size:13px;color:#fff;text-shadow:0 1px 3px #000;pointer-events:none;min-height:1.2em}
+  #caption{position:absolute;left:16px;right:16px;bottom:6px;text-align:center;color:#fff;text-shadow:0 1px 3px #000,0 0 8px #000;pointer-events:none}
+  #caption b{display:block;font-family:var(--marker);font-weight:400;font-size:17px;letter-spacing:.02em}
+  #caption small{display:block;font-size:11px;opacity:.75;font-style:italic;margin-top:1px}
   #toast{position:absolute;left:50%;top:10px;transform:translateX(-50%);background:var(--bg-raised);border:1px solid var(--hairline);padding:6px 12px;border-radius:8px;font-size:13px;opacity:0;transition:opacity .25s;pointer-events:none;max-width:calc(100% - 32px);text-align:center}
   #toast.show{opacity:1}#toast.ok{border-color:var(--green)}#toast.bad{border-color:var(--red)}
   #pausa{position:absolute;inset:0;background:rgba(8,8,10,.85);display:grid;place-items:center;font-family:var(--display);font-size:34px;letter-spacing:.1em}
@@ -47,12 +49,13 @@
   /* ---- banco regia ---- */
   #desk{background:var(--bg-panel);border-top:1px solid var(--hairline);padding:8px 16px calc(10px + env(safe-area-inset-bottom,0px));display:grid;gap:8px;height:44vh;max-height:330px;grid-template-rows:auto 1fr}
   .tabs{display:flex;gap:6px}
-  .tab{flex:1;background:var(--bg-raised);border:1px solid var(--hairline);border-radius:8px;padding:6px;font-family:var(--display);font-size:17px;letter-spacing:.08em}
+  .tab{flex:1;white-space:nowrap;background:var(--bg-raised);border:1px solid var(--hairline);border-radius:8px;padding:6px;font-family:var(--display);font-size:17px;letter-spacing:.08em}
   .tab[aria-selected=true]{border-color:var(--amber);color:var(--amber)}
+  .tab.alarm{border-color:var(--red);color:#fff;background:#4a1c17;animation:blink 1s steps(2) infinite}
+  .tab.alarm[aria-selected=true]{animation:none}
+  @keyframes blink{50%{background:var(--red)}}
   .panel{min-height:0;display:flex;gap:10px}
-  .panel[hidden]{display:none!important}
   .strip{flex:1;min-width:0;background:var(--bg-raised);border:1px solid var(--hairline);border-radius:10px;padding:6px 4px;display:grid;grid-template-rows:auto 1fr auto;gap:6px;justify-items:center}
-  .strip.off{opacity:.38}
   .strip.pulse{animation:pulse .5s ease-in-out 4}
   @keyframes pulse{50%{border-color:var(--amber);box-shadow:0 0 0 3px rgba(242,165,65,.35)}}
   .strip-name{font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:.06em;display:flex;align-items:center;gap:4px;white-space:nowrap}
@@ -78,9 +81,25 @@
   .mem b{font-family:var(--display);font-size:16px;letter-spacing:.04em}
   .mem small{font-size:10px;color:var(--muted)}
   .mem[aria-pressed=true]{border-color:var(--amber);box-shadow:inset 0 0 0 1px var(--amber)}
-  .mem.pulse,.lights.pulse .mems{animation:pulse .5s ease-in-out 4}
-  .dimmer{display:grid;grid-template-rows:auto 1fr;gap:4px;justify-items:center;font-size:10px;color:var(--muted);text-transform:uppercase}
+  .mem.pulse,.dimmer.pulse{animation:pulse .5s ease-in-out 4}
+  .dimmer{display:grid;grid-template-rows:auto 1fr;gap:4px;justify-items:center;font-size:10px;color:var(--muted);text-transform:uppercase;border-radius:8px}
   .hint{font-size:11px;color:var(--muted)}
+
+  /* ---- guasto: la catena del microfono ---- */
+  .fault{flex-direction:column;gap:8px;overflow:auto}
+  .chain{display:grid;grid-template-columns:1fr auto 1fr auto 1fr;align-items:stretch;gap:4px}
+  .chain .link{align-self:center;width:14px;height:3px;background:var(--hairline)}
+  .node{background:var(--bg-raised);border:1px solid var(--hairline);border-radius:10px;padding:8px 6px;display:grid;gap:6px;align-content:start;text-align:center;font-size:12px}
+  .node b{font-family:var(--display);font-size:15px;letter-spacing:.05em}
+  .node .st{font-size:11px;color:var(--muted);min-height:2.6em}
+  .node.ok{border-color:var(--green)}.node.ok .st{color:var(--green)}
+  .node.bad{border-color:var(--red)}.node.bad .st{color:#ff9b8f}
+  .act{background:#15161a;border:1px solid var(--hairline);border-radius:6px;padding:6px 4px;font-size:12px;font-weight:600}
+  .act:disabled{opacity:.4;cursor:default}
+  .act.go{border-color:var(--amber);color:var(--amber)}
+  .prog{height:4px;background:#0c0d10;border-radius:2px;overflow:hidden}.prog i{display:block;height:100%;width:0;background:var(--amber)}
+  .patch{display:flex;gap:6px;align-items:center;font-size:12px;color:var(--muted);flex-wrap:wrap}
+  .patch .act{flex:1;min-width:56px}
 
   /* ---- schede iniziale e finale ---- */
   .overlay{position:fixed;inset:0;background:rgba(10,10,12,.88);display:grid;place-items:center;padding:16px;z-index:10}
@@ -91,6 +110,11 @@
   .card .tag{font-size:11px;letter-spacing:.08em;text-transform:uppercase;color:var(--muted)}
   .card p{margin:0;font-size:14px;line-height:1.5}
   .card ul{margin:0;padding-left:18px;font-size:14px;line-height:1.5}
+  .toggle{display:flex;align-items:center;justify-content:space-between;gap:10px;background:var(--bg-raised);border:1px solid var(--hairline);border-radius:10px;padding:8px 12px;font-size:13px}
+  .toggle[aria-pressed=true] .sw{background:var(--green)}
+  .sw{width:38px;height:22px;border-radius:11px;background:#3a3c44;position:relative;flex:none;transition:background .2s}
+  .sw::after{content:"";position:absolute;top:3px;left:3px;width:16px;height:16px;border-radius:50%;background:#fff;transition:left .2s}
+  .toggle[aria-pressed=true] .sw::after{left:19px}
   .cta{background:var(--amber);color:#1a1206;border:0;border-radius:10px;padding:12px;font-family:var(--display);font-size:22px;letter-spacing:.06em}
   .results{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;text-align:center}
   .results div{background:var(--bg-raised);border-radius:10px;padding:8px 4px}
@@ -98,11 +122,11 @@
   .results span{font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:.06em}
 
   @media (min-width:900px){
-    #app{grid-template-columns:1fr 380px;grid-template-rows:auto 1fr}
+    #app{grid-template-columns:1fr 400px;grid-template-rows:auto 1fr}
     header{grid-column:1 / -1}
     #desk{height:auto;max-height:none;border-top:0;border-left:1px solid var(--hairline)}
   }
-  @media (prefers-reduced-motion:reduce){.strip.pulse,.mem.pulse{animation:none;border-color:var(--amber)}}
+  @media (prefers-reduced-motion:reduce){.strip.pulse,.mem.pulse,.dimmer.pulse,.tab.alarm{animation:none;border-color:var(--amber)}}
 </style>
 
 <svg width="0" height="0" style="position:absolute" aria-hidden="true">
@@ -149,10 +173,12 @@
       <g id="beams"></g>
       <rect y="150" width="400" height="12" fill="#2b2320"/>
       <rect y="162" width="400" height="88" fill="#101116"/>
-      <!-- casse -->
+      <!-- casse, con le onde del larsen che crescono -->
       <g id="spk-l"><rect x="14" y="80" width="46" height="72" rx="3" fill="#1b1c21" stroke="#34363e"/><circle cx="37" cy="100" r="8" fill="#0a0a0c"/><circle cx="37" cy="130" r="16" fill="#0a0a0c" stroke="#2a2b30"/></g>
       <g id="spk-r"><rect x="340" y="80" width="46" height="72" rx="3" fill="#1b1c21" stroke="#34363e"/><circle cx="363" cy="100" r="8" fill="#0a0a0c"/><circle cx="363" cy="130" r="16" fill="#0a0a0c" stroke="#2a2b30"/></g>
-      <!-- leggio e asta -->
+      <g id="ring-l" opacity="0" stroke="#f2c53d" fill="none" stroke-width="2"><path d="M66 96 Q74 116 66 136"/><path d="M74 90 Q86 116 74 142"/><path d="M82 84 Q98 116 82 148"/></g>
+      <g id="ring-r" opacity="0" stroke="#f2c53d" fill="none" stroke-width="2"><path d="M334 96 Q326 116 334 136"/><path d="M326 90 Q314 116 326 142"/><path d="M318 84 Q302 116 318 148"/></g>
+      <!-- asta del microfono e cavo XLR verso il mixer -->
       <g id="stand"><line x1="200" y1="150" x2="200" y2="96" stroke="#555" stroke-width="2"/><line x1="200" y1="96" x2="190" y2="90" stroke="#555" stroke-width="2"/><rect x="185" y="86" width="8" height="6" rx="2" fill="#777"/><path d="M200 150 Q230 158 250 162" stroke="#a3acb8" stroke-width="1.5" fill="none" id="cable"/></g>
       <g id="preside" transform="translate(172 72)"><use href="#tramp" width="56" height="78"/></g>
       <path d="M170 150 L230 150 L222 112 L178 112 Z" fill="#3a2a1e" stroke="#4d3927"/>
@@ -170,15 +196,21 @@
     <div class="tabs" role="tablist">
       <button class="tab" role="tab" id="tab-mixer" aria-selected="true">MIXER</button>
       <button class="tab" role="tab" id="tab-luci" aria-selected="false">LUCI</button>
+      <button class="tab alarm" role="tab" id="tab-guasto" aria-selected="false" hidden>🔇 GUASTO</button>
     </div>
     <div class="panel" id="panel-mixer"></div>
     <div class="panel lights" id="panel-luci" hidden>
       <div class="pars" id="par-btns"></div>
       <div class="lights-bottom">
         <div class="mems" id="mems"></div>
-        <div class="dimmer">Dimmer<div class="fadewrap" id="dimmer-wrap"></div></div>
+        <div class="dimmer" id="dimmer-box">Dimmer<div class="fadewrap" id="dimmer-wrap"></div></div>
       </div>
       <div class="hint">Tocca un PAR per cambiargli colore · tocca una memoria per richiamarla, tienila premuta per salvarci le luci di adesso.</div>
+    </div>
+    <div class="panel fault" id="panel-guasto" hidden>
+      <div class="hint">Il preside non si sente. Segui la catena e trova dove si è interrotta: ogni controllo richiede tempo, e sei da solo.</div>
+      <div class="chain" id="chain"></div>
+      <div class="patch" id="patch" hidden></div>
     </div>
   </section>
 </div>
@@ -189,13 +221,13 @@
       <div class="portrait"><svg viewBox="8 8 84 84" width="96" height="96"><use href="#tramp"/></svg></div>
       <div><div class="tag">Obiettivo 1 · 21:00</div><h2>Il discorso del Preside Tramp</h2></div>
     </div>
-    <p>«Farò il discorso più bello della storia delle scuole. Tutti lo dicono.» Parla un quarto d'ora e vuole essere sentito fino al parcheggio.</p>
+    <p>«Tramp tramp, tramp TRAMP tramp.» Nessuno capisce una parola, ma vuole essere sentito fino al parcheggio. Parla un quarto d'ora.</p>
     <ul>
-      <li>Tieni la sua voce nella <b>zona verde</b> col fader CH1.</li>
-      <li><b>Luce bianca piena</b> su di lui.</li>
-      <li>Occhio al <b>larsen</b> se si avvicina alle casse.</li>
-      <li>Tocca i fumetti sul palco: ti portano al comando giusto.</li>
+      <li>Quando sale sul palco: <b>luce bianca</b>, <b>microfono aperto</b>, <b>musica giù</b>.</li>
+      <li>Tieni la sua voce nella <b>zona verde</b>. Ogni sera è diversa: lui non parla mai uguale.</li>
+      <li>Se va verso le casse il <b>larsen</b> cresce: abbassa quanto basta, senza zittirlo.</li>
     </ul>
+    <button class="toggle" id="hints-btn" aria-pressed="true"><span>Suggerimenti nei fumetti</span><span class="sw"></span></button>
     <button class="cta" id="start">Inizia il discorso</button>
   </div>
 </div>
@@ -221,10 +253,17 @@
   const $ = s => document.querySelector(s);
   const NS = 'http://www.w3.org/2000/svg';
   const mk = (tag, attrs, parent) => { const e = document.createElementNS(NS, tag); for (const k in attrs) e.setAttribute(k, attrs[k]); if (parent) parent.appendChild(e); return e; };
+  const rnd = (a, b) => a + Math.random() * (b - a);
+  const pick = a => a[Math.floor(Math.random() * a.length)];
+  const clamp = v => Math.max(0, Math.min(100, v));
+  const store = { get (k, d) { try { const v = localStorage.getItem(k); return v == null ? d : JSON.parse(v); } catch (e) { return d; } }, set (k, v) { try { localStorage.setItem(k, JSON.stringify(v)); } catch (e) {} } };
 
   const DURATION = 90;            // secondi reali = 15 minuti di discorso
-  const ZONE = [0.5, 0.8];        // zona verde sul meter del CH1
+  const ZONE = [0.5, 0.8];        // zona verde sui meter
+  const PC = 5;                   // canale del PC (la musica di sala)
+  const SPK_X = { l: 60, r: 290 }, LECTERN_X = 172;
   const COLORS = { bianco: '#f4f1ea', rosso: '#e0503f', blu: '#3f7fe0', verde: '#49b06a', ambra: '#f2a541', viola: '#b36bff' };
+  // cosa direbbe, se parlasse italiano: sotto i sottotitoli in lingua Tramp
   const LINES = [
     'Benvenuti alla festa della scuola più grande, la più bella. Tremenda.',
     'Abbiamo i banchi migliori. Tutti mi chiedono: come fa ad avere questi banchi?',
@@ -234,14 +273,22 @@
     'Qualcuno dice che il discorso è lungo. Fake news. È perfetto.',
     'E ora vi lascio alla musica. Musica bellissima, l\'ho scelta io.'
   ];
+  const trampify = line => line.split(' ').map(w => {
+    const p = (w.match(/[.,!?:…]+$/) || [''])[0];
+    const core = w.replace(/[.,!?:…]+$/, '');
+    return (core.length > 8 ? 'TRAMP' : /^[A-ZÈ]/.test(core) ? 'Tramp' : 'tramp') + p;
+  }).join(' ');
 
+  let hints = store.get('tramp-hints', store.get('tramp-runs', 0) === 0);
   let S;
   function fresh () {
     return {
       t: 0, running: false, paused: false, grad: 60, fatigue: 30, beers: 1, drunk: 0,
-      fader: 0.55, mute: false, dimmer: 0.3, pars: ['viola', 'blu', 'viola', 'blu'], mem: 2,
-      voiceK: 1, disconnected: false, walking: false, larsens: 0, pops: 0,
-      events: [], done: new Set(), notes: [], going: null, lastLine: -1,
+      fad: { 1: 0, 2: 0, 3: 0, 4: 0, 5: 0.7 }, mute: { 1: false, 2: false, 3: false, 4: false, 5: false },
+      micCh: 1, micOk: true, fault: null, task: null,
+      dimmer: 0.3, pars: ['viola', 'blu', 'viola', 'blu'], mem: 2,
+      voiceK: 1, drift: 1, driftTo: 1, px: LECTERN_X, walkTo: null, ring: 0, ringCool: 0,
+      jingle: false, larsens: 0, pops: 0, repDelta: 0, notes: [], events: [],
       mems: {
         1: { name: 'Bianco pieno', pars: ['bianco', 'bianco', 'bianco', 'bianco'], dimmer: 1 },
         2: { name: 'Festa', pars: ['viola', 'blu', 'viola', 'blu'], dimmer: 0.3 },
@@ -251,50 +298,135 @@
     };
   }
 
-  /* ---------- copione: eventi fissi + uno pescato a caso ---------- */
-  function script () {
-    const random = Math.random() < 0.5 ? cableEvent(66) : tapEvent(66);
-    return [
-      { id: 'luce', at: 1.5, win: 9, target: 'preside', text: 'Luce su di me!', tab: 'luci', icon: '💡',
-        ok: () => lightsWhite(), fail: () => hit(-10, 'Il preside è rimasto al buio colorato.') },
-      { id: 'piano', at: 13, win: 7, target: 'preside', text: 'Parla piano…', tab: 'mixer', icon: '🔉',
-        start: () => { S.voiceK = 0.6; }, endAt: 28, end: () => { S.voiceK = 1; },
-        ok: () => inZone(), fail: () => hit(-8, 'In fondo alla palestra non si sentiva niente.') },
-      { id: 'mangia', at: 31, win: 6, target: 'preside', text: 'Mangia il microfono!', tab: 'mixer', icon: '📢',
-        start: () => { S.voiceK = 1.8; }, endAt: 44, end: () => { S.voiceK = 1; },
-        ok: () => inZone(), fail: () => hit(-8, 'Voce distorta: la gente si tappa le orecchie.') },
-      { id: 'larsen', at: 49, win: 4, target: 'spk-r', text: 'Va verso le casse!', tab: 'mixer', icon: '⚠️',
-        start: () => { S.walking = true; }, endAt: 58, end: () => { S.walking = false; toast('È tornato al leggio: riporta su il CH1.'); },
-        ok: () => S.mute || output() < 0.35,
-        fail: () => { S.larsens++; sfx.larsen(); hit(-20, 'LARSEN! Fischio in tutta la palestra.'); } },
-      random,
-      { id: 'finale', at: 80, win: 8, target: 'preside', text: 'Ha finito: luci Festa!', tab: 'luci', icon: '👏',
-        ok: () => !lightsWhite() && S.dimmer >= 0.25 && !S.pars.every(p => p === 'bianco'), fail: () => hit(-4, 'Finale spento: niente luci da festa.') }
-    ];
-  }
-  function cableEvent (at) {
-    return { id: 'cavo', at, win: 10, target: 'stand', text: 'Cavo staccato! Tocca e vai', icon: '🔌', onsite: 2.5,
-      start: () => { S.disconnected = true; }, ok: () => !S.disconnected,
-      fail: () => { hit(-15, 'Dieci secondi di preside muto.'); S.disconnected = false; } };
-  }
-  function tapEvent (at) {
-    return { id: 'tap', at, win: 3.5, target: 'preside', text: '«Si sente?» Batte sul mic!', tab: 'mixer', icon: '👊',
-      ok: () => S.mute || output() < 0.2,
-      fail: () => { S.pops++; sfx.pop(); hit(-8, 'BUM BUM nelle casse.'); }, after: 'Ora riapri il CH1!' };
-  }
-
-  /* ---------- livelli ---------- */
-  function voice (t) {
-    if (S.disconnected) return 0;
-    const syll = 0.88 + 0.12 * Math.sin(t * 9.1) * Math.sin(t * 3.3);
-    return 0.62 * S.voiceK * syll;
+  /* ---------- segnali ---------- */
+  const speaking = () => S.t > 4 && S.t < 82 && !S.jingle;
+  function micSignal () {
+    if (!speaking() || !S.micOk) return 0;
+    const syll = 0.88 + 0.12 * Math.sin(S.t * 9.1) * Math.sin(S.t * 3.3);
+    return 0.62 * S.voiceK * S.drift * syll;
   }
   function jitter () { return (S.fatigue / 100) * 0.12 * Math.sin(S.t * 5.7) * Math.sin(S.t * 1.9); }
-  function output () { return S.mute ? 0 : voice(S.t) * Math.max(0, S.fader + jitter()) * 1.9; }
-  function inZone () { const o = output(); return o >= ZONE[0] && o <= ZONE[1]; }
-  function lightsWhite () { return S.pars.every(p => p === 'bianco') && S.dimmer >= 0.6; }
+  function chOut (ch) {
+    if (S.mute[ch]) return 0;
+    const sig = ch === PC ? 0.55 : (ch === S.micCh ? micSignal() : 0);
+    return sig * Math.max(0, S.fad[ch] + jitter()) * 1.9;
+  }
+  const voiceOut = () => chOut(S.micCh);
+  const inZone = o => o >= ZONE[0] && o <= ZONE[1];
+  const lightsWhite = () => S.pars.every(p => p === 'bianco') && S.dimmer >= 0.6;
   function hit (d, msg) { S.grad = clamp(S.grad + d); toast(msg, 'bad'); sfx.boo(); }
-  const clamp = v => Math.max(0, Math.min(100, v));
+
+  /* ---------- copione: apertura e finale fissi, in mezzo 5 imprevisti pescati da 7, a tempi variabili ---------- */
+  const POOL = {
+    piano: () => ({ win: 7, dur: 12, target: 'preside', icon: '🔉', text: 'si allontana dal microfono', hint: 'alza il suo fader', tab: 'mixer',
+      start () { S.voiceK = rnd(0.55, 0.65); }, end () { S.voiceK = 1; }, hold: 1,
+      ok: () => inZone(voiceOut()), fail: () => hit(-8, 'In fondo alla palestra non si sentiva niente.') }),
+    mangia: () => ({ win: 6, dur: 12, target: 'preside', icon: '📢', text: 'si mangia il microfono', hint: 'abbassa il suo fader', tab: 'mixer',
+      start () { S.voiceK = rnd(1.6, 1.9); }, end () { S.voiceK = 1; }, hold: 1,
+      ok: () => inZone(voiceOut()), fail: () => hit(-8, 'Voce distorta: la gente si tappa le orecchie.') }),
+    casse: () => { const side = pick(['l', 'r']); return { win: 99, dur: 11, target: 'spk-' + side, icon: '🚶', text: 'scende verso la cassa ' + (side === 'l' ? 'sinistra' : 'destra'), hint: 'abbassa quanto basta', tab: 'mixer',
+      start () { S.walkTo = SPK_X[side]; }, end () { S.walkTo = null; },
+      ok: () => false, fail () {}, done () { if (!this.larsen) { S.grad = clamp(S.grad + 4); toast('Niente larsen. Pulito!', 'ok'); sfx.ok(); } } }; },
+    tap: () => ({ win: 3.5, dur: 5, target: 'preside', icon: '👊', text: '«Tramp?» batte sul microfono', hint: 'MUTE, poi riapri', tab: 'mixer',
+      ok: () => S.mute[S.micCh] || voiceOut() < 0.2 || !S.micOk,
+      fail () { S.pops++; sfx.pop(); hit(-8, 'BUM BUM nelle casse.'); }, after: 'Ora riapri il canale!' }),
+    cavo: () => ({ win: 24, dur: 24, target: 'stand', icon: '🔇', text: 'non si sente più niente', hint: 'apri GUASTO e segui il cavo', tab: 'guasto',
+      start () { startFault(); }, ok: () => S.micOk && voiceOut() > 0.3,
+      fail () { endFault(); S.micCh = 1; S.fad[1] = Math.max(S.fad[1], 0.55); hit(-10, 'Il bidello ha trovato il guasto prima di te.'); } }),
+    sigla: () => ({ win: 5, dur: 8, target: 'preside', icon: '🎺', text: '«TRAMP TRAMP!» vuole la sua sigla', hint: 'su il PC, poi giù', tab: 'mixer',
+      start () { S.jingle = true; }, end () { S.jingle = false; }, hold: 0.5,
+      ok: () => chOut(PC) >= 0.55, fail: () => hit(-6, 'Niente sigla: il preside è offeso.') }),
+    volume: () => ({ win: 7, dur: 7, target: 'preside', icon: '😠', text: '«PIÙ TRAMP!» vuole più volume', hint: 'accontentarlo o no? scegli tu', tab: 'mixer',
+      ok: () => false, fail () {},
+      done () {
+        if (voiceOut() > 0.85) { S.repDelta += 3; S.notes.push('Hai accontentato il preside: +3 reputazione, ma il pubblico si è tappato le orecchie.'); toast('Il preside è felice. Il pubblico meno.', 'ok'); }
+        else { S.repDelta -= 3; S.notes.push('Non hai alzato il volume al preside: −3 reputazione, ma il pubblico ti ringrazia.'); toast('Il preside ti guarda malissimo.', 'bad'); }
+      } })
+  };
+  function script () {
+    const ids = Object.keys(POOL).sort(() => Math.random() - 0.5).slice(0, 5);
+    const evs = [{ id: 'apertura', at: 1, win: 9, target: 'preside', icon: '🎤', text: 'sale sul palco', hint: 'luce bianca, CH1 su, PC giù', tab: 'luci',
+      ok: () => lightsWhite() && S.fad[1] >= 0.3 && !S.mute[1] && chOut(PC) < 0.3, hold: 0.3,
+      fail: () => hit(-10, 'Il preside ha cominciato al buio e sopra la musica.') }];
+    let at = rnd(12, 15);
+    ids.forEach((id, i) => {
+      evs.push(Object.assign({ id, at }, POOL[id]()));
+      at += i >= 2 ? rnd(6, 10) : rnd(10, 14);    // verso la fine si accavallano
+      at = Math.min(at, 72);
+    });
+    evs.push({ id: 'finale', at: 82, win: 7, target: 'preside', icon: '🎉', text: '«TRAMP!» ha finito', hint: 'luci Festa e musica su', tab: 'luci',
+      ok: () => !S.pars.every(p => p === 'bianco') && S.dimmer >= 0.25 && chOut(PC) >= 0.5, hold: 0.3,
+      fail: () => hit(-6, 'Finale muto e spento.') });
+    return evs;
+  }
+
+  /* ---------- guasto: la catena microfono → cavo → mixer ---------- */
+  const NODES = [
+    { id: 'mic', name: 'Microfono', where: 'sull\'asta' },
+    { id: 'cavo', name: 'Cavo XLR', where: 'lungo il palco' },
+    { id: 'ing', name: 'Ingresso', where: 'dietro al mixer' }
+  ];
+  const CAUSES = {
+    mic: { st: 'Il connettore si è sfilato dal microfono.', fix: 'Riattacca', time: 1.6, then: () => { S.micOk = true; } },
+    cavo: { st: 'Cavo schiacciato da una sedia: non passa segnale.', fix: 'Prendi un XLR dal baule', time: 3.2, then: () => { S.patchNeeded = true; } },
+    ing: { st: 'Il cavo è uscito dalla presa del mixer.', fix: null, time: 0, then: () => {} }
+  };
+  function startFault () {
+    const cause = pick(['mic', 'cavo', 'ing']);
+    S.fault = { cause, nodes: { mic: 'unk', cavo: 'unk', ing: 'unk' } };
+    S.micOk = false; S.patchNeeded = false;   // l'ingresso da ricollegare si scopre solo controllando
+    $('#tab-guasto').hidden = false;
+    renderFault();
+  }
+  function endFault () { S.fault = null; S.task = null; $('#tab-guasto').hidden = true; if (!$('#panel-guasto').hidden) showTab('mixer'); }
+  function startTask (node, kind, time) {
+    if (S.task) { toast('Sei da solo: finisci prima quello che stai facendo.'); return; }
+    S.task = { node, kind, left: time * (1 + S.fatigue / 100), total: time * (1 + S.fatigue / 100) };
+    S.fault.nodes[node] = kind === 'check' ? 'checking' : 'fixing';
+    renderFault();
+  }
+  function finishTask () {
+    const { node, kind } = S.task; S.task = null;
+    const f = S.fault; if (!f) return;
+    if (kind === 'check') {
+      f.nodes[node] = node === f.cause ? 'bad' : 'ok';
+      if (node === f.cause && node === 'ing') S.patchNeeded = true;
+    } else {
+      f.nodes[node] = 'fixed';
+      CAUSES[node].then();
+      if (S.micOk) toast('Riattaccato! Si sente di nuovo?', 'ok');
+    }
+    renderFault();
+  }
+  function renderFault () {
+    const f = S.fault; if (!f) return;
+    const ch = $('#chain'); ch.textContent = '';
+    NODES.forEach((n, i) => {
+      if (i) { const l = document.createElement('div'); l.className = 'link'; ch.appendChild(l); }
+      const st = f.nodes[n.id];
+      const d = document.createElement('div');
+      d.className = 'node' + (st === 'ok' || st === 'fixed' ? ' ok' : st === 'bad' ? ' bad' : '');
+      const txt = { unk: 'Da controllare ' + n.where, checking: 'Controllo…', fixing: 'Ci sto lavorando…', ok: 'Tutto a posto qui.', fixed: 'Sistemato.', bad: CAUSES[n.id].st }[st];
+      d.innerHTML = `<b>${n.name}</b><div class="st">${txt}</div>`;
+      if (st === 'checking' || st === 'fixing') { d.insertAdjacentHTML('beforeend', `<div class="prog"><i id="prog-${n.id}"></i></div>`); }
+      else if (st === 'unk') { const b = document.createElement('button'); b.className = 'act'; b.textContent = 'Controlla'; b.onclick = () => startTask(n.id, 'check', 1.3); d.appendChild(b); }
+      else if (st === 'bad' && CAUSES[n.id].fix) { const b = document.createElement('button'); b.className = 'act go'; b.textContent = CAUSES[n.id].fix; b.onclick = () => startTask(n.id, 'fix', CAUSES[n.id].time); d.appendChild(b); }
+      ch.appendChild(d);
+    });
+    const p = $('#patch');
+    p.hidden = !S.patchNeeded;
+    if (S.patchNeeded) {
+      p.innerHTML = '<span>Collega il cavo all\'ingresso:</span>';
+      [1, 2, 3, 4].forEach(n => { const b = document.createElement('button'); b.className = 'act go'; b.textContent = 'IN ' + n; b.onclick = () => plugInto(n); p.appendChild(b); });
+    }
+  }
+  function plugInto (n) {
+    if (S.task) { toast('Sei da solo: finisci prima quello che stai facendo.'); return; }
+    S.micCh = n; S.micOk = true; S.patchNeeded = false;
+    if (S.fault) S.fault.nodes.ing = 'fixed';
+    toast('Collegato all\'ingresso ' + n + (n === 1 ? '.' : ': il canale ' + n + ' però ha il fader giù…'), 'ok');
+    renderFault();
+  }
 
   /* ---------- palco ---------- */
   const beams = $('#beams'), parsG = $('#pars'), crowd = $('#crowd'), bubbles = $('#bubbles');
@@ -303,25 +435,25 @@
   const parEls = PAR_X.map(x => { mk('rect', { x: x - 8, y: 10, width: 16, height: 10, rx: 3, fill: '#222' }, parsG); return mk('circle', { cx: x, cy: 20, r: 5 }, parsG); });
   const heads = [];
   for (let r = 0; r < 4; r++) for (let i = 0; i < 16; i++) {
-    const x = 12 + i * 25 + (r % 2) * 12 + (Math.random() * 6 - 3), y = 186 + r * 18;
+    const x = 12 + i * 25 + (r % 2) * 12 + rnd(-3, 3), y = 186 + r * 18;
     const g = mk('g', {}, crowd);
     mk('rect', { x: x - 9, y: y + 6, width: 18, height: 20, rx: 6, fill: ['#384152', '#4a3a3a', '#2f4a3a', '#4b4458'][(i + r) % 4] }, g);
     const h = mk('circle', { cx: x, cy: y, r: 7, fill: '#d9a57a' }, g);
-    heads.push({ g, h, ph: Math.random() * 6 });
+    heads.push({ g, h, ph: rnd(0, 6) });
   }
-
   function drawStage () {
     S.pars.forEach((c, i) => {
-      const col = COLORS[c];
-      parEls[i].setAttribute('fill', S.dimmer > 0.02 ? col : '#333');
-      beamEls[i].setAttribute('fill', col);
+      parEls[i].setAttribute('fill', S.dimmer > 0.02 ? COLORS[c] : '#333');
+      beamEls[i].setAttribute('fill', COLORS[c]);
       beamEls[i].setAttribute('opacity', (0.28 * S.dimmer).toFixed(3));
     });
-    const px = S.walking ? Math.min(292, 172 + (S.t - 49) * 60) : (S.t > 58 && S.t < 60 ? 172 : 172);
-    $('#preside').setAttribute('transform', `translate(${px} ${72 + Math.sin(S.t * 4) * 1.2})`);
-    $('#cable').setAttribute('d', S.disconnected ? 'M200 150 Q214 166 226 170' : 'M200 150 Q230 158 250 162');
+    $('#preside').setAttribute('transform', `translate(${S.px.toFixed(1)} ${72 + Math.sin(S.t * 4) * 1.2})`);
+    $('#cable').setAttribute('d', S.fault ? 'M200 150 Q214 166 226 170' : 'M200 150 Q230 158 250 162');
+    const nearL = S.px < LECTERN_X - 20;
+    $('#ring-l').setAttribute('opacity', nearL ? S.ring.toFixed(2) : 0);
+    $('#ring-r').setAttribute('opacity', !nearL ? S.ring.toFixed(2) : 0);
     const mood = S.grad / 100;
-    heads.forEach((o, i) => {
+    heads.forEach(o => {
       const bob = S.running && !S.paused ? Math.sin(S.t * (2 + mood * 4) + o.ph) * mood * 3 : 0;
       o.g.setAttribute('transform', `translate(0 ${bob.toFixed(2)})`);
       o.h.setAttribute('fill', mood < 0.35 ? '#8d8f96' : '#d9a57a');
@@ -329,46 +461,45 @@
   }
 
   /* ---------- fumetti ---------- */
-  const TARGET_XY = { preside: () => [S.walking ? 300 : 200, 58], 'spk-r': () => [340, 62], stand: () => [215, 150] };
+  const TARGET_XY = { preside: () => [S.px + 28, 58], 'spk-l': () => [60, 62], 'spk-r': () => [340, 62], stand: () => [215, 150] };
   function renderBubbles () {
     bubbles.textContent = '';
     S.events.filter(e => e.live).forEach(e => {
       const [x, y] = TARGET_XY[e.target]();
-      const w = Math.min(170, 30 + e.text.length * 5.4);
-      const bx = Math.max(4, Math.min(396 - w, x - w / 2));
+      const line1 = e.icon + ' ' + e.text, line2 = hints ? '→ ' + e.hint : '';
+      const w = Math.min(230, 34 + Math.max(line1.length, line2.length) * 5.2);
+      const h = line2 ? 38 : 26;
+      const bx = Math.max(4, Math.min(396 - w, x - w / 2)), by = y - 8 - h;
       const g = mk('g', { class: 'bubble', role: 'button', 'aria-label': e.text }, bubbles);
-      mk('rect', { x: bx, y: y - 34, width: w, height: 26, rx: 8, fill: '#f4f1ea', stroke: '#1a1a1a' }, g);
+      mk('rect', { x: bx, y: by, width: w, height: h, rx: 8, fill: '#f4f1ea', stroke: '#1a1a1a' }, g);
       mk('path', { d: `M${x - 5} ${y - 9} L${x} ${y - 1} L${x + 5} ${y - 9} Z`, fill: '#f4f1ea' }, g);
-      const left = e.going ? 1 - e.going : Math.max(0, (e.deadline - S.t) / e.win);
-      const col = e.going ? '#49b06a' : left > 0.5 ? '#f2c53d' : '#e0503f';
-      mk('circle', { cx: bx + 14, cy: y - 21, r: 8, fill: 'none', stroke: '#ddd', 'stroke-width': 3 }, g);
-      mk('circle', { cx: bx + 14, cy: y - 21, r: 8, fill: 'none', stroke: col, 'stroke-width': 3, 'stroke-dasharray': `${(left * 50.3).toFixed(1)} 60`, transform: `rotate(-90 ${bx + 14} ${y - 21})` }, g);
-      const tx = mk('text', { x: bx + 27, y: y - 17, 'font-size': 10.5, 'font-family': 'Inter, sans-serif', 'font-weight': 600, fill: '#141519' }, g);
-      tx.textContent = e.going ? 'Sto andando…' : e.text;
+      const timed = e.win < 90;
+      const left = timed ? Math.max(0, (e.deadline - S.t) / e.win) : 1 - (S.t - e.at) / e.dur;
+      const col = left > 0.5 ? '#f2c53d' : '#e0503f';
+      const cy = by + 13;
+      mk('circle', { cx: bx + 14, cy, r: 8, fill: 'none', stroke: '#ddd', 'stroke-width': 3 }, g);
+      mk('circle', { cx: bx + 14, cy, r: 8, fill: 'none', stroke: col, 'stroke-width': 3, 'stroke-dasharray': `${(left * 50.3).toFixed(1)} 60`, transform: `rotate(-90 ${bx + 14} ${cy})` }, g);
+      const t1 = mk('text', { x: bx + 27, y: by + 17, 'font-size': 10.5, 'font-family': 'Inter, sans-serif', 'font-weight': 600, fill: '#141519' }, g); t1.textContent = line1;
+      if (line2) { const t2 = mk('text', { x: bx + 27, y: by + 30, 'font-size': 9.5, 'font-family': 'Inter, sans-serif', fill: '#6a5a3a' }, g); t2.textContent = line2; }
       g.addEventListener('pointerdown', ev => { ev.stopPropagation(); tapBubble(e); });
     });
   }
   function tapBubble (e) {
-    if (e.onsite) {
-      if (e.going) return;
-      e.going = 0.001; toast('Stai andando al leggio…');
-      return;
-    }
-    showTab(e.tab);
-    if (e.tab === 'mixer') pulse($('#strip-1'));
-    else pulse(e.id === 'finale' ? $('#mem-2') : $('#mem-1'));
+    showTab(e.tab === 'guasto' && !S.fault ? 'mixer' : e.tab);
+    if (!hints) return;    // senza suggerimenti il fumetto apre solo il banco giusto
+    if (e.tab === 'mixer') pulse($('#strip-' + (e.id === 'sigla' ? PC : S.micCh)));
+    else if (e.tab === 'luci') pulse(e.id === 'finale' ? $('#mem-2') : $('#mem-1'));
   }
-  function pulse (el) { el.classList.remove('pulse'); void el.offsetWidth; el.classList.add('pulse'); }
+  function pulse (el) { if (!el) return; el.classList.remove('pulse'); void el.offsetWidth; el.classList.add('pulse'); }
 
   /* ---------- banco regia ---------- */
   function showTab (which) {
-    $('#tab-mixer').setAttribute('aria-selected', which === 'mixer');
-    $('#tab-luci').setAttribute('aria-selected', which === 'luci');
-    $('#panel-mixer').hidden = which !== 'mixer';
-    $('#panel-luci').hidden = which !== 'luci';
+    ['mixer', 'luci', 'guasto'].forEach(k => { $('#tab-' + k).setAttribute('aria-selected', k === which); $('#panel-' + k).hidden = k !== which; });
+    if (which === 'guasto') renderFault();
   }
   $('#tab-mixer').onclick = () => showTab('mixer');
   $('#tab-luci').onclick = () => showTab('luci');
+  $('#tab-guasto').onclick = () => showTab('guasto');
 
   function makeFader (parent, get, set, zone) {
     const wrap = document.createElement('div'); wrap.className = 'fadewrap';
@@ -392,20 +523,19 @@
     return { paint, meter: meter && meter.querySelector('i') };
   }
 
-  let ch1, dimmerF;
+  const chF = {};
+  let dimmerF;
   function buildDesk () {
     const pm = $('#panel-mixer'); pm.textContent = '';
-    const strips = [
-      { id: 1, name: 'CH1', face: true }, { id: 2, name: 'CH2' }, { id: 3, name: 'CH3' }, { id: 4, name: 'CH4' }, { id: 5, name: 'PC' }
-    ];
-    strips.forEach(s => {
-      const d = document.createElement('div'); d.className = 'strip' + (s.face ? '' : ' off'); d.id = 'strip-' + s.id;
-      d.innerHTML = `<div class="strip-name">${s.face ? '<span class="face-mini"><svg viewBox="12 10 76 76" width="20" height="20"><use href="#tramp"/></svg></span>' : ''}${s.name}</div>`;
+    [1, 2, 3, 4, PC].forEach(n => {
+      const d = document.createElement('div'); d.className = 'strip'; d.id = 'strip-' + n;
+      const face = n === 1 ? '<span class="face-mini"><svg viewBox="12 10 76 76" width="20" height="20"><use href="#tramp"/></svg></span>' : '';
+      d.innerHTML = `<div class="strip-name">${face}${n === PC ? 'PC' : 'CH' + n}</div>`;
       pm.appendChild(d);
-      if (s.face) ch1 = makeFader(d, () => S.fader, v => { S.fader = v; }, true);
-      else makeFader(d, () => 0, () => {}, true);
-      const m = document.createElement('button'); m.className = 'mute'; m.textContent = 'MUTE'; m.setAttribute('aria-pressed', 'false');
-      if (s.face) { m.id = 'mute-1'; m.onclick = () => { S.mute = !S.mute; m.setAttribute('aria-pressed', S.mute); }; }
+      chF[n] = makeFader(d, () => S.fad[n], v => { S.fad[n] = v; }, true);
+      const m = document.createElement('button'); m.className = 'mute'; m.textContent = 'MUTE'; m.id = 'mute-' + n;
+      m.setAttribute('aria-pressed', 'false');
+      m.onclick = () => { S.mute[n] = !S.mute[n]; m.setAttribute('aria-pressed', S.mute[n]); };
       d.appendChild(m);
     });
 
@@ -427,21 +557,21 @@
     });
     const dw = $('#dimmer-wrap'); dw.textContent = '';
     dimmerF = makeFader(dw, () => S.dimmer, v => { S.dimmer = v; S.mem = null; paintLights(); }, false);
+    $('#tab-guasto').hidden = true;
     showTab('mixer');
     paintLights();
   }
   function recall (n) { const m = S.mems[n]; S.pars = [...m.pars]; S.dimmer = m.dimmer; S.mem = n; dimmerF.paint(); paintLights(); }
   function paintLights () {
     S.pars.forEach((c, i) => { const d = $('#par-' + i + ' .dot'); d.style.background = COLORS[c]; d.style.color = COLORS[c]; d.style.opacity = 0.35 + 0.65 * S.dimmer; });
-    [1, 2, 3, 4].forEach(n => { const b = $('#mem-' + n); b.innerHTML = `<b>${n} · ${S.mems[n].name}</b><small>${S.mems[n].pars.map(p => p).join(' ')}</small>`; b.setAttribute('aria-pressed', S.mem === n); });
+    [1, 2, 3, 4].forEach(n => { const b = $('#mem-' + n); b.innerHTML = `<b>${n} · ${S.mems[n].name}</b><small>${S.mems[n].pars.join(' ')}</small>`; b.setAttribute('aria-pressed', S.mem === n); });
     drawStage();
   }
 
   /* ---------- header ---------- */
   function paintHeader () {
     $('#tl').style.width = (S.t / DURATION * 100) + '%';
-    const mins = Math.floor(S.t / DURATION * 15);
-    $('#clock').textContent = '21:' + String(mins).padStart(2, '0');
+    $('#clock').textContent = '21:' + String(Math.floor(S.t / DURATION * 15)).padStart(2, '0');
     const gb = $('#grad-bar'); gb.style.width = S.grad + '%';
     gb.style.background = S.grad < 35 ? 'var(--red)' : S.grad < 65 ? 'var(--yellow)' : 'var(--green)';
     const fb = $('#fat-bar'); fb.style.width = S.fatigue + '%'; fb.style.background = S.fatigue > 70 ? 'var(--red)' : '#8b8e98';
@@ -452,13 +582,16 @@
     if (S.beers <= 0) { toast('Niente birre in tasca.'); return; }
     S.beers--; S.drunk++; S.fatigue = Math.max(0, S.fatigue - 30); sfx.beer(); toast('Glu glu. Stanchezza giù.', 'ok'); paintHeader();
   };
-  $('#pause-btn').onclick = () => { if (!S.running) return; S.paused = !S.paused; $('#pausa').hidden = !S.paused; $('#pause-btn').textContent = S.paused ? '▶' : '⏸'; };
-
+  $('#pause-btn').onclick = () => {
+    if (!S.running) return;
+    S.paused = !S.paused; $('#pausa').hidden = !S.paused; $('#pause-btn').textContent = S.paused ? '▶' : '⏸';
+    if (S.paused) voice.silence();
+  };
   let toastT;
   function toast (msg, kind) { const t = $('#toast'); t.textContent = msg; t.className = 'show ' + (kind || ''); clearTimeout(toastT); toastT = setTimeout(() => t.className = '', 2600); }
 
   /* ---------- ciclo di gioco ---------- */
-  let last = 0, hold = 0;
+  let last = 0;
   function tick (now) {
     const dt = Math.min(0.1, (now - last) / 1000 || 0); last = now;
     if (S.running && !S.paused) step(dt);
@@ -469,46 +602,87 @@
     S.fatigue = Math.min(100, S.fatigue + dt * 0.35);
     const k = 1 - S.fatigue / 250;   // stanco = finestre di reazione più corte
 
-    // eventi: partono, si risolvono o scadono
+    // il preside non parla mai uguale: il volume va e viene da solo
+    if (Math.abs(S.drift - S.driftTo) < 0.02) S.driftTo = rnd(0.8, 1.2);
+    S.drift += (S.driftTo - S.drift) * dt * 0.4;
+
+    // camminata verso le casse e larsen che cresce con volume × vicinanza
+    const tx = S.walkTo == null ? LECTERN_X : S.walkTo;
+    S.px += (tx - S.px) * Math.min(1, dt * 1.6);
+    const near = Math.max(0, 1 - Math.min(Math.abs(S.px - SPK_X.l), Math.abs(S.px - SPK_X.r)) / 120);
+    const loop = voiceOut() * near * 1.2;
+    S.ringCool = Math.max(0, S.ringCool - dt);
+    if (loop > 0.55 && !S.ringCool) S.ring = Math.min(1, S.ring + dt * (loop - 0.45) * 2.2);
+    else S.ring = Math.max(0, S.ring - dt * 1.2);
+    if (S.ring >= 1) {
+      S.ring = 0; S.ringCool = 3; S.larsens++; sfx.larsen();
+      const w = S.events.find(e => e.id === 'casse' && e.live); if (w) w.larsen = true;
+      hit(-20, 'LARSEN! Fischio in tutta la palestra.');
+    }
+    sfx.ring(S.ring);
+
+    // eventi: partono, si risolvono, scadono
     S.events.forEach(e => {
       if (!e.started && S.t >= e.at) { e.started = true; e.live = true; e.deadline = S.t + e.win * k; e.start && e.start(); sfx.ding(); }
       if (e.live) {
-        if (e.going) { e.going += dt / (e.onsite * (1 + S.fatigue / 100)); if (e.going >= 1) { S.disconnected = false; } }
-        if (e.ok()) { e.hold = (e.hold || 0) + dt; if (e.hold > (e.id === 'piano' || e.id === 'mangia' ? 1 : 0.15)) { e.live = false; S.grad = clamp(S.grad + 4); toast('Fatto! ' + (e.after || ''), 'ok'); sfx.ok(); } }
-        else e.hold = 0;
-        if (e.live && S.t > e.deadline && !(e.going > 0 && e.going < 1)) { e.live = false; e.fail(); }
+        if (e.ok()) { e.held = (e.held || 0) + dt; if (e.held > (e.hold || 0.15)) { e.live = false; e.solved = true; S.grad = clamp(S.grad + 4); toast('Fatto! ' + (e.after || ''), 'ok'); sfx.ok(); if (e.id === 'cavo') endFault(); } }
+        else e.held = 0;
+        if (e.live && e.win < 90 && S.t > e.deadline && !(e.id === 'cavo' && S.task)) { e.live = false; e.fail(); }
       }
-      if (e.endAt && !e.ended && S.t >= e.endAt) { e.ended = true; e.end(); }
+      if (e.started && !e.ended && S.t >= e.at + (e.dur || e.win)) {
+        e.ended = true; e.end && e.end();
+        if (e.live) { e.live = false; e.done && e.done.call(e); }
+      }
     });
 
+    // lavoro sul posto (guasto)
+    if (S.task) {
+      S.task.left -= dt;
+      const bar = $('#prog-' + S.task.node); if (bar) bar.style.width = (100 * (1 - S.task.left / S.task.total)) + '%';
+      if (S.task.left <= 0) finishTask();
+    }
+
     // gradimento continuo
-    const o = output();
+    const o = voiceOut();
     let d = 0;
-    if (S.mute || S.disconnected) d -= 3; else if (o < 0.35) d -= 2; else if (o > 0.9) d -= 2.5; else if (inZone()) d += 1.2; else d += 0.2;
-    if (S.t < 80 && !lightsWhite()) d -= 0.8;
+    if (speaking()) {
+      if (!S.micOk || S.mute[S.micCh]) d -= 3; else if (o < 0.3) d -= 2.5; else if (o > 0.9) d -= 2.5; else if (inZone(o)) d += 1.2; else d += 0.2;
+      if (chOut(PC) > 0.3) d -= 1.5;               // musica sopra il discorso
+      if (S.t > 10 && !lightsWhite()) d -= 0.8;
+    }
     S.grad = clamp(S.grad + d * dt);
 
-    // sottotitoli
-    const li = Math.min(LINES.length - 1, Math.floor(S.t / (DURATION / LINES.length)));
-    if (li !== S.lastLine) { S.lastLine = li; }
-    $('#caption').textContent = S.disconnected || S.mute ? '(…il preside parla ma non si sente niente…)' : '«' + LINES[li] + '»';
+    // sottotitoli in lingua Tramp, con la traduzione sotto
+    const li = Math.min(LINES.length - 1, Math.floor(S.t / (82 / LINES.length)));
+    const cap = $('#caption');
+    if (S.jingle) cap.innerHTML = '<b>♪ TRAMP TRAMP TRAMP ♪</b><small>(la sua sigla)</small>';
+    else if (!speaking()) cap.innerHTML = '';
+    else if (o < 0.05) cap.innerHTML = '<b>…</b><small>(il preside parla ma non si sente niente)</small>';
+    else cap.innerHTML = `<b style="font-size:${o > 0.9 ? 21 : o < 0.3 ? 13 : 17}px">«${trampify(LINES[li])}»</b><small>(${LINES[li]})</small>`;
 
-    if (ch1.meter) { ch1.meter.style.height = Math.min(100, o * 100) + '%'; ch1.meter.style.background = o > 0.9 ? 'var(--red)' : inZone() ? 'var(--green)' : 'var(--yellow)'; }
-    ch1.paint();
-    sfx.voice(S.mute || S.disconnected ? 0 : o, S.t);
+    [1, 2, 3, 4, PC].forEach(n => {
+      const v = chOut(n), m = chF[n].meter;
+      m.style.height = Math.min(100, v * 100) + '%';
+      m.style.background = v > 0.9 ? 'var(--red)' : inZone(v) ? 'var(--green)' : 'var(--yellow)';
+      chF[n].paint();
+    });
+    voice.say(speaking() && S.micOk ? o : 0);
+    sfx.music(S.jingle ? chOut(PC) : chOut(PC) * 0.5);
     drawStage(); renderBubbles(); paintHeader();
     if (S.t >= DURATION) finish();
   }
 
   function finish () {
-    S.running = false; sfx.voice(0); sfx.applause(S.grad);
+    S.running = false; voice.silence(); sfx.music(0); sfx.ring(0); sfx.applause(S.grad);
+    store.set('tramp-runs', store.get('tramp-runs', 0) + 1);
     let beers = 0; const notes = [];
     if (!S.larsens && !S.pops) { beers++; notes.push('🍺 Nessun larsen e nessun colpo nelle casse.'); }
-    else notes.push((S.larsens ? 'Larsen: ' + S.larsens + '. ' : '') + (S.pops ? 'Colpi nelle casse: ' + S.pops + '.' : ''));
+    else notes.push([S.larsens ? 'Larsen: ' + S.larsens + '.' : '', S.pops ? 'Colpi nelle casse: ' + S.pops + '.' : ''].join(' '));
     if (S.grad >= 70) { beers++; notes.push('🍺 Pubblico contento (almeno 70%).'); }
     if (S.drunk) notes.push('Birre bevute durante il discorso: ' + S.drunk + '.');
-    const rep = 5 + Math.round((S.grad - 60) / 10) - S.larsens * 5;
-    $('#outro-title').textContent = S.grad >= 70 ? 'Applausi! «Il miglior tecnico della storia.»' : S.grad >= 40 ? 'Applausi tiepidi.' : '«Siete licenziati!»';
+    notes.push(...S.notes);
+    const rep = 5 + Math.round((S.grad - 60) / 10) - S.larsens * 5 + S.repDelta;
+    $('#outro-title').textContent = S.grad >= 70 ? '«TRAMP TRAMP!» (il miglior tecnico della storia)' : S.grad >= 40 ? 'Applausi tiepidi.' : '«TRAMP!» (siete licenziati)';
     $('#r-grad').textContent = Math.round(S.grad) + '%';
     $('#r-beer').textContent = '+' + beers;
     $('#r-rep').textContent = (rep >= 0 ? '+' : '') + rep;
@@ -520,34 +694,70 @@
     S = fresh(); S.events = script();
     buildDesk(); $('#pausa').hidden = true; $('#pause-btn').textContent = '⏸';
     $('#intro').hidden = true; $('#outro').hidden = true;
-    sfx.init(); S.running = true;
+    sfx.init(); voice.init(); S.running = true;
   }
+  const paintHints = () => $('#hints-btn').setAttribute('aria-pressed', hints);
+  $('#hints-btn').onclick = () => { hints = !hints; store.set('tramp-hints', hints); paintHints(); };
+  paintHints();
   $('#start').onclick = start;
-  $('#again').onclick = start;
+  $('#again').onclick = () => { $('#outro').hidden = true; $('#intro').hidden = false; };
+
+  /* ---------- la voce del preside: sintesi vocale che dice solo "Tramp",
+     con il volume che esce dal mixer. Se il browser non ha voci, un ronzio. ---------- */
+  const voice = (() => {
+    const ss = window.speechSynthesis;
+    let alive = false, tried = false, lastSay = 0;
+    return {
+      init () {
+        if (!ss) return;
+        try { const u = new SpeechSynthesisUtterance(' '); u.volume = 0; u.onstart = () => { alive = true; }; ss.speak(u); tried = true; } catch (e) {}
+        setTimeout(() => { if (!alive) sfx.hum(true); }, 2500);
+      },
+      say (level) {
+        if (!ss || !tried) { sfx.hum(true); sfx.humLevel(level); return; }
+        if (!alive) { sfx.humLevel(level); }
+        if (level < 0.05) { if (ss.speaking) ss.cancel(); return; }
+        const now = performance.now();
+        if (ss.speaking || ss.pending || now - lastSay < 120) return;
+        lastSay = now;
+        const n = 1 + Math.floor(Math.random() * 3);
+        const loud = level > 0.9 || S.voiceK > 1.4;
+        const words = Array.from({ length: n }, () => loud ? 'TRAMP' : pick(['tramp', 'tramp', 'Tramp', 'TRAMP']));
+        const u = new SpeechSynthesisUtterance(words.join(', ') + (Math.random() < 0.3 ? '!' : ''));
+        u.lang = 'en-US'; u.rate = rnd(1.05, 1.4); u.pitch = loud ? rnd(1.2, 1.5) : rnd(0.6, 0.95);
+        u.volume = Math.min(1, level);
+        u.onstart = () => { alive = true; };
+        ss.speak(u);
+      },
+      silence () { if (ss) ss.cancel(); sfx.humLevel(0); }
+    };
+  })();
 
   /* ---------- suoni sintetizzati (partono solo dopo il tocco su Inizia) ---------- */
   const sfx = (() => {
-    let ac, vo, vg, noiseBuf;
+    let ac, hum, humG, ringO, ringG, musO, musG, noiseBuf;
     const env = (g, a, peak, rel, t0) => { g.gain.setValueAtTime(0.0001, t0); g.gain.exponentialRampToValueAtTime(peak, t0 + a); g.gain.exponentialRampToValueAtTime(0.0001, t0 + a + rel); };
     const tone = (f, dur, type, vol) => { if (!ac) return; const o = ac.createOscillator(), g = ac.createGain(); o.type = type || 'sine'; o.frequency.value = f; o.connect(g).connect(ac.destination); env(g, 0.01, vol || 0.15, dur, ac.currentTime); o.start(); o.stop(ac.currentTime + dur + 0.05); };
     const noise = (dur, vol, fl) => { if (!ac) return; const s = ac.createBufferSource(); s.buffer = noiseBuf; const f = ac.createBiquadFilter(); f.type = 'bandpass'; f.frequency.value = fl || 1500; const g = ac.createGain(); s.connect(f).connect(g).connect(ac.destination); env(g, 0.3, vol, dur, ac.currentTime); s.start(); s.stop(ac.currentTime + dur + 0.4); };
+    const osc = (type, f, dest) => { const o = ac.createOscillator(); o.type = type; o.frequency.value = f; const g = ac.createGain(); g.gain.value = 0; o.connect(g).connect(dest || ac.destination); o.start(); return [o, g]; };
+    let humOn = false;
     return {
       init () {
         if (ac) return;
         try { ac = new (window.AudioContext || window.webkitAudioContext)(); } catch (e) { return; }
         noiseBuf = ac.createBuffer(1, ac.sampleRate * 2, ac.sampleRate);
         const d = noiseBuf.getChannelData(0); for (let i = 0; i < d.length; i++) d[i] = Math.random() * 2 - 1;
-        vo = ac.createOscillator(); vo.type = 'sawtooth'; vo.frequency.value = 120;
-        const f = ac.createBiquadFilter(); f.type = 'bandpass'; f.frequency.value = 700; f.Q.value = 2;
-        vg = ac.createGain(); vg.gain.value = 0; vo.connect(f).connect(vg).connect(ac.destination); vo.start();
+        const f = ac.createBiquadFilter(); f.type = 'bandpass'; f.frequency.value = 700; f.Q.value = 2; f.connect(ac.destination);
+        [hum, humG] = osc('sawtooth', 120, f);
+        [ringO, ringG] = osc('sine', 2750);
+        const lp = ac.createBiquadFilter(); lp.type = 'lowpass'; lp.frequency.value = 500; lp.connect(ac.destination);
+        [musO, musG] = osc('square', 110, lp);
       },
-      voice (level, t) {
-        if (!vg) return;
-        const syl = t == null ? 0 : Math.max(0, Math.sin(t * 11) * Math.sin(t * 2.7));
-        vg.gain.setTargetAtTime(Math.min(0.12, level * 0.09) * syl, ac.currentTime, 0.03);
-        if (t != null) vo.frequency.setTargetAtTime(110 + 30 * Math.sin(t * 1.3) + (level > 0.9 ? 60 : 0), ac.currentTime, 0.05);
-      },
-      larsen () { if (!ac) return; const o = ac.createOscillator(), g = ac.createGain(); o.frequency.value = 2750; o.connect(g).connect(ac.destination); g.gain.setValueAtTime(0.001, ac.currentTime); g.gain.exponentialRampToValueAtTime(0.18, ac.currentTime + 1.2); g.gain.exponentialRampToValueAtTime(0.001, ac.currentTime + 2.4); o.start(); o.stop(ac.currentTime + 2.5); },
+      hum (on) { humOn = on; },
+      humLevel (level) { if (!ac || !humOn) return; const t = ac.currentTime, s = Math.max(0, Math.sin(t * 11) * Math.sin(t * 2.7)); humG.gain.setTargetAtTime(Math.min(0.12, level * 0.09) * s, t, 0.03); },
+      ring (r) { if (!ac) return; ringG.gain.setTargetAtTime(r * r * 0.12, ac.currentTime, 0.05); ringO.frequency.setTargetAtTime(2600 + r * 400, ac.currentTime, 0.1); },
+      music (level) { if (!ac) return; const t = ac.currentTime; musO.frequency.setValueAtTime([110, 138.6, 164.8, 220][Math.floor(t * 4) % 4], t); musG.gain.setTargetAtTime(level * 0.05, t, 0.05); },
+      larsen () { if (!ac) return; const [o, g] = osc('sine', 2750); g.gain.setValueAtTime(0.001, ac.currentTime); g.gain.exponentialRampToValueAtTime(0.2, ac.currentTime + 0.4); g.gain.exponentialRampToValueAtTime(0.001, ac.currentTime + 2.2); o.stop(ac.currentTime + 2.3); },
       pop () { tone(55, 0.25, 'sine', 0.5); setTimeout(() => tone(55, 0.25, 'sine', 0.5), 280); },
       ding () { tone(880, 0.15, 'triangle', 0.08); },
       ok () { tone(660, 0.1, 'triangle', 0.08); setTimeout(() => tone(990, 0.15, 'triangle', 0.08), 90); },
