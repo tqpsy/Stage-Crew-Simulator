@@ -83,6 +83,7 @@ const SEED0 = parseInt(process.argv[4] || '1', 10);
       });
       // --- celle, disegni, montaggi
       Object.values(P).forEach(c => {
+        if (/NaN|undefined|null/.test(c.id) || gameState.placed[c.id] !== c) bug('id di pezzo non valido', at + ': ' + c.id);
         (c.cells || []).forEach(k => { if (S.occupied[k] !== c.id) bug('cella del pezzo non segnata come occupata', at + ': ' + c.id + ' ' + k + ' -> ' + S.occupied[k]); });
         if (c.type !== 'allaccio' && !S.compVisuals[c.id]) bug('pezzo posato senza disegno', at + ': ' + c.id);
         const m = MOUNTS[c.type];

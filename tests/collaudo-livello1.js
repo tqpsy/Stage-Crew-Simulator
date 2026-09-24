@@ -47,6 +47,9 @@ const N = parseInt(process.argv[2] || '40', 10), SEED0 = parseInt(process.argv[3
       shuffle(standAt).forEach(s => P('stativo', ...s));
       const mountPar = st => { const v = S.compVisuals[st.id].container; S.placeComponentAt('par', v.x, v.y); };
       shuffle(placedOfType('stativo')).forEach(mountPar);
+      // asta microfonica sul palco con il microfono sulla giraffa
+      P('asta', 2 + Math.floor(rng() * 4), 4 + Math.floor(rng() * 3));
+      S.placeComponentAt('mic', S.compVisuals[placedOfType('asta')[0].id].container.x, S.compVisuals[placedOfType('asta')[0].id].container.y);
       P('quadro', 4, 2); P('ciabatta_cee', 6, 2); P('ciabatta', 3, 13); P('pc', 4, 13); P('scheda', 5, 13);
       if (rng() < 0.5) {
         const ty = pick(['par', 'stativo', 'mixer', 'pc', 'scheda', 'ampli', 'controller']);
@@ -123,6 +126,9 @@ const N = parseInt(process.argv[2] || '40', 10), SEED0 = parseInt(process.argv[3
       const subs = subsLeftToRight();
       wire('speakon', AM, s3 ? 'out_R' : 'out_L', subs[0].id, 'spk_in'); wire('speakon', AM, s3 ? 'out_L' : 'out_R', subs[1].id, 'spk_in');
       subs.forEach(sb => wire('speakon', sb.id, 'spk_thru', sb.hasTop, 'spk_in'));
+      // microfono del preside: in un ingresso MIC a caso (non conta per il Test impianto)
+      const micIn = pick(['in_1', 'in_2', 'in_3', 'in_4']);
+      wire('xlr', placedOfType('mic')[0].id, 'out', MX, micIn);
       desc.push('swap' + (+s1) + (+s2) + (+s3));
       // ---- DMX: 1 o 2 catene (una per universo)
       const dp = shuffle(placedOfType('par').map(c => c.id));
@@ -168,6 +174,7 @@ const N = parseInt(process.argv[2] || '40', 10), SEED0 = parseInt(process.argv[3
       out.rcd = (out.rcd || 0) + (gameState.rcdTrips ? 1 : 0);
       if (r.status !== 'IMPIANTO OK') { out.validFail.push(seed + ' [' + desc.join(' ') + '] ' + r.msg + ' | trips=' + gameState.trips + ' conta=' + el('#conn-val').textContent); continue; }
       if (el('#conn-val').textContent !== '24 / 24') out.validFail.push(seed + ' contatore ' + el('#conn-val').textContent);
+      if (micChannel() !== parseInt(micIn.slice(3), 10)) out.validFail.push(seed + ' microfono: CH ' + micChannel() + ' invece di ' + micIn);
       out.valid++;
       // ---- una mutazione
       const muts = ['cut', 'stereo', 'off', 'overlap', 'group', 'mcbUsed', 'mcbUnused', 'otherUni', 'aux', 'lights'];
@@ -175,7 +182,8 @@ const N = parseInt(process.argv[2] || '40', 10), SEED0 = parseInt(process.argv[3
       let expect = 'fail', expectMsg = null;
       if (m === 'cut') {
         // il test reagisce con l'effetto dell'impianto toccato
-        const e = pick(gameState.edges); S.selectedEdgeId = e.id; S.deleteSelectedEdge();
+        const e = pick(gameState.edges.filter(x => (gameState.placed[x.a] || {}).type !== 'mic'));   // il microfono non conta per il Test impianto
+        S.selectedEdgeId = e.id; S.deleteSelectedEdge();
         expectMsg = POWER_CABLE_IDS.has(e.signal) ? /^Scintille/ : e.signal === 'dmx' ? /^Le luci vanno in tilt/ : /^L'impianto gracchia/;
       }
       else if (m === 'stereo') {
