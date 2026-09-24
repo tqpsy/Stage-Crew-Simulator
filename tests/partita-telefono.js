@@ -116,6 +116,10 @@ const OUT = process.env.SHOTS || null;
   const recs = await p.evaluate(() => (Profile.data.records[LEVEL_ID] || []).map(r => r.service + ' test=' + r.tests));
   log.push('record: ' + recs.join(', '));
   if (recs.length !== 1 || !/Service Telefono test=1/.test(recs[0])) problems.push('record del collaudo mancante o sbagliato: ' + recs);
+  // procedura perfetta al primo test: reputazione piena
+  const rep = await p.evaluate(() => reputation());
+  log.push('reputazione: ' + rep);
+  if (rep !== 150 || !/Reputazione \+150/.test(await toast())) problems.push('reputazione del collaudo perfetto sbagliata: ' + rep);
   log.push('TOTALE tocchi: ' + taps + ' (menu Quale?: ' + menus + ')');
   await shot('fine');
   console.log(log.join('\n')); console.log('PROBLEMI:', JSON.stringify(problems, null, 1)); console.log('ERRORI JS:', errs);

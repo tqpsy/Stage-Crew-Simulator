@@ -1308,9 +1308,13 @@ document.querySelectorAll('.tab-btn').forEach(btn => {
    numero di versione: se un giorno il formato cambia si converte, invece
    di perdere la partita. "Nuova partita" azzera il livello ma tiene
    impostazioni e record.
+   Il valore principale del service è la REPUTAZIONE, che non cala mai:
+   ogni livello porta la reputazione del suo miglior collaudo, quindi
+   rifare un livello non la gonfia, ma rifarlo meglio la fa crescere della
+   differenza. Un nuovo service (Nuova partita) riparte da zero.
    I record preparano gli highscore: per ogni collaudo riuscito si tengono
    i dati grezzi (tempo di gioco, test fatti e falliti, scatti, colpi nelle
-   casse). Il punteggio vero si deciderà quando ci saranno più livelli.
+   casse) e la reputazione che vale.
    --------------------------------------------------------------------- */
 const SAVE_KEY = 'scs-save';
 const SAVE_VERSION = 1;
@@ -1319,14 +1323,14 @@ const RECORDS_KEEP = 20;       // record tenuti per livello
 const SERVICE_MAX = 24;        // caratteri del nome del service
 
 function defaultProfile () {
-  return { v: SAVE_VERSION, service: '', settings: { volume: 0.8, reducedFx: false, skipShow: false }, level: null, records: {} };
+  return { v: SAVE_VERSION, service: '', settings: { volume: 0.8, reducedFx: false, skipShow: false }, level: null, records: {}, reputation: { total: 0, byLevel: {} } };
 }
 const Profile = (() => {
   let data = defaultProfile();
   try {
     const raw = localStorage.getItem(SAVE_KEY);
     const d = raw ? JSON.parse(raw) : null;
-    if (d && d.v === SAVE_VERSION) data = { ...defaultProfile(), ...d, settings: { ...defaultProfile().settings, ...d.settings } };
+    if (d && d.v === SAVE_VERSION) data = { ...defaultProfile(), ...d, settings: { ...defaultProfile().settings, ...d.settings }, reputation: { ...defaultProfile().reputation, ...d.reputation } };
     else if (!raw && localStorage.getItem('scs-muted') === '1') data.settings.volume = 0;   // vecchio tasto muto
   } catch (e) { /* memoria non disponibile o salvataggio illeggibile: si parte da zero */ }
   let timer = null;
@@ -1366,7 +1370,19 @@ function saveLevel () {
   Profile.save();
 }
 
+/* reputazione di un collaudo riuscito: 100 per l'impianto che funziona,
+   più fino a 50 per la procedura pulita (ogni test fallito, scatto del
+   Quadro o del salvavita costa 10, ogni colpo nelle casse 5) */
+const REP_BASE = 100, REP_CLEAN = 50;
+function collaudoReputation (r) {
+  const slips = (r.failedTests + r.trips + r.rcdTrips) * 10 + r.pops * 5;
+  return REP_BASE + Math.max(0, REP_CLEAN - slips);
+}
+const reputation = () => Profile.data.reputation.total;
+
 // un collaudo riuscito entra nei record del livello (i migliori per primi)
+// e fa crescere la reputazione se batte il miglior collaudo del livello;
+// restituisce quanta reputazione ha guadagnato (0 se non ha fatto meglio)
 function addRecord () {
   const st = gameState.stats;
   const rec = {
@@ -1375,12 +1391,18 @@ function addRecord () {
     trips: gameState.trips || 0, rcdTrips: gameState.rcdTrips || 0,
     pops: (gameState.procErrors || []).filter(x => x === 'pop').length
   };
-  const slips = r => r.failedTests + r.trips + r.rcdTrips + r.pops;
+  rec.reputation = collaudoReputation(rec);
   const list = (Profile.data.records[LEVEL_ID] || []).concat(rec)
-    .sort((a, b) => slips(a) - slips(b) || a.playMs - b.playMs)
+    .sort((a, b) => b.reputation - a.reputation || a.playMs - b.playMs)
     .slice(0, RECORDS_KEEP);
   Profile.data.records[LEVEL_ID] = list;
+  const R = Profile.data.reputation, best = R.byLevel[LEVEL_ID] || 0;
+  const gain = Math.max(0, rec.reputation - best);
+  R.byLevel[LEVEL_ID] = best + gain;
+  R.total += gain;
   Profile.save();
+  applySettings();
+  return gain;
 }
 
 // tempo di gioco: conta solo con la pagina in vista e il menù chiuso
@@ -1391,7 +1413,9 @@ setInterval(() => {
 function applySettings () {
   SFX.setVolume(settings().volume);
   const tag = el('#service-tag');
-  if (tag) tag.textContent = Profile.data.service ? Profile.data.service.toUpperCase() : 'STAGE CREW SIMULATOR';
+  if (tag) tag.textContent = gameActive || Profile.data.service
+    ? (Profile.data.service || serviceName()).toUpperCase() + ' · REPUTAZIONE ' + reputation()
+    : 'STAGE CREW SIMULATOR';
   if (window.__scene) window.__scene.paintServiceName();
 }
 
@@ -1414,7 +1438,7 @@ function showMenuPage (page) {
   document.querySelectorAll('#menu-modal .menu-page').forEach(p => { p.hidden = p.dataset.page !== page; });
   const canResume = gameActive || !!Profile.data.level;
   el('#menu-resume').hidden = !canResume;
-  el('#menu-resume').textContent = gameActive ? 'Riprendi' : 'Continua · ' + serviceName();
+  el('#menu-resume').textContent = gameActive ? 'Riprendi' : 'Continua · ' + serviceName() + ' · ★ ' + reputation();
   el('#menu-new').classList.toggle('primary', !canResume);
   el('#new-warning').hidden = !Profile.data.level;
   el('#set-service-row').hidden = !gameActive;
@@ -1444,6 +1468,7 @@ const cleanName = s => String(s || '').replace(/\s+/g, ' ').trim().slice(0, SERV
 
 function startNewGame (name) {
   Profile.data.service = cleanName(name);
+  Profile.data.reputation = defaultProfile().reputation;   // nuovo service, reputazione da costruire
   whenScene(scene => {
     gameActive = true;
     scene.resetLevel(true);      // azzera livello e statistiche e salva
@@ -4850,8 +4875,9 @@ class StageScene extends Phaser.Scene {
       : gameState.rcdTrips ? 'la prossima volta cabla a impianto spento.'
       : pops ? 'la prossima volta accendi finali e sub per ultimi.'
       : null;
-    showToast('Impianto collaudato, si va in scena! ' + (tip ? 'Piccolo consiglio: ' + tip : 'Procedura perfetta.'), 'ok');
-    if (gameActive) addRecord();
+    this.repGain = gameActive ? addRecord() : 0;
+    showToast('Impianto collaudato, si va in scena! ' + (tip ? 'Piccolo consiglio: ' + tip : 'Procedura perfetta.')
+      + (this.repGain ? ' Reputazione +' + this.repGain + '.' : gameActive ? ' Reputazione invariata: hai già fatto di meglio.' : ''), 'ok');
     saveLevel();
     this.playSuccessSequence();
   }
@@ -5102,7 +5128,7 @@ class StageScene extends Phaser.Scene {
      Alla fine torna il giorno e l'impianto resta com'era. */
   // "IMPIANTO COLLAUDATO" col nome del service sotto
   showBanner () {
-    const banner = this.fxObj(this.add.text(GAME_W / 2, GAME_H / 2, 'IMPIANTO COLLAUDATO\n' + serviceName().toUpperCase(), {
+    const banner = this.fxObj(this.add.text(GAME_W / 2, GAME_H / 2, 'IMPIANTO COLLAUDATO\n' + serviceName().toUpperCase() + (this.repGain ? '\n+' + this.repGain + ' REPUTAZIONE' : ''), {
       fontFamily: 'Barlow Condensed, sans-serif', fontSize: '44px', fontStyle: 'bold',
       color: '#f2a541', align: 'center', lineSpacing: 2, wordWrap: { width: GAME_W - 80 }
     }).setOrigin(0.5).setDepth(100).setAlpha(0).setScale(0.85).setScrollFactor(0));

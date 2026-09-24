@@ -31,7 +31,7 @@ const path = require('path');
   check(await p.inputValue('#service-input') === 'Service Wasd', 'nel nome non si scrivono tutte le lettere: ' + await p.inputValue('#service-input'));
   await p.click('#new-start');
   check(!(await p.isVisible('#menu-modal')), 'il menù resta aperto dopo Inizia');
-  check(await p.textContent('#service-tag') === 'SERVICE WASD', 'nome del service non in testata');
+  check(await p.textContent('#service-tag') === 'SERVICE WASD · REPUTAZIONE 0', 'nome del service o reputazione non in testata: ' + await p.textContent('#service-tag'));
   check(await ev(() => window.__scene.vanName.text) === 'SERVICE WASD', 'nome del service non sul furgone');
 
   // ---- un po' di impianto: pezzi, un cavo, Quadro armato, mixer acceso
@@ -58,15 +58,23 @@ const path = require('path');
   await p.press('#set-service', 'Tab');
   await p.click('#settings-back');
   await p.click('#menu-resume');
-  check(await p.textContent('#service-tag') === 'SERVICE PROVA', 'rinomina non applicata');
-  // un record finto, per vedere che Nuova partita lo tiene
-  await ev(() => addRecord());
+  check(/^SERVICE PROVA/.test(await p.textContent('#service-tag')), 'rinomina non applicata');
+  // reputazione: un collaudo con un test fallito vale 140; rifatto uguale
+  // non aggiunge nulla, fatto meglio aggiunge solo la differenza
+  const gains = await ev(() => {
+    const g = [addRecord(), addRecord()];
+    gameState.stats.failedTests = 0; g.push(addRecord());
+    gameState.stats.failedTests = 1;
+    return { g, total: reputation(), level: Profile.data.reputation.byLevel[LEVEL_ID] };
+  });
+  check(JSON.stringify(gains) === JSON.stringify({ g: [140, 0, 10], total: 150, level: 150 }), 'reputazione sbagliata: ' + JSON.stringify(gains));
+  check(await p.textContent('#service-tag') === 'SERVICE PROVA · REPUTAZIONE 150', 'reputazione non in testata');
   await p.waitForTimeout(1500);          // un po' di tempo di gioco e il salvataggio differito
 
   // ---- ricarica: Continua riporta tutto com'era
   await open();
   check(await p.isVisible('#menu-resume'), 'dopo la ricarica manca Continua');
-  check(/Service Prova/.test(await p.textContent('#menu-resume')), 'Continua non dice il nome del service');
+  check(/Service Prova · ★ 150/.test(await p.textContent('#menu-resume')), 'Continua non dice nome e reputazione: ' + await p.textContent('#menu-resume'));
   await p.click('#menu-resume');
   const after = await ev(() => ({ placed: Object.keys(gameState.placed).sort(), edges: gameState.edges.length, on: placedOfType('mixer')[0].on, prot: { ...findQuadro().prot, tripped: undefined }, tests: gameState.stats.tests, failed: gameState.stats.failedTests, playMs: gameState.stats.playMs, vol: SFX.volume, reduced: reducedFx(), undo: el('#undo-btn').disabled, conn: el('#conn-val').textContent, van: window.__scene.vanName.text }));
   check(JSON.stringify(after.placed) === JSON.stringify(before.placed), 'pezzi diversi dopo la ricarica: ' + after.placed);
@@ -84,9 +92,10 @@ const path = require('path');
   check(await p.isVisible('#new-warning'), 'manca l\'avviso prima di ricominciare');
   await p.fill('#service-input', 'Service Nuovo');
   await p.click('#new-start');
-  const fresh = await ev(() => ({ placed: Object.keys(gameState.placed), edges: gameState.edges.length, tests: gameState.stats.tests, vol: SFX.volume, recs: (Profile.data.records[LEVEL_ID] || []).length }));
+  const fresh = await ev(() => ({ placed: Object.keys(gameState.placed), edges: gameState.edges.length, tests: gameState.stats.tests, vol: SFX.volume, recs: (Profile.data.records[LEVEL_ID] || []).length, rep: reputation() }));
   check(fresh.placed.length === 1 && fresh.edges === 0 && fresh.tests === 0, 'Nuova partita non azzera il livello: ' + JSON.stringify(fresh));
-  check(fresh.vol === 0.3 && fresh.recs === 1, 'Nuova partita perde impostazioni o record: ' + JSON.stringify(fresh));
+  check(fresh.vol === 0.3 && fresh.recs === 3, 'Nuova partita perde impostazioni o record: ' + JSON.stringify(fresh));
+  check(fresh.rep === 0, 'il nuovo service non parte da reputazione 0');
 
   console.log('PROBLEMI:', JSON.stringify(problems, null, 1));
   console.log('ERRORI JS:', errs);
