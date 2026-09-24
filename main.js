@@ -57,22 +57,11 @@ const SIGNAL_LABEL = {
 const MIXER_GEO = {
   La: 112, Lb: 42,       // lunghezza (canali) e profondità del banco
   Bd: 10, bt: 4,         // dove la plancia incontra il ponte, profondità del cappello del ponte
-  zF: 5, zR: 10, Hb: 24, // altezza bordo anteriore, posteriore e del ponte meter/schermo
-  cx: 0.5, cy: 0.343,
-  offX: 38.5, offY: -24 // centra il bounding box sull'origine del container
+  zF: 5, zR: 10, Hb: 24  // altezza bordo anteriore, posteriore e del ponte meter/schermo
 };
-// banco ruotato di -90° sul pavimento: i canali corrono verso il fondo
-// (in alto a destra) e il fronte operatore guarda in basso a destra
-function mixerIso (a, b, z) {
-  const m = MIXER_GEO;
-  return { x: (a + b) * m.cx - m.offX, y: (b - a) * m.cy - z - m.offY };
-}
 // le porte stanno sul pannello posteriore, appena dietro al ponte: da lì
 // escono davvero i cavi di un banco reale
-function mixerRearPort (a) {
-  const p = mixerIso(a, -6, MIXER_GEO.Hb + 3);
-  return { dx: Math.round(p.x), dy: Math.round(p.y) };
-}
+function mixerRearIso (a) { return [a, -6, MIXER_GEO.Hb + 3]; }
 
 /* Proiezione isometrica comune a TUTTI gli apparecchi (la stessa del mixer e
    della griglia di gioco, TILE_H/TILE_W = 70/102): a = asse che sale verso il
@@ -88,6 +77,9 @@ function isoFrame (A, B, Z) {
   P.A = A; P.B = B; P.Z = Z;
   return P;
 }
+// il banco del mixer nella proiezione comune, così può girarsi verso il
+// palco quando sta in FOH (vedi orientK)
+const MIXER_ISO = isoFrame(MIXER_GEO.La, MIXER_GEO.Lb, MIXER_GEO.Hb);
 /* stesso solido ruotato di k quarti di giro sul pavimento (per i dispositivi
    che cambiano verso a seconda di dove stanno, vedi orientK). Le coordinate
    locali (a, b, z) restano quelle del disegno: cambia solo dove finiscono. */
@@ -221,18 +213,20 @@ const COMPONENT_TYPES = {
     label: 'MIX', category: 'audio', powerW: 50, zone: 'offstage', shape: 'mixer',
     body: { w: 77, h: 77, fill: 0x2a2c32, accent: 0x8a8e98 },
     // LED di alimentazione sul ponte, come su un banco vero
-    ledPos: mixerIso(3.5, 7, 17),
+    frame: MIXER_ISO, front: '+b',
+    ledIso: [3.5, 7, 17],
     // retro del ponte (livello 1): 4 ingressi microfonici XLR, 2 ingressi di
     // linea jack, uscite MAIN L/R, 2 mandate AUX per i monitor e
     // l'alimentazione (i canali cresceranno coi livelli)
     ports: [
-      ...[1, 2, 3, 4].map(n => ({ id: 'in_' + n, signal: 'xlr', dir: 'in', ...mixerRearPort(-2 + n * 10) })),
-      ...[5, 6].map(n => ({ id: 'in_' + n, signal: 'jack', dir: 'in', ...mixerRearPort(-2 + n * 10) })),
-      { id: 'main_L', signal: 'xlr',      dir: 'out', ...mixerRearPort(68) },
-      { id: 'main_R', signal: 'xlr',      dir: 'out', ...mixerRearPort(78) },
-      { id: 'aux_1',  signal: 'xlr',      dir: 'out', ...mixerRearPort(88) },
-      { id: 'aux_2',  signal: 'xlr',      dir: 'out', ...mixerRearPort(98) },
-      { id: 'power',  signal: 'powercon', dir: 'in',  ...mixerRearPort(108) }
+      ...[1, 2, 3, 4].map(n => ({ id: 'in_' + n, signal: 'xlr', dir: 'in', iso: mixerRearIso(-2 + n * 10) })),
+      ...[5, 6].map(n => ({ id: 'in_' + n, signal: 'jack', dir: 'in', iso: mixerRearIso(-2 + n * 10) })),
+      { id: 'main_L', signal: 'xlr',      dir: 'out', iso: mixerRearIso(68) },
+      { id: 'main_R', signal: 'xlr',      dir: 'out', iso: mixerRearIso(78) },
+      // mandate monitor in jack, come sui banchi piccoli veri
+      { id: 'aux_1',  signal: 'jack',     dir: 'out', iso: mixerRearIso(88) },
+      { id: 'aux_2',  signal: 'jack',     dir: 'out', iso: mixerRearIso(98) },
+      { id: 'power',  signal: 'powercon', dir: 'in',  iso: mixerRearIso(108) }
     ]
   },
   ampli: {
@@ -265,12 +259,14 @@ const COMPONENT_TYPES = {
   controller: {
     label: 'CTRL', category: 'luci', powerW: 20, zone: 'offstage', shape: 'controller',
     body: { w: 62, h: 42, fill: 0x2a2c32, accent: 0xf2a541 },
-    ledPos: CTRL_ISO(52, 30, 10),
-    // alimentazione PowerCON e due universi DMX in uscita
+    frame: CTRL_ISO, front: '+b',
+    ledIso: [52, 30, 10],
+    // alimentazione PowerCON e due universi DMX in uscita, sul retro (lato
+    // alto della consolle), da dove partono i cavi di una consolle vera
     ports: [
-      { id: 'power', signal: 'powercon', dir: 'in',  ...isoPort(CTRL_ISO, 8, 34, 3) },
-      { id: 'dmx_1', signal: 'dmx',      dir: 'out', ...isoPort(CTRL_ISO, 34, 34, 3) },
-      { id: 'dmx_2', signal: 'dmx',      dir: 'out', ...isoPort(CTRL_ISO, 46, 34, 3) }
+      { id: 'power', signal: 'powercon', dir: 'in',  iso: [8, -3, 13] },
+      { id: 'dmx_1', signal: 'dmx',      dir: 'out', iso: [34, -3, 13] },
+      { id: 'dmx_2', signal: 'dmx',      dir: 'out', iso: [46, -3, 13] }
     ]
   },
   quadro: {
@@ -398,78 +394,139 @@ const FORCE_TRIFASE = true;
 // budget per fase: 3kW ciascuna (coerente con un 16A monofase per fase su un
 // quadro trifase, 16A×230V≈3680W con un margine di sicurezza tondo a 3000W).
 const PHASE_BUDGET_W = 3000;
+// i picchi di accensione (finali e sub) durano meno di un secondo: un
+// magnetotermico da 16A li regge, a meno che più apparecchi pesanti partano
+// insieme sulla stessa fase. Acceso uno alla volta, il livello non scatta mai.
+const PHASE_PEAK_W = 4600;
 
-/* La "soluzione" del livello: collegamenti richiesti, PORTA per PORTA (non
-   solo componente-componente), così i cavi devono rispettare L/R e la
-   sequenza reale della catena (mixer -> finale -> sub -> top, daisy DMX/potenza). */
+/* Cosa deve essere cablato nel livello: 24 collegamenti che servono,
+   fissi. Non c'è un unico schema giusto: conta che l'impianto funzioni come
+   nella realtà, qualunque strada si scelga.
+   - corrente (11): il Quadro dall'allaccio, e ogni utenza che arriva al
+     Quadro da una sua presa qualunque, da una ciabatta o dal passante di un
+     altro PAR. Le ciabatte sono un mezzo, non un obbligo: il PC può anche
+     andare al Quadro con l'adattatore CEE/Schuko;
+   - audio (9): PC -> scheda, le due uscite della scheda nei due ingressi
+     jack del mixer, MAIN L/R nei due ingressi del finale, un'uscita del
+     finale per Sub, ogni Sub alla SUA testa. Se L/R vengono scambiati due
+     volte il suono arriva giusto e va bene; se no lo dice stereoCheck;
+   - DMX (4): ogni PAR arriva alla consolle, in qualunque ordine e su
+     qualunque dei due universi.
+   I dispositivi si cercano per tipo e non per id, così un pezzo tolto e
+   rimesso (che prende un id nuovo) conta come prima. */
+const REQUIRED_POWER = { mixer: 1, controller: 1, ampli: 1, sub: 2, par: 4, pc: 1 };
+
+function placedOfType (type) {
+  return Object.values(gameState.placed)
+    .filter(c => c.type === type)
+    .sort((a, b) => parseInt(a.id.split('_').pop(), 10) - parseInt(b.id.split('_').pop(), 10));
+}
+// l'ingresso di corrente risale, cavo dopo cavo, fino a una presa del Quadro?
+function wiredToQuadro (compId, visited) {
+  visited = visited || new Set();
+  if (visited.has(compId)) return false;
+  visited.add(compId);
+  const e = feedingPowerEdge(compId);
+  const src = e && gameState.placed[e.a];
+  if (!src) return false;
+  return src.type === 'quadro' || wiredToQuadro(src.id, visited);
+}
+// universo DMX (1 o 2) da cui arriva il PAR risalendo la catena, o null
+function dmxUniverse (parId, visited) {
+  visited = visited || new Set();
+  if (visited.has(parId)) return null;
+  visited.add(parId);
+  const e = gameState.edges.find(x => x.b === parId && x.bPort === 'dmx_in' && x.signal === 'dmx');
+  const src = e && gameState.placed[e.a];
+  if (!src) return null;
+  if (src.type === 'controller') return e.aPort === 'dmx_2' ? 2 : 1;
+  return src.type === 'par' ? dmxUniverse(src.id, visited) : null;
+}
+// cavo che entra in una porta (o null)
+function edgeInto (compId, portId, signal) {
+  return gameState.edges.find(e => e.b === compId && e.bPort === portId && (!signal || e.signal === signal)) || null;
+}
+// i due Sub ordinati da sinistra a destra per chi guarda il palco dalla
+// platea (asse X della griglia; a parità, la posizione sullo schermo)
+function subsLeftToRight () {
+  const key = c => (c.gx != null ? c.gx : 0) * 1000 + (c.screen ? c.screen.x : 0) / 1000;
+  return placedOfType('sub').sort((a, b) => key(a) - key(b));
+}
+
 function buildExpectedConnections () {
-  const list = [
-    // aPort: null = "una qualunque presa/fase del Quadro" — non importa su quale
-    // delle 3 fasi finisca il cavo, conta solo che la connessione esista (il
-    // bilanciamento del carico tra le fasi è controllato a parte, vedi runValidation).
-    // il Quadro esce in CEE su tutte e 3 le fasi: ogni utenza qui sotto ha
-    // porte PowerCON, quindi il cavo che serve è l'adattatore CEE/PowerCON.
-    { a: 'allaccio', aPort: 'out', b: 'quadro_1',      bPort: 'in',       signal: 'cee_tri' },
-    { a: 'quadro_1', aPort: null, b: 'mixer_1',      bPort: 'power',    signal: 'cee_powercon' },
-    { a: 'quadro_1', aPort: null, b: 'controller_1', bPort: 'power',    signal: 'cee_powercon' },
-    { a: 'quadro_1', aPort: null, b: 'ampli_1',      bPort: 'power',    signal: 'cee_powercon' },
-    { a: 'quadro_1', aPort: null, b: 'sub_1',        bPort: 'power',    signal: 'cee_powercon' },
-    { a: 'quadro_1', aPort: null, b: 'sub_2',        bPort: 'power',    signal: 'cee_powercon' },
-    { a: 'quadro_1', aPort: null, b: 'par_1',        bPort: 'power_in', signal: 'cee_powercon' },
-    // corrente alla regia: la ciabatta CEE si attacca con la sua spina a una
-    // presa del Quadro, la ciabatta civile con la sua spina a una presa della
-    // ciabatta CEE, e il PC a una presa della ciabatta civile
-    { a: 'quadro_1', aPort: null, b: 'ciabatta_cee_1', bPort: 'in',  signal: 'cee_mono' },
-    { a: 'ciabatta_cee_1', aPort: null, b: 'ciabatta_1', bPort: 'in', signal: 'schuko' },
-    { a: 'ciabatta_1', aPort: null, b: 'pc_1', bPort: 'power', signal: 'schuko' },
-    { a: 'par_1', aPort: 'power_thru', b: 'par_2', bPort: 'power_in', signal: 'powercon' },
-    { a: 'par_2', aPort: 'power_thru', b: 'par_3', bPort: 'power_in', signal: 'powercon' },
-    { a: 'par_3', aPort: 'power_thru', b: 'par_4', bPort: 'power_in', signal: 'powercon' },
+  const one = t => placedOfType(t)[0] || null;
+  const L = c => c ? compLabel(c.id) : null;
+  const missing = t => COMPONENT_TYPES[t].label + ' da posare';
+  // ogni posto dice a parole cosa serve, per il messaggio del Test impianto
+  const slot = (ok, what, ...cs) => ({ ok: !!ok, what, ids: cs.filter(Boolean).map(c => c.id) });
+  const list = [];
+  const mixer = one('mixer'), ampli = one('ampli'), pc = one('pc'), scheda = one('scheda');
 
-    { a: 'mixer_1', aPort: 'main_L', b: 'ampli_1', bPort: 'in_L', signal: 'xlr' },
-    { a: 'mixer_1', aPort: 'main_R', b: 'ampli_1', bPort: 'in_R', signal: 'xlr' },
-
-    // il PC suona dalla scheda audio: USB-C dal PC, poi le due uscite di linea
-    // jack L/R nei due ingressi jack del mixer (CH 5 = L, CH 6 = R)
-    { a: 'pc_1', aPort: 'usb', b: 'scheda_1', bPort: 'usb', signal: 'usbc' },
-    { a: 'scheda_1', aPort: 'out_L', b: 'mixer_1', bPort: 'in_5', signal: 'jack' },
-    { a: 'scheda_1', aPort: 'out_R', b: 'mixer_1', bPort: 'in_6', signal: 'jack' },
-
-    // l'universo DMX è a scelta (1 o 2), purché la catena parta dalla consolle
-    { a: 'controller_1', aPort: null, b: 'par_1', bPort: 'dmx_in', signal: 'dmx' },
-    { a: 'par_1', aPort: 'dmx_thru', b: 'par_2', bPort: 'dmx_in', signal: 'dmx' },
-    { a: 'par_2', aPort: 'dmx_thru', b: 'par_3', bPort: 'dmx_in', signal: 'dmx' },
-    { a: 'par_3', aPort: 'dmx_thru', b: 'par_4', bPort: 'dmx_in', signal: 'dmx' }
-  ];
-
-  // finale -> sub: L/R assegnati in base alla posizione FISICA sullo schermo
-  // (il Sub più a sinistra va con out_L), non all'ordine in cui sono stati
-  // piazzati — così il giocatore collega in base a quello che vede. Sono
-  // sempre 2 "posti" nel conteggio totale, anche se un Sub non è ancora
-  // stato piazzato (in quel caso usiamo un id segnaposto che nessun cavo
-  // reale potrà mai soddisfare, così il totale resta fisso a 19 durante
-  // tutta la costruzione del livello, invece di scendere e risalire).
-  const subs = Object.values(gameState.placed)
-    .filter(c => c.type === 'sub')
-    .sort((a, b) => (a.screen ? a.screen.x : 0) - (b.screen ? b.screen.x : 0));
-  const leftSub = subs[0] || null;
-  const rightSub = subs[1] || null;
-  list.push({ a: 'ampli_1', aPort: 'out_L', b: leftSub ? leftSub.id : '__sub_L_non_piazzato__', bPort: 'spk_in', signal: 'speakon' });
-  list.push({ a: 'ampli_1', aPort: 'out_R', b: rightSub ? rightSub.id : '__sub_R_non_piazzato__', bPort: 'spk_in', signal: 'speakon' });
-
-  // sub -> testa: stesso principio, 2 posti fissi (uno per il Sub di sinistra,
-  // uno per quello di destra), risolti verso LA testa realmente agganciata a
-  // quel Sub specifico, qualunque id essa abbia.
-  list.push({
-    a: leftSub ? leftSub.id : '__sub_L_non_piazzato__', aPort: 'spk_thru',
-    b: (leftSub && leftSub.hasTop) ? leftSub.hasTop : '__top_L_non_agganciata__', bPort: 'spk_in', signal: 'speakon'
+  // corrente
+  const allaccio = one('allaccio'), quadro = one('quadro');
+  list.push(slot(allaccio && quadro && portEdgeExists(allaccio.id, 'out', quadro.id, 'in', 'cee_tri'),
+    quadro ? 'Allaccio → ' + L(quadro) + ' (CEE 400V)' : missing('quadro'), quadro));
+  Object.entries(REQUIRED_POWER).forEach(([t, n]) => {
+    const cs = placedOfType(t);
+    for (let i = 0; i < n; i++) list.push(slot(cs[i] && wiredToQuadro(cs[i].id), cs[i] ? 'corrente a ' + L(cs[i]) : missing(t), cs[i]));
   });
-  list.push({
-    a: rightSub ? rightSub.id : '__sub_R_non_piazzato__', aPort: 'spk_thru',
-    b: (rightSub && rightSub.hasTop) ? rightSub.hasTop : '__top_R_non_agganciata__', bPort: 'spk_in', signal: 'speakon'
+
+  // audio: PC -> scheda
+  list.push(slot(pc && scheda && portEdgeExists(pc.id, 'usb', scheda.id, 'usb', 'usbc'),
+    pc && scheda ? 'USB-C da ' + L(scheda) + ' a ' + L(pc) : missing(pc ? 'scheda' : 'pc'), pc, scheda));
+  // scheda out L/R -> un ingresso jack del mixer ciascuna
+  ['out_L', 'out_R'].forEach(out => {
+    const e = scheda && gameState.edges.find(x => x.a === scheda.id && x.aPort === out && x.signal === 'jack');
+    list.push(slot(e && mixer && e.b === mixer.id,
+      scheda && mixer ? L(scheda) + ' OUT ' + out.slice(-1) + ' → ' + L(mixer) + ' (jack)' : missing(scheda ? 'mixer' : 'scheda'), scheda, mixer));
   });
+  // MAIN L/R -> un ingresso del finale ciascuna
+  ['main_L', 'main_R'].forEach(out => {
+    const e = mixer && gameState.edges.find(x => x.a === mixer.id && x.aPort === out && x.signal === 'xlr');
+    list.push(slot(e && ampli && e.b === ampli.id,
+      mixer && ampli ? L(mixer) + ' MAIN ' + out.slice(-1) + ' → ' + L(ampli) + ' (XLR)' : missing(mixer ? 'ampli' : 'mixer'), mixer, ampli));
+  });
+
+  // DMX: ogni PAR in catena dalla consolle
+  const pars = placedOfType('par');
+  for (let i = 0; i < 4; i++) list.push(slot(pars[i] && dmxUniverse(pars[i].id) != null, pars[i] ? 'DMX dalla consolle a ' + L(pars[i]) : missing('par'), pars[i]));
+
+  // finale -> ogni Sub, ogni Sub -> la testa agganciata sopra
+  const subs = subsLeftToRight();
+  for (let i = 0; i < 2; i++) {
+    const sub = subs[i];
+    const e = sub && edgeInto(sub.id, 'spk_in', 'speakon');
+    list.push(slot(e && ampli && e.a === ampli.id, sub ? (ampli ? L(ampli) : 'finale') + ' → ' + L(sub) + ' (Speakon)' : missing('sub'), ampli, sub));
+    const top = sub && sub.hasTop ? gameState.placed[sub.hasTop] : null;
+    list.push(slot(sub && top && portEdgeExists(sub.id, 'spk_thru', top.id, 'spk_in', 'speakon'),
+      sub && top ? L(sub) + ' LINK → ' + L(top) + ' (Speakon)' : (sub ? 'testa da montare su ' + L(sub) : missing('sub')), sub, top));
+  }
 
   return list;
+}
+
+/* Stereo: seguendo i cavi all'indietro, la cassa di sinistra deve suonare il
+   canale sinistro del PC e quella di destra il destro. Il mixer manda il CH5
+   a sinistra e il CH6 a destra; il finale manda IN L su OUT L e IN R su OUT R.
+   Restituisce null se è giusto, altrimenti il lato che risulta invertito. */
+function stereoCheck () {
+  const mixer = placedOfType('mixer')[0], ampli = placedOfType('ampli')[0], scheda = placedOfType('scheda')[0];
+  if (!mixer || !ampli || !scheda) return null;
+  const chSide = { in_5: 'L', in_6: 'R' };
+  const wrong = [];
+  subsLeftToRight().forEach((sub, i) => {
+    const want = i === 0 ? 'L' : 'R';
+    const e1 = edgeInto(sub.id, 'spk_in', 'speakon');                    // finale OUT x -> sub
+    if (!e1 || e1.a !== ampli.id) return;
+    const e2 = edgeInto(ampli.id, e1.aPort === 'out_L' ? 'in_L' : 'in_R', 'xlr'); // mixer MAIN y -> finale IN x
+    if (!e2 || e2.a !== mixer.id) return;
+    const bus = e2.aPort === 'main_L' ? 'L' : 'R';
+    const e3 = gameState.edges.find(x => x.a === scheda.id && x.b === mixer.id && chSide[x.bPort] === bus && x.signal === 'jack');
+    if (!e3) return;
+    const got = e3.aPort === 'out_L' ? 'L' : 'R';
+    if (got !== want) wrong.push(sub.id);
+  });
+  return wrong.length ? wrong : null;
 }
 
 /* ---------------------------------------------------------------------
@@ -775,7 +832,9 @@ function livePhaseLoads (withInrush) {
   });
   if (withInrush) {
     const now = Date.now();
-    gameState.inrush = (gameState.inrush || []).filter(s => s.until > now);
+    // il picco dura finché l'apparecchio sta davvero partendo: se nel
+    // frattempo è rimasto senza corrente o è stato spento, non conta più
+    gameState.inrush = (gameState.inrush || []).filter(s => s.until > now && (!s.id || isRunning(s.id)));
     gameState.inrush.forEach(s => { loads[s.phase] += s.w; });
   }
   return loads;
@@ -800,7 +859,7 @@ function applyPowerAction (action) {
     const ph = phaseOf(id);
     if (k && ph) {
       gameState.inrush = gameState.inrush || [];
-      gameState.inrush.push({ phase: ph, w: COMPONENT_TYPES[c.type].powerW * (k - 1), until: now + INRUSH_MS });
+      gameState.inrush.push({ id, phase: ph, w: COMPONENT_TYPES[c.type].powerW * (k - 1), until: now + INRUSH_MS });
     }
   });
   // il mixer si accende o si spegne mentre i finali sono già accesi: il
@@ -832,14 +891,18 @@ function checkOverloads () {
   const q = findQuadro();
   if (!q) return;
   const prot = quadroProt(q);
+  const steady = livePhaseLoads(false);
   const loads = livePhaseLoads(true);
-  const tripped = ['L1', 'L2', 'L3'].filter(ph => prot[ph] && loads[ph] > PHASE_BUDGET_W);
+  const tripped = ['L1', 'L2', 'L3'].filter(ph => prot[ph] && (steady[ph] > PHASE_BUDGET_W || loads[ph] > PHASE_PEAK_W));
   if (!tripped.length) return;
+  const byPeak = tripped.every(ph => steady[ph] <= PHASE_BUDGET_W);
   tripped.forEach(ph => { prot[ph] = false; prot.tripped[ph] = true; });
   gameState.trips = (gameState.trips || 0) + tripped.length;
   SFX.trip();
   const kw = tripped.map(ph => ph + ' ' + fmtKW(loads[ph], 1) + ' kW').join(', ');
-  showToast('Magnetotermico scattato (' + kw + ' su ' + fmtKW(PHASE_BUDGET_W, 1) + ' kW): la fase è spenta. Togli carico o spostalo su un\'altra fase, spegni finali e sub, poi riarma dal Quadro e riaccendili uno alla volta.');
+  showToast(byPeak
+    ? 'Magnetotermico scattato per il picco di accensione (' + kw + '): sono partiti insieme più apparecchi pesanti sulla stessa fase (anche accendendo la ciabatta a cui sono attaccati). Spegni finali e sub, riarma dal Quadro e riaccendili uno alla volta.'
+    : 'Magnetotermico scattato (' + kw + ' su ' + fmtKW(PHASE_BUDGET_W, 1) + ' kW): la fase è spenta. Togli carico o spostalo su un\'altra fase, spegni finali e sub, poi riarma dal Quadro e riaccendili uno alla volta.');
   if (window.__scene) window.__scene.sparkQuadro(tripped);
 }
 
@@ -897,18 +960,23 @@ function toggleProtection (key) {
   saveHistory();
 }
 
-// indirizzi DMX dei PAR: nessuno deve sovrapporsi a un altro
+// indirizzi DMX dei PAR sullo stesso universo: non devono accavallarsi.
+// Due PAR con lo stesso indirizzo E la stessa modalità vanno bene (si
+// comandano insieme, in gruppo, come si fa spesso); una sovrapposizione
+// parziale invece fa fare cose sbagliate ai fari.
 function dmxOverlaps () {
-  const pars = Object.values(gameState.placed).filter(c => c.type === 'par');
-  const ranges = pars.map(c => {
+  const ranges = placedOfType('par').map(c => {
     const d = parDmx(c);
     const n = parseInt(PAR_MODES[d.mode].id, 10);
-    return { id: c.id, from: d.addr, to: d.addr + n - 1 };
-  });
+    return { id: c.id, u: dmxUniverse(c.id), mode: d.mode, from: d.addr, to: d.addr + n - 1 };
+  }).filter(r => r.u != null);
   const clashes = [];
   for (let i = 0; i < ranges.length; i++) {
     for (let j = i + 1; j < ranges.length; j++) {
-      if (ranges[i].from <= ranges[j].to && ranges[j].from <= ranges[i].to) clashes.push([ranges[i].id, ranges[j].id]);
+      const r = ranges[i], q = ranges[j];
+      if (r.u !== q.u) continue;
+      if (r.from === q.from && r.mode === q.mode) continue;
+      if (r.from <= q.to && q.from <= r.to) clashes.push([r.id, q.id]);
     }
   }
   return clashes;
@@ -917,13 +985,22 @@ function dmxOverlaps () {
 /* Un cavo appena creato collegherebbe fromId (lato OUT) -> toId (lato IN).
    Se da toId, seguendo i cavi già esistenti (sempre in verso OUT->IN), si può
    già raggiungere fromId, quel nuovo cavo richiuderebbe un anello: rifiutato. */
-function wouldCreateCycle (fromId, toId) {
+// famiglia di un cavo: la corrente, il DMX e l'audio sono reti separate, un
+// anello conta solo dentro la stessa rete (la catena DMX dei PAR può andare
+// nel verso opposto a quella della corrente)
+function cableFamily (signal) {
+  if (POWER_CABLE_IDS.has(signal)) return 'power';
+  return signal === 'dmx' ? 'dmx' : 'audio';
+}
+function wouldCreateCycle (fromId, toId, signal) {
   if (fromId === toId) return true;
+  const fam = signal ? cableFamily(signal) : null;
   const visited = new Set([toId]);
   const queue = [toId];
   while (queue.length) {
     const cur = queue.shift();
     for (const e of gameState.edges) {
+      if (fam && cableFamily(e.signal) !== fam) continue;
       if (e.a === cur && !visited.has(e.b)) {
         if (e.b === fromId) return true;
         visited.add(e.b);
@@ -950,19 +1027,25 @@ function portHasConnection (componentId, portId) {
   );
 }
 
+// "a; b; c e altri 2"
+function listShort (items, max) {
+  if (items.length <= max) return items.join('; ');
+  return items.slice(0, max).join('; ') + ' e altri ' + (items.length - max);
+}
+
 function runValidation () {
   const expected = buildExpectedConnections();
   const failedComponents = new Set();
   let allFound = true;
   let madeCount = 0;
 
+  const missingList = [];
   expected.forEach(exp => {
-    if (portEdgeExists(exp.a, exp.aPort, exp.b, exp.bPort, exp.signal)) {
-      madeCount++;
-    } else {
+    if (exp.ok) madeCount++;
+    else {
       allFound = false;
-      failedComponents.add(exp.a);
-      failedComponents.add(exp.b);
+      missingList.push(exp.what);
+      exp.ids.forEach(i => failedComponents.add(i));
     }
   });
 
@@ -980,7 +1063,7 @@ function runValidation () {
 
   return {
     pass: allFound && !overBudget && allSubsTopsPlaced && !overPhase,
-    failedComponents, overBudget, usedW, madeCount, totalCount: expected.length,
+    failedComponents, missingList, overBudget, usedW, madeCount, totalCount: expected.length,
     phaseLoads, overloadedPhases, overPhase
   };
 }
@@ -1035,10 +1118,13 @@ function showToast (msg, kind) {
   if (kind === 'ok') toast.classList.add('ok');
   toast.classList.add('show');
   clearTimeout(toastTimer);
-  toastTimer = setTimeout(() => toast.classList.remove('show'), 3200);
+  // i messaggi lunghi restano più a lungo: il tempo di leggerli
+  toastTimer = setTimeout(() => toast.classList.remove('show'), Math.max(3200, msg.length * 60));
 }
 
 function updateStockUI () {
+  // la potenza impegnata segue i pezzi posati: si aggiorna a ogni posa
+  updatePowerMeter();
   Object.keys(AVAILABLE_STOCK).forEach(type => {
     const remaining = gameState.stock[type];
     const countEl = el('#count-' + type);
@@ -1768,6 +1854,9 @@ function renderStripPanel (ctx, comp, def, panel) {
   return svg + `</svg>`;
 }
 
+// scala minima del disegno di un pannello (pixel per unità): sotto questa
+// le scritte delle prese non si leggono più
+const REAR_MIN_SCALE = 0.56;
 function renderRearPanel () {
   const id = rearPanelId;
   const comp = gameState.placed[id];
@@ -1848,7 +1937,19 @@ function renderRearPanel () {
     svg += `</svg>`;
   }
 
-  el('#rear-svg').innerHTML = svg;
+  const wrap = el('#rear-svg');
+  const keepScroll = wrap.scrollLeft;
+  wrap.innerHTML = svg;
+  // sul telefono un pannello largo (mixer, finale...) diventerebbe troppo
+  // piccolo per leggerlo: lo si mostra più grande e scorre di lato
+  const svgEl = wrap.querySelector('svg');
+  const vbW = svgEl ? svgEl.viewBox.baseVal.width : 0;
+  const avail = wrap.clientWidth - 32;
+  const big = vbW && avail > 0 && avail / vbW < REAR_MIN_SCALE;
+  wrap.classList.toggle('scroll-x', !!big);
+  if (svgEl) svgEl.style.width = big ? Math.round(vbW * REAR_MIN_SCALE) + 'px' : '';
+  if (big) wrap.insertAdjacentHTML('afterbegin', '<div class="rear-scroll-hint">↔ scorri di lato per vedere tutto il pannello</div>');
+  wrap.scrollLeft = big ? keepScroll : 0;
   el('#rear-svg').querySelectorAll('.rp-port').forEach(node => {
     node.addEventListener('click', () => onRearPortClick(id, node.dataset.port));
   });
@@ -1872,8 +1973,10 @@ function onParButton (comp, act) {
   if (act === 'menu') parMenuField = parMenuField === 'addr' ? 'mode' : 'addr';
   else if (act === 'up' || act === 'down') {
     const d = act === 'up' ? 1 : -1;
-    if (parMenuField === 'addr') dmx.addr = Math.min(512, Math.max(1, dmx.addr + d));
+    if (parMenuField === 'addr') dmx.addr += d;
     else dmx.mode = (dmx.mode + d + PAR_MODES.length) % PAR_MODES.length;
+    // come sui fari veri, i canali devono stare dentro i 512 dell'universo
+    dmx.addr = Math.min(513 - parseInt(PAR_MODES[dmx.mode].id, 10), Math.max(1, dmx.addr));
   } else if (act === 'enter') {
     showToast(compLabel(comp.id) + ': indirizzo ' + String(dmx.addr).padStart(3, '0') + ', modalità ' + PAR_MODES[dmx.mode].id + '.', 'ok');
     if (window.__scene) window.__scene.pushHistory();
@@ -1936,22 +2039,39 @@ function onRearPortClick (compId, portId) {
   const pending = gameState.pendingPort;
   const isPendingPort = pending && pending.componentId === compId && pending.portId === portId;
 
-  // spina della ciabatta: il cavo è già suo, non si sceglie nella scheda Cavi
+  // spine già attaccate (ciabatte, PC, scheda): il cavo è il loro. Con un
+  // adattatore in mano (es. CEE / Schuko) la spina si infila nella sua presa
+  // e l'adattatore va nella presa di tipo diverso, come dal vero.
+  const held = gameState.selectedCable && CABLE_TYPES[gameState.selectedCable];
+  const isAdapter = c => !!c && c.endpoints.length === 2;
+  const pendDef0 = pending && getPortDef(pending.componentId, pending.portId);
   if (p.lead && !busy.length && !isPendingPort) {
     if (pending) {
-      const pendDef = getPortDef(pending.componentId, pending.portId);
-      if (!pendDef || pendDef.signal !== p.signal || pendDef.dir === p.dir) {
-        showToast('La spina ' + SIGNAL_LABEL[p.signal] + ' va infilata in una presa ' + SIGNAL_LABEL[p.signal] + ' libera.');
-        return;
+      const bridges = isAdapter(held) && !!pendDef0 && pendDef0.signal !== p.signal &&
+        held.endpoints.includes(p.signal) && held.endpoints.includes(pendDef0.signal);
+      if (!bridges) {
+        if (!pendDef0 || pendDef0.signal !== p.signal || pendDef0.dir === p.dir) {
+          showToast('La spina ' + SIGNAL_LABEL[p.signal] + ' va infilata in una presa ' + SIGNAL_LABEL[p.signal] + ' libera.');
+          return;
+        }
+        selectCable(p.signal);
       }
+    } else if (!(isAdapter(held) && held.endpoints.includes(p.signal))) {
+      selectCable(p.signal);
     }
-    selectCable(p.signal);
   }
-  // spina di una ciabatta in mano: va solo in una presa del suo tipo
-  const pendLead = pending && getPortDef(pending.componentId, pending.portId);
-  if (pendLead && pendLead.lead && !isPendingPort && !busy.length && p.signal !== pendLead.signal) {
-    showToast('La spina ' + SIGNAL_LABEL[pendLead.signal] + ' di ' + compLabel(pending.componentId) + ' va in una presa ' + SIGNAL_LABEL[pendLead.signal] + '.');
-    return;
+  // spina in mano: nella presa del suo tipo col suo cavo, in una di tipo
+  // diverso solo con l'adattatore giusto
+  const pendLead = pendDef0;
+  if (pendLead && pendLead.lead && !isPendingPort && (!busy.length || p.multi)) {
+    if (p.signal === pendLead.signal) {
+      if (gameState.selectedCable !== pendLead.signal) selectCable(pendLead.signal);
+    } else if (!(isAdapter(held) && held.endpoints.includes(p.signal) && held.endpoints.includes(pendLead.signal))) {
+      const adapter = Object.keys(CABLE_TYPES).find(k => isAdapter(CABLE_TYPES[k]) && CABLE_TYPES[k].endpoints.includes(p.signal) && CABLE_TYPES[k].endpoints.includes(pendLead.signal));
+      showToast('La spina ' + SIGNAL_LABEL[pendLead.signal] + ' di ' + compLabel(pending.componentId) + ' va in una presa ' + SIGNAL_LABEL[pendLead.signal] + '.' +
+        (adapter ? ' Qui serve l\'adattatore ' + cableName(adapter) + ': prendilo dal baule e riprova.' : ''));
+      return;
+    }
   }
 
   // presa occupata (e non è una presa multipla del Quadro con un cavo in
@@ -1989,8 +2109,10 @@ function openRearPanel (compId) {
   if (!REAR_PANELS[(gameState.placed[compId] || {}).type]) return;
   rearPanelId = compId;
   el('#rear-detail').innerHTML = '';
-  renderRearPanel();
+  // prima visibile, poi disegnato: serve la larghezza vera del riquadro
   el('#rear-modal').classList.add('show');
+  el('#rear-svg').scrollLeft = 0;
+  renderRearPanel();
   setSceneInput(false);
 }
 function closeRearPanel () {
@@ -2022,7 +2144,7 @@ el('#cable-banner-cancel').addEventListener('click', () => {
    3d) BAULI DEI CAVI — i cavi si prendono dai due flight case, come in un
        service: SEGNALE (XLR, DMX, jack, Speakon) e CORRENTE (PowerCON,
        Schuko, CEE e adattatori). Ogni cavo è una matassa col velcro, i due
-       connettori veri ai capi e l'etichetta di nastro carta.
+       connettori veri ai capi e l'etichetta di nastro fluo.
    --------------------------------------------------------------------- */
 const CABLE_CASES = {
   segnale: {
@@ -2097,12 +2219,31 @@ function cableHead (kind, x, y, tape) {
   return '';
 }
 
-// matassa arrotolata col velcro, i due capi che escono a destra, nastro carta
-function cableCoil (cx, cy, it, selected) {
+// nastro fluo strappato a mano, scritto col pennarello nero: si legge anche
+// sullo schermo di un telefono
+const FLUO_TAPES = ['#eaff2b', '#ff4fb4', '#4dff73', '#ff9b21'];
+function fluoTape (cx, cy, w, h, color, text, rot) {
+  const x0 = cx - w / 2, x1 = cx + w / 2, y0 = cy - h / 2, y1 = cy + h / 2;
+  // bordi corti seghettati come uno strappo
+  const pts = [[x0, y0], [x1, y0]];
+  for (let i = 1; i < 6; i++) pts.push([x1 - (i % 2 ? 3.5 : 0), y0 + h * i / 6]);
+  pts.push([x1, y1], [x0, y1]);
+  for (let i = 5; i > 0; i--) pts.push([x0 + (i % 2 ? 3.5 : 0), y0 + h * i / 6]);
+  const fs = text.length <= 5 ? h * 0.78 : text.length <= 7 ? h * 0.66 : h * 0.56;
+  return `<g transform="rotate(${rot} ${cx} ${cy})">
+    <polygon points="${pts.map(p => p.join(',')).join(' ')}" fill="${color}" stroke="#000" stroke-opacity=".25"/>
+    <rect x="${x0 + 3}" y="${y0 + 2}" width="${w - 6}" height="${h * 0.18}" fill="#fff" fill-opacity=".22"/>
+    <text x="${cx}" y="${cy + fs * 0.36}" font-size="${fs.toFixed(1)}" fill="#111" text-anchor="middle"
+      font-family="'Permanent Marker','Marker Felt','Comic Sans MS',cursive">${escapeHtml(text)}</text></g>`;
+}
+
+// matassa arrotolata col velcro, i due capi che escono a destra, nastro fluo
+function cableCoil (cx, cy, it, selected, tapeColor) {
   const cab = hex(CABLE_TYPES[it.cable].color);
+  const [len, ends] = it.info.split(' · ');
   let s = `<g class="cc-coil" data-cable="${it.cable}" style="cursor:pointer">
-    <rect x="${cx - 92}" y="${cy - 76}" width="184" height="152" rx="8" fill="${selected ? '#f2a54124' : 'transparent'}" stroke="${selected ? '#f2a541' : 'none'}" stroke-width="3"/>
-    <g transform="translate(0 ${selected ? -6 : 0})">
+    <rect x="${cx - 92}" y="${cy - 90}" width="184" height="180" rx="8" fill="${selected ? '#f2a54124' : 'transparent'}" stroke="${selected ? '#f2a541' : 'none'}" stroke-width="3"/>
+    <g transform="translate(0 ${selected ? -6 : 0})"><g transform="translate(0 4)">
     <ellipse cx="${cx - 18}" cy="${cy + 6}" rx="52" ry="44" fill="#000" fill-opacity=".35"/>`;
   for (let i = 0; i < 5; i++) {
     const r = 40 - i * 2.2, o = i * 1.6;
@@ -2113,10 +2254,10 @@ function cableCoil (cx, cy, it, selected) {
     <rect x="${cx - 70}" y="${cy - 8}" width="20" height="16" rx="3" fill="#8b2530" transform="rotate(-10 ${cx - 60} ${cy})"/>
     <path d="M ${cx + 12} ${cy - 16} C ${cx + 26} ${cy - 18}, ${cx + 26} ${cy - 24}, ${cx + 32} ${cy - 24}" fill="none" stroke="#17181b" stroke-width="7"/>
     <path d="M ${cx + 14} ${cy + 12} C ${cx + 26} ${cy + 14}, ${cx + 26} ${cy + 20}, ${cx + 32} ${cy + 20}" fill="none" stroke="#17181b" stroke-width="7"/>
-    ${cableHead(it.ends[0], cx + 30, cy - 24, cab)}${cableHead(it.ends[1], cx + 30, cy + 20, cab)}
-    <g transform="rotate(-4 ${cx - 22} ${cy - 50})"><rect x="${cx - 64}" y="${cy - 60}" width="88" height="20" rx="2" fill="#e9dcb8" stroke="#c9b98f"/>
-      <text x="${cx - 20}" y="${cy - 45}" font-size="12.5" font-weight="700" fill="#2a2c32" text-anchor="middle" font-family="'Comic Sans MS','Segoe Print',cursive">${it.tape}</text></g>
-    <text x="${cx}" y="${cy + 66}" font-size="11" fill="#cfd2d6" text-anchor="middle">${escapeHtml(it.info)}</text>
+    ${cableHead(it.ends[0], cx + 30, cy - 24, cab)}${cableHead(it.ends[1], cx + 30, cy + 20, cab)}</g>
+    ${fluoTape(cx - 4, cy - 62, 164, 36, tapeColor, it.tape, -3)}
+    <text x="${cx}" y="${cy + 64}" font-size="15" font-weight="700" fill="#e6e8eb" text-anchor="middle">${escapeHtml(len)}</text>
+    <text x="${cx}" y="${cy + 82}" font-size="13" fill="#b4b8c0" text-anchor="middle">${escapeHtml(ends || '')}</text>
     </g></g>`;
   return s;
 }
@@ -2125,7 +2266,8 @@ function cableCoil (cx, cy, it, selected) {
 // profili, angolari e chiusure a farfalla, interno in gommapiuma a scomparti
 function renderCase (name) {
   const box = CABLE_CASES[name];
-  const cols = 4, cw = 196, ch = 170;
+  // su telefono due colonne, così nastri e scritte restano grandi
+  const cols = window.innerWidth < 700 ? 2 : 4, cw = 196, ch = 196;
   const rows = Math.ceil(box.items.length / cols);
   const W = cols * cw + 80, H = rows * ch + 150;
   let s = `<svg class="case-svg" viewBox="0 0 ${W} ${H}" xmlns="http://www.w3.org/2000/svg" font-family="Inter,sans-serif">
@@ -2138,7 +2280,7 @@ function renderCase (name) {
   box.items.forEach((it, i) => {
     const cx = 50 + (i % cols) * cw + cw / 2, cy = 88 + Math.floor(i / cols) * ch + ch / 2;
     s += `<rect x="${cx - cw / 2 + 6}" y="${cy - ch / 2 + 6}" width="${cw - 12}" height="${ch - 12}" rx="6" fill="#1a1b1f" stroke="#26272c" stroke-width="2"/>`;
-    s += cableCoil(cx, cy, it, gameState.selectedCable === it.cable);
+    s += cableCoil(cx, cy, it, gameState.selectedCable === it.cable, FLUO_TAPES[i % FLUO_TAPES.length]);
   });
   return s + `</svg>`;
 }
@@ -2184,6 +2326,13 @@ function pickCable (cableId) {
 }
 
 // nella scheda Cavi: il cavo che si ha in mano, coi suoi due connettori
+function tapeColorOf (cableId) {
+  for (const box of Object.values(CABLE_CASES)) {
+    const i = box.items.findIndex(it => it.cable === cableId);
+    if (i >= 0) return FLUO_TAPES[i % FLUO_TAPES.length];
+  }
+  return FLUO_TAPES[0];
+}
 function updateCableHand () {
   const box = el('#cable-hand');
   if (!box) return;
@@ -2199,7 +2348,7 @@ function updateCableHand () {
       <g transform="translate(60 25) scale(-1 1) translate(-60 -25)">${cableHead(it.ends[0], 60, 25, cab)}</g>
       <line x1="60" y1="25" x2="190" y2="25" stroke="#17181b" stroke-width="7"/><line x1="60" y1="25" x2="190" y2="25" stroke="${cab}" stroke-width="2"/>
       ${cableHead(it.ends[1], 190, 25, cab)}</svg>
-    <span class="ch-name">${escapeHtml(it.name)}<small>${escapeHtml(it.info)}</small></span>
+    <span class="ch-name"><span class="tape-fluo" style="background:${tapeColorOf(it.cable)}">${escapeHtml(it.tape)}</span><small>${escapeHtml(it.info)}</small></span>
     <button class="ch-drop" title="Rimetti nel baule">✕</button>`;
   box.querySelector('.ch-drop').addEventListener('click', () => pickCable(it.cable));
 }
@@ -2329,6 +2478,8 @@ el('#run-btn').addEventListener('click', () => {
       + regia + ali laterali), tutta all'interno della stessa area di lavoro
    --------------------------------------------------------------------- */
 const GAME_W = 1400;
+// tolleranza del tocco sui dispositivi, in pixel di schermo (un dito ≈ 40px)
+const TOUCH_SLOP_PX = 22;
 // GAME_H non è più un numero fisso "indovinato": si misura la vera proporzione
 // del contenitore di gioco al caricamento della pagina, così il canvas
 // riempie sempre esattamente lo spazio disponibile su qualunque schermo,
@@ -2407,8 +2558,9 @@ function isFohCell (cx, cy) {
 }
 
 const ZONE_PREDICATES = {
-  mixer: isOffStageCell,
-  controller: isOffStageCell,
+  // mixer e consolle luci: in quinta (Off Stage) o in Regia di sala (FOH)
+  mixer: (cx, cy) => isOffStageCell(cx, cy) || isFohCell(cx, cy),
+  controller: (cx, cy) => isOffStageCell(cx, cy) || isFohCell(cx, cy),
   ampli: isOffStageCell,
   par: isStageCoreCell,
   sub: isPitCell,
@@ -2655,6 +2807,13 @@ class StageScene extends Phaser.Scene {
       // e un tocco sul pavimento vuoto chiude montaggio e cavo in attesa
       if (gameState.selectedPieceType) { this.placeArmedPieceAt(pointer.worldX, pointer.worldY); return; }
       if (this.assemblyId) { this.exitAssembly(); return; }
+      // sul telefono i dispositivi sono piccoli: un tocco che li sfiora apre
+      // comunque il pannello di quello più vicino
+      if (this.devicesNear(pointer.worldX, pointer.worldY, TOUCH_SLOP_PX).length) {
+        this.clearEdgeSelection();
+        this.openPanelAt(pointer.worldX, pointer.worldY, null);
+        return;
+      }
       const hitEdge = this.findEdgeAt(pointer.worldX, pointer.worldY);
       if (hitEdge) {
         if (this.selectedEdgeId === hitEdge.id) this.clearEdgeSelection();
@@ -3161,7 +3320,7 @@ class StageScene extends Phaser.Scene {
         // plancia leggermente inclinata verso l'operatore, ponte posteriore
         // rialzato con meter LED e schermo, e per ogni canale la striscia
         // reale dal fondo al fronte: ingresso XLR, gain, EQ, pan, mute, fader.
-        const m = MIXER_GEO, P = mixerIso;
+        const m = MIXER_GEO, P = rotFrame(MIXER_ISO, rot);
         const zTop = b => m.zR - (m.zR - m.zF) * (b - m.Bd) / (m.Lb - m.Bd);
         const T = (a, b, dz = 0) => P(a, b, zTop(b) + dz);
         // punto sulla faccia inclinata del ponte: t=0 base, t=1 cima
@@ -3295,7 +3454,7 @@ class StageScene extends Phaser.Scene {
       case 'controller': {
         // consolle luci da tavolo: display, griglia di tasti scena
         // retroilluminati e una fila di fader, piano leggermente inclinato
-        const P = CTRL_ISO, k = this.isoKit(g, P);
+        const P = rotFrame(CTRL_ISO, rot), k = this.isoKit(g, P);
         const { A, B } = P;
         const zb = 10, zf = 5;                         // altezza retro/fronte
         const zAt = b => zb - (zb - zf) * b / B;
@@ -3414,7 +3573,7 @@ class StageScene extends Phaser.Scene {
       if (pointer.rightButtonDown()) return;
       // un pezzo "armato" dalla barra si posa anche toccando sopra un dispositivo
       if (gameState.selectedPieceType) { this.placeArmedPieceAt(pointer.worldX, pointer.worldY); return; }
-      this.onDevicePress(id, pointer);
+      this.onDevicePress(this.pickDeviceAt(pointer.worldX, pointer.worldY, 0) || id, pointer);
     });
 
     let phaseBars = null;
@@ -3699,7 +3858,7 @@ class StageScene extends Phaser.Scene {
       return;
     }
 
-    if (wouldCreateCycle(outSide.componentId, inSide.componentId)) {
+    if (wouldCreateCycle(outSide.componentId, inSide.componentId, gameState.selectedCable)) {
       showToast('Questo collegamento richiuderebbe un anello nel circuito: non è consentito.');
       return;
     }
@@ -3899,10 +4058,70 @@ class StageScene extends Phaser.Scene {
 
   /* ---------------- riposizionamento componenti già piazzati ---------------- */
   /* ---------------- tocco / pressione lunga su un dispositivo ---------------- */
+  /* dispositivi sotto o vicino a un punto del mondo, dal più vicino:
+     distanza dal loro disegno in pixel di schermo, entro slopPx */
+  devicesNear (wx, wy, slopPx) {
+    const cam = this.cameras.main;
+    const rc = this.game.canvas.getBoundingClientRect();
+    const k = cam.zoom * (rc.width / GAME_W);   // pixel CSS per unità di mondo
+    const out = [];
+    Object.keys(gameState.placed).forEach(id => {
+      const v = this.compVisuals[id];
+      if (!v || !v.def || !v.def.body) return;
+      const c = v.container;
+      const hw = (v.def.body.w / 2) * Math.abs(c.scaleX), hh = (v.def.body.h / 2) * Math.abs(c.scaleY);
+      const dx = Math.max(0, Math.abs(wx - c.x) - hw), dy = Math.max(0, Math.abs(wy - c.y) - hh);
+      const edge = Math.hypot(dx, dy) * k;
+      if (edge <= slopPx) out.push({ id, edge, center: Math.hypot(wx - c.x, wy - c.y) * k });
+    });
+    return out.sort((x, y) => x.edge - y.edge || x.center - y.center);
+  }
+  pickDeviceAt (wx, wy, slopPx) {
+    const c = this.devicesNear(wx, wy, slopPx + 8);
+    return c.length ? c[0].id : null;
+  }
+
+  /* tocco breve: apre il pannello del dispositivo toccato. Se il dito è
+     davvero a metà tra due o più dispositivi non si tira a indovinare:
+     compare un menu "Quale?" con i loro nomi. */
+  openPanelAt (wx, wy, fallbackId) {
+    const c = this.devicesNear(wx, wy, TOUCH_SLOP_PX + 8);
+    if (!c.length) { if (fallbackId) openRearPanel(fallbackId); return !!fallbackId; }
+    const first = c[0];
+    const close = c.filter(x => x.id !== first.id && (
+      first.edge > 0 ? x.edge - first.edge < 6 : (x.edge === 0 && x.center < first.center * 1.35 + 4)));
+    if (!close.length) { openRearPanel(first.id); return true; }
+    this.showPickMenu([first, ...close].slice(0, 4).map(x => x.id), wx, wy);
+    return true;
+  }
+  showPickMenu (ids, wx, wy) {
+    const cam = this.cameras.main, rc = this.game.canvas.getBoundingClientRect();
+    const px = rc.left + (wx - cam.worldView.x) * cam.zoom * rc.width / GAME_W;
+    const py = rc.top + (wy - cam.worldView.y) * cam.zoom * rc.height / GAME_H;
+    ids.forEach(id => { const v = this.compVisuals[id]; if (v) this.setGlow(v, true, 0x4aa3ff); });
+    const menu = el('#pick-menu');
+    const box = menu.querySelector('.pick-box');
+    box.innerHTML = '<div class="pick-title">Quale?</div>' + ids.map(id =>
+      `<button class="pick-opt" data-id="${id}">${escapeHtml(compLabel(id))}</button>`).join('');
+    menu.classList.add('show');
+    setSceneInput(false);
+    const bw = box.offsetWidth, bh = box.offsetHeight;
+    box.style.left = Math.max(8, Math.min(window.innerWidth - bw - 8, px - bw / 2)) + 'px';
+    box.style.top = Math.max(8, Math.min(window.innerHeight - bh - 8, py - bh - 18)) + 'px';
+    const done = id => {
+      menu.classList.remove('show');
+      ids.forEach(i => { const v = this.compVisuals[i]; if (v && i !== this.assemblyId) this.setGlow(v, false); });
+      setTimeout(() => { if (!rearPanelId && !openCaseName) setSceneInput(true); }, 0);
+      if (id) openRearPanel(id);
+    };
+    box.querySelectorAll('.pick-opt').forEach(b => b.addEventListener('click', ev => { ev.stopPropagation(); SFX.button(); done(b.dataset.id); }));
+    menu.onclick = ev => { if (ev.target === menu) done(null); };
+  }
+
   onDevicePress (id, pointer) {
     if (this.press && this.press.timer) clearTimeout(this.press.timer);
     const inAssembly = this.assemblyId === id;
-    this.press = { id, x: pointer.x, y: pointer.y, moved: false, long: inAssembly, timer: null };
+    this.press = { id, x: pointer.x, y: pointer.y, wx: pointer.worldX, wy: pointer.worldY, moved: false, long: inAssembly, timer: null };
     if (!inAssembly) {
       // timer del browser: non dipende dal ritmo dei fotogrammi del gioco
       this.press.timer = setTimeout(() => {
@@ -3950,9 +4169,9 @@ class StageScene extends Phaser.Scene {
       return;
     }
     if (pr.moved) return;
-    // tocco breve: pannello posteriore
+    // tocco breve: pannello posteriore (o "Quale?" se il tocco è ambiguo)
     if (this.assemblyId) this.exitAssembly();
-    openRearPanel(pr.id);
+    this.openPanelAt(pr.wx, pr.wy, pr.id);
   }
 
   /* modalità montaggio: il dispositivo ondeggia e mostra la ✕ per toglierlo;
@@ -3973,9 +4192,14 @@ class StageScene extends Phaser.Scene {
     this.setGlow(v, true, 0xf2a541);
     this.assemblyTween = this.tweens.add({ targets: v.container, angle: { from: -1.6, to: 1.6 }, duration: 110, yoyo: true, repeat: -1 });
     if (navigator.vibrate) navigator.vibrate(25);
-    const hx = v.container.x + (-v.def.body.w / 2 - 4) * v.container.scaleX;
-    const hy = v.container.y + (-v.def.body.h / 2 - 4) * v.container.scaleY;
-    const handle = this.add.container(hx, hy).setDepth(70);
+    // la ✕ resta toccabile (≈26px) a qualunque zoom, appena fuori
+    // dall'angolo del dispositivo così non lo copre
+    const rc = this.game.canvas.getBoundingClientRect();
+    const k = this.cameras.main.zoom * (rc.width / GAME_W);
+    const hs = Math.max(1, 13 / (12 * k));
+    const hx = v.container.x + (-v.def.body.w / 2) * v.container.scaleX - 11 * hs;
+    const hy = v.container.y + (-v.def.body.h / 2) * v.container.scaleY - 11 * hs;
+    const handle = this.add.container(hx, hy).setDepth(70).setScale(hs);
     const bg = this.add.circle(0, 0, 12, 0xe0503f, 1).setStrokeStyle(2, 0xffffff, 0.9).setInteractive({ useHandCursor: true });
     handle.add(bg);
     handle.add(this.add.text(0, 0, '✕', { fontFamily: 'Inter, sans-serif', fontSize: '13px', fontStyle: 'bold', color: '#ffffff' }).setOrigin(0.5));
@@ -4092,11 +4316,17 @@ class StageScene extends Phaser.Scene {
 
     const q = findQuadro();
     const prot = q ? quadroProt(q) : null;
-    const armed = !!prot && PROTECTIONS.every(k => prot[k]);
-    // tutto ciò che si alimenta deve essere acceso e ricevere corrente
+    // deve funzionare tutto ciò che serve: le utenze del livello, la scheda
+    // (alimentata dal PC) e le ciabatte solo se ci è attaccato qualcosa
+    const inUse = c => !/^ciabatta/.test(c.type) || gameState.edges.some(e => e.a === c.id && POWER_CABLE_IDS.has(e.signal));
     const notRunning = Object.values(gameState.placed)
-      .filter(c => c.type !== 'allaccio' && (powerInPort(COMPONENT_TYPES[c.type]) || COMPONENT_TYPES[c.type].busPowered) && !isRunning(c.id))
+      .filter(c => c.type !== 'allaccio' && (powerInPort(COMPONENT_TYPES[c.type]) || COMPONENT_TYPES[c.type].busPowered) && inUse(c) && !isRunning(c.id))
       .map(c => c.id);
+    // protezioni che servono davvero: generale, salvavita e le sole fasi usate
+    const usedPhases = new Set(Object.keys(gameState.placed).map(id => phaseOf(id)).filter(Boolean));
+    const needed = ['main', 'rcd', ...['L1', 'L2', 'L3'].filter(ph => usedPhases.has(ph))];
+    const armed = !!prot && needed.every(k => prot[k]);
+    const stereo = result.pass ? stereoCheck() : null;
     const clashes = dmxOverlaps();
     const glow = ids => ids.forEach(id => {
       const v = this.compVisuals[id];
@@ -4113,22 +4343,29 @@ class StageScene extends Phaser.Scene {
       } else {
         showToast(result.overBudget
           ? 'Potenza richiesta oltre il limite disponibile.'
-          : 'Cablaggio incompleto: i dispositivi evidenziati in rosso non sono collegati come serve.');
+          : 'Cablaggio incompleto (' + result.madeCount + '/' + result.totalCount + '). Manca: ' + listShort([...new Set(result.missingList)], 3) + '.');
         glow([...result.failedComponents]);
       }
+      return;
+    }
+    if (stereo) {
+      setCircuitStatus('error');
+      SFX.fail();
+      showToast('Stereo invertito: la cassa di sinistra suona il canale destro e viceversa. Controlla L e R dalla scheda audio al mixer, al finale e alle casse.');
+      glow(stereo);
       return;
     }
     if (!armed) {
       setCircuitStatus('error');
       SFX.fail();
-      showToast('Il Quadro non è armato: dal suo pannello alza l\'interruttore generale, il salvavita e le tre fasi.');
+      showToast('Il Quadro non è armato: dal suo pannello alza l\'interruttore generale, il salvavita e le fasi che usi (' + needed.filter(k => /^L/.test(k)).join(', ') + ').');
       if (q) glow([q.id]);
       return;
     }
     if (notRunning.length) {
       setCircuitStatus('error');
       SFX.fail();
-      showToast('Alcuni dispositivi sono spenti o senza corrente: accendili dal loro pannello (in rosso).');
+      showToast('Spenti o senza corrente: ' + listShort(notRunning.map(compLabel), 4) + '. Accendili dal loro pannello; se sono accesi, controlla che arrivi corrente.');
       glow(notRunning);
       return;
     }

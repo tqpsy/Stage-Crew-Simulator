@@ -6,7 +6,7 @@
 <title>Stage Crew Simulator — Livello 1: Festa della scuola</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@600;700&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@600;700&family=Permanent+Marker&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
 <script src="https://cdn.jsdelivr.net/npm/phaser@3.70.0/dist/phaser.min.js"></script>
 <link rel="stylesheet" href="style.css">
 </head>
@@ -21,7 +21,7 @@
 
     <div class="meters">
       <div class="meter-power">
-        <div class="label">CABLAGGI <span class="val" id="conn-val">0 / 19</span></div>
+        <div class="label">CABLAGGI <span class="val" id="conn-val">0 / 24</span></div>
         <div class="gauge"><div class="gauge-fill" id="conn-fill"></div></div>
       </div>
 
@@ -66,6 +66,7 @@
     </div>
   </div>
 
+  <div id="pick-menu"><div class="pick-box"></div></div>
   <div class="modal-overlay" id="rear-modal">
     <div class="modal-box rear-box">
       <div class="modal-header">
@@ -143,7 +144,7 @@
           <span class="count" id="count-mixer">×1</span>
         </div>
       </div>
-      <span class="panel-hint">Il mixer va in Off Stage: 4 ingressi XLR, 2 ingressi jack (linea), uscite MAIN L/R verso il finale e 2 mandate AUX per i monitor. Sub e teste vanno nel Pit: la testa si monta sul palo di un sub libero.</span>
+      <span class="panel-hint">Il mixer va in Off Stage o in FOH: 4 ingressi XLR, 2 ingressi jack (linea), uscite MAIN L/R (XLR) verso il finale e 2 mandate AUX (jack) per i monitor. Sub e teste vanno nel Pit: la testa si monta sul palo di un sub libero.</span>
     </div>
 
     <div class="tab-panel" data-panel="regia">
@@ -161,7 +162,7 @@
           <span class="count" id="count-scheda">×1</span>
         </div>
       </div>
-      <span class="panel-hint">Il finale va in Off Stage, accanto al mixer. PC e scheda audio vanno in FOH o in Off Stage. Il PC si alimenta con la sua spina Schuko da una presa della ciabatta civile; la scheda audio si collega al PC con il suo cavo USB-C (che la alimenta) ed entra nei CH 5 e 6 del mixer con due jack (L e R).</span>
+      <span class="panel-hint">Il finale va in Off Stage. PC e scheda audio vanno in FOH o in Off Stage. Il PC si alimenta con la sua spina Schuko da una ciabatta (o dal Quadro con l'adattatore CEE / Schuko); la scheda audio si collega al PC con il suo cavo USB-C (che la alimenta) ed entra nei CH 5 e 6 del mixer con due jack (L e R).</span>
     </div>
 
     <div class="tab-panel" data-panel="luci">
@@ -175,7 +176,7 @@
           <span class="count" id="count-controller">×1</span>
         </div>
       </div>
-      <span class="panel-hint">I PAR vanno sulla pedana e si numerano nell'ordine in cui li posi; dal loro display si regolano indirizzo e modalità DMX (3, 4 o 8 canali). La consolle luci va in Off Stage: si alimenta in PowerCON e ha 2 universi DMX.</span>
+      <span class="panel-hint">I PAR vanno sulla pedana e si numerano nell'ordine in cui li posi; dal loro display si regolano indirizzo e modalità DMX (3, 4 o 8 canali). La consolle luci va in Off Stage o in FOH: si alimenta in PowerCON e ha 2 universi DMX.</span>
     </div>
 
     <div class="tab-panel" data-panel="cavi">
@@ -184,7 +185,7 @@
         <button class="case-btn" data-case="corrente"><svg viewBox="0 0 64 44" class="case-ico"><rect x="3" y="6" width="58" height="34" rx="4" fill="#232428" stroke="#b9bcc1" stroke-width="3"/><rect x="3" y="6" width="9" height="9" rx="2" fill="#d7dadd"/><rect x="52" y="6" width="9" height="9" rx="2" fill="#d7dadd"/><rect x="3" y="31" width="9" height="9" rx="2" fill="#d7dadd"/><rect x="52" y="31" width="9" height="9" rx="2" fill="#d7dadd"/><rect x="18" y="2" width="10" height="7" rx="2" fill="#c9ccd1"/><rect x="36" y="2" width="10" height="7" rx="2" fill="#c9ccd1"/><rect x="24" y="21" width="16" height="4" rx="2" fill="#0c0d10"/></svg><span>CORRENTE</span></button>
         <div class="cable-hand" id="cable-hand"></div>
       </div>
-      <span class="panel-hint">Apri un baule (anche toccando i case vicino al furgone) e prendi un cavo, poi tocca un dispositivo e scegli la presa nel suo pannello; ripeti sul secondo dispositivo. Ogni presa accetta un solo cavo, tranne quelle del Quadro. Gli adattatori hanno due connettori diversi (es. CEE / PowerCON). Cabla a impianto spento: staccare o attaccare un cavo di corrente sotto carico fa scattare il salvavita. Poi arma il Quadro e accendi i dispositivi dal loro pannello, finali e sub per ultimi, uno alla volta.</span>
+      <span class="panel-hint">Apri un baule (anche toccando i case vicino al furgone) e prendi un cavo, poi tocca un dispositivo e scegli la presa nel suo pannello; ripeti sul secondo dispositivo. Ogni presa accetta un solo cavo, tranne quelle del Quadro. Gli adattatori hanno due connettori diversi (es. CEE / PowerCON) e accolgono anche le spine di ciabatte e PC. Cabla a impianto spento: staccare o attaccare un cavo di corrente sotto carico fa scattare il salvavita. Poi arma il Quadro e accendi i dispositivi dal loro pannello, finali e sub per ultimi, uno alla volta.</span>
     </div>
 
     <div id="run-bar">
