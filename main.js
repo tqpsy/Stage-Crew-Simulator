@@ -1,5 +1,5 @@
 /* ======================================================================
-   STAGE CREW SIMULATOR — Livello 1 "Il Pub" — MVP giocabile
+   STAGE CREW SIMULATOR — Livello 1 "Festa della scuola" — MVP giocabile
    Motore: Phaser 3 (via CDN). File singolo, nessuna asset esterna:
    ogni fixture è disegnata come icona vettoriale (non foto) che ne
    richiama la forma reale (PAR rotondo, sub/top con cono, ecc.).
@@ -439,8 +439,9 @@ function parAim (parId) {
   const stand = mountBase(gameState.placed[parId]);
   const role = standRole(stand);
   const mid = STAGE_ORIGIN_X + STAGE_W / 2;
-  if (role === 'front') return { gx: mid - (stand.gx + 0.5 - mid) * 0.3, gy: STAGE_ORIGIN_Y + STAGE_H - 1.3 };
-  if (role === 'left' || role === 'right') return { gx: mid + (role === 'left' ? 0.5 : -0.5), gy: stand.gy + 0.5 };
+  const sc = stand && compCenter(stand);
+  if (role === 'front') return { gx: mid - (sc.gx - mid) * 0.3, gy: STAGE_ORIGIN_Y + STAGE_H - 1.3 };
+  if (role === 'left' || role === 'right') return { gx: mid + (role === 'left' ? 0.5 : -0.5), gy: sc.gy };
   return null;
 }
 /* luci del livello 1: due frontali (uno per lato) e due tagli (uno per
@@ -449,7 +450,7 @@ function lightingCheck () {
   const mid = STAGE_ORIGIN_X + STAGE_W / 2;
   const onStand = placedOfType('par').map(p => ({ p, s: mountBase(p) })).filter(x => x.s);
   const front = onStand.filter(x => standRole(x.s) === 'front');
-  const fl = front.filter(x => x.s.gx + 0.5 < mid).length, fr = front.length - fl;
+  const fl = front.filter(x => compCenter(x.s).gx < mid).length, fr = front.length - fl;
   const tl = onStand.filter(x => standRole(x.s) === 'left').length;
   const tr = onStand.filter(x => standRole(x.s) === 'right').length;
   const ids = onStand.map(x => x.s.id);
@@ -3345,14 +3346,42 @@ function gridToScreen (gx, gy) {
   };
 }
 
+/* Posa su celle da 50 cm. Tutte le coordinate restano in METRI (zone, palco,
+   gridToScreen): una cella di posa è un quadrato di CELL metri e la sua
+   posizione (cx, cy) è l'angolo in metri, multiplo di CELL. */
+const CELL = 0.5;
+// punto dello schermo -> cella di posa che lo contiene
 function screenToCell (px, py) {
   const relX = px - ORIGIN_X;
   const relY = py - ORIGIN_Y;
   const gxRaw = (relX / (TILE_W / 2) + relY / (TILE_H / 2)) / 2;
   const gyRaw = (relY / (TILE_H / 2) - relX / (TILE_W / 2)) / 2;
-  const cx = Math.min(VENUE_W - 1, Math.max(0, Math.floor(gxRaw)));
-  const cy = Math.min(VENUE_H - 1, Math.max(0, Math.floor(gyRaw)));
+  const cx = Math.min(VENUE_W - CELL, Math.max(0, Math.floor(gxRaw / CELL) * CELL));
+  const cy = Math.min(VENUE_H - CELL, Math.max(0, Math.floor(gyRaw / CELL) * CELL));
   return { cx, cy };
+}
+/* ingombro di ogni pezzo in celle da 50 cm, [lungo gx, lungo gy], dalla sua
+   misura reale nel disegno; se il pezzo è girato di un quarto (in FOH) si
+   scambia. I pezzi montati (testa, PAR) non occupano celle. */
+const FOOTPRINT = {
+  sub: [1, 1], mixer: [1, 2], ampli: [1, 2], controller: [1, 1], quadro: [1, 2],
+  ciabatta: [1, 2], ciabatta_cee: [1, 3], pc: [1, 1], scheda: [1, 1], di: [1, 1], stativo: [1, 1]
+};
+function footprint (type, rot) {
+  const f = FOOTPRINT[type] || [1, 1];
+  return rot % 2 ? [f[1], f[0]] : f;
+}
+// chiave di una cella (indici interi, niente errori di virgola)
+function cellKey (gx, gy) { return Math.round(gx / CELL) + ',' + Math.round(gy / CELL); }
+function footCells (gx, gy, f) {
+  const out = [];
+  for (let i = 0; i < f[0]; i++) for (let j = 0; j < f[1]; j++) out.push([gx + i * CELL, gy + j * CELL]);
+  return out;
+}
+// centro (in metri) di un pezzo posato
+function compCenter (c) {
+  const f = c.foot || [1, 1];
+  return { gx: c.gx + f[0] * CELL / 2, gy: c.gy + f[1] * CELL / 2 };
 }
 
 function isStageCoreCell (cx, cy) {
@@ -3619,6 +3648,15 @@ class StageScene extends Phaser.Scene {
     g.beginPath();
     g.moveTo(p0.x, p0.y); g.lineTo(p1.x, p1.y); g.lineTo(p2.x, p2.y); g.lineTo(p3.x, p3.y);
     g.closePath(); g.fillPath();
+    // griglia di posa leggera, celle da 50 cm (una linea più marcata ogni metro)
+    for (let x = CELL; x < VENUE_W; x += CELL) {
+      const a = gridToScreen(x, 0), b = gridToScreen(x, VENUE_H);
+      g.lineStyle(1, 0x484c58, x % 1 ? 0.35 : 0.6); g.lineBetween(a.x, a.y, b.x, b.y);
+    }
+    for (let y = CELL; y < VENUE_H; y += CELL) {
+      const a = gridToScreen(0, y), b = gridToScreen(VENUE_W, y);
+      g.lineStyle(1, 0x484c58, y % 1 ? 0.35 : 0.6); g.lineBetween(a.x, a.y, b.x, b.y);
+    }
     g.lineStyle(2, 0x484c58, 0.9);
     g.beginPath();
     g.moveTo(p0.x, p0.y); g.lineTo(p1.x, p1.y); g.lineTo(p2.x, p2.y); g.lineTo(p3.x, p3.y);
@@ -3928,14 +3966,14 @@ class StageScene extends Phaser.Scene {
     top.closePath(); top.fillPath();
 
     // griglia + scacchiera SOLO sulla pedana spettacolo (area core, tono ambra)
-    top.lineStyle(1, 0x4a3f30, 0.9);
-    for (let i = 0; i <= STAGE_W; i++) {
+    // linee ogni 50 cm (celle di posa), più marcate ogni metro
+    for (let i = 0; i <= totalW; i += CELL) {
       const a = gridToScreen(gx0 + i, gy0), b = gridToScreen(gx0 + i, gy0 + H);
-      top.lineBetween(a.x, a.y, b.x, b.y);
+      top.lineStyle(1, 0x4a3f30, i % 1 ? 0.5 : 0.9); top.lineBetween(a.x, a.y, b.x, b.y);
     }
-    for (let j = 0; j <= H; j++) {
-      const a = gridToScreen(gx0, gy0 + j), b = gridToScreen(gx0 + STAGE_W, gy0 + j);
-      top.lineBetween(a.x, a.y, b.x, b.y);
+    for (let j = 0; j <= H; j += CELL) {
+      const a = gridToScreen(gx0, gy0 + j), b = gridToScreen(gx0 + totalW, gy0 + j);
+      top.lineStyle(1, 0x4a3f30, j % 1 ? 0.5 : 0.9); top.lineBetween(a.x, a.y, b.x, b.y);
     }
     for (let i = 0; i < STAGE_W; i++) {
       for (let j = 0; j < H; j++) {
@@ -4644,19 +4682,31 @@ class StageScene extends Phaser.Scene {
     return this.cameras.main.getWorldPoint(localX, localY);
   }
 
-  nearestAllowedCell (type, wx, wy) {
+  /* posto per un pezzo vicino a un punto del mondo: tutte le sue celle nella
+     zona giusta e libere (ignoreId: il pezzo che si sta spostando). Prima si
+     prova la cella toccata, poi la più vicina. Restituisce origine, ingombro,
+     verso e centro sullo schermo, o null se non c'è posto. */
+  findSpot (type, wx, wy, ignoreId) {
+    const def = COMPONENT_TYPES[type];
     const pred = ZONE_PREDICATES[type] || (() => true);
     const raw = screenToCell(wx, wy);
-    if (pred(raw.cx, raw.cy)) return raw;
+    const target = { gx: raw.cx + CELL / 2, gy: raw.cy + CELL / 2 };
+    const free = k => !this.occupied[k] || this.occupied[k] === ignoreId;
     let best = null, bestDist = Infinity;
-    for (let gx = 0; gx < VENUE_W; gx++) {
-      for (let gy = 0; gy < VENUE_H; gy++) {
-        if (!pred(gx, gy)) continue;
-        const d = Math.hypot(gx - raw.cx, gy - raw.cy);
-        if (d < bestDist) { bestDist = d; best = { cx: gx, cy: gy }; }
+    for (let gx = 0; gx < VENUE_W; gx += CELL) {
+      for (let gy = 0; gy < VENUE_H; gy += CELL) {
+        // verso e ingombro dipendono da dove finisce (in FOH si gira)
+        const probe = gridToScreen(gx + CELL / 2, gy + CELL / 2);
+        const rot = orientK(def, probe.x, probe.y);
+        const f = footprint(type, rot);
+        const cells = footCells(gx, gy, f);
+        if (cells.some(([x, y]) => x >= VENUE_W || y >= VENUE_H || !pred(x, y) || !free(cellKey(x, y)))) continue;
+        const cgx = gx + f[0] * CELL / 2, cgy = gy + f[1] * CELL / 2;
+        const d = Math.hypot(cgx - target.gx, cgy - target.gy);
+        if (d < bestDist - 1e-9) { bestDist = d; best = { gx, gy, foot: f, keys: cells.map(([x, y]) => cellKey(x, y)), pos: gridToScreen(cgx, cgy) }; }
       }
     }
-    return best || raw;
+    return best;
   }
 
   /* ---------------- anteprima durante il trascinamento dalla toolbar ---------------- */
@@ -4677,13 +4727,13 @@ class StageScene extends Phaser.Scene {
       return;
     }
 
-    const { cx, cy } = type ? this.nearestAllowedCell(type, world.x, world.y) : screenToCell(world.x, world.y);
-    const key = cx + ',' + cy;
-    const occupied = !!this.occupied[key];
-    const p0 = gridToScreen(cx, cy), p1 = gridToScreen(cx + 1, cy),
-          p2 = gridToScreen(cx + 1, cy + 1), p3 = gridToScreen(cx, cy + 1);
-    this.previewGraphics.fillStyle(occupied ? 0xe0503f : 0x49b06a, 0.35);
-    this.previewGraphics.lineStyle(2, occupied ? 0xe0503f : 0x49b06a, 0.95);
+    const spot = type ? this.findSpot(type, world.x, world.y, null) : null;
+    const raw = screenToCell(world.x, world.y);
+    const gx = spot ? spot.gx : raw.cx, gy = spot ? spot.gy : raw.cy, f = spot ? spot.foot : [1, 1];
+    const p0 = gridToScreen(gx, gy), p1 = gridToScreen(gx + f[0] * CELL, gy),
+          p2 = gridToScreen(gx + f[0] * CELL, gy + f[1] * CELL), p3 = gridToScreen(gx, gy + f[1] * CELL);
+    this.previewGraphics.fillStyle(spot ? 0x49b06a : 0xe0503f, 0.35);
+    this.previewGraphics.lineStyle(2, spot ? 0x49b06a : 0xe0503f, 0.95);
     this.previewGraphics.beginPath();
     this.previewGraphics.moveTo(p0.x, p0.y); this.previewGraphics.lineTo(p1.x, p1.y);
     this.previewGraphics.lineTo(p2.x, p2.y); this.previewGraphics.lineTo(p3.x, p3.y);
@@ -4707,28 +4757,27 @@ class StageScene extends Phaser.Scene {
 
     if (MOUNTS[type]) { this.attachToNearestBase(type, { x: worldX, y: worldY }); return; }
 
-    const { cx, cy } = this.nearestAllowedCell(type, worldX, worldY);
-    const key = cx + ',' + cy;
-    if (this.occupied[key]) { showToast('Cella occupata: scegli una cella libera.'); return; }
+    const spot = this.findSpot(type, worldX, worldY, null);
+    if (!spot) { showToast('Non c\'è più posto per ' + COMPONENT_TYPES[type].label + ' nella sua zona: libera un po\' di spazio.'); return; }
+    const cx = spot.gx, cy = spot.gy;
 
     const idx = gameState.nextIndex[type]++;
     const id = `${type}_${idx}`;
     gameState.stock[type]--;
     updateStockUI();
 
-    const pos = gridToScreen(cx + 0.5, cy + 0.5);
+    const pos = spot.pos;
     const def = COMPONENT_TYPES[type];
-    const visual = this.buildComponentVisual(id, def, pos.x, pos.y);
-    this.compVisuals[id] = visual;
-    this.occupied[key] = id;
+    spot.keys.forEach(k => { this.occupied[k] = id; });
 
 
     // "sul palco" (instradamento cavi diretto) vale per QUALSIASI cella del
     // complesso palco, non solo la pedana spettacolo — include quindi anche
     // la fascia Off Stage, che è alla stessa quota.
     const zone = isStageCell(cx, cy) ? 'stage' : 'ground';
-    gameState.placed[id] = { id, type, gx: cx, gy: cy, screen: pos, zone };
+    gameState.placed[id] = { id, type, gx: cx, gy: cy, foot: spot.foot, cells: spot.keys, screen: pos, zone };
     if (MOUNT_ON[type]) gameState.placed[id][MOUNTS[MOUNT_ON[type]].link] = null;   // base libera
+    this.compVisuals[id] = this.buildComponentVisual(id, def, pos.x, pos.y);
 
     this.updateQuadroVisual();
     setCircuitStatus('untested');
@@ -5229,7 +5278,7 @@ class StageScene extends Phaser.Scene {
       gameState.edges = gameState.edges.filter(e => !ids.includes(e.a) && !ids.includes(e.b));
       ids.forEach(did => {
         const c = gameState.placed[did];
-        if (c.gx != null) delete this.occupied[c.gx + ',' + c.gy];
+        (c.cells || []).forEach(k => { delete this.occupied[k]; });
         const v = this.compVisuals[did];
         if (v) v.container.destroy();
         delete this.compVisuals[did];
@@ -5261,16 +5310,15 @@ class StageScene extends Phaser.Scene {
     // un pezzo montato (testa, PAR) si sposta solo insieme alla sua base
     if (!comp || MOUNTS[comp.type]) { this.moveSelected = null; return; }
 
-    const { cx, cy } = this.nearestAllowedCell(comp.type, worldX, worldY);
-    const key = cx + ',' + cy;
-    const oldKey = comp.gx + ',' + comp.gy;
-    if (key !== oldKey && this.occupied[key]) { showToast('Cella occupata: scegli una cella libera.'); return; }
+    const spot = this.findSpot(comp.type, worldX, worldY, id);
+    if (!spot) { showToast('Lì non c\'è posto: scegli uno spazio libero nella sua zona.'); return; }
+    const cx = spot.gx, cy = spot.gy;
 
-    delete this.occupied[oldKey];
-    this.occupied[key] = id;
-    comp.gx = cx; comp.gy = cy;
+    (comp.cells || []).forEach(k => { delete this.occupied[k]; });
+    spot.keys.forEach(k => { this.occupied[k] = id; });
+    comp.gx = cx; comp.gy = cy; comp.foot = spot.foot; comp.cells = spot.keys;
     comp.zone = isStageCell(cx, cy) ? 'stage' : 'ground';   // per il percorso dei cavi
-    const pos = gridToScreen(cx + 0.5, cy + 0.5);
+    const pos = spot.pos;
     comp.screen = pos;
     this.compVisuals[id].container.setPosition(pos.x, pos.y).setDepth(isoDepth(pos.y));
     // PC e scheda audio cambiano verso tra quinta e FOH: si ridisegnano
@@ -5822,7 +5870,7 @@ class StageScene extends Phaser.Scene {
       const base = mountBase(c);
       if (base) visual.container.setDepth(isoDepth(base.screen.y) + 0.001);
       this.compVisuals[c.id] = visual;
-      if (c.gx != null && c.gy != null) this.occupied[c.gx + ',' + c.gy] = c.id;
+      (c.cells || []).forEach(k => { this.occupied[k] = c.id; });
     });
 
     this.updateQuadroVisual();
