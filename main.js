@@ -1630,6 +1630,7 @@ function svgMated (signal, dir, cableColor) {
 const REAR_SLOT = 150, REAR_PADX = 18, REAR_FRAME_H = 234;
 function rearSlot (ctx, cx, y0, pid, label) {
   const { id, def, st, pending, loads, planned, bottom, plugOnly, tilt } = ctx;
+  const fs = ctx.fs || 1;
   const p = def.ports.find(q => q.id === pid);
   if (!p) return '';
   const yb = y0 + REAR_FRAME_H;
@@ -1645,8 +1646,8 @@ function rearSlot (ctx, cx, y0, pid, label) {
   const rot = tilt && p.dir === 'out' ? ` rotate(45 ${CONN_CX} ${CONN_CY})` : '';
   let svg = `<g class="rp-port" data-port="${pid}" style="cursor:pointer">
     <rect x="${cx - REAR_SLOT / 2 + 4}" y="${y0 + 14}" width="${REAR_SLOT - 8}" height="${REAR_FRAME_H - 28}" fill="transparent"/>
-    <text x="${cx}" y="${y0 + 32}" font-size="16" font-weight="700" fill="${st.ink}" text-anchor="middle">${escapeHtml(label)}</text>
-    <text x="${cx}" y="${y0 + 50}" font-size="11.5" fill="${st.sub}" text-anchor="middle">${escapeHtml(SIGNAL_LABEL[p.signal] || p.signal)} · ${gender}</text>
+    <text x="${cx}" y="${y0 + 32}" font-size="${16 * fs}" font-weight="700" fill="${st.ink}" text-anchor="middle">${escapeHtml(label)}</text>
+    <text x="${cx}" y="${y0 + 50 + 3 * (fs - 1) * 4}" font-size="${Math.min(11.5 * fs, 13.5)}" fill="${st.sub}" text-anchor="middle">${escapeHtml(SIGNAL_LABEL[p.signal] || p.signal)} · ${gender}</text>
     <g transform="translate(${cx - 60} ${cTop})${rot}">${face}</g>`;
   if (busy.length) {
     // connettore collegato: si vede il connettore del cavo infilato nella
@@ -1674,11 +1675,12 @@ function rearSlot (ctx, cx, y0, pid, label) {
     const otherId = e.a === id ? e.b : e.a, otherPort = e.a === id ? e.bPort : e.aPort;
     status = '→ ' + compLabel(otherId) + ' · ' + portLabel(otherId, otherPort);
   } else if (busy.length > 1) status = busy.length + ' cavi collegati';
-  else status = p.lead ? 'tocca per prendere la spina' : 'libera';
-  if (status.length > 23) status = status.slice(0, 22) + '…';   // deve stare nella targhetta
+  else status = p.lead ? 'prendi la spina' : 'libera';
+  const maxLen = fs > 1 ? 17 : 23;                                // deve stare nella targhetta
+  if (status.length > maxLen) status = status.slice(0, maxLen - 1) + '…';
   svg += `<rect x="${cx - REAR_SLOT / 2 + 6}" y="${yb - 24}" width="${REAR_SLOT - 12}" height="22" rx="11"
       fill="${busy.length ? '#1c1d22' : 'transparent'}" stroke="${busy.length ? sigColor : 'none'}"/>
-    <text x="${cx}" y="${yb - 9}" font-size="11.5" fill="${busy.length ? '#eee9df' : st.sub}" text-anchor="middle">${escapeHtml(status)}</text>`;
+    <text x="${cx}" y="${yb - 8}" font-size="${11.5 * Math.min(fs, 1.25)}" fill="${busy.length ? '#eee9df' : st.sub}" text-anchor="middle">${escapeHtml(status)}</text>`;
   if (phaseLoad) {
     // carico della fase, subito sotto la presa
     const frac = Math.min(1, loads[p.phase] / PHASE_BUDGET_W);
@@ -1693,10 +1695,11 @@ function rearSlot (ctx, cx, y0, pid, label) {
 // sezione serigrafata: riquadro con il titolo e le sue prese in fila
 function rearSection (ctx, x, y0, title, ports) {
   const { st } = ctx;
+  const fs = ctx.fs || 1;
   const w = ports.length * REAR_SLOT + REAR_PADX * 2;
   let svg = `<rect x="${x}" y="${y0}" width="${w}" height="${REAR_FRAME_H}" rx="4" fill="none" stroke="${st.ink}" stroke-opacity=".45" stroke-width="1.5"/>
-    <rect x="${x + 12}" y="${y0 - 10}" width="${title.length * 10 + 18}" height="22" fill="${st.bg}"/>
-    <text x="${x + 21}" y="${y0 + 6}" font-size="15" font-weight="700" fill="${st.ink}">${escapeHtml(title)}</text>`;
+    <rect x="${x + 12}" y="${y0 - 10}" width="${Math.min(w - 24, title.length * 10 * fs + 18)}" height="22" fill="${st.bg}"/>
+    <text x="${x + 21}" y="${y0 + 6}" font-size="${15 * Math.min(fs, 1.2)}" font-weight="700" fill="${st.ink}">${escapeHtml(title)}</text>`;
   ports.forEach(([pid, label], pi) => {
     svg += rearSlot(ctx, x + REAR_PADX + pi * REAR_SLOT + REAR_SLOT / 2, y0, pid, label);
   });
@@ -1793,7 +1796,10 @@ function renderRoundPanel (ctx, comp, panel) {
   // display acceso solo se il faro è alimentato
   const powered = isPowered(comp.id);
   const shown = !powered ? '' : (parMenuField === 'addr' ? 'A' + String(dmx.addr).padStart(3, '0') : mode.id);
-  let svg = `<svg class="rear-svg round" viewBox="0 0 ${W} ${H}" xmlns="http://www.w3.org/2000/svg" font-family="Inter,sans-serif">
+  // sul telefono si inquadra solo il centro del disco (display e prese):
+  // il bordo tondo resta visibile sopra e sotto
+  const vb = ctx.compact ? `${cx - 210} 44 420 ${H - 64}` : `0 0 ${W} ${H}`;
+  let svg = `<svg class="rear-svg round${ctx.compact ? ' compact' : ''}" viewBox="${vb}" xmlns="http://www.w3.org/2000/svg" font-family="Inter,sans-serif">
     ${[6, W - 50].map(x => `<rect x="${x}" y="${cy - 40}" width="44" height="${R + 60}" rx="8" fill="#6a6e78" stroke="#4a4d56" stroke-width="2"/>
       <circle cx="${x + 22}" cy="${cy}" r="26" fill="#2a2c32" stroke="#8a8e98" stroke-width="3"/>
       ${[0, 60, 120, 180, 240, 300].map(d => { const a = d * Math.PI / 180; return `<circle cx="${x + 22 + Math.cos(a) * 17}" cy="${cy + Math.sin(a) * 17}" r="4" fill="#8a8e98"/>`; }).join('')}`).join('')}
@@ -1830,33 +1836,41 @@ function renderRoundPanel (ctx, comp, panel) {
 function renderStripPanel (ctx, comp, def, panel) {
   const { st } = ctx;
   const outs = panelSections(panel).find(([t]) => t === 'PRESE')[1];
-  const plugX = 125, barX = 260, H = 330;
-  const W = barX + 120 + outs.length * REAR_SLOT + 30;
+  // sul telefono: spina sopra a sinistra, barra con interruttore e prese sotto
+  const compact = ctx.compact;
+  const plugX = 125, barX = compact ? 14 : 260;
+  const y1 = compact ? 250 : 0;                    // di quanto scende la barra
+  const H = 330 + y1;
+  const W = compact ? Math.max(outs.length * REAR_SLOT + 150, 560) : barX + 120 + outs.length * REAR_SLOT + 30;
   const accent = '#' + def.body.accent.toString(16).padStart(6, '0');
   const y0 = 48;
+  const yb = y0 + y1;
+  // cavo della spina: di lato verso la barra, oppure giù verso la barra sotto
+  const cablePath = compact
+    ? `M ${plugX} ${y0 + 176} C ${plugX} ${y0 + 236}, ${barX + 20} ${yb + 60}, ${barX + 60} ${yb + 60}`
+    : `M ${plugX + 44} ${y0 + 118} C ${plugX + 90} ${y0 + 118}, ${barX - 60} ${y0 + 150}, ${barX + 6} ${y0 + 150}`;
   let svg = `<svg class="rear-svg" viewBox="0 0 ${W} ${H}" xmlns="http://www.w3.org/2000/svg" font-family="Inter,sans-serif">
-    <path d="M ${plugX + 44} ${y0 + 118} C ${plugX + 90} ${y0 + 118}, ${barX - 60} ${y0 + 150}, ${barX + 6} ${y0 + 150}" fill="none" stroke="#0c0d10" stroke-width="16"/>
-    <path d="M ${plugX + 44} ${y0 + 118} C ${plugX + 90} ${y0 + 118}, ${barX - 60} ${y0 + 150}, ${barX + 6} ${y0 + 150}" fill="none" stroke="#26282e" stroke-width="10"/>
-    <rect x="${barX}" y="${y0 + 52}" width="${W - barX - 14}" height="148" rx="26" fill="${st.bg}" stroke="${st.edge}" stroke-width="2"/>
-    <rect x="${barX + 16}" y="${y0 + 186}" width="${W - barX - 46}" height="6" rx="3" fill="${accent}"/>
+    ${[['#0c0d10', 16], ['#26282e', 10]].map(([c, w]) => `<path d="${cablePath}" fill="none" stroke="${c}" stroke-width="${w}"/>`).join('')}
+    <rect x="${barX}" y="${yb + 52}" width="${W - barX - 14}" height="148" rx="26" fill="${st.bg}" stroke="${st.edge}" stroke-width="2"/>
+    <rect x="${barX + 16}" y="${yb + 186}" width="${W - barX - 46}" height="6" rx="3" fill="${accent}"/>
     <g class="rp-switch" style="cursor:pointer">
-      <rect x="${barX + 24}" y="${y0 + 84}" width="74" height="100" fill="transparent"/>
-      <rect x="${barX + 30}" y="${y0 + 94}" width="62" height="64" rx="8" fill="#0e0f12"/>
-      <rect x="${barX + 38}" y="${y0 + 102}" width="46" height="48" rx="5" fill="${comp.on && isPowered(comp.id) ? '#ff5a4a' : '#7a2019'}"/>
-      <rect x="${barX + 38}" y="${comp.on ? y0 + 102 : y0 + 128}" width="46" height="22" rx="5" fill="#000" fill-opacity=".3"/>
-      <text x="${barX + 61}" y="${y0 + 176}" font-size="11" font-weight="700" fill="${comp.on ? (isPowered(comp.id) ? '#7fe0a0' : '#ffc27a') : st.sub}" text-anchor="middle">${comp.on ? (isPowered(comp.id) ? 'ACCESA' : 'ACCESA · no corrente') : 'I / O · SPENTA'}</text>
+      <rect x="${barX + 24}" y="${yb + 84}" width="74" height="100" fill="transparent"/>
+      <rect x="${barX + 30}" y="${yb + 94}" width="62" height="64" rx="8" fill="#0e0f12"/>
+      <rect x="${barX + 38}" y="${yb + 102}" width="46" height="48" rx="5" fill="${comp.on && isPowered(comp.id) ? '#ff5a4a' : '#7a2019'}"/>
+      <rect x="${barX + 38}" y="${comp.on ? yb + 102 : yb + 128}" width="46" height="22" rx="5" fill="#000" fill-opacity=".3"/>
+      <text x="${barX + 61}" y="${yb + 176}" font-size="11" font-weight="700" fill="${comp.on ? (isPowered(comp.id) ? '#7fe0a0' : '#ffc27a') : st.sub}" text-anchor="middle">${comp.on ? (isPowered(comp.id) ? 'ACCESA' : 'ACCESA · no corrente') : 'I / O · SPENTA'}</text>
     </g>`;
   svg += rearSlot(ctx, plugX, y0, 'in', 'SPINA');
   outs.forEach(([pid, label], i) => {
-    svg += rearSlot({ ...ctx, tilt: true }, barX + 120 + REAR_SLOT / 2 + i * REAR_SLOT, y0, pid, label);
+    svg += rearSlot({ ...ctx, tilt: true }, barX + 120 + REAR_SLOT / 2 + i * REAR_SLOT, yb, pid, label);
   });
   svg += `<text x="${(barX + W) / 2}" y="${H - 22}" font-size="12" fill="${st.sub}" text-anchor="middle" letter-spacing="1">${escapeHtml(panel.serial)}</text>`;
   return svg + `</svg>`;
 }
 
-// scala minima del disegno di un pannello (pixel per unità): sotto questa
-// le scritte delle prese non si leggono più
-const REAR_MIN_SCALE = 0.56;
+// sotto questa larghezza (px) del riquadro il pannello si impagina "stretto"
+// (telefono): sezioni a capo entro REAR_COMPACT_W unità e scritte più grandi
+const REAR_COMPACT_BELOW = 640, REAR_COMPACT_W = 700;
 function renderRearPanel () {
   const id = rearPanelId;
   const comp = gameState.placed[id];
@@ -1867,7 +1881,9 @@ function renderRearPanel () {
   const pending = gameState.pendingPort;
   const loads = comp.type === 'quadro' ? livePhaseLoads(false) : null;
   const planned = comp.type === 'quadro' ? computePhaseLoads() : null;
-  const ctx = { id, def, st, pending, loads, planned };
+  // telefono: pannelli impaginati stretti, scritte più grandi
+  const compact = el('#rear-svg').clientWidth < REAR_COMPACT_BELOW;
+  const ctx = { id, def, st, pending, loads, planned, compact, fs: compact ? 1.35 : 1 };
 
   el('#rear-title').textContent = def.label + '  ·  ' + id.replace(/_/g, ' ') + '  —  pannello posteriore';
 
@@ -1877,12 +1893,30 @@ function renderRearPanel () {
   } else if (panel.style === 'strip') {
     svg = renderStripPanel({ ...ctx, plugOnly: true }, comp, def, panel);
   } else {
-    // una o più file di sezioni affiancate
-    const rows = panel.rows || [panel.sections];
-    const GAP = 26, MARGIN = 36, ROW_H = REAR_FRAME_H + 34;
+    // una o più file di sezioni affiancate. Sul telefono (compact) le
+    // sezioni vanno a capo quando non c'è più posto, l'interruttore POWER
+    // diventa un blocco come le altre e le decorazioni laterali spariscono:
+    // il pannello entra tutto nello schermo, senza scorrere
+    const compact = ctx.compact;
+    const GAP = compact ? 14 : 26, MARGIN = 36, ROW_H = REAR_FRAME_H + 34;
     const secW = ([title, ports]) => title === '__PROT__' ? PROT_W : sectionWidth(ports);
-    const leftW = panel.left ? 140 : 0, rightW = (panel.right ? 140 : 0) + (panel.power ? 140 : 0);
-    const rowW = rows.map(r => r.reduce((s, sec) => s + secW(sec), 0) + GAP * (r.length - 1));
+    let rows;
+    if (compact) {
+      const items = panelSections(panel).map(sec => ({ sec, w: secW(sec) }));
+      if (panel.power) items.push({ power: true, w: 130 });
+      rows = [[]];
+      let cw = 0;
+      items.forEach(it => {
+        const row = rows[rows.length - 1];
+        if (row.length && cw + GAP + it.w > REAR_COMPACT_W) { rows.push([it]); cw = it.w; }
+        else { cw += (row.length ? GAP : 0) + it.w; row.push(it); }
+      });
+    } else {
+      rows = (panel.rows || [panel.sections]).map(r => r.map(sec => ({ sec, w: secW(sec) })));
+    }
+    const leftW = !compact && panel.left ? 140 : 0;
+    const rightW = compact ? 0 : (panel.right ? 140 : 0) + (panel.power ? 140 : 0);
+    const rowW = rows.map(r => r.reduce((sum, it) => sum + it.w, 0) + GAP * (r.length - 1));
     const W = MARGIN * 2 + leftW + rightW + Math.max(...rowW);
     const H = 48 + rows.length * ROW_H + 48;
     const plugOnly = rows.length > 1;
@@ -1919,37 +1953,31 @@ function renderRearPanel () {
     } else {
       svg += `<rect x="4" y="4" width="${W - 8}" height="${H - 8}" rx="16" fill="${st.bg}" stroke="${st.edge}" stroke-width="2"/>`;
     }
-    if (panel.left) svg += rearDeco(panel.left, MARGIN, H, st);
+    if (leftW) svg += rearDeco(panel.left, MARGIN, H, st);
     rows.forEach((row, ri) => {
       const y0 = 48 + ri * ROW_H;
       let x = MARGIN + leftW + (Math.max(...rowW) - rowW[ri]) / 2;
-      row.forEach(([title, ports]) => {
-        svg += title === '__PROT__'
-          ? rearProtections(ctx, comp, x, y0)
-          : rearSection({ ...ctx, plugOnly, bottom: H - 8 }, x, y0, title, ports).svg;
-        x += secW([title, ports]) + GAP;
+      row.forEach(it => {
+        if (it.power) svg += rearPowerSwitch(comp, x, y0 + REAR_FRAME_H / 2, st);
+        else {
+          const [title, ports] = it.sec;
+          svg += title === '__PROT__'
+            ? rearProtections(ctx, comp, x, y0)
+            : rearSection({ ...ctx, plugOnly, bottom: H - 8 }, x, y0, title, ports).svg;
+        }
+        x += it.w + GAP;
       });
     });
-    let rx = W - MARGIN - rightW + 10;
-    if (panel.power) { svg += rearPowerSwitch(comp, rx, H / 2, st); rx += 140; }
-    if (panel.right) svg += rearDeco(panel.right, rx, H, st);
+    if (!compact) {
+      let rx = W - MARGIN - rightW + 10;
+      if (panel.power) { svg += rearPowerSwitch(comp, rx, H / 2, st); rx += 140; }
+      if (panel.right) svg += rearDeco(panel.right, rx, H, st);
+    }
     if (panel.serial) svg += `<text x="${W / 2}" y="${H - 22}" font-size="12" fill="${st.sub}" text-anchor="middle" letter-spacing="1">${escapeHtml(panel.serial)}</text>`;
     svg += `</svg>`;
   }
 
-  const wrap = el('#rear-svg');
-  const keepScroll = wrap.scrollLeft;
-  wrap.innerHTML = svg;
-  // sul telefono un pannello largo (mixer, finale...) diventerebbe troppo
-  // piccolo per leggerlo: lo si mostra più grande e scorre di lato
-  const svgEl = wrap.querySelector('svg');
-  const vbW = svgEl ? svgEl.viewBox.baseVal.width : 0;
-  const avail = wrap.clientWidth - 32;
-  const big = vbW && avail > 0 && avail / vbW < REAR_MIN_SCALE;
-  wrap.classList.toggle('scroll-x', !!big);
-  if (svgEl) svgEl.style.width = big ? Math.round(vbW * REAR_MIN_SCALE) + 'px' : '';
-  if (big) wrap.insertAdjacentHTML('afterbegin', '<div class="rear-scroll-hint">↔ scorri di lato per vedere tutto il pannello</div>');
-  wrap.scrollLeft = big ? keepScroll : 0;
+  el('#rear-svg').innerHTML = svg;
   el('#rear-svg').querySelectorAll('.rp-port').forEach(node => {
     node.addEventListener('click', () => onRearPortClick(id, node.dataset.port));
   });
@@ -1997,7 +2025,7 @@ function renderRearHand () {
   } else if (cable) {
     box.innerHTML = `Cavo selezionato: <b>${escapeHtml(cableName(cable))}</b> — scegli la presa da cui partire.`;
   } else {
-    box.innerHTML = `Nessun cavo selezionato: prendine uno da un baule nella scheda <b>Cavi</b> per collegare (le spine di ciabatte, PC e scheda audio si prendono direttamente dal pannello).`;
+    box.innerHTML = `Nessun cavo in mano: prendilo da un baule (scheda <b>Cavi</b>). Le spine di ciabatte, PC e scheda si prendono da qui.`;
   }
 }
 
@@ -2111,7 +2139,6 @@ function openRearPanel (compId) {
   el('#rear-detail').innerHTML = '';
   // prima visibile, poi disegnato: serve la larghezza vera del riquadro
   el('#rear-modal').classList.add('show');
-  el('#rear-svg').scrollLeft = 0;
   renderRearPanel();
   setSceneInput(false);
 }
