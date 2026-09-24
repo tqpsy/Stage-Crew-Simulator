@@ -335,8 +335,12 @@
     background:#1c1d22; border:1px solid var(--amber); border-radius:6px;
     padding:7px 8px 7px 14px; font-size:13px; max-width:92%;
     z-index:15; box-shadow:0 4px 16px rgba(0,0,0,.4);
+    /* i tocchi passano ai dispositivi sotto la barra (sui telefoni piccoli
+       la scena è bassa e la barra li coprirebbe); solo "Annulla" è attivo */
+    pointer-events:none;
   }
   #cable-banner.show{ display:flex; }
+  #cable-banner button{ pointer-events:auto; }
   #cable-banner b{ color:var(--amber); }
   #cable-banner button{
     background:none; border:1px solid var(--hairline); color:var(--text-main);
