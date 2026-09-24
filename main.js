@@ -156,6 +156,14 @@ const INTF_ISO  = isoFrame(46, 30, 12);   // scheda audio USB da tavolo
 function isoDepth (screenY) { return 10 + screenY / 10000; }
 
 // il PAR poggia con la sua piastra sulla barra a T in cima allo stativo
+// asta microfonica con giraffa: treppiede, asta fino a ASTA_POLE e giraffa che
+// sale verso il fondo del palco (+a, -b: dritta in su sullo schermo), dove sta
+// chi parla girato verso il pubblico. Il microfono si monta sulla punta.
+const ASTA_ISO = isoFrame(40, 40, 3);
+const ASTA_POLE = 96;                     // unità iso: ~1,25 m
+const ASTA_TIP = [48, 12, 110];           // punta della giraffa (a, b, z): bocca di chi parla
+function micOffset () { const t = ASTA_ISO(...ASTA_TIP), c = ASTA_ISO(20, 20, 0); return { x: t.x - c.x, y: t.y }; }
+
 function standBarY () { return STAND_ISO(STAND_ISO.A / 2, STAND_ISO.B / 2, 0).y - STAND_POLE; }
 function parOffsetY () { return standBarY() - PAR_ISO(19, 17, 0).y; }
 
@@ -247,6 +255,22 @@ const COMPONENT_TYPES = {
       { id: 'in_R',  signal: 'xlr',      dir: 'in',  ...isoPort(AMP_ISO, 41, 8, 16) },
       { id: 'out_L', signal: 'speakon',  dir: 'out', ...isoPort(AMP_ISO, 26, 38, 16) },
       { id: 'out_R', signal: 'speakon',  dir: 'out', ...isoPort(AMP_ISO, 53, 38, 16) }
+    ]
+  },
+  // asta microfonica con giraffa: si posa sul palco, nessuna presa; ci si
+  // monta sopra il microfono
+  asta: {
+    label: 'ASTA', category: 'audio', powerW: 0, zone: 'stage', shape: 'asta',
+    body: { w: 40, h: 30, fill: 0x1c1d22, accent: 0x55585f },
+    ports: []
+  },
+  // microfono dinamico da voce: sulla punta della giraffa, uscita XLR verso
+  // un ingresso MIC del mixer. Non serve corrente.
+  mic: {
+    label: 'MIC', category: 'audio', powerW: 0, zone: 'stage', shape: 'mic',
+    body: { w: 22, h: 22, fill: 0x1c1d22, accent: 0x9aa0aa },
+    ports: [
+      { id: 'out', signal: 'xlr', dir: 'out', dx: -9, dy: 7 }
     ]
   },
   // stativo luci con barra a T: nessuna presa, ci si monta sopra un PAR
@@ -393,7 +417,7 @@ const COMPONENT_TYPES = {
 
 // la DI resta nel catalogo per gli strumenti sul palco dei livelli successivi,
 // ma nel livello 1 non serve: il PC entra nel mixer dalla scheda audio
-const AVAILABLE_STOCK = { sub: 2, top: 2, mixer: 1, stativo: 4, par: 4, controller: 1, ampli: 1, quadro: 1, ciabatta: 1, ciabatta_cee: 1, pc: 1, scheda: 1, di: 0 };
+const AVAILABLE_STOCK = { sub: 2, top: 2, mixer: 1, asta: 1, mic: 1, stativo: 4, par: 4, controller: 1, ampli: 1, quadro: 1, ciabatta: 1, ciabatta_cee: 1, pc: 1, scheda: 1, di: 0 };
 
 const POWER_LIMIT_KW = 3.0;
 const TOP_ATTACH_RADIUS = 300; // px: quanto lontano può essere trascinata una Testa da un Sub libero
@@ -407,9 +431,12 @@ const MOUNTS = {
     done: baseId => 'Testa montata sul palo di ' + compLabel(baseId) + '.' },
   par: { base: 'stativo', link: 'hasPar', back: 'parentStandId', offsetY: () => parOffsetY(),
     missing: 'Posa il PAR sopra uno stativo libero: si monta sulla barra a T.',
-    done: baseId => 'PAR montato su ' + compLabel(baseId) + ': si punta da solo verso il palco.' }
+    done: baseId => 'PAR montato su ' + compLabel(baseId) + ': si punta da solo verso il palco.' },
+  mic: { base: 'asta', link: 'hasMic', back: 'parentAstaId', offsetY: () => micOffset().y, offsetX: () => micOffset().x,
+    missing: 'Posa il microfono sopra un\'asta microfonica libera: si monta sulla punta della giraffa.',
+    done: baseId => 'Microfono montato su ' + compLabel(baseId) + ': collegalo con un XLR a un ingresso MIC del mixer.' }
 };
-const MOUNT_ON = { sub: 'top', stativo: 'par' };   // base -> tipo che ci si monta sopra
+const MOUNT_ON = { sub: 'top', stativo: 'par', asta: 'mic' };   // base -> tipo che ci si monta sopra
 // figlio montato su una base (o null)
 function mountedOn (base) {
   const t = base && MOUNT_ON[base.type];
@@ -488,6 +515,17 @@ const PHASE_PEAK_W = 4600;
    I dispositivi si cercano per tipo e non per id, così un pezzo tolto e
    rimesso (che prende un id nuovo) conta come prima. */
 const REQUIRED_POWER = { mixer: 1, controller: 1, ampli: 1, sub: 2, par: 4, pc: 1 };
+
+/* Microfono pronto per il discorso del preside: montato sull'asta e collegato
+   con un XLR a un ingresso MIC del mixer. Restituisce il numero del canale
+   (1-4) o null. Non conta per il Test impianto: serve dopo, per lo spettacolo. */
+function micChannel () {
+  const mic = placedOfType('mic').find(m => mountBase(m));
+  if (!mic) return null;
+  const e = gameState.edges.find(x => x.a === mic.id && x.aPort === 'out' && x.signal === 'xlr' &&
+    (gameState.placed[x.b] || {}).type === 'mixer' && /^in_[1-4]$/.test(x.bPort));
+  return e ? parseInt(e.bPort.slice(3), 10) : null;
+}
 
 function placedOfType (type) {
   return Object.values(gameState.placed)
@@ -613,7 +651,7 @@ function stereoCheck () {
 const gameState = {
   placed: {},
   stock: { ...AVAILABLE_STOCK },
-  nextIndex: { sub: 1, top: 1, mixer: 1, stativo: 1, par: 1, controller: 1, ampli: 1, quadro: 1, ciabatta: 1, ciabatta_cee: 1, pc: 1, scheda: 1, di: 1 },
+  nextIndex: { sub: 1, top: 1, mixer: 1, asta: 1, mic: 1, stativo: 1, par: 1, controller: 1, ampli: 1, quadro: 1, ciabatta: 1, ciabatta_cee: 1, pc: 1, scheda: 1, di: 1 },
   edges: [],              // { id, a, aPort, b, bPort, signal }
   edgeSeq: 0,
   selectedCable: null,
@@ -1573,6 +1611,8 @@ const REAR_PANELS = {
     sections: [['INPUT', [['in_L', 'IN A (L)'], ['in_R', 'IN B (R)']]], ['OUTPUT', [['out_L', 'OUT CH1'], ['out_R', 'OUT CH2']]], ['POWER ~230V', [['power', 'MAINS IN']]]] },
   par: { style: 'round', serial: 'LED PAR 7 × 10 W RGBW',
     sections: [['POWER', [['power_in', 'POWER IN'], ['power_thru', 'POWER OUT']]], ['DMX 512', [['dmx_in', 'DMX IN'], ['dmx_thru', 'DMX THRU']]]] },
+  mic: { style: 'round', serial: 'MICROFONO DINAMICO DA VOCE  ·  CARDIOIDE',
+    sections: [['USCITA', [['out', 'XLR OUT']]]] },
   controller: { style: 'desk', accent: true, power: true, serial: 'DMX CONTROLLER  ·  2 UNIVERSI  ·  1024 CH',
     sections: [['DMX OUT', [['dmx_1', 'UNIVERSO 1'], ['dmx_2', 'UNIVERSO 2']]], ['POWER', [['power', 'POWER IN']]]] },
   // sopra le protezioni su guida DIN, sotto ingresso e prese
@@ -2281,6 +2321,12 @@ function openRearPanel (compId) {
       : compLabel(compId) + ': monta un PAR sulla barra a T (scheda Luci, poi tocca lo stativo).');
     return;
   }
+  if (t === 'asta') {
+    const mic = mountedOn(gameState.placed[compId]);
+    showToast(mic ? compLabel(compId) + ' regge ' + compLabel(mic.id) + ': tocca il microfono per la sua presa.'
+      : compLabel(compId) + ': monta il microfono sulla giraffa (scheda Audio, poi tocca l\'asta).');
+    return;
+  }
   if (!REAR_PANELS[t]) return;
   rearPanelId = compId;
   el('#rear-detail').innerHTML = '';
@@ -2726,7 +2772,7 @@ function screenToCell (px, py) {
    scambia. I pezzi montati (testa, PAR) non occupano celle. */
 const FOOTPRINT = {
   sub: [1, 1], mixer: [1, 2], ampli: [1, 2], controller: [1, 1], quadro: [1, 2],
-  ciabatta: [1, 2], ciabatta_cee: [1, 3], pc: [1, 1], scheda: [1, 1], di: [1, 1], stativo: [1, 1]
+  ciabatta: [1, 2], ciabatta_cee: [1, 3], pc: [1, 1], scheda: [1, 1], di: [1, 1], stativo: [1, 1], asta: [1, 1]
 };
 function footprint (type, rot) {
   const f = FOOTPRINT[type] || [1, 1];
@@ -2780,6 +2826,8 @@ const ZONE_PREDICATES = {
   stativo: (cx, cy) => isPitCell(cx, cy) ||
     (cy >= STAGE_ORIGIN_Y && cy < STAGE_ORIGIN_Y + STAGE_H && (cx < STAGE_ORIGIN_X || isOffStageCell(cx, cy))),
   sub: isPitCell,
+  // l'asta del microfono sta sulla pedana, dove parla o canta qualcuno
+  asta: isStageCoreCell,
   quadro: isBackstageCell,
   // le ciabatte portano corrente dove serve: sul palco, in Regia di palco
   // (Off Stage) e in Regia di sala (FOH). Quella CEE può restare anche in
@@ -3471,6 +3519,38 @@ class StageScene extends Phaser.Scene {
         g.lineStyle(1, 0x6a6e78, 1); g.lineBetween(b0.x, b0.y - STAND_POLE - 1.5, b1.x, b1.y - STAND_POLE - 1.5);
         break;
       }
+      case 'asta': {
+        // asta microfonica: treppiede, asta nera, snodo e giraffa col contrappeso
+        const P = ASTA_ISO, k = this.isoKit(g, P);
+        const A = P.A / 2, B = P.B / 2, c0 = P(A, B, 0);
+        const line = (p, q, w, col) => { g.lineStyle(w, col, 1); g.lineBetween(p.x, p.y, q.x, q.y); };
+        k.discZ(0, A, B, 16, 0x000000, 0.25);                                       // ombra
+        [[A - 15, B], [A + 8, B - 13], [A + 8, B + 13]].forEach(([a, b]) => {
+          const f = P(a, b, 0); line(P(A, B, 14), f, 2.6, 0x1c1d22);                // gambe
+          g.fillStyle(0x0c0d10, 1); g.fillCircle(f.x, f.y, 1.8);
+        });
+        g.fillStyle(0x2a2c32, 1); g.fillRect(c0.x - 2, c0.y - ASTA_POLE, 4, ASTA_POLE - 12);   // asta
+        g.fillStyle(0x5d6068, 1); g.fillRect(c0.x - 2, c0.y - ASTA_POLE, 1.1, ASTA_POLE - 12);
+        g.fillStyle(0x3a3d45, 1); g.fillRect(c0.x - 3.5, c0.y - 18, 7, 4);             // serraggio altezza
+        const top = P(A, B, ASTA_POLE), tip = P(...ASTA_TIP), back = P(A - 8, B + 8, ASTA_POLE - 5);
+        line(back, tip, 2.6, 0x26282d);                                            // giraffa
+        g.fillStyle(0x3a3d45, 1); g.fillCircle(back.x, back.y, 2.6);              // contrappeso
+        g.fillCircle(top.x, top.y, 2.8);                                           // snodo
+        g.fillStyle(0x6a6e78, 1); g.fillCircle(top.x - 0.8, top.y - 0.8, 1);
+        break;
+      }
+      case 'mic': {
+        // microfono dinamico sulla punta della giraffa, nello stesso verso:
+        // impugnatura nera verso l'asta (e il cavo), griglia argentata verso
+        // chi parla, in fondo al palco
+        g.lineStyle(4.4, 0x1c1d22, 1); g.lineBetween(-7, 4.8, 1, -0.7);
+        g.fillStyle(0x1c1d22, 1); g.fillCircle(-7, 4.8, 2.2);
+        g.lineStyle(1.8, 0x3a3d45, 1); g.lineBetween(-0.4, 1.4, 1.8, -1.6);          // ghiera
+        g.fillStyle(0x9aa0aa, 1); g.fillCircle(3.6, -2.5, 4);                        // griglia
+        g.fillStyle(0xd8dbe0, 1); g.fillCircle(2.4, -3.8, 1.6);
+        g.lineStyle(0.6, 0x5d6068, 0.8); g.strokeCircle(3.6, -2.5, 4);
+        break;
+      }
       case 'par': {
         // PAR LED su staffa: corpo cilindrico nero, lente frontale con i LED,
         // forcella con le manopole. Sullo stativo gira verso il palco: se la
@@ -3851,7 +3931,7 @@ class StageScene extends Phaser.Scene {
     // isLedOn/refreshLive.
     // L'Allaccio è la sorgente fissa: non ha bisogno di un proprio LED.
     let led = null;
-    if (compType !== 'allaccio' && def.ports.length) {
+    if (compType !== 'allaccio' && compType !== 'mic' && def.ports.length) {   // il microfono non ha spie
       led = this.add.graphics();
       c.add(led);
       this.drawLed(led, def, false, ledPos);
@@ -4101,7 +4181,8 @@ class StageScene extends Phaser.Scene {
   // posizione e profondità di un pezzo montato: sopra la sua base, davanti a lei
   mountPos (type, base) {
     const bv = this.compVisuals[base.id];
-    return { x: bv.container.x, y: bv.container.y + MOUNTS[type].offsetY(), depth: isoDepth(bv.container.y) + 0.001 };
+    const m = MOUNTS[type];
+    return { x: bv.container.x + (m.offsetX ? m.offsetX() : 0), y: bv.container.y + m.offsetY(), depth: isoDepth(bv.container.y) + 0.001 };
   }
 
   attachToNearestBase (type, world) {
@@ -4698,7 +4779,11 @@ class StageScene extends Phaser.Scene {
       : gameState.rcdTrips ? 'la prossima volta cabla a impianto spento.'
       : pops ? 'la prossima volta accendi finali e sub per ultimi.'
       : null;
-    showToast('Impianto collaudato, si va in scena! ' + (tip ? 'Piccolo consiglio: ' + tip : 'Procedura perfetta.'), 'ok');
+    // prossimo obiettivo: il microfono per il discorso del preside
+    const ch = micChannel();
+    const next = ch ? ' Microfono pronto sul CH ' + ch + ': il preside può salire sul palco.'
+      : ' Prossimo: arriva il preside. Monta l\'asta sul palco, il microfono sulla giraffa e collegalo con un XLR a un ingresso MIC del mixer.';
+    showToast('Impianto collaudato, si va in scena! ' + (tip ? 'Piccolo consiglio: ' + tip : 'Procedura perfetta.') + next, 'ok');
     this.playSuccessSequence();
   }
 
