@@ -156,6 +156,14 @@ const INTF_ISO  = isoFrame(46, 30, 12);   // scheda audio USB da tavolo
 function isoDepth (screenY) { return 10 + screenY / 10000; }
 
 // il PAR poggia con la sua piastra sulla barra a T in cima allo stativo
+// asta microfonica con giraffa: treppiede, asta fino a ASTA_POLE e giraffa che
+// sale verso il fondo del palco (+a, -b: dritta in su sullo schermo), dove sta
+// chi parla girato verso il pubblico. Il microfono si monta sulla punta.
+const ASTA_ISO = isoFrame(40, 40, 3);
+const ASTA_POLE = 46;                     // alla scala dello stativo luci (barra a T a 64)
+const ASTA_TIP = [40, 14, 56];           // punta della giraffa (a, b, z): bocca di chi parla
+function micOffset () { const t = ASTA_ISO(...ASTA_TIP), c = ASTA_ISO(20, 20, 0); return { x: t.x - c.x, y: t.y }; }
+
 function standBarY () { return STAND_ISO(STAND_ISO.A / 2, STAND_ISO.B / 2, 0).y - STAND_POLE; }
 function parOffsetY () { return standBarY() - PAR_ISO(19, 17, 0).y; }
 
@@ -247,6 +255,22 @@ const COMPONENT_TYPES = {
       { id: 'in_R',  signal: 'xlr',      dir: 'in',  ...isoPort(AMP_ISO, 41, 8, 16) },
       { id: 'out_L', signal: 'speakon',  dir: 'out', ...isoPort(AMP_ISO, 26, 38, 16) },
       { id: 'out_R', signal: 'speakon',  dir: 'out', ...isoPort(AMP_ISO, 53, 38, 16) }
+    ]
+  },
+  // asta microfonica con giraffa: si posa sul palco, nessuna presa; ci si
+  // monta sopra il microfono
+  asta: {
+    label: 'ASTA', category: 'audio', powerW: 0, zone: 'stage', shape: 'asta',
+    body: { w: 40, h: 30, fill: 0x1c1d22, accent: 0x55585f },
+    ports: []
+  },
+  // microfono dinamico da voce: sulla punta della giraffa, uscita XLR verso
+  // un ingresso MIC del mixer. Non serve corrente.
+  mic: {
+    label: 'MIC', category: 'audio', powerW: 0, zone: 'stage', shape: 'mic',
+    body: { w: 22, h: 22, fill: 0x1c1d22, accent: 0x9aa0aa },
+    ports: [
+      { id: 'out', signal: 'xlr', dir: 'out', dx: -9, dy: 7 }
     ]
   },
   // stativo luci con barra a T: nessuna presa, ci si monta sopra un PAR
@@ -393,7 +417,7 @@ const COMPONENT_TYPES = {
 
 // la DI resta nel catalogo per gli strumenti sul palco dei livelli successivi,
 // ma nel livello 1 non serve: il PC entra nel mixer dalla scheda audio
-const AVAILABLE_STOCK = { sub: 2, top: 2, mixer: 1, stativo: 4, par: 4, controller: 1, ampli: 1, quadro: 1, ciabatta: 1, ciabatta_cee: 1, pc: 1, scheda: 1, di: 0 };
+const AVAILABLE_STOCK = { sub: 2, top: 2, mixer: 1, asta: 1, mic: 1, stativo: 4, par: 4, controller: 1, ampli: 1, quadro: 1, ciabatta: 1, ciabatta_cee: 1, pc: 1, scheda: 1, di: 0 };
 
 const POWER_LIMIT_KW = 3.0;
 const TOP_ATTACH_RADIUS = 300; // px: quanto lontano può essere trascinata una Testa da un Sub libero
@@ -407,9 +431,12 @@ const MOUNTS = {
     done: baseId => 'Testa montata sul palo di ' + compLabel(baseId) + '.' },
   par: { base: 'stativo', link: 'hasPar', back: 'parentStandId', offsetY: () => parOffsetY(),
     missing: 'Posa il PAR sopra uno stativo libero: si monta sulla barra a T.',
-    done: baseId => 'PAR montato su ' + compLabel(baseId) + ': si punta da solo verso il palco.' }
+    done: baseId => 'PAR montato su ' + compLabel(baseId) + ': si punta da solo verso il palco.' },
+  mic: { base: 'asta', link: 'hasMic', back: 'parentAstaId', offsetY: () => micOffset().y, offsetX: () => micOffset().x,
+    missing: 'Posa il microfono sopra un\'asta microfonica libera: si monta sulla punta della giraffa.',
+    done: baseId => 'Microfono montato su ' + compLabel(baseId) + ': collegalo con un XLR a un ingresso MIC del mixer.' }
 };
-const MOUNT_ON = { sub: 'top', stativo: 'par' };   // base -> tipo che ci si monta sopra
+const MOUNT_ON = { sub: 'top', stativo: 'par', asta: 'mic' };   // base -> tipo che ci si monta sopra
 // figlio montato su una base (o null)
 function mountedOn (base) {
   const t = base && MOUNT_ON[base.type];
@@ -488,6 +515,17 @@ const PHASE_PEAK_W = 4600;
    I dispositivi si cercano per tipo e non per id, così un pezzo tolto e
    rimesso (che prende un id nuovo) conta come prima. */
 const REQUIRED_POWER = { mixer: 1, controller: 1, ampli: 1, sub: 2, par: 4, pc: 1 };
+
+/* Microfono pronto per il discorso del preside: montato sull'asta e collegato
+   con un XLR a un ingresso MIC del mixer. Restituisce il numero del canale
+   (1-4) o null. Non conta per il Test impianto: serve dopo, per lo spettacolo. */
+function micChannel () {
+  const mic = placedOfType('mic').find(m => mountBase(m));
+  if (!mic) return null;
+  const e = gameState.edges.find(x => x.a === mic.id && x.aPort === 'out' && x.signal === 'xlr' &&
+    (gameState.placed[x.b] || {}).type === 'mixer' && /^in_[1-4]$/.test(x.bPort));
+  return e ? parseInt(e.bPort.slice(3), 10) : null;
+}
 
 function placedOfType (type) {
   return Object.values(gameState.placed)
@@ -613,7 +651,7 @@ function stereoCheck () {
 const gameState = {
   placed: {},
   stock: { ...AVAILABLE_STOCK },
-  nextIndex: { sub: 1, top: 1, mixer: 1, stativo: 1, par: 1, controller: 1, ampli: 1, quadro: 1, ciabatta: 1, ciabatta_cee: 1, pc: 1, scheda: 1, di: 1 },
+  nextIndex: { sub: 1, top: 1, mixer: 1, asta: 1, mic: 1, stativo: 1, par: 1, controller: 1, ampli: 1, quadro: 1, ciabatta: 1, ciabatta_cee: 1, pc: 1, scheda: 1, di: 1 },
   edges: [],              // { id, a, aPort, b, bPort, signal }
   edgeSeq: 0,
   selectedCable: null,
@@ -2212,6 +2250,8 @@ const REAR_PANELS = {
     sections: [['INPUT', [['in_L', 'IN A (L)'], ['in_R', 'IN B (R)']]], ['OUTPUT', [['out_L', 'OUT CH1'], ['out_R', 'OUT CH2']]], ['POWER ~230V', [['power', 'MAINS IN']]]] },
   par: { style: 'round', serial: 'LED PAR 7 × 10 W RGBW',
     sections: [['POWER', [['power_in', 'POWER IN'], ['power_thru', 'POWER OUT']]], ['DMX 512', [['dmx_in', 'DMX IN'], ['dmx_thru', 'DMX THRU']]]] },
+  mic: { style: 'round', serial: 'MICROFONO DINAMICO DA VOCE  ·  CARDIOIDE',
+    sections: [['USCITA', [['out', 'XLR OUT']]]] },
   controller: { style: 'desk', accent: true, power: true, serial: 'DMX CONTROLLER  ·  2 UNIVERSI  ·  1024 CH',
     sections: [['DMX OUT', [['dmx_1', 'UNIVERSO 1'], ['dmx_2', 'UNIVERSO 2']]], ['POWER', [['power', 'POWER IN']]]] },
   // sopra le protezioni su guida DIN, sotto ingresso e prese
@@ -2244,7 +2284,9 @@ const PAR_MODES = [
   { id: '8CH', name: '8CH · RGBW + dimmer + strobo' }
 ];
 function parDmx (comp) {
-  if (!comp.dmx) comp.dmx = { addr: 1, mode: 1 };
+  // solo i PAR hanno un indirizzo: il microfono usa lo stesso pannello tondo
+  // ma non deve ricevere un DMX (sfuggirebbe ad annulla/ripeti)
+  if (!comp.dmx) { if (comp.type !== 'par') return { addr: 1, mode: 1 }; comp.dmx = { addr: 1, mode: 1 }; }
   return comp.dmx;
 }
 let parMenuField = 'addr';   // cosa si sta regolando sul display: indirizzo o modalità
@@ -2920,6 +2962,12 @@ function openRearPanel (compId) {
       : compLabel(compId) + ': monta un PAR sulla barra a T (scheda Luci, poi tocca lo stativo).');
     return;
   }
+  if (t === 'asta') {
+    const mic = mountedOn(gameState.placed[compId]);
+    showToast(mic ? compLabel(compId) + ' regge ' + compLabel(mic.id) + ': tocca il microfono per la sua presa.'
+      : compLabel(compId) + ': monta il microfono sulla giraffa (scheda Audio, poi tocca l\'asta).');
+    return;
+  }
   if (!REAR_PANELS[t]) return;
   rearPanelId = compId;
   el('#rear-detail').innerHTML = '';
@@ -3365,7 +3413,7 @@ function screenToCell (px, py) {
    scambia. I pezzi montati (testa, PAR) non occupano celle. */
 const FOOTPRINT = {
   sub: [1, 1], mixer: [1, 2], ampli: [1, 2], controller: [1, 1], quadro: [1, 2],
-  ciabatta: [1, 2], ciabatta_cee: [1, 3], pc: [1, 1], scheda: [1, 1], di: [1, 1], stativo: [1, 1]
+  ciabatta: [1, 2], ciabatta_cee: [1, 3], pc: [1, 1], scheda: [1, 1], di: [1, 1], stativo: [1, 1], asta: [1, 1]
 };
 function footprint (type, rot) {
   const f = FOOTPRINT[type] || [1, 1];
@@ -3419,6 +3467,8 @@ const ZONE_PREDICATES = {
   stativo: (cx, cy) => isPitCell(cx, cy) ||
     (cy >= STAGE_ORIGIN_Y && cy < STAGE_ORIGIN_Y + STAGE_H && (cx < STAGE_ORIGIN_X || isOffStageCell(cx, cy))),
   sub: isPitCell,
+  // l'asta del microfono sta sulla pedana, dove parla o canta qualcuno
+  asta: isStageCoreCell,
   quadro: isBackstageCell,
   // le ciabatte portano corrente dove serve: sul palco, in Regia di palco
   // (Off Stage) e in Regia di sala (FOH). Quella CEE può restare anche in
@@ -4126,7 +4176,7 @@ class StageScene extends Phaser.Scene {
   }
 
   /* ---------------- disegno di un componente: forma dedicata per tipo ---------------- */
-  drawComponentBody (g, def, rot) {
+  drawComponentBody (g, def, rot, id) {
     const w = def.body.w, h = def.body.h;
     switch (def.shape) {
       case 'sub': {
@@ -4185,35 +4235,101 @@ class StageScene extends Phaser.Scene {
         g.lineStyle(1, 0x6a6e78, 1); g.lineBetween(b0.x, b0.y - STAND_POLE - 1.5, b1.x, b1.y - STAND_POLE - 1.5);
         break;
       }
-      case 'par': {
-        // PAR LED su staffa: corpo cilindrico nero, lente frontale con i LED,
-        // forcella con le manopole. Sullo stativo gira verso il palco: se la
-        // lente guarda lontano da chi osserva si vede il retro del fusto.
-        const P = rotFrame(PAR_ISO, rot), k = this.isoKit(g, P);
-        const zc = 24, bc = 17, r = 14, aF = 3, aR = 34;
-        const lensSeen = rot === 0 || rot === 3;
-        k.box(6, 32, 4, 30, 0, 2.5, ISO_GREY);                       // piastra
-        k.box(17, 21, 2, 4.5, 2.5, zc + 1, ISO_GREY);                 // forcella
-        const ring = (a, rad) => Array.from({ length: 32 }, (_, i) => {
-          const t = i / 32 * Math.PI * 2;
-          return P(a, bc + rad * Math.cos(t), zc + rad * Math.sin(t));
+      case 'asta': {
+        // asta microfonica: treppiede, asta nera, snodo e giraffa col contrappeso
+        const P = ASTA_ISO, k = this.isoKit(g, P);
+        const A = P.A / 2, B = P.B / 2, c0 = P(A, B, 0);
+        const line = (p, q, w, col) => { g.lineStyle(w, col, 1); g.lineBetween(p.x, p.y, q.x, q.y); };
+        k.discZ(0, A, B, 16, 0x000000, 0.25);                                       // ombra
+        [[A - 15, B], [A + 8, B - 13], [A + 8, B + 13]].forEach(([a, b]) => {
+          const f = P(a, b, 0); line(P(A, B, 14), f, 2.6, 0x1c1d22);                // gambe
+          g.fillStyle(0x0c0d10, 1); g.fillCircle(f.x, f.y, 1.8);
         });
-        const lens = () => {
-          k.poly(ring(aF, r), 0x0c0d10);                               // anello frontale
-          k.poly(ring(aF - 0.6, r - 2), 0x3b3423);                     // lente
-          [[0, 0], [5.5, 0], [-5.5, 0], [2.7, 4.8], [-2.7, 4.8], [2.7, -4.8], [-2.7, -4.8]].forEach(([db, dz]) => {
-            k.discA(aF - 0.8, bc + db, zc + dz, 1.9, 0xf6e7a8);
+        g.fillStyle(0x2a2c32, 1); g.fillRect(c0.x - 2, c0.y - ASTA_POLE, 4, ASTA_POLE - 12);   // asta
+        g.fillStyle(0x5d6068, 1); g.fillRect(c0.x - 2, c0.y - ASTA_POLE, 1.1, ASTA_POLE - 12);
+        g.fillStyle(0x3a3d45, 1); g.fillRect(c0.x - 3.5, c0.y - 18, 7, 4);             // serraggio altezza
+        const top = P(A, B, ASTA_POLE), tip = P(...ASTA_TIP), back = P(A - 8, B + 8, ASTA_POLE - 5);
+        line(back, tip, 2.6, 0x26282d);                                            // giraffa
+        g.fillStyle(0x3a3d45, 1); g.fillCircle(back.x, back.y, 2.6);              // contrappeso
+        g.fillCircle(top.x, top.y, 2.8);                                           // snodo
+        g.fillStyle(0x6a6e78, 1); g.fillCircle(top.x - 0.8, top.y - 0.8, 1);
+        break;
+      }
+      case 'mic': {
+        // microfono dinamico sulla punta della giraffa, nello stesso verso:
+        // impugnatura nera verso l'asta (e il cavo), griglia argentata verso
+        // chi parla, in fondo al palco
+        g.lineStyle(4.4, 0x1c1d22, 1); g.lineBetween(-7, 4.8, 1, -0.7);
+        g.fillStyle(0x1c1d22, 1); g.fillCircle(-7, 4.8, 2.2);
+        g.lineStyle(1.8, 0x3a3d45, 1); g.lineBetween(-0.4, 1.4, 1.8, -1.6);          // ghiera
+        g.fillStyle(0x9aa0aa, 1); g.fillCircle(3.6, -2.5, 4);                        // griglia
+        g.fillStyle(0xd8dbe0, 1); g.fillCircle(2.4, -3.8, 1.6);
+        g.lineStyle(0.6, 0x5d6068, 0.8); g.strokeCircle(3.6, -2.5, 4);
+        break;
+      }
+      case 'par': {
+        // PAR LED: fusto cilindrico ("lattina") puntato davvero verso dove
+        // illumina (vedi parAim), inclinato in giù, tenuto da una forcella a U
+        // sulla piastra dello stativo. Se la lente guarda lontano da chi
+        // osserva si vedono il retro e le alette di raffreddamento.
+        const P = PAR_ISO, k = this.isoKit(g, P);
+        const stand = id && mountBase(gameState.placed[id]), aim = id && parAim(id);
+        let [da, db] = rotDir(rot, -1, 0);
+        if (stand && aim) { const sc = compCenter(stand); da = -(aim.gy - sc.gy); db = aim.gx - sc.gx; }
+        // un filo girato verso chi guarda (-a, +b): la lente resta tonda e
+        // leggibile anche quando il faro punta di lato
+        // (o via da chi guarda, se il faro gli dà le spalle: si vede tondo il retro)
+        let hl = Math.hypot(da, db) || 1; da /= hl; db /= hl;
+        const sg = -da + db >= 0 ? 1 : -1; da -= 0.4 * sg; db += 0.4 * sg;
+        hl = Math.hypot(da, db) || 1;
+        const tilt = 0.12;                                           // appena verso il basso
+        const d = [da / hl * Math.cos(tilt), db / hl * Math.cos(tilt), -Math.sin(tilt)];
+        const cross = (x, y) => [x[1] * y[2] - x[2] * y[1], x[2] * y[0] - x[0] * y[2], x[0] * y[1] - x[1] * y[0]];
+        const norm = x => { const l = Math.hypot(...x) || 1; return x.map(c => c / l); };
+        const u = norm(cross(d, [0, 0, 1])), v = norm(cross(u, d));  // u orizzontale, v "in su" sulla lente
+        const C = [19, 17, 25], r = 12.5;
+        const at = (c, t, rad) => P(c[0] + rad * (Math.cos(t) * u[0] + Math.sin(t) * v[0]),
+          c[1] + rad * (Math.cos(t) * u[1] + Math.sin(t) * v[1]), c[2] + rad * (Math.cos(t) * u[2] + Math.sin(t) * v[2]));
+        const along = s0 => C.map((c, n) => c + d[n] * s0);
+        const ring = (s0, rad, n = 36) => Array.from({ length: n }, (_, i) => at(along(s0), i / n * Math.PI * 2, rad));
+        const F = 11, Bk = -13;                                         // lente davanti, tappo dietro
+        // verso chi guarda (vedi isoFrame): -a, +b, +z
+        const facing = -d[0] + d[1] + 0.686 * d[2] > 0;
+        // forcella: piastra sulla barra a T e due bracci fino ai perni sui fianchi
+        k.box(8, 30, 6, 28, 0, 2.5, ISO_GREY);
+        const pivots = [1, -1].map(sg => P(C[0] + u[0] * (r + 2.5) * sg, C[1] + u[1] * (r + 2.5) * sg, C[2]));
+        const feet = [1, -1].map(sg => P(19 + u[0] * (r + 2.5) * sg, 17 + u[1] * (r + 2.5) * sg, 2.5));
+        const arm = n => { g.lineStyle(3.2, 0x55585f, 1); g.lineBetween(feet[n].x, feet[n].y, pivots[n].x, pivots[n].y); };
+        // il braccio più lontano va dietro al fusto
+        const far = pivots[0].y < pivots[1].y ? 0 : 1;
+        arm(far);
+        // fusto: sagoma dei due cerchi, poi la metà in luce (dall'alto a sinistra)
+        const front = ring(F, r), back = ring(Bk, r);
+        k.poly(convexHull(front.concat(back)), 0x17181c);
+        const lit = t => Math.sin(t) * 0.9 - Math.cos(t) * 0.35 > 0.25;
+        const litPts = [];
+        for (let i = 0; i < 36; i++) { const t = i / 36 * Math.PI * 2; if (lit(t)) litPts.push(at(along(F), t, r), at(along(Bk), t, r)); }
+        if (litPts.length > 2) k.poly(convexHull(litPts), 0x2b2d34);
+        // alette di raffreddamento sul fusto
+        g.lineStyle(1, 0x0c0d10, 0.9);
+        [-9, -5, -1, 3].forEach(s0 => g.strokePoints(ring(s0, r + 0.3), true));
+        if (facing) {
+          k.poly(ring(F, r + 0.6), 0x0c0d10);                            // ghiera frontale
+          k.poly(ring(F + 0.3, r - 1.6), 0x3b3423);                      // lente
+          k.poly(ring(F + 0.4, r - 4.5), 0x4a412b);
+          [[0, 0], [5.8, 0], [-5.8, 0], [2.9, 5], [-2.9, 5], [2.9, -5], [-2.9, -5]].forEach(([x, y]) => {
+            const t = Math.atan2(y, x), rad = Math.hypot(x, y);
+            const c0 = rad ? at(along(F + 0.5), t, rad) : P(...along(F + 0.5));
+            g.fillStyle(0xf6e7a8, 1); g.fillCircle(c0.x, c0.y, 1.7);
           });
-          g.lineStyle(1.4, def.body.accent, 0.9); g.strokePoints(ring(aF, r), true);
-        };
-        if (!lensSeen) lens();
-        k.poly(convexHull(ring(aR, r).concat(ring(aF, r))), 0x1c1d22);  // fusto
-        g.lineStyle(1, 0x3a3d45, 1);                                   // alette di raffreddamento
-        [12, 18, 24, 30].forEach(a => { g.strokePoints(ring(a, r).slice(4, 20), false); });
-        if (lensSeen) lens();
-        else { k.poly(ring(aR, r), 0x26282e); g.lineStyle(1, 0x3a3d45, 1); g.strokePoints(ring(aR, r), true); }
-        k.box(17, 21, 29.5, 32, 2.5, zc + 1, ISO_GREY);               // braccio destro
-        k.discB(32, 19, zc, 3.2, 0x8a8e98);                            // manopola
+          g.lineStyle(1.4, def.body.accent, 0.9); g.strokePoints(ring(F, r + 0.6), true);
+        } else {
+          k.poly(ring(Bk, r), 0x222429);                                   // tappo posteriore
+          g.lineStyle(1, 0x3a3d45, 1); g.strokePoints(ring(Bk, r), true);
+          k.poly(ring(Bk - 0.2, 4.5), 0x2e3037);                           // passacavo
+        }
+        arm(1 - far);
+        pivots.forEach(pv => { g.fillStyle(0x8a8e98, 1); g.fillCircle(pv.x, pv.y, 3); g.fillStyle(0x3a3d45, 1); g.fillCircle(pv.x, pv.y, 1.4); });
         break;
       }
       case 'ampli': {
@@ -4534,7 +4650,7 @@ class StageScene extends Phaser.Scene {
     const body = this.add.graphics();
     // il PAR guarda il palco dal suo stativo; gli altri seguono orientK
     const rot = def.shape === 'par' ? parRot(id) : orientK(def, x, y);
-    this.drawComponentBody(body, def, rot);
+    this.drawComponentBody(body, def, rot, id);
     // punti di aggancio dei cavi e LED, ruotati insieme al dispositivo
     const frame = def.frame ? rotFrame(def.frame, rot) : null;
     const portPos = {};
@@ -4565,7 +4681,7 @@ class StageScene extends Phaser.Scene {
     // isLedOn/refreshLive.
     // L'Allaccio è la sorgente fissa: non ha bisogno di un proprio LED.
     let led = null;
-    if (compType !== 'allaccio' && def.ports.length) {
+    if (compType !== 'allaccio' && compType !== 'mic' && def.ports.length) {   // il microfono non ha spie
       led = this.add.graphics();
       c.add(led);
       this.drawLed(led, def, false, ledPos);
@@ -4816,7 +4932,8 @@ class StageScene extends Phaser.Scene {
   // posizione e profondità di un pezzo montato: sopra la sua base, davanti a lei
   mountPos (type, base) {
     const bv = this.compVisuals[base.id];
-    return { x: bv.container.x, y: bv.container.y + MOUNTS[type].offsetY(), depth: isoDepth(bv.container.y) + 0.001 };
+    const m = MOUNTS[type];
+    return { x: bv.container.x + (m.offsetX ? m.offsetX() : 0), y: bv.container.y + m.offsetY(), depth: isoDepth(bv.container.y) + 0.001 };
   }
 
   attachToNearestBase (type, world) {
@@ -5417,9 +5534,13 @@ class StageScene extends Phaser.Scene {
       : gameState.rcdTrips ? 'la prossima volta cabla a impianto spento.'
       : pops ? 'la prossima volta accendi finali e sub per ultimi.'
       : null;
+    // prossimo obiettivo: il microfono per il discorso del preside
+    const ch = micChannel();
+    const next = ch ? ' Microfono pronto sul CH ' + ch + ': il preside può salire sul palco.'
+      : ' Prossimo: arriva il preside. Monta l\'asta sul palco, il microfono sulla giraffa e collegalo con un XLR a un ingresso MIC del mixer.';
     this.repGain = gameActive ? addRecord() : 0;
     showToast('Impianto collaudato, si va in scena! ' + (tip ? 'Piccolo consiglio: ' + tip : 'Procedura perfetta.')
-      + (this.repGain ? ' Reputazione +' + this.repGain + '.' : gameActive ? ' Reputazione invariata: hai già fatto di meglio.' : ''), 'ok');
+      + (this.repGain ? ' Reputazione +' + this.repGain + '.' : gameActive ? ' Reputazione invariata: hai già fatto di meglio.' : '') + next, 'ok');
     saveLevel();
     this.playSuccessSequence();
   }
@@ -5795,7 +5916,8 @@ class StageScene extends Phaser.Scene {
 
     gameState.placed = {};
     gameState.stock = { ...AVAILABLE_STOCK };
-    gameState.nextIndex = { sub: 1, top: 1, mixer: 1, stativo: 1, par: 1, controller: 1, ampli: 1, quadro: 1, ciabatta: 1, ciabatta_cee: 1, pc: 1, scheda: 1, di: 1 };
+    // un contatore per ogni pezzo della dotazione (anche quelli aggiunti poi: asta, mic…)
+    gameState.nextIndex = Object.fromEntries(Object.keys(AVAILABLE_STOCK).map(t => [t, 1]));
     gameState.edges = [];
     gameState.edgeSeq = 0;
     gameState.selectedCable = null;
