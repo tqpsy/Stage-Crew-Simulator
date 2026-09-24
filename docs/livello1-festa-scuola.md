@@ -56,15 +56,82 @@ Serve una consolle usabile: fader per canale/PAR, anteprima del colore di ogni
 luce, **memorie** salvabili. Proposta: ogni fase chiede anche la sua scena
 (bianco pieno per il preside, colori/chase per il DJ, luce calda per il cantante).
 
+## Ingressi del mixer (deciso)
+
+Si usa quello che c'è: 4 XLR + 2 jack (occupati dalla scheda). Ogni fase deve
+starci da sola, non tutte insieme:
+
+| Fase | XLR usati |
+|------|-----------|
+| Preside | 1 (mic) |
+| DJ | 2 (L/R dalla DI stereo) + eventualmente il mic del preside = 3 |
+| Cantante | 2 (voce + chitarra via DI): **bisogna staccare il DJ** |
+
+Il cambio palco (staccare ciò che non serve e ripatchare) fa parte del gioco.
+
+## Personaggi (proposta)
+
+Filo comune: la scuola, con i personaggi delle **materie** che prendono vita.
+
+| Ruolo | Scelta consigliata | Alternative |
+|------|-------------------|-------------|
+| Preside | Donald Trump ("Preside Tramp"): discorso lunghissimo, vuole il volume più alto di tutti | — |
+| DJ | Albert Einstein, "DJ E=mc²": capelli elettrizzati, BPM relativi | Leonardo da Vinci con piatti di legno inventati da lui; Sergio Mattarella serissimo alla techno |
+| Cantante con chitarra | Dante Alighieri, "Nel mezzo del cammin — unplugged" | Cristiano Ronaldo che canta e urla "SIUUU" nel mic; Napoleone con la chitarra (e l'asta del mic troppo alta) |
+| Bidello (dà le richieste extra) | Gerry Scotti o Carlo Conti | Gordon Ramsay che urla per i cavi in giro |
+
+Personaggi storici: nessun problema di diritti. Personaggi viventi: caricatura
+disegnata e nome parodia.
+
+## Tra una fase e l'altra (proposta)
+
+- Fase 0 (montaggio): tempo libero, niente pressione. È anche il tutorial.
+- Cambi palco (fasi 1-3): barra di **pazienza del pubblico**. Se si svuota non
+  si perde, ma si perde reputazione e il pubblico fischia.
+- La **stanchezza** sale con il tempo e con le azioni; la birra la abbassa.
+
+## Guasti (proposta)
+
+- Contatore **stress impianto**: +1 per ogni magnetotermico, salvavita o colpo
+  nelle casse.
+- Al terzo si rompe l'apparecchio colpevole: colpo nelle casse → tweeter di una
+  testa bruciato (suona gracchiante); scatto → il finale va in protezione.
+- Si può ripararlo con il **ricambio nel furgone** (zona carico): costa tempo e
+  stanchezza. Oppure si va avanti così e si perde reputazione.
+
+## Reputazione (proposta)
+
+Scala 0–100, si parte da 50 e si porta tra i livelli.
+- apparecchio rotto: −10
+- pazienza del pubblico finita: −5 per cambio palco
+- fase completata: +5
+- birra rifiutata in una richiesta extra: +5
+
+## Animazione di errore (proposta)
+
+Sì, breve (5 s) e comica, quando il test di fine fase fallisce: larsen e preside
+con le mani sulle orecchie; silenzio e pubblico che fischia al DJ; Dante al buio.
+Poi si torna a sistemare.
+
+## Richieste extra (per ogni livello)
+
+Missioni facoltative chieste dai personaggi. Se la fai il personaggio offre una
+🍺: **accettarla** = birra in tasca, **rifiutarla** = +reputazione. Ogni livello ne
+ha qualcuna, anche strana.
+
+Livello 1:
+- **Cantante**: un monitor di palco dalla mandata AUX.
+- **Preside**: la sua musica d'ingresso dal PC mentre sale sul palco.
+- **DJ**: la macchina del fumo… ma sotto c'è il rilevatore antincendio della
+  palestra (va coperto, o scatta l'allarme e si perde reputazione).
+- **Bidello**: vuole caricare il telefono "da quella presa rossa grossa" (il
+  quadro): dirgli di no è la risposta giusta.
+- **Una mamma**: "quelle luci colorate mi fanno venire mal di testa": un PAR
+  in bianco fisso verso le sedie delle famiglie.
+
 ## Da decidere
 
-1. **Ingressi del mixer**: ha 4 XLR + 2 jack (già usati dalla scheda). Preside (1)
-   + DJ L/R (2) + voce (1) + chitarra (1) = 5 XLR. Si ripatcha tra una fase e
-   l'altra (realistico), si usa una DI mono per il DJ, o si dà un mixer più grande?
-2. **Personaggi** di DJ e cantante.
-3. **Tra una fase e l'altra**: il giocatore ha tempo per montare, o il pubblico aspetta
-   (e la stanchezza sale)?
-4. **Cosa si rompe** e quanto costa in reputazione; come si ripara.
-5. **Animazione in caso di errore** (es. larsen, silenzio, luci spente) o solo
-   quella di successo?
-6. Il monitor di palco (mandata AUX) per il cantante è obbligatorio o fa guadagnare una birra?
+1. Personaggi definitivi.
+2. Valori di reputazione, stress e pazienza (da tarare giocando).
+3. Quali richieste extra tenere nel livello 1.
+4. Stanchezza: quali errori provoca in concreto.
