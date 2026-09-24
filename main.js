@@ -1730,7 +1730,8 @@ function saveLevel () {
 /* REPUTAZIONE — misura la professionalità, non la sfortuna:
    - sale: fase completata, guasto gestito bene, birra rifiutata;
    - scende: guasto gestito male (risolto dal bidello, larsen, microfono
-     lasciato sull'ingresso sbagliato…);
+     lasciato sull'ingresso sbagliato) o cambio palco così lento da finire
+     la pazienza del pubblico;
    - apparecchio rotto: 0, non è colpa del giocatore.
    Parte da 0 e non va sotto lo 0. Ogni fase (e ogni richiesta extra) conta
    una volta sola per service: rifarla non aggiunge altro. I numeri sono
@@ -1742,6 +1743,7 @@ const REP = {
   faultByJanitor: -5,  // guasto trovato dal bidello al posto tuo
   feedback: -5,        // larsen
   wrongInput: -2,      // microfono lasciato su un altro ingresso
+  slowChange: -5,      // pazienza del pubblico finita per un cambio palco lento
   deviceBroken: 0      // apparecchio rotto: non è colpa del giocatore
 };
 const REP_LOG_KEEP = 50;

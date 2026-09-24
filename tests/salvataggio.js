@@ -103,6 +103,7 @@ const path = require('path');
   const floor = await ev(() => { const d = addReputation(REP.feedback, 'larsen'); return { d, total: reputation() }; });
   check(floor.d === -3 && floor.total === 0, 'la reputazione va sotto lo 0: ' + JSON.stringify(floor));
   await ev(() => addReputation(REP.beerRefused, 'birra rifiutata'));
+  check(await ev(() => REP.slowChange) === -5, 'manca la regola del cambio palco lento');
   check(await p.textContent('#service-tag') === 'SERVICE PROVA · REPUTAZIONE 5', 'reputazione non in testata: ' + await p.textContent('#service-tag'));
   await p.waitForTimeout(1500);          // un po' di tempo di gioco e il salvataggio differito
 
