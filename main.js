@@ -1,5 +1,5 @@
 /* ======================================================================
-   STAGE CREW SIMULATOR — Livello 1 "Il Pub" — MVP giocabile
+   STAGE CREW SIMULATOR — Livello 1 "Festa della scuola" — MVP giocabile
    Motore: Phaser 3 (via CDN). File singolo, nessuna asset esterna:
    ogni fixture è disegnata come icona vettoriale (non foto) che ne
    richiama la forma reale (PAR rotondo, sub/top con cono, ecc.).

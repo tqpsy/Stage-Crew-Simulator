@@ -1,0 +1,805 @@
+<title>Discorso del Preside Tramp</title>
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@600;700&family=Permanent+Marker&family=Inter:wght@400;500;600;700&display=swap">
+<style>
+  /* Prototipo della fase di spettacolo: stessi colori e caratteri del gioco (solo tema scuro, come il gioco). */
+  :root{
+    color-scheme: dark;
+    --bg-deck:#141519; --bg-panel:#1c1d22; --bg-raised:#24252b; --hairline:#34363e;
+    --text:#eee9df; --muted:#8b8e98; --amber:#f2a541; --green:#49b06a; --red:#e0503f; --yellow:#f2c53d;
+    --display:'Barlow Condensed', 'Arial Narrow', sans-serif;
+    --ui:'Inter', system-ui, sans-serif;
+    --marker:'Permanent Marker', 'Comic Sans MS', cursive;
+  }
+  *{box-sizing:border-box}
+  [hidden]{display:none!important}
+  html,body{height:100%}
+  body{margin:0;background:var(--bg-deck);color:var(--text);font-family:var(--ui);overflow:hidden;-webkit-tap-highlight-color:transparent;user-select:none;-webkit-user-select:none}
+  button{font:inherit;color:inherit;cursor:pointer}
+  button:focus-visible,.fader:focus-visible{outline:2px solid var(--amber);outline-offset:2px}
+  #app{height:100%;display:grid;grid-template-rows:auto 1fr auto;max-width:1200px;margin:0 auto}
+
+  /* ---- header ---- */
+  header{padding:8px 16px;background:var(--bg-panel);border-bottom:1px solid var(--hairline);display:grid;gap:6px}
+  .row{display:flex;align-items:center;gap:10px}
+  .face-mini{width:34px;height:34px;border-radius:50%;background:var(--bg-raised);border:1px solid var(--hairline);overflow:hidden;flex:none}
+  .who{font-family:var(--display);font-size:18px;letter-spacing:.03em;line-height:1;white-space:nowrap}
+  .who small{display:block;font-family:var(--ui);font-size:11px;color:var(--muted);letter-spacing:0;margin-top:2px}
+  .timeline{flex:1;height:8px;background:var(--bg-raised);border-radius:4px;overflow:hidden;min-width:40px}
+  .timeline i{display:block;height:100%;width:0;background:var(--amber)}
+  .clock{font-family:var(--display);font-size:20px;font-variant-numeric:tabular-nums}
+  .stat{display:flex;align-items:center;gap:6px;font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:.06em}
+  .bar{width:70px;height:8px;background:var(--bg-raised);border-radius:4px;overflow:hidden}
+  .bar i{display:block;height:100%;width:50%;transition:width .3s,background .3s}
+  .stat.grad{flex:1}.stat.grad .bar{flex:1;width:auto}
+  .pill{border:1px solid var(--hairline);background:var(--bg-raised);border-radius:999px;padding:4px 10px;font-size:14px;line-height:1.2;white-space:nowrap}
+  .pill:active{transform:scale(.96)}
+
+  /* ---- palco ---- */
+  #stage{position:relative;overflow:hidden;background:#0c0d10;min-height:180px}
+  #scene{position:absolute;inset:0;width:100%;height:100%}
+  #caption{position:absolute;left:16px;right:16px;bottom:6px;text-align:center;color:#fff;text-shadow:0 1px 3px #000,0 0 8px #000;pointer-events:none}
+  #caption b{display:block;font-weight:600;font-size:16px;line-height:1.3;transition:font-size .2s}
+  #caption small{display:block;font-size:13px;opacity:.85;font-style:italic;margin-top:2px}
+  #toast{position:absolute;left:50%;top:10px;transform:translateX(-50%);background:var(--bg-raised);border:2px solid var(--hairline);padding:10px 16px;border-radius:10px;font-size:16px;font-weight:600;line-height:1.3;box-shadow:0 6px 20px rgba(0,0,0,.5);z-index:3;opacity:0;transition:opacity .25s;pointer-events:none;max-width:calc(100% - 32px);text-align:center}
+  #toast.show{opacity:1}#toast.ok{border-color:var(--green)}#toast.bad{border-color:var(--red)}
+  #pausa{position:absolute;inset:0;background:rgba(8,8,10,.85);display:grid;place-items:center;font-family:var(--display);font-size:34px;letter-spacing:.1em}
+  #bubbles-html{position:absolute;inset:0;pointer-events:none;z-index:2}
+  .bub{position:absolute;pointer-events:auto;cursor:pointer;display:flex;gap:10px;align-items:center;background:#f4f1ea;color:#141519;border:2px solid #141519;border-radius:12px;padding:8px 12px 8px 8px;max-width:min(300px,calc(100% - 16px));box-shadow:0 4px 14px rgba(0,0,0,.45)}
+  .bub::after{content:"";position:absolute;left:var(--tail,50%);bottom:-9px;width:14px;height:14px;background:#f4f1ea;border-right:2px solid #141519;border-bottom:2px solid #141519;transform:translateX(-50%) rotate(45deg)}
+  .bub svg{flex:none}
+  .bub b{display:block;font-size:15px;line-height:1.25}
+  .bub small{display:block;font-size:13px;color:#7a5a1e;font-weight:600;margin-top:2px}
+
+  /* ---- banco regia ---- */
+  #desk{background:var(--bg-panel);border-top:1px solid var(--hairline);padding:8px 16px calc(10px + env(safe-area-inset-bottom,0px));display:grid;gap:8px;height:44vh;max-height:330px;grid-template-rows:auto 1fr}
+  .tabs{display:flex;gap:6px}
+  .tab{flex:1;white-space:nowrap;background:var(--bg-raised);border:1px solid var(--hairline);border-radius:8px;padding:6px;font-family:var(--display);font-size:17px;letter-spacing:.08em}
+  .tab[aria-selected=true]{border-color:var(--amber);color:var(--amber)}
+  .tab.alarm{border-color:var(--red);color:#fff;background:#4a1c17;animation:blink 1s steps(2) infinite}
+  .tab.alarm[aria-selected=true]{animation:none}
+  @keyframes blink{50%{background:var(--red)}}
+  .panel{min-height:0;display:flex;gap:10px}
+  .strip{flex:1;min-width:0;background:var(--bg-raised);border:1px solid var(--hairline);border-radius:10px;padding:6px 4px;display:grid;grid-template-rows:auto 1fr auto;gap:6px;justify-items:center}
+  .strip.pulse{animation:pulse .5s ease-in-out 4}
+  @keyframes pulse{50%{border-color:var(--amber);box-shadow:0 0 0 3px rgba(242,165,65,.35)}}
+  .strip-name{font-size:12px;color:var(--muted);text-transform:uppercase;letter-spacing:.06em;display:flex;align-items:center;gap:4px;white-space:nowrap}
+  .strip-name .face-mini{width:20px;height:20px}
+  .fadewrap{display:flex;gap:6px;height:100%;min-height:0}
+  .fader{position:relative;width:26px;height:100%;touch-action:none;cursor:ns-resize}
+  .fader .track{position:absolute;left:11px;width:4px;top:6px;bottom:6px;background:#0c0d10;border-radius:2px}
+  .fader .knob{position:absolute;left:0;width:26px;height:16px;margin-top:-8px;background:linear-gradient(#d8d4cb,#8f8b84);border-radius:3px;box-shadow:0 2px 4px #000}
+  .fader .knob::after{content:"";position:absolute;left:3px;right:3px;top:7px;height:2px;background:#222}
+  .meter{position:relative;width:8px;height:100%;background:#0c0d10;border-radius:2px;overflow:hidden}
+  .meter .zone{position:absolute;left:0;right:0;background:rgba(73,176,106,.28)}
+  .meter i{position:absolute;left:0;right:0;bottom:0;height:0;background:var(--green)}
+  .mute{width:100%;max-width:64px;border:1px solid var(--hairline);background:#15161a;border-radius:6px;font-size:11px;font-weight:700;padding:5px 0;letter-spacing:.06em}
+  .mute[aria-pressed=true]{background:var(--red);border-color:var(--red);color:#fff}
+
+  .lights{flex-direction:column}
+  .pars{display:flex;gap:10px;justify-content:space-around}
+  .par{display:grid;justify-items:center;gap:4px;background:none;border:0;padding:0;font-size:11px;color:var(--muted)}
+  .par span.dot{width:42px;height:42px;border-radius:50%;border:3px solid #2c2d33;box-shadow:0 0 16px currentColor}
+  .lights-bottom{display:flex;gap:10px;flex:1;min-height:0}
+  .mems{flex:1;display:grid;grid-template-columns:repeat(2,1fr);gap:6px}
+  .mem{background:var(--bg-raised);border:1px solid var(--hairline);border-radius:8px;padding:4px 8px;text-align:left;display:flex;flex-direction:column;justify-content:center;gap:2px}
+  .mem b{font-family:var(--display);font-size:16px;letter-spacing:.04em}
+  .mem small{font-size:10px;color:var(--muted)}
+  .mem[aria-pressed=true]{border-color:var(--amber);box-shadow:inset 0 0 0 1px var(--amber)}
+  .mem.pulse,.dimmer.pulse{animation:pulse .5s ease-in-out 4}
+  .dimmer{display:grid;grid-template-rows:auto 1fr;gap:4px;justify-items:center;font-size:10px;color:var(--muted);text-transform:uppercase;border-radius:8px}
+  .hint{font-size:13px;color:var(--muted);line-height:1.35}
+
+  /* ---- guasto: la catena del microfono ---- */
+  .fault{flex-direction:column;gap:8px;overflow:auto}
+  .chain{display:grid;grid-template-columns:1fr auto 1fr auto 1fr;align-items:stretch;gap:4px}
+  .chain .link{align-self:center;width:14px;height:3px;background:var(--hairline)}
+  .node{background:var(--bg-raised);border:1px solid var(--hairline);border-radius:10px;padding:8px 6px;display:grid;gap:6px;align-content:start;text-align:center;font-size:12px}
+  .node b{font-family:var(--display);font-size:17px;letter-spacing:.05em}
+  .node .st{font-size:13px;color:var(--muted);min-height:2.6em;line-height:1.3}
+  .node.ok{border-color:var(--green)}.node.ok .st{color:var(--green)}
+  .node.bad{border-color:var(--red)}.node.bad .st{color:#ff9b8f}
+  .act{background:#15161a;border:1px solid var(--hairline);border-radius:6px;padding:8px 4px;font-size:14px;font-weight:600}
+  .act:disabled{opacity:.4;cursor:default}
+  .act.go{border-color:var(--amber);color:var(--amber)}
+  .prog{height:4px;background:#0c0d10;border-radius:2px;overflow:hidden}.prog i{display:block;height:100%;width:0;background:var(--amber)}
+  .patch{display:flex;gap:6px;align-items:center;font-size:14px;color:var(--muted);flex-wrap:wrap}
+  .patch .act{flex:1;min-width:56px}
+
+  /* ---- schede iniziale e finale ---- */
+  .overlay{position:fixed;inset:0;background:rgba(10,10,12,.88);display:grid;place-items:center;padding:16px;z-index:10}
+  .card{width:min(420px,100%);background:var(--bg-panel);border:1px solid var(--hairline);border-radius:14px;padding:18px;display:grid;gap:12px;max-height:100%;overflow:auto}
+  .card-top{display:flex;gap:14px;align-items:center}
+  .portrait{width:96px;height:96px;border-radius:12px;background:linear-gradient(#2a3a5a,#1a2233);flex:none;overflow:hidden;border:2px solid var(--amber)}
+  .card h2{margin:0;font-family:var(--marker);font-weight:400;font-size:26px;line-height:1.1;color:var(--amber);text-wrap:balance}
+  .card .tag{font-size:11px;letter-spacing:.08em;text-transform:uppercase;color:var(--muted)}
+  .card p{margin:0;font-size:15px;line-height:1.5}
+  .card ul{margin:0;padding-left:18px;font-size:15px;line-height:1.5}
+  .toggle{display:flex;align-items:center;justify-content:space-between;gap:10px;background:var(--bg-raised);border:1px solid var(--hairline);border-radius:10px;padding:8px 12px;font-size:13px}
+  .toggle[aria-pressed=true] .sw{background:var(--green)}
+  .sw{width:38px;height:22px;border-radius:11px;background:#3a3c44;position:relative;flex:none;transition:background .2s}
+  .sw::after{content:"";position:absolute;top:3px;left:3px;width:16px;height:16px;border-radius:50%;background:#fff;transition:left .2s}
+  .toggle[aria-pressed=true] .sw::after{left:19px}
+  .cta{background:var(--amber);color:#1a1206;border:0;border-radius:10px;padding:12px;font-family:var(--display);font-size:22px;letter-spacing:.06em}
+  .results{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;text-align:center}
+  .results div{background:var(--bg-raised);border-radius:10px;padding:8px 4px}
+  .results b{display:block;font-family:var(--display);font-size:26px;font-variant-numeric:tabular-nums}
+  .results span{font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:.06em}
+
+  @media (min-width:900px){
+    #app{grid-template-columns:1fr 400px;grid-template-rows:auto 1fr}
+    header{grid-column:1 / -1}
+    #desk{height:auto;max-height:none;border-top:0;border-left:1px solid var(--hairline)}
+  }
+  @media (prefers-reduced-motion:reduce){.strip.pulse,.mem.pulse,.dimmer.pulse,.tab.alarm{animation:none;border-color:var(--amber)}}
+</style>
+
+<svg width="0" height="0" style="position:absolute" aria-hidden="true">
+  <defs>
+    <!-- Preside Tramp, caricatura vettoriale: ciuffo giallo, abbronzatura arancio, cravatta rossa lunghissima -->
+    <symbol id="tramp" viewBox="0 0 100 140">
+      <path d="M14 140 L20 92 Q50 78 80 92 L86 140 Z" fill="#1d2b4a"/>
+      <path d="M40 88 L50 104 L60 88 Z" fill="#f4f1ea"/>
+      <path d="M47 92 L53 92 L56 136 L50 140 L44 136 Z" fill="#d6392f"/>
+      <rect x="42" y="72" width="16" height="16" rx="4" fill="#e8964f"/>
+      <ellipse cx="50" cy="52" rx="24" ry="28" fill="#f0a35a"/>
+      <ellipse cx="38" cy="54" rx="6" ry="4" fill="#f7d7b0"/>
+      <ellipse cx="62" cy="54" rx="6" ry="4" fill="#f7d7b0"/>
+      <circle cx="39" cy="54" r="2" fill="#2a1d12"/><circle cx="61" cy="54" r="2" fill="#2a1d12"/>
+      <path d="M32 47 Q38 43 44 46 M56 46 Q62 43 68 47" stroke="#e9d27a" stroke-width="2.5" fill="none" stroke-linecap="round"/>
+      <ellipse cx="50" cy="69" rx="5" ry="3.5" fill="#b8573a"/>
+      <path d="M22 44 Q20 16 52 18 Q84 18 80 40 Q70 26 54 30 Q40 24 30 34 Q26 38 22 44 Z" fill="#f4d35e"/>
+      <path d="M48 20 Q70 12 84 26 Q78 22 66 24 Z" fill="#e9c23f"/>
+    </symbol>
+  </defs>
+</svg>
+
+<div id="app">
+  <header>
+    <div class="row">
+      <div class="face-mini"><svg viewBox="12 10 76 76" width="34" height="34"><use href="#tramp"/></svg></div>
+      <div class="who">PRESIDE TRAMP<small>Discorso di benvenuto</small></div>
+      <div class="timeline" aria-label="Avanzamento del discorso"><i id="tl"></i></div>
+      <div class="clock" id="clock">21:00</div>
+    </div>
+    <div class="row">
+      <div class="stat grad">Pubblico <div class="bar"><i id="grad-bar"></i></div></div>
+      <div class="stat">Stanchezza <div class="bar"><i id="fat-bar"></i></div></div>
+      <button class="pill" id="beer" title="Bevi una birra: meno stanchezza">🍺 <span id="beer-n">1</span></button>
+      <button class="pill" id="pause-btn" title="Pausa">⏸</button>
+    </div>
+  </header>
+
+  <div id="stage">
+    <svg id="scene" viewBox="0 0 400 250" preserveAspectRatio="xMidYMid meet">
+      <rect width="400" height="250" fill="#0f1116"/>
+      <rect y="0" width="400" height="150" fill="#16181f"/>
+      <path d="M0 0 H400 V14 H0 Z" fill="#2a2c33"/>
+      <g id="beams"></g>
+      <rect y="150" width="400" height="12" fill="#2b2320"/>
+      <rect y="162" width="400" height="88" fill="#101116"/>
+      <!-- casse, con le onde del larsen che crescono -->
+      <g id="spk-l"><rect x="14" y="80" width="46" height="72" rx="3" fill="#1b1c21" stroke="#34363e"/><circle cx="37" cy="100" r="8" fill="#0a0a0c"/><circle cx="37" cy="130" r="16" fill="#0a0a0c" stroke="#2a2b30"/></g>
+      <g id="spk-r"><rect x="340" y="80" width="46" height="72" rx="3" fill="#1b1c21" stroke="#34363e"/><circle cx="363" cy="100" r="8" fill="#0a0a0c"/><circle cx="363" cy="130" r="16" fill="#0a0a0c" stroke="#2a2b30"/></g>
+      <g id="ring-l" opacity="0" stroke="#f2c53d" fill="none" stroke-width="2"><path d="M66 96 Q74 116 66 136"/><path d="M74 90 Q86 116 74 142"/><path d="M82 84 Q98 116 82 148"/></g>
+      <g id="ring-r" opacity="0" stroke="#f2c53d" fill="none" stroke-width="2"><path d="M334 96 Q326 116 334 136"/><path d="M326 90 Q314 116 326 142"/><path d="M318 84 Q302 116 318 148"/></g>
+      <!-- asta del microfono e cavo XLR verso il mixer -->
+      <g id="stand"><line x1="200" y1="150" x2="200" y2="96" stroke="#555" stroke-width="2"/><line x1="200" y1="96" x2="190" y2="90" stroke="#555" stroke-width="2"/><rect x="185" y="86" width="8" height="6" rx="2" fill="#777"/><path d="M200 150 Q230 158 250 162" stroke="#a3acb8" stroke-width="1.5" fill="none" id="cable"/></g>
+      <g id="preside" transform="translate(172 72)"><use href="#tramp" width="56" height="78"/></g>
+      <path d="M170 150 L230 150 L222 112 L178 112 Z" fill="#3a2a1e" stroke="#4d3927"/>
+      <text x="200" y="136" text-anchor="middle" font-family="Barlow Condensed" font-size="10" fill="#c8a36a">LICEO</text>
+      <!-- indizi del guasto: chi guarda bene il palco capisce dove cercare -->
+      <g id="clue-mic" display="none"><path d="M189 92 Q172 104 166 128" stroke="#a3acb8" stroke-width="2.4" fill="none"/><rect x="161" y="126" width="9" height="12" rx="2" fill="#dfe2e8" stroke="#6b6f78"/></g>
+      <g id="clue-cavo" display="none" fill="#6b6f78" stroke="#4a4d55"><rect x="224" y="146" width="24" height="4"/><rect x="243" y="126" width="5" height="22"/><path d="M227 150 L223 164 M245 150 L249 164" stroke-width="2.5" fill="none"/></g>
+      <g id="clue-ing" display="none"><path d="M284 159 q6 -6 12 0 q6 6 12 0" stroke="#a3acb8" stroke-width="2.4" fill="none"/><rect x="306" y="153" width="12" height="9" rx="2" fill="#dfe2e8" stroke="#6b6f78"/></g>
+      <g id="pars"></g>
+      <g id="crowd"></g>
+    </svg>
+    <div id="bubbles-html"></div>
+    <div id="caption"></div>
+    <div id="toast"></div>
+    <div id="pausa" hidden>PAUSA</div>
+  </div>
+
+  <section id="desk" aria-label="Banco regia">
+    <div class="tabs" role="tablist">
+      <button class="tab" role="tab" id="tab-mixer" aria-selected="true">MIXER</button>
+      <button class="tab" role="tab" id="tab-luci" aria-selected="false">LUCI</button>
+      <button class="tab alarm" role="tab" id="tab-guasto" aria-selected="false" hidden>🔇 GUASTO</button>
+    </div>
+    <div class="panel" id="panel-mixer"></div>
+    <div class="panel lights" id="panel-luci" hidden>
+      <div class="pars" id="par-btns"></div>
+      <div class="lights-bottom">
+        <div class="mems" id="mems"></div>
+        <div class="dimmer" id="dimmer-box">Dimmer<div class="fadewrap" id="dimmer-wrap"></div></div>
+      </div>
+      <div class="hint">Tocca un PAR per cambiargli colore · tocca una memoria per richiamarla, tienila premuta per salvarci le luci di adesso.</div>
+    </div>
+    <div class="panel fault" id="panel-guasto" hidden>
+      <div class="hint">Il preside non si sente. Segui la catena e trova dove si è interrotta: ogni controllo richiede tempo, e sei da solo.</div>
+      <div class="chain" id="chain"></div>
+      <div class="patch" id="patch" hidden></div>
+    </div>
+  </section>
+</div>
+
+<div class="overlay" id="intro">
+  <div class="card">
+    <div class="card-top">
+      <div class="portrait"><svg viewBox="8 8 84 84" width="96" height="96"><use href="#tramp"/></svg></div>
+      <div><div class="tag">Obiettivo 1 · 21:00</div><h2>Il discorso del Preside Tramp</h2></div>
+    </div>
+    <p>Parla un quarto d'ora e vuole essere sentito fino al parcheggio. Nessuno capisce una parola di quello che dice, ma guai se non si sente.</p>
+    <ul>
+      <li>Quando sale sul palco: <b>luce bianca</b>, <b>microfono aperto</b>, <b>musica giù</b>.</li>
+      <li>Tieni la sua voce nella <b>zona verde</b>. Ogni sera è diversa: lui non parla mai uguale.</li>
+      <li>Se va verso le casse il <b>larsen</b> cresce: abbassa quanto basta, senza zittirlo.</li>
+      <li>Se qualcosa si guasta, <b>guarda bene il palco</b>: il problema si vede. Risolverlo in fretta ti fa guadagnare reputazione.</li>
+    </ul>
+    <button class="toggle" id="hints-btn" aria-pressed="true"><span>Suggerimenti nei fumetti</span><span class="sw"></span></button>
+    <button class="cta" id="start">Inizia il discorso</button>
+  </div>
+</div>
+
+<div class="overlay" id="outro" hidden>
+  <div class="card">
+    <div class="card-top">
+      <div class="portrait"><svg viewBox="8 8 84 84" width="96" height="96"><use href="#tramp"/></svg></div>
+      <div><div class="tag">Obiettivo 1 · fine</div><h2 id="outro-title">Applausi!</h2></div>
+    </div>
+    <div class="results">
+      <div><b id="r-grad">0%</b><span>Pubblico</span></div>
+      <div><b id="r-beer">0</b><span>Birre</span></div>
+      <div><b id="r-rep">+0</b><span>Reputazione</span></div>
+    </div>
+    <ul id="r-notes"></ul>
+    <button class="cta" id="again">Rifai il discorso</button>
+  </div>
+</div>
+
+<script>
+(() => {
+  const $ = s => document.querySelector(s);
+  const NS = 'http://www.w3.org/2000/svg';
+  const mk = (tag, attrs, parent) => { const e = document.createElementNS(NS, tag); for (const k in attrs) e.setAttribute(k, attrs[k]); if (parent) parent.appendChild(e); return e; };
+  const rnd = (a, b) => a + Math.random() * (b - a);
+  const pick = a => a[Math.floor(Math.random() * a.length)];
+  const clamp = v => Math.max(0, Math.min(100, v));
+  const store = { get (k, d) { try { const v = localStorage.getItem(k); return v == null ? d : JSON.parse(v); } catch (e) { return d; } }, set (k, v) { try { localStorage.setItem(k, JSON.stringify(v)); } catch (e) {} } };
+
+  const DURATION = 90;            // secondi reali = 15 minuti di discorso
+  const ZONE = [0.5, 0.8];        // zona verde sui meter
+  const PC = 5;                   // canale del PC (la musica di sala)
+  const SPK_X = { l: 60, r: 290 }, LECTERN_X = 172;
+  const COLORS = { bianco: '#f4f1ea', rosso: '#e0503f', blu: '#3f7fe0', verde: '#49b06a', ambra: '#f2a541', viola: '#b36bff' };
+  // cosa dice (la voce dice solo "Tramp", i sottotitoli lo traducono)
+  const LINES = [
+    'Benvenuti alla festa della scuola più grande, la più bella. Tremenda.',
+    'Abbiamo i banchi migliori. Tutti mi chiedono: come fa ad avere questi banchi?',
+    'La mensa? Fantastica. Gli spaghetti più lunghi della storia.',
+    'Costruiremo una palestra enorme. E la pagherà il liceo di fronte.',
+    'I voti quest\'anno sono altissimi. Record. Nessuno ha mai visto voti così.',
+    'Qualcuno dice che il discorso è lungo. Fake news. È perfetto.',
+    'E ora vi lascio alla musica. Musica bellissima, l\'ho scelta io.'
+  ];
+
+  let hints = store.get('tramp-hints', store.get('tramp-runs', 0) === 0);
+  let S;
+  function fresh () {
+    return {
+      t: 0, running: false, paused: false, grad: 60, fatigue: 30, beers: 1, drunk: 0,
+      fad: { 1: 0, 2: 0, 3: 0, 4: 0, 5: 0.7 }, mute: { 1: false, 2: false, 3: false, 4: false, 5: false },
+      micCh: 1, micOk: true, fault: null, task: null,
+      dimmer: 0.3, pars: ['viola', 'blu', 'viola', 'blu'], mem: 2,
+      voiceK: 1, drift: 1, driftTo: 1, px: LECTERN_X, walkTo: null, ring: 0, ringCool: 0,
+      jingle: false, larsens: 0, pops: 0, repDelta: 0, notes: [], events: [],
+      mems: {
+        1: { name: 'Bianco pieno', pars: ['bianco', 'bianco', 'bianco', 'bianco'], dimmer: 1 },
+        2: { name: 'Festa', pars: ['viola', 'blu', 'viola', 'blu'], dimmer: 0.3 },
+        3: { name: 'Caldo', pars: ['ambra', 'ambra', 'ambra', 'ambra'], dimmer: 0.8 },
+        4: { name: 'Buio', pars: ['bianco', 'bianco', 'bianco', 'bianco'], dimmer: 0 }
+      }
+    };
+  }
+
+  /* ---------- segnali ---------- */
+  const speaking = () => S.t > 4 && S.t < 82 && !S.jingle;
+  function micSignal () {
+    if (!speaking() || !S.micOk) return 0;
+    const syll = 0.88 + 0.12 * Math.sin(S.t * 9.1) * Math.sin(S.t * 3.3);
+    return 0.62 * S.voiceK * S.drift * syll;
+  }
+  function jitter () { return (S.fatigue / 100) * 0.12 * Math.sin(S.t * 5.7) * Math.sin(S.t * 1.9); }
+  function chOut (ch) {
+    if (S.mute[ch]) return 0;
+    const sig = ch === PC ? 0.55 : (ch === S.micCh ? micSignal() : 0);
+    return sig * Math.max(0, S.fad[ch] + jitter()) * 1.9;
+  }
+  const voiceOut = () => chOut(S.micCh);
+  const inZone = o => o >= ZONE[0] && o <= ZONE[1];
+  const lightsWhite = () => S.pars.every(p => p === 'bianco') && S.dimmer >= 0.6;
+  function hit (d, msg) { S.grad = clamp(S.grad + d); toast(msg, 'bad'); sfx.boo(); }
+
+  /* ---------- copione: apertura e finale fissi, in mezzo 5 imprevisti pescati da 7, a tempi variabili ---------- */
+  const POOL = {
+    piano: () => ({ win: 7, dur: 12, target: 'preside', icon: '🔉', text: 'Si allontana dal microfono', hint: 'alza il suo fader', tab: 'mixer',
+      start () { S.voiceK = rnd(0.55, 0.65); }, end () { S.voiceK = 1; }, hold: 1,
+      ok: () => inZone(voiceOut()), fail: () => hit(-8, 'In fondo alla palestra non si sentiva niente.') }),
+    mangia: () => ({ win: 6, dur: 12, target: 'preside', icon: '📢', text: 'Si mangia il microfono', hint: 'abbassa il suo fader', tab: 'mixer',
+      start () { S.voiceK = rnd(1.6, 1.9); }, end () { S.voiceK = 1; }, hold: 1,
+      ok: () => inZone(voiceOut()), fail: () => hit(-8, 'Voce distorta: la gente si tappa le orecchie.') }),
+    casse: () => { const side = pick(['l', 'r']); return { win: 99, dur: 11, target: 'spk-' + side, icon: '🚶', text: 'Va verso la cassa ' + (side === 'l' ? 'sinistra' : 'destra'), hint: 'abbassa quanto basta, non zittirlo', tab: 'mixer',
+      start () { S.walkTo = SPK_X[side]; }, end () { S.walkTo = null; },
+      ok: () => false, fail () {}, done () { if (!this.larsen) { S.grad = clamp(S.grad + 4); toast('Niente larsen. Pulito!', 'ok'); sfx.ok(); } } }; },
+    tap: () => ({ win: 3.5, dur: 5, target: 'preside', icon: '👊', text: 'Batte sul microfono per provarlo', hint: 'premi MUTE, poi riapri il canale', tab: 'mixer',
+      ok: () => S.mute[S.micCh] || voiceOut() < 0.2 || !S.micOk,
+      fail () { S.pops++; sfx.pop(); hit(-8, 'BUM BUM nelle casse.'); }, after: 'Ora riapri il canale!' }),
+    cavo: () => ({ win: 24, dur: 24, target: 'preside', icon: '🔇', text: 'Non si sente più niente!', hint: 'guarda il palco, poi apri GUASTO', tab: 'guasto',
+      start () { startFault(); }, ok: () => S.micOk && voiceOut() > 0.3,
+      onSolved () {
+        const secs = Math.round(S.t - this.at);
+        if (secs <= 8) { S.grad = clamp(S.grad + 6); S.repDelta += 3; sfx.applause(85); toast('Applausi per il tecnico!', 'ok'); S.notes.push('Guasto risolto in ' + secs + ' s: il pubblico ha applaudito il tecnico (+3 reputazione).'); }
+        else S.notes.push('Guasto risolto in ' + secs + ' s.');
+      },
+      fail () { endFault(); S.micCh = 1; S.fad[1] = Math.max(S.fad[1], 0.55); S.repDelta -= 5; S.notes.push('Il guasto l\'ha trovato il bidello al posto tuo (−5 reputazione).'); hit(-10, 'Il bidello ha trovato il guasto prima di te. Figuraccia.'); } }),
+    sigla: () => ({ win: 5, dur: 8, target: 'preside', icon: '🎺', text: 'Vuole la sua sigla musicale', hint: 'alza il PC, poi riabbassalo', tab: 'mixer',
+      start () { S.jingle = true; }, end () { S.jingle = false; }, hold: 0.5,
+      ok: () => chOut(PC) >= 0.55, fail: () => hit(-6, 'Niente sigla: il preside è offeso.') }),
+    volume: () => ({ win: 7, dur: 7, target: 'preside', icon: '😠', text: 'Ti fa segno: vuole più volume', hint: 'accontentarlo o no? scegli tu', tab: 'mixer',
+      ok: () => false, fail () {},
+      done () {
+        if (voiceOut() > 0.85) { S.repDelta += 3; S.notes.push('Hai accontentato il preside: +3 reputazione, ma il pubblico si è tappato le orecchie.'); toast('Il preside è felice. Il pubblico meno.', 'ok'); }
+        else { S.repDelta -= 3; S.notes.push('Non hai alzato il volume al preside: −3 reputazione, ma il pubblico ti ringrazia.'); toast('Il preside ti guarda malissimo.', 'bad'); }
+      } })
+  };
+  function script () {
+    const ids = Object.keys(POOL).sort(() => Math.random() - 0.5).slice(0, 5);
+    // il guasto, se esce, va tra i primi due e ha la scena tutta per sé
+    const ci = ids.indexOf('cavo');
+    if (ci > 1) { ids.splice(ci, 1); ids.splice(Math.floor(Math.random() * 2), 0, 'cavo'); }
+    const evs = [{ id: 'apertura', at: 1, win: 9, target: 'preside', icon: '🎤', text: 'Sale sul palco', hint: 'luce bianca, CH1 su, musica PC giù', tab: 'luci',
+      ok: () => lightsWhite() && S.fad[1] >= 0.3 && !S.mute[1] && chOut(PC) < 0.3, hold: 0.3,
+      fail: () => hit(-10, 'Il preside ha cominciato al buio e sopra la musica.') }];
+    let at = rnd(12, 15);
+    ids.forEach((id, i) => {
+      evs.push(Object.assign({ id, at }, POOL[id]()));
+      at += id === 'cavo' ? 26 : i >= 2 ? rnd(6, 10) : rnd(10, 14);    // verso la fine si accavallano
+      at = Math.min(at, 72);
+    });
+    evs.push({ id: 'finale', at: 82, win: 7, target: 'preside', icon: '🎉', text: 'Ha finito il discorso', hint: 'memoria Festa e musica su', tab: 'luci',
+      ok: () => !S.pars.every(p => p === 'bianco') && S.dimmer >= 0.25 && chOut(PC) >= 0.5, hold: 0.3,
+      fail: () => hit(-6, 'Finale muto e spento.') });
+    return evs;
+  }
+
+  /* ---------- guasto: la catena microfono → cavo → mixer ---------- */
+  const NODES = [
+    { id: 'mic', name: 'Microfono', where: 'sull\'asta' },
+    { id: 'cavo', name: 'Cavo XLR', where: 'lungo il palco' },
+    { id: 'ing', name: 'Ingresso', where: 'dietro al mixer' }
+  ];
+  const CAUSES = {
+    mic: { st: 'Il connettore si è sfilato dal microfono.', fix: 'Riattacca', time: 1.6, then: () => { S.micOk = true; } },
+    cavo: { st: 'Cavo schiacciato da una sedia: non passa segnale.', fix: 'Prendi un XLR dal baule', time: 3.2, then: () => { S.patchNeeded = true; } },
+    ing: { st: 'Il cavo è uscito dalla presa del mixer.', fix: null, time: 0, then: () => {} }
+  };
+  function startFault () {
+    const cause = pick(['mic', 'cavo', 'ing']);
+    S.fault = { cause, nodes: { mic: 'unk', cavo: 'unk', ing: 'unk' } };
+    S.micOk = false; S.patchNeeded = false;   // l'ingresso da ricollegare si scopre solo controllando
+    S.faultAt = S.t;
+    $('#tab-guasto').hidden = false;
+    renderFault();
+  }
+  function endFault () { S.fault = null; S.task = null; $('#tab-guasto').hidden = true; if (!$('#panel-guasto').hidden) showTab('mixer'); }
+  function startTask (node, kind, time) {
+    if (S.task) { toast('Sei da solo: finisci prima quello che stai facendo.'); return; }
+    S.task = { node, kind, left: time * (1 + S.fatigue / 100), total: time * (1 + S.fatigue / 100) };
+    S.fault.nodes[node] = kind === 'check' ? 'checking' : 'fixing';
+    renderFault();
+  }
+  function finishTask () {
+    const { node, kind } = S.task; S.task = null;
+    const f = S.fault; if (!f) return;
+    if (kind === 'check') {
+      f.nodes[node] = node === f.cause ? 'bad' : 'ok';
+      if (node === f.cause && node === 'ing') S.patchNeeded = true;
+    } else {
+      f.nodes[node] = 'fixed';
+      CAUSES[node].then();
+      if (S.micOk) toast('Riattaccato! Si sente di nuovo?', 'ok');
+    }
+    renderFault();
+  }
+  function renderFault () {
+    const f = S.fault; if (!f) return;
+    const ch = $('#chain'); ch.textContent = '';
+    NODES.forEach((n, i) => {
+      if (i) { const l = document.createElement('div'); l.className = 'link'; ch.appendChild(l); }
+      const st = f.nodes[n.id];
+      const d = document.createElement('div');
+      d.className = 'node' + (st === 'ok' || st === 'fixed' ? ' ok' : st === 'bad' ? ' bad' : '');
+      const txt = { unk: 'Da controllare ' + n.where, checking: 'Controllo…', fixing: 'Ci sto lavorando…', ok: 'Tutto a posto qui.', fixed: 'Sistemato.', bad: CAUSES[n.id].st }[st];
+      d.innerHTML = `<b>${n.name}</b><div class="st">${txt}</div>`;
+      if (st === 'checking' || st === 'fixing') { d.insertAdjacentHTML('beforeend', `<div class="prog"><i id="prog-${n.id}"></i></div>`); }
+      else if (st === 'unk') { const b = document.createElement('button'); b.className = 'act'; b.textContent = 'Controlla'; b.onclick = () => startTask(n.id, 'check', 1); d.appendChild(b); }
+      else if (st === 'bad' && CAUSES[n.id].fix) { const b = document.createElement('button'); b.className = 'act go'; b.textContent = CAUSES[n.id].fix; b.onclick = () => startTask(n.id, 'fix', CAUSES[n.id].time); d.appendChild(b); }
+      ch.appendChild(d);
+    });
+    const p = $('#patch');
+    p.hidden = !S.patchNeeded;
+    if (S.patchNeeded) {
+      p.innerHTML = '<span>Collega il cavo all\'ingresso:</span>';
+      [1, 2, 3, 4].forEach(n => { const b = document.createElement('button'); b.className = 'act go'; b.textContent = 'IN ' + n; b.onclick = () => plugInto(n); p.appendChild(b); });
+    }
+  }
+  function plugInto (n) {
+    if (S.task) { toast('Sei da solo: finisci prima quello che stai facendo.'); return; }
+    S.micCh = n; S.micOk = true; S.patchNeeded = false;
+    if (S.fault) S.fault.nodes.ing = 'fixed';
+    toast('Collegato all\'ingresso ' + n + (n === 1 ? '.' : ': il canale ' + n + ' però ha il fader giù…'), 'ok');
+    renderFault();
+  }
+
+  /* ---------- palco ---------- */
+  const beams = $('#beams'), parsG = $('#pars'), crowd = $('#crowd');
+  const PAR_X = [70, 150, 250, 330];
+  const beamEls = PAR_X.map(x => mk('path', { d: `M${x - 6} 18 L${x + 6} 18 L${x + 55} 162 L${x - 55} 162 Z`, opacity: 0 }, beams));
+  const parEls = PAR_X.map(x => { mk('rect', { x: x - 8, y: 10, width: 16, height: 10, rx: 3, fill: '#222' }, parsG); return mk('circle', { cx: x, cy: 20, r: 5 }, parsG); });
+  const heads = [];
+  for (let r = 0; r < 4; r++) for (let i = 0; i < 16; i++) {
+    const x = 12 + i * 25 + (r % 2) * 12 + rnd(-3, 3), y = 186 + r * 18;
+    const g = mk('g', {}, crowd);
+    mk('rect', { x: x - 9, y: y + 6, width: 18, height: 20, rx: 6, fill: ['#384152', '#4a3a3a', '#2f4a3a', '#4b4458'][(i + r) % 4] }, g);
+    const h = mk('circle', { cx: x, cy: y, r: 7, fill: '#d9a57a' }, g);
+    heads.push({ g, h, ph: rnd(0, 6) });
+  }
+  function drawStage () {
+    S.pars.forEach((c, i) => {
+      parEls[i].setAttribute('fill', S.dimmer > 0.02 ? COLORS[c] : '#333');
+      beamEls[i].setAttribute('fill', COLORS[c]);
+      beamEls[i].setAttribute('opacity', (0.28 * S.dimmer).toFixed(3));
+    });
+    $('#preside').setAttribute('transform', `translate(${S.px.toFixed(1)} ${72 + Math.sin(S.t * 4) * 1.2})`);
+    const cause = S.fault && S.fault.nodes[S.fault.cause] !== 'fixed' ? S.fault.cause : null;
+    $('#cable').setAttribute('d', cause === 'ing' ? 'M200 150 Q250 162 284 159' : 'M200 150 Q230 158 250 162');
+    ['mic', 'cavo', 'ing'].forEach(c => $('#clue-' + c).setAttribute('display', cause === c ? 'inline' : 'none'));
+    const nearL = S.px < LECTERN_X - 20;
+    $('#ring-l').setAttribute('opacity', nearL ? S.ring.toFixed(2) : 0);
+    $('#ring-r').setAttribute('opacity', !nearL ? S.ring.toFixed(2) : 0);
+    const mood = S.grad / 100;
+    heads.forEach(o => {
+      const bob = S.running && !S.paused ? Math.sin(S.t * (2 + mood * 4) + o.ph) * mood * 3 : 0;
+      o.g.setAttribute('transform', `translate(0 ${bob.toFixed(2)})`);
+      o.h.setAttribute('fill', mood < 0.35 ? '#8d8f96' : '#d9a57a');
+    });
+  }
+
+  /* ---------- fumetti ---------- */
+  const TARGET_XY = { preside: () => [S.px + 28, 58], 'spk-l': () => [60, 62], 'spk-r': () => [340, 62], stand: () => [215, 150] };
+  // fumetti in HTML sopra il palco, così il testo resta leggibile anche sul telefono
+  const bubbleEls = new Map();
+  const scene = $('#scene'), layer = $('#bubbles-html');
+  function toStage (x, y) {
+    const m = scene.getScreenCTM(), r = $('#stage').getBoundingClientRect();
+    return [m.a * x + m.e - r.left, m.d * y + m.f - r.top];
+  }
+  function renderBubbles () {
+    const live = new Set();
+    S.events.filter(e => e.live).forEach(e => {
+      live.add(e);
+      let el = bubbleEls.get(e);
+      if (!el) {
+        el = document.createElement('div'); el.className = 'bub'; el.setAttribute('role', 'button');
+        el.innerHTML = '<svg width="26" height="26" viewBox="0 0 26 26"><circle cx="13" cy="13" r="10" fill="none" stroke="#ddd" stroke-width="4"/><circle class="arc" cx="13" cy="13" r="10" fill="none" stroke-width="4" transform="rotate(-90 13 13)"/></svg><div><b></b><small></small></div>';
+        el.addEventListener('pointerdown', ev => { ev.stopPropagation(); tapBubble(e); });
+        layer.appendChild(el); bubbleEls.set(e, el);
+      }
+      el.querySelector('b').textContent = e.icon + ' ' + e.text;
+      const sm = el.querySelector('small'); sm.textContent = hints ? '→ ' + e.hint : ''; sm.hidden = !hints;
+      const timed = e.win < 90;
+      const left = timed ? Math.max(0, (e.deadline - S.t) / e.win) : Math.max(0, 1 - (S.t - e.at) / e.dur);
+      const arc = el.querySelector('.arc');
+      arc.setAttribute('stroke', left > 0.5 ? '#d9a21b' : '#e0503f');
+      arc.setAttribute('stroke-dasharray', `${(left * 62.8).toFixed(1)} 70`);
+      const [x, y] = TARGET_XY[e.target]();
+      const [px, py] = toStage(x, y);
+      const W = layer.clientWidth, w = el.offsetWidth, h = el.offsetHeight;
+      const lx = Math.max(8, Math.min(W - w - 8, px - w / 2));
+      el.style.left = lx + 'px'; el.style.top = Math.max(4, py - h - 10) + 'px';
+      el.style.setProperty('--tail', Math.max(16, Math.min(w - 16, px - lx)) + 'px');
+    });
+    bubbleEls.forEach((el, e) => { if (!live.has(e)) { el.remove(); bubbleEls.delete(e); } });
+  }
+  function tapBubble (e) {
+    showTab(e.tab === 'guasto' && !S.fault ? 'mixer' : e.tab);
+    if (!hints) return;    // senza suggerimenti il fumetto apre solo il banco giusto
+    if (e.tab === 'mixer') pulse($('#strip-' + (e.id === 'sigla' ? PC : S.micCh)));
+    else if (e.tab === 'luci') pulse(e.id === 'finale' ? $('#mem-2') : $('#mem-1'));
+  }
+  function pulse (el) { if (!el) return; el.classList.remove('pulse'); void el.offsetWidth; el.classList.add('pulse'); }
+
+  /* ---------- banco regia ---------- */
+  function showTab (which) {
+    ['mixer', 'luci', 'guasto'].forEach(k => { $('#tab-' + k).setAttribute('aria-selected', k === which); $('#panel-' + k).hidden = k !== which; });
+    if (which === 'guasto') renderFault();
+  }
+  $('#tab-mixer').onclick = () => showTab('mixer');
+  $('#tab-luci').onclick = () => showTab('luci');
+  $('#tab-guasto').onclick = () => showTab('guasto');
+
+  function makeFader (parent, get, set, zone) {
+    const wrap = document.createElement('div'); wrap.className = 'fadewrap';
+    const f = document.createElement('div'); f.className = 'fader'; f.tabIndex = 0; f.setAttribute('role', 'slider');
+    f.innerHTML = '<div class="track"></div><div class="knob"></div>';
+    wrap.appendChild(f);
+    let meter = null;
+    if (zone) {
+      meter = document.createElement('div'); meter.className = 'meter';
+      meter.innerHTML = `<div class="zone" style="bottom:${ZONE[0] * 100}%;height:${(ZONE[1] - ZONE[0]) * 100}%"></div><i></i>`;
+      wrap.appendChild(meter);
+    }
+    parent.appendChild(wrap);
+    const knob = f.querySelector('.knob');
+    const paint = () => { knob.style.top = `calc(6px + (100% - 12px) * ${1 - get()})`; f.setAttribute('aria-valuenow', Math.round(get() * 100)); };
+    const fromY = y => { const r = f.getBoundingClientRect(); set(Math.max(0, Math.min(1, 1 - (y - r.top - 6) / (r.height - 12)))); paint(); };
+    f.addEventListener('pointerdown', e => { f.setPointerCapture(e.pointerId); fromY(e.clientY); });
+    f.addEventListener('pointermove', e => { if (f.hasPointerCapture(e.pointerId)) fromY(e.clientY); });
+    f.addEventListener('keydown', e => { if (e.key === 'ArrowUp') set(Math.min(1, get() + 0.05)); else if (e.key === 'ArrowDown') set(Math.max(0, get() - 0.05)); else return; e.preventDefault(); paint(); });
+    paint();
+    return { paint, meter: meter && meter.querySelector('i') };
+  }
+
+  const chF = {};
+  let dimmerF;
+  function buildDesk () {
+    const pm = $('#panel-mixer'); pm.textContent = '';
+    [1, 2, 3, 4, PC].forEach(n => {
+      const d = document.createElement('div'); d.className = 'strip'; d.id = 'strip-' + n;
+      const face = n === 1 ? '<span class="face-mini"><svg viewBox="12 10 76 76" width="20" height="20"><use href="#tramp"/></svg></span>' : '';
+      d.innerHTML = `<div class="strip-name">${face}${n === PC ? 'PC' : 'CH' + n}</div>`;
+      pm.appendChild(d);
+      chF[n] = makeFader(d, () => S.fad[n], v => { S.fad[n] = v; }, true);
+      const m = document.createElement('button'); m.className = 'mute'; m.textContent = 'MUTE'; m.id = 'mute-' + n;
+      m.setAttribute('aria-pressed', 'false');
+      m.onclick = () => { S.mute[n] = !S.mute[n]; m.setAttribute('aria-pressed', S.mute[n]); };
+      d.appendChild(m);
+    });
+
+    const pb = $('#par-btns'); pb.textContent = '';
+    S.pars.forEach((_, i) => {
+      const b = document.createElement('button'); b.className = 'par'; b.id = 'par-' + i;
+      b.innerHTML = `<span class="dot"></span>PAR ${i + 1}`;
+      b.onclick = () => { const keys = Object.keys(COLORS); S.pars[i] = keys[(keys.indexOf(S.pars[i]) + 1) % keys.length]; S.mem = null; paintLights(); };
+      pb.appendChild(b);
+    });
+    const ms = $('#mems'); ms.textContent = '';
+    [1, 2, 3, 4].forEach(n => {
+      const b = document.createElement('button'); b.className = 'mem'; b.id = 'mem-' + n;
+      let timer = null, saved = false;
+      b.addEventListener('pointerdown', () => { saved = false; timer = setTimeout(() => { saved = true; S.mems[n] = { name: 'Mia ' + n, pars: [...S.pars], dimmer: S.dimmer }; S.mem = n; paintLights(); toast('Memoria ' + n + ' salvata.', 'ok'); }, 600); });
+      b.addEventListener('pointerup', () => { clearTimeout(timer); if (!saved) recall(n); });
+      b.addEventListener('pointerleave', () => clearTimeout(timer));
+      ms.appendChild(b);
+    });
+    const dw = $('#dimmer-wrap'); dw.textContent = '';
+    dimmerF = makeFader(dw, () => S.dimmer, v => { S.dimmer = v; S.mem = null; paintLights(); }, false);
+    $('#tab-guasto').hidden = true;
+    showTab('mixer');
+    paintLights();
+  }
+  function recall (n) { const m = S.mems[n]; S.pars = [...m.pars]; S.dimmer = m.dimmer; S.mem = n; dimmerF.paint(); paintLights(); }
+  function paintLights () {
+    S.pars.forEach((c, i) => { const d = $('#par-' + i + ' .dot'); d.style.background = COLORS[c]; d.style.color = COLORS[c]; d.style.opacity = 0.35 + 0.65 * S.dimmer; });
+    [1, 2, 3, 4].forEach(n => { const b = $('#mem-' + n); b.innerHTML = `<b>${n} · ${S.mems[n].name}</b><small>${S.mems[n].pars.join(' ')}</small>`; b.setAttribute('aria-pressed', S.mem === n); });
+    drawStage();
+  }
+
+  /* ---------- header ---------- */
+  function paintHeader () {
+    $('#tl').style.width = (S.t / DURATION * 100) + '%';
+    $('#clock').textContent = '21:' + String(Math.floor(S.t / DURATION * 15)).padStart(2, '0');
+    const gb = $('#grad-bar'); gb.style.width = S.grad + '%';
+    gb.style.background = S.grad < 35 ? 'var(--red)' : S.grad < 65 ? 'var(--yellow)' : 'var(--green)';
+    const fb = $('#fat-bar'); fb.style.width = S.fatigue + '%'; fb.style.background = S.fatigue > 70 ? 'var(--red)' : '#8b8e98';
+    $('#beer-n').textContent = S.beers;
+  }
+  $('#beer').onclick = () => {
+    if (!S.running) return;
+    if (S.beers <= 0) { toast('Niente birre in tasca.'); return; }
+    S.beers--; S.drunk++; S.fatigue = Math.max(0, S.fatigue - 30); sfx.beer(); toast('Glu glu. Stanchezza giù.', 'ok'); paintHeader();
+  };
+  $('#pause-btn').onclick = () => {
+    if (!S.running) return;
+    S.paused = !S.paused; $('#pausa').hidden = !S.paused; $('#pause-btn').textContent = S.paused ? '▶' : '⏸';
+    if (S.paused) voice.silence();
+  };
+  let toastT;
+  function toast (msg, kind) { const t = $('#toast'); t.textContent = msg; t.className = 'show ' + (kind || ''); clearTimeout(toastT); toastT = setTimeout(() => t.className = '', 2600); }
+
+  /* ---------- ciclo di gioco ---------- */
+  let last = 0;
+  function tick (now) {
+    const dt = Math.min(0.1, (now - last) / 1000 || 0); last = now;
+    if (S.running && !S.paused) step(dt);
+    requestAnimationFrame(tick);
+  }
+  function step (dt) {
+    S.t += dt;
+    S.fatigue = Math.min(100, S.fatigue + dt * 0.35);
+    const k = 1 - S.fatigue / 250;   // stanco = finestre di reazione più corte
+
+    // il preside non parla mai uguale: il volume va e viene da solo
+    if (Math.abs(S.drift - S.driftTo) < 0.02) S.driftTo = rnd(0.8, 1.2);
+    S.drift += (S.driftTo - S.drift) * dt * 0.4;
+
+    // camminata verso le casse e larsen che cresce con volume × vicinanza
+    const tx = S.walkTo == null ? LECTERN_X : S.walkTo;
+    S.px += (tx - S.px) * Math.min(1, dt * 1.6);
+    const near = Math.max(0, 1 - Math.min(Math.abs(S.px - SPK_X.l), Math.abs(S.px - SPK_X.r)) / 120);
+    const loop = voiceOut() * near * 1.2;
+    S.ringCool = Math.max(0, S.ringCool - dt);
+    if (loop > 0.55 && !S.ringCool) S.ring = Math.min(1, S.ring + dt * (loop - 0.45) * 2.2);
+    else S.ring = Math.max(0, S.ring - dt * 1.2);
+    if (S.ring >= 1) {
+      S.ring = 0; S.ringCool = 3; S.larsens++; sfx.larsen();
+      const w = S.events.find(e => e.id === 'casse' && e.live); if (w) w.larsen = true;
+      hit(-20, 'LARSEN! Fischio in tutta la palestra.');
+    }
+    sfx.ring(S.ring);
+
+    // eventi: partono, si risolvono, scadono
+    S.events.forEach(e => {
+      if (!e.started && S.t >= e.at) { e.started = true; e.live = true; e.deadline = S.t + e.win * k; e.start && e.start(); sfx.ding(); }
+      if (e.live) {
+        if (e.ok()) { e.held = (e.held || 0) + dt; if (e.held > (e.hold || 0.15)) { e.live = false; e.solved = true; S.grad = clamp(S.grad + 4); toast('Fatto! ' + (e.after || ''), 'ok'); sfx.ok(); if (e.onSolved) e.onSolved(); if (e.id === 'cavo') endFault(); } }
+        else e.held = 0;
+        if (e.live && e.win < 90 && S.t > e.deadline && !(e.id === 'cavo' && S.task)) { e.live = false; e.fail(); }
+      }
+      if (e.started && !e.ended && S.t >= e.at + (e.dur || e.win)) {
+        e.ended = true; e.end && e.end();
+        if (e.live) { e.live = false; e.done && e.done.call(e); }
+      }
+    });
+
+    // lavoro sul posto (guasto)
+    if (S.task) {
+      S.task.left -= dt;
+      const bar = $('#prog-' + S.task.node); if (bar) bar.style.width = (100 * (1 - S.task.left / S.task.total)) + '%';
+      if (S.task.left <= 0) finishTask();
+    }
+
+    // gradimento continuo
+    const o = voiceOut();
+    let d = 0;
+    if (speaking()) {
+      const quiet = S.t - (S.faultAt || 0);
+      if (!S.micOk) d -= quiet < 5 ? 0.3 : quiet < 15 ? 1.5 : 3;     // all'inizio il pubblico aspetta
+      else if (S.mute[S.micCh]) d -= 3; else if (o < 0.3) d -= 2.5; else if (o > 0.9) d -= 2.5; else if (inZone(o)) d += 1.2; else d += 0.2;
+      if (chOut(PC) > 0.3) d -= 1.5;               // musica sopra il discorso
+      if (S.t > 10 && !lightsWhite()) d -= 0.8;
+    }
+    S.grad = clamp(S.grad + d * dt);
+
+    // sottotitoli: più piccoli se si sente poco, più grandi se è troppo forte
+    const li = Math.min(LINES.length - 1, Math.floor(S.t / (82 / LINES.length)));
+    const cap = $('#caption');
+    if (S.jingle) cap.innerHTML = '<b>♪ La sigla del preside ♪</b>';
+    else if (!speaking()) cap.innerHTML = '';
+    else if (!S.micOk && S.t - S.faultAt > 5) cap.innerHTML = '<b>Il preside batte sul microfono: non si sente niente!</b>';
+    else if (o < 0.05) cap.innerHTML = '<b>(il preside parla ma non si sente niente)</b>';
+    else cap.innerHTML = `<b style="font-size:${o > 0.9 ? 20 : o < 0.3 ? 13 : 16}px">«${LINES[li]}»</b>${o > 0.9 ? '<small>(troppo forte: distorce)</small>' : o < 0.3 ? '<small>(si sente appena)</small>' : ''}`;
+
+    [1, 2, 3, 4, PC].forEach(n => {
+      const v = chOut(n), m = chF[n].meter;
+      m.style.height = Math.min(100, v * 100) + '%';
+      m.style.background = v > 0.9 ? 'var(--red)' : inZone(v) ? 'var(--green)' : 'var(--yellow)';
+      chF[n].paint();
+    });
+    voice.say(speaking() && S.micOk ? o : 0);
+    sfx.music(S.jingle ? chOut(PC) : chOut(PC) * 0.5);
+    drawStage(); renderBubbles(); paintHeader();
+    if (S.t >= DURATION) finish();
+  }
+
+  function finish () {
+    S.running = false; voice.silence(); sfx.music(0); sfx.ring(0); sfx.applause(S.grad);
+    store.set('tramp-runs', store.get('tramp-runs', 0) + 1);
+    let beers = 0; const notes = [];
+    if (!S.larsens && !S.pops) { beers++; notes.push('🍺 Nessun larsen e nessun colpo nelle casse.'); }
+    else notes.push([S.larsens ? 'Larsen: ' + S.larsens + '.' : '', S.pops ? 'Colpi nelle casse: ' + S.pops + '.' : ''].join(' '));
+    if (S.grad >= 70) { beers++; notes.push('🍺 Pubblico contento (almeno 70%).'); }
+    if (S.drunk) notes.push('Birre bevute durante il discorso: ' + S.drunk + '.');
+    if (S.micCh !== 1) { S.repDelta -= 2; S.notes.push('Il microfono è rimasto sull\'ingresso ' + S.micCh + ' invece del CH1 (−2 reputazione).'); }
+    notes.push(...S.notes);
+    const rep = 5 + Math.round((S.grad - 60) / 10) - S.larsens * 5 + S.repDelta;
+    $('#outro-title').textContent = S.grad >= 70 ? 'Il miglior tecnico della storia!' : S.grad >= 40 ? 'Applausi tiepidi.' : 'Siete licenziati!';
+    $('#r-grad').textContent = Math.round(S.grad) + '%';
+    $('#r-beer').textContent = '+' + beers;
+    $('#r-rep').textContent = (rep >= 0 ? '+' : '') + rep;
+    $('#r-notes').innerHTML = notes.map(n => `<li>${n}</li>`).join('');
+    setTimeout(() => { $('#outro').hidden = false; }, 1800);
+  }
+
+  function start () {
+    S = fresh(); S.events = script();
+    buildDesk(); $('#pausa').hidden = true; $('#pause-btn').textContent = '⏸';
+    $('#intro').hidden = true; $('#outro').hidden = true;
+    sfx.init(); voice.init(); S.running = true;
+  }
+  const paintHints = () => $('#hints-btn').setAttribute('aria-pressed', hints);
+  $('#hints-btn').onclick = () => { hints = !hints; store.set('tramp-hints', hints); paintHints(); };
+  paintHints();
+  $('#start').onclick = start;
+  $('#again').onclick = () => { $('#outro').hidden = true; $('#intro').hidden = false; };
+
+  /* ---------- la voce del preside: sintesi vocale che dice solo "Tramp",
+     con il volume che esce dal mixer. Se il browser non ha voci, un ronzio. ---------- */
+  const voice = (() => {
+    const ss = window.speechSynthesis;
+    let alive = false, tried = false, lastSay = 0;
+    return {
+      init () {
+        if (!ss) return;
+        try { const u = new SpeechSynthesisUtterance(' '); u.volume = 0; u.onstart = () => { alive = true; }; ss.speak(u); tried = true; } catch (e) {}
+        setTimeout(() => { if (!alive) sfx.hum(true); }, 2500);
+      },
+      say (level) {
+        if (!ss || !tried) { sfx.hum(true); sfx.humLevel(level); return; }
+        if (!alive) { sfx.humLevel(level); }
+        if (level < 0.05) { if (ss.speaking) ss.cancel(); return; }
+        const now = performance.now();
+        if (ss.speaking || ss.pending || now - lastSay < 120) return;
+        lastSay = now;
+        const n = 1 + Math.floor(Math.random() * 3);
+        const loud = level > 0.9 || S.voiceK > 1.4;
+        const words = Array.from({ length: n }, () => loud ? 'TRAMP' : pick(['tramp', 'tramp', 'Tramp', 'TRAMP']));
+        const u = new SpeechSynthesisUtterance(words.join(', ') + (Math.random() < 0.3 ? '!' : ''));
+        u.lang = 'en-US'; u.rate = rnd(1.05, 1.4); u.pitch = loud ? rnd(1.2, 1.5) : rnd(0.6, 0.95);
+        u.volume = Math.min(1, level);
+        u.onstart = () => { alive = true; };
+        ss.speak(u);
+      },
+      silence () { if (ss) ss.cancel(); sfx.humLevel(0); }
+    };
+  })();
+
+  /* ---------- suoni sintetizzati (partono solo dopo il tocco su Inizia) ---------- */
+  const sfx = (() => {
+    let ac, hum, humG, ringO, ringG, musO, musG, noiseBuf;
+    const env = (g, a, peak, rel, t0) => { g.gain.setValueAtTime(0.0001, t0); g.gain.exponentialRampToValueAtTime(peak, t0 + a); g.gain.exponentialRampToValueAtTime(0.0001, t0 + a + rel); };
+    const tone = (f, dur, type, vol) => { if (!ac) return; const o = ac.createOscillator(), g = ac.createGain(); o.type = type || 'sine'; o.frequency.value = f; o.connect(g).connect(ac.destination); env(g, 0.01, vol || 0.15, dur, ac.currentTime); o.start(); o.stop(ac.currentTime + dur + 0.05); };
+    const noise = (dur, vol, fl) => { if (!ac) return; const s = ac.createBufferSource(); s.buffer = noiseBuf; const f = ac.createBiquadFilter(); f.type = 'bandpass'; f.frequency.value = fl || 1500; const g = ac.createGain(); s.connect(f).connect(g).connect(ac.destination); env(g, 0.3, vol, dur, ac.currentTime); s.start(); s.stop(ac.currentTime + dur + 0.4); };
+    const osc = (type, f, dest) => { const o = ac.createOscillator(); o.type = type; o.frequency.value = f; const g = ac.createGain(); g.gain.value = 0; o.connect(g).connect(dest || ac.destination); o.start(); return [o, g]; };
+    let humOn = false;
+    return {
+      init () {
+        if (ac) return;
+        try { ac = new (window.AudioContext || window.webkitAudioContext)(); } catch (e) { return; }
+        noiseBuf = ac.createBuffer(1, ac.sampleRate * 2, ac.sampleRate);
+        const d = noiseBuf.getChannelData(0); for (let i = 0; i < d.length; i++) d[i] = Math.random() * 2 - 1;
+        const f = ac.createBiquadFilter(); f.type = 'bandpass'; f.frequency.value = 700; f.Q.value = 2; f.connect(ac.destination);
+        [hum, humG] = osc('sawtooth', 120, f);
+        [ringO, ringG] = osc('sine', 2750);
+        const lp = ac.createBiquadFilter(); lp.type = 'lowpass'; lp.frequency.value = 500; lp.connect(ac.destination);
+        [musO, musG] = osc('square', 110, lp);
+      },
+      hum (on) { humOn = on; },
+      humLevel (level) { if (!ac || !humOn) return; const t = ac.currentTime, s = Math.max(0, Math.sin(t * 11) * Math.sin(t * 2.7)); humG.gain.setTargetAtTime(Math.min(0.12, level * 0.09) * s, t, 0.03); },
+      ring (r) { if (!ac) return; ringG.gain.setTargetAtTime(r * r * 0.12, ac.currentTime, 0.05); ringO.frequency.setTargetAtTime(2600 + r * 400, ac.currentTime, 0.1); },
+      music (level) { if (!ac) return; const t = ac.currentTime; musO.frequency.setValueAtTime([110, 138.6, 164.8, 220][Math.floor(t * 4) % 4], t); musG.gain.setTargetAtTime(level * 0.05, t, 0.05); },
+      larsen () { if (!ac) return; const [o, g] = osc('sine', 2750); g.gain.setValueAtTime(0.001, ac.currentTime); g.gain.exponentialRampToValueAtTime(0.2, ac.currentTime + 0.4); g.gain.exponentialRampToValueAtTime(0.001, ac.currentTime + 2.2); o.stop(ac.currentTime + 2.3); },
+      pop () { tone(55, 0.25, 'sine', 0.5); setTimeout(() => tone(55, 0.25, 'sine', 0.5), 280); },
+      ding () { tone(880, 0.15, 'triangle', 0.08); },
+      ok () { tone(660, 0.1, 'triangle', 0.08); setTimeout(() => tone(990, 0.15, 'triangle', 0.08), 90); },
+      boo () { noise(0.9, 0.12, 300); },
+      beer () { noise(0.5, 0.08, 3000); },
+      applause (g) { noise(2.5, 0.05 + g / 100 * 0.25, 2500); }
+    };
+  })();
+
+  S = fresh(); buildDesk(); drawStage(); paintHeader();
+  requestAnimationFrame(tick);
+})();
+</script>
