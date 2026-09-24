@@ -33,7 +33,10 @@ const N = parseInt(process.argv[2] || '40', 10), SEED0 = parseInt(process.argv[3
       const P = (ty, gx, gy) => { const w = gridToScreen(gx + .5, gy + .5); S.placeComponentAt(ty, w.x, w.y); };
       const subSpots = shuffle([[1, 8], [7, 8]]);
       P('sub', ...subSpots[0]); P('sub', ...subSpots[1]); P('top', 1, 8); P('top', 7, 8);
-      P('mixer', 7, 5); P('ampli', 6, 4); P('controller', 7, 7);
+      // mixer e consolle in quinta o in regia di sala (FOH), a caso
+      if (rng() < 0.5) P('mixer', 7, 5); else P('mixer', 6, 13);
+      P('ampli', 6, 4);
+      if (rng() < 0.5) P('controller', 7, 7); else P('controller', 7, 13);
       shuffle([[2, 5], [3, 5], [4, 5], [5, 5]]).forEach(s => P('par', ...s));
       P('quadro', 4, 2); P('ciabatta_cee', 6, 2); P('ciabatta', 3, 13); P('pc', 4, 13); P('scheda', 5, 13);
       if (rng() < 0.5) {
@@ -157,7 +160,7 @@ const N = parseInt(process.argv[2] || '40', 10), SEED0 = parseInt(process.argv[3
       if (el('#conn-val').textContent !== '24 / 24') out.validFail.push(seed + ' contatore ' + el('#conn-val').textContent);
       out.valid++;
       // ---- una mutazione
-      const muts = ['cut', 'stereo', 'off', 'overlap', 'group', 'mcbUsed', 'mcbUnused', 'otherUni'];
+      const muts = ['cut', 'stereo', 'off', 'overlap', 'group', 'mcbUsed', 'mcbUnused', 'otherUni', 'aux'];
       const m = pick(muts);
       let expect = 'fail', expectMsg = null;
       if (m === 'cut') { const e = pick(gameState.edges); S.selectedEdgeId = e.id; S.deleteSelectedEdge(); }
@@ -175,6 +178,17 @@ const N = parseInt(process.argv[2] || '40', 10), SEED0 = parseInt(process.argv[3
         const us = Object.values(byU); if (us.length < 2) continue;
         us[1][0].dmx = { addr: us[0][0].dmx.addr + 1, mode: us[0][0].dmx.mode };
         us[1].forEach((x, i) => { if (i) x.dmx.addr = 400 + i * 10; });
+        expect = 'pass';
+      } else if (m === 'aux') {
+        // le mandate AUX sono jack: verso il finale (XLR) non c'è cavo che entri
+        const n0 = gameState.edges.length;
+        ['xlr', 'jack', 'speakon'].forEach(cab => {
+          selectCable(cab);
+          openRearPanel(MX); onRearPortClick(MX, 'aux_1'); if (rearPanelId) closeRearPanel();
+          openRearPanel(AM); onRearPortClick(AM, 'in_L'); if (rearPanelId) closeRearPanel();
+          S.cancelPending();
+        });
+        if (gameState.edges.length !== n0) out.mutBad.push(seed + ' aux collegata al finale!');
         expect = 'pass';
       } else if (m === 'mcbUsed') { toggleProtection(pick([...used])); }
       else if (m === 'mcbUnused') { const un = ['L1', 'L2', 'L3'].filter(x => !used.has(x)); if (!un.length) continue; const q = findQuadro(); un.forEach(x => { if (quadroProt(q)[x]) toggleProtection(x); }); expect = 'pass'; }

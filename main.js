@@ -57,22 +57,11 @@ const SIGNAL_LABEL = {
 const MIXER_GEO = {
   La: 112, Lb: 42,       // lunghezza (canali) e profondità del banco
   Bd: 10, bt: 4,         // dove la plancia incontra il ponte, profondità del cappello del ponte
-  zF: 5, zR: 10, Hb: 24, // altezza bordo anteriore, posteriore e del ponte meter/schermo
-  cx: 0.5, cy: 0.343,
-  offX: 38.5, offY: -24 // centra il bounding box sull'origine del container
+  zF: 5, zR: 10, Hb: 24  // altezza bordo anteriore, posteriore e del ponte meter/schermo
 };
-// banco ruotato di -90° sul pavimento: i canali corrono verso il fondo
-// (in alto a destra) e il fronte operatore guarda in basso a destra
-function mixerIso (a, b, z) {
-  const m = MIXER_GEO;
-  return { x: (a + b) * m.cx - m.offX, y: (b - a) * m.cy - z - m.offY };
-}
 // le porte stanno sul pannello posteriore, appena dietro al ponte: da lì
 // escono davvero i cavi di un banco reale
-function mixerRearPort (a) {
-  const p = mixerIso(a, -6, MIXER_GEO.Hb + 3);
-  return { dx: Math.round(p.x), dy: Math.round(p.y) };
-}
+function mixerRearIso (a) { return [a, -6, MIXER_GEO.Hb + 3]; }
 
 /* Proiezione isometrica comune a TUTTI gli apparecchi (la stessa del mixer e
    della griglia di gioco, TILE_H/TILE_W = 70/102): a = asse che sale verso il
@@ -88,6 +77,9 @@ function isoFrame (A, B, Z) {
   P.A = A; P.B = B; P.Z = Z;
   return P;
 }
+// il banco del mixer nella proiezione comune, così può girarsi verso il
+// palco quando sta in FOH (vedi orientK)
+const MIXER_ISO = isoFrame(MIXER_GEO.La, MIXER_GEO.Lb, MIXER_GEO.Hb);
 /* stesso solido ruotato di k quarti di giro sul pavimento (per i dispositivi
    che cambiano verso a seconda di dove stanno, vedi orientK). Le coordinate
    locali (a, b, z) restano quelle del disegno: cambia solo dove finiscono. */
@@ -221,18 +213,20 @@ const COMPONENT_TYPES = {
     label: 'MIX', category: 'audio', powerW: 50, zone: 'offstage', shape: 'mixer',
     body: { w: 77, h: 77, fill: 0x2a2c32, accent: 0x8a8e98 },
     // LED di alimentazione sul ponte, come su un banco vero
-    ledPos: mixerIso(3.5, 7, 17),
+    frame: MIXER_ISO, front: '+b',
+    ledIso: [3.5, 7, 17],
     // retro del ponte (livello 1): 4 ingressi microfonici XLR, 2 ingressi di
     // linea jack, uscite MAIN L/R, 2 mandate AUX per i monitor e
     // l'alimentazione (i canali cresceranno coi livelli)
     ports: [
-      ...[1, 2, 3, 4].map(n => ({ id: 'in_' + n, signal: 'xlr', dir: 'in', ...mixerRearPort(-2 + n * 10) })),
-      ...[5, 6].map(n => ({ id: 'in_' + n, signal: 'jack', dir: 'in', ...mixerRearPort(-2 + n * 10) })),
-      { id: 'main_L', signal: 'xlr',      dir: 'out', ...mixerRearPort(68) },
-      { id: 'main_R', signal: 'xlr',      dir: 'out', ...mixerRearPort(78) },
-      { id: 'aux_1',  signal: 'xlr',      dir: 'out', ...mixerRearPort(88) },
-      { id: 'aux_2',  signal: 'xlr',      dir: 'out', ...mixerRearPort(98) },
-      { id: 'power',  signal: 'powercon', dir: 'in',  ...mixerRearPort(108) }
+      ...[1, 2, 3, 4].map(n => ({ id: 'in_' + n, signal: 'xlr', dir: 'in', iso: mixerRearIso(-2 + n * 10) })),
+      ...[5, 6].map(n => ({ id: 'in_' + n, signal: 'jack', dir: 'in', iso: mixerRearIso(-2 + n * 10) })),
+      { id: 'main_L', signal: 'xlr',      dir: 'out', iso: mixerRearIso(68) },
+      { id: 'main_R', signal: 'xlr',      dir: 'out', iso: mixerRearIso(78) },
+      // mandate monitor in jack, come sui banchi piccoli veri
+      { id: 'aux_1',  signal: 'jack',     dir: 'out', iso: mixerRearIso(88) },
+      { id: 'aux_2',  signal: 'jack',     dir: 'out', iso: mixerRearIso(98) },
+      { id: 'power',  signal: 'powercon', dir: 'in',  iso: mixerRearIso(108) }
     ]
   },
   ampli: {
@@ -265,12 +259,14 @@ const COMPONENT_TYPES = {
   controller: {
     label: 'CTRL', category: 'luci', powerW: 20, zone: 'offstage', shape: 'controller',
     body: { w: 62, h: 42, fill: 0x2a2c32, accent: 0xf2a541 },
-    ledPos: CTRL_ISO(52, 30, 10),
-    // alimentazione PowerCON e due universi DMX in uscita
+    frame: CTRL_ISO, front: '+b',
+    ledIso: [52, 30, 10],
+    // alimentazione PowerCON e due universi DMX in uscita, sul retro (lato
+    // alto della consolle), da dove partono i cavi di una consolle vera
     ports: [
-      { id: 'power', signal: 'powercon', dir: 'in',  ...isoPort(CTRL_ISO, 8, 34, 3) },
-      { id: 'dmx_1', signal: 'dmx',      dir: 'out', ...isoPort(CTRL_ISO, 34, 34, 3) },
-      { id: 'dmx_2', signal: 'dmx',      dir: 'out', ...isoPort(CTRL_ISO, 46, 34, 3) }
+      { id: 'power', signal: 'powercon', dir: 'in',  iso: [8, -3, 13] },
+      { id: 'dmx_1', signal: 'dmx',      dir: 'out', iso: [34, -3, 13] },
+      { id: 'dmx_2', signal: 'dmx',      dir: 'out', iso: [46, -3, 13] }
     ]
   },
   quadro: {
@@ -2562,8 +2558,9 @@ function isFohCell (cx, cy) {
 }
 
 const ZONE_PREDICATES = {
-  mixer: isOffStageCell,
-  controller: isOffStageCell,
+  // mixer e consolle luci: in quinta (Off Stage) o in Regia di sala (FOH)
+  mixer: (cx, cy) => isOffStageCell(cx, cy) || isFohCell(cx, cy),
+  controller: (cx, cy) => isOffStageCell(cx, cy) || isFohCell(cx, cy),
   ampli: isOffStageCell,
   par: isStageCoreCell,
   sub: isPitCell,
@@ -3323,7 +3320,7 @@ class StageScene extends Phaser.Scene {
         // plancia leggermente inclinata verso l'operatore, ponte posteriore
         // rialzato con meter LED e schermo, e per ogni canale la striscia
         // reale dal fondo al fronte: ingresso XLR, gain, EQ, pan, mute, fader.
-        const m = MIXER_GEO, P = mixerIso;
+        const m = MIXER_GEO, P = rotFrame(MIXER_ISO, rot);
         const zTop = b => m.zR - (m.zR - m.zF) * (b - m.Bd) / (m.Lb - m.Bd);
         const T = (a, b, dz = 0) => P(a, b, zTop(b) + dz);
         // punto sulla faccia inclinata del ponte: t=0 base, t=1 cima
@@ -3457,7 +3454,7 @@ class StageScene extends Phaser.Scene {
       case 'controller': {
         // consolle luci da tavolo: display, griglia di tasti scena
         // retroilluminati e una fila di fader, piano leggermente inclinato
-        const P = CTRL_ISO, k = this.isoKit(g, P);
+        const P = rotFrame(CTRL_ISO, rot), k = this.isoKit(g, P);
         const { A, B } = P;
         const zb = 10, zf = 5;                         // altezza retro/fronte
         const zAt = b => zb - (zb - zf) * b / B;
