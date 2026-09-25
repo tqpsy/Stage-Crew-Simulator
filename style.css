@@ -249,6 +249,8 @@
   }
   #toast.show{ opacity:1; transform:translate(-50%,0); }
   #toast.ok{ border-left-color:var(--green); }
+  /* durante lo show finale il messaggio aspetta: prima si guardano le luci */
+  #toast.show.hold{ opacity:0; visibility:hidden; }
 
   /* ---------- "Quale?": tocco a metà tra più dispositivi ---------- */
   #pick-menu{ display:none; position:fixed; inset:0; z-index:140; }

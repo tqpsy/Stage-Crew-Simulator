@@ -1288,8 +1288,10 @@ function setCircuitStatus (state) {
 }
 
 let toastTimer = null;
+let toastHeld = false;
 function showToast (msg, kind) {
   const toast = el('#toast');
+  toastHeld = false; toast.classList.remove('hold');
   toast.textContent = msg;
   toast.classList.remove('ok');
   if (kind === 'ok') toast.classList.add('ok');
@@ -1297,6 +1299,17 @@ function showToast (msg, kind) {
   clearTimeout(toastTimer);
   // i messaggi lunghi restano più a lungo: il tempo di leggerli
   toastTimer = setTimeout(() => toast.classList.remove('show'), Math.max(3200, msg.length * 60));
+}
+// il messaggio resta scritto ma nascosto finché finisce lo show, poi si legge con calma
+function holdToast () {
+  toastHeld = true;
+  clearTimeout(toastTimer);
+  el('#toast').classList.add('hold');
+}
+function releaseToast () {
+  if (!toastHeld) return;
+  const toast = el('#toast');
+  showToast(toast.textContent, toast.classList.contains('ok') ? 'ok' : undefined);
 }
 
 function updateStockUI () {
@@ -3387,6 +3400,7 @@ const ORIGIN_Y = Math.round((GAME_H - (VENUE_W + VENUE_H) * TILE_H / 2) / 2);
 
 const ZOOM_MIN = 0.5, ZOOM_MAX = 4;
 const DEFAULT_ZOOM = 1.05;
+const SHOW_ZOOM = 2;         // zoom dello show finale: palco e Pit a tutto schermo
 const PLATFORM_HEIGHT = 26; // px: altezza visiva della pedana rialzata
 
 const STAGE_W = 4, STAGE_H = 4;       // pedana 4x4 m (area spettacolo, sempre visibile)
@@ -5819,36 +5833,55 @@ class StageScene extends Phaser.Scene {
   // "IMPIANTO COLLAUDATO" col nome del service sotto
   showBanner () {
     const brand = this.brandKey && this.textures.exists(this.brandKey);
-    const title = this.fxObj(this.add.text(GAME_W / 2, GAME_H / 2 - (brand ? 150 : 0), 'IMPIANTO COLLAUDATO' + (brand ? '' : '\n' + serviceName().toUpperCase()), {
-      fontFamily: 'Barlow Condensed, sans-serif', fontSize: '44px', fontStyle: 'bold',
-      color: '#f2a541', align: 'center', lineSpacing: 2, wordWrap: { width: GAME_W - 80 }
-    }).setOrigin(0.5).setDepth(100).setAlpha(0).setScale(0.85).setScrollFactor(0));
-    const parts = [title];
+    // gli oggetti fissi sullo schermo (scrollFactor 0) risentono comunque dello
+    // zoom della telecamera: il contenitore lo compensa, così scritta e
+    // marchio stanno sempre per intero nello schermo, qualunque sia lo zoom
+    const cam = this.cameras.main;
+    const box = this.fxObj(this.add.container(GAME_W / 2, GAME_H / 2).setDepth(100).setScrollFactor(0).setScale(1 / cam.zoom));
+    const W = GAME_W - 120;
+    const title = this.add.text(0, brand ? -150 : 0, 'IMPIANTO COLLAUDATO' + (brand ? '' : '\n' + serviceName().toUpperCase()), {
+      fontFamily: 'Barlow Condensed, sans-serif', fontSize: '64px', fontStyle: 'bold',
+      color: '#f2a541', align: 'center', lineSpacing: 2, wordWrap: { width: W },
+      stroke: '#141519', strokeThickness: 8
+    }).setOrigin(0.5).setAlpha(0).setScale(0.85);
+    box.add(title);
+    const pop = [title];
+    let img = null, bottom = 40;
     if (brand) {
       // il marchio del service entra in grande, con un lampo di luce
-      const img = this.fxObj(this.add.image(GAME_W / 2, GAME_H / 2 + 10, this.brandKey).setDepth(100).setScrollFactor(0).setAlpha(0));
-      const fit = Math.min(1, (GAME_W - 120) / img.width);
+      img = this.add.image(0, 10, this.brandKey).setAlpha(0);
+      const fit = Math.min(1, W / img.width);
       img.setScale(fit * 0.6);
+      box.add(img);
+      // la scritta sopra il marchio, la reputazione sotto: senza sovrapporsi
+      const half = img.height * fit / 2;
+      title.setY(10 - half - 50); bottom = 10 + half;
       this.fxTween({ targets: img, alpha: 1, scale: fit, duration: 520, ease: 'Back.Out' });
       if (!reducedFx()) {
-        const flash = this.fxObj(this.add.rectangle(GAME_W / 2, GAME_H / 2 + 10, img.width * fit, img.height * fit, 0xffffff, 0)
-          .setDepth(101).setScrollFactor(0).setBlendMode(Phaser.BlendModes.ADD));
+        const flash = this.add.rectangle(0, 10, img.width * fit, img.height * fit, 0xffffff, 0).setBlendMode(Phaser.BlendModes.ADD);
+        box.add(flash);
         this.fxTween({ targets: flash, fillAlpha: { from: 0.55, to: 0 }, delay: 300, duration: 450 });
       }
-      parts.push(img);
     }
     if (this.repGain) {
-      parts.push(this.fxObj(this.add.text(GAME_W / 2, GAME_H / 2 + (brand ? 180 : 110), '+' + this.repGain + ' REPUTAZIONE', {
-        fontFamily: 'Barlow Condensed, sans-serif', fontSize: '34px', fontStyle: 'bold', color: '#49b06a'
-      }).setOrigin(0.5).setDepth(100).setAlpha(0).setScrollFactor(0)));
+      const rep = this.add.text(0, bottom + 45, '+' + this.repGain + ' REPUTAZIONE', {
+        fontFamily: 'Barlow Condensed, sans-serif', fontSize: '48px', fontStyle: 'bold', color: '#49b06a',
+        stroke: '#141519', strokeThickness: 6
+      }).setOrigin(0.5).setAlpha(0);
+      box.add(rep); pop.push(rep);
     }
-    this.fxTween({ targets: parts.filter(o => o !== parts[1] || !brand), alpha: 1, scale: 1, duration: 380, ease: 'Back.Out' });
-    this.fxTween({ targets: parts, alpha: 0, delay: 1800, duration: 400 });
+    this.fxTween({ targets: pop, alpha: 1, scale: 1, duration: 380, ease: 'Back.Out' });
+    this.fxTween({ targets: box, alpha: 0, delay: 2200, duration: 400 });
+    // se intanto la telecamera torna indietro, la scritta resta della stessa misura
+    this.fxEvery(33, 85, () => box.setScale(1 / cam.zoom));
   }
 
+  // zoom dello show: palco e Pit riempiono la larghezza dello schermo
   playSuccessSequence () {
     this.fxStart();
     SFX.success();
+    holdToast();
+    this.fx.restore.push(() => releaseToast());
     // show saltato dalle impostazioni: solo la scritta
     if (settings().skipShow) {
       this.showBanner();
@@ -5863,7 +5896,7 @@ class StageScene extends Phaser.Scene {
     const view = { x: cam.midPoint.x, y: cam.midPoint.y, z: cam.zoom };
     const stage = gridToScreen(STAGE_ORIGIN_X + STAGE_W / 2, STAGE_ORIGIN_Y + STAGE_H / 2 + 1);
     cam.pan(stage.x, stage.y, 1200, 'Sine.easeInOut');
-    cam.zoomTo(Math.max(view.z, DEFAULT_ZOOM * 1.7), 1200, 'Sine.easeInOut');
+    cam.zoomTo(Math.max(view.z, SHOW_ZOOM), 1200, 'Sine.easeInOut');
     this.fxLater(T_DAY, () => {
       cam.pan(view.x, view.y, 800, 'Sine.easeInOut', true);
       cam.zoomTo(view.z, 800, 'Sine.easeInOut', true);
