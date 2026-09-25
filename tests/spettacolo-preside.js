@@ -38,7 +38,6 @@ const path = require('path');
   // un giro nuovo, fatto bene: luce bianca dalla memoria, voce su, musica giù
   await p.evaluate(() => Show.start());
   await p.evaluate(() => Show.manualTime(true));
-  await p.locator('#sd-tab-luci').click();
   await p.locator('#sd-mem-1').dispatchEvent('pointerdown');
   await p.locator('#sd-mem-1').dispatchEvent('pointerup');
   await p.evaluate(() => { const S = Show.state; S.fad[S.micCh] = 0.55; S.fad.pc = 0; for (let i = 0; i < 30; i++) Show.step(0.1); });

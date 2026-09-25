@@ -177,25 +177,19 @@
       <button id="zoom-reset" title="Adatta alla vista">⤢</button>
     </div>
     <div id="toast"></div>
+    <canvas id="show-canvas" hidden></canvas>
     <div id="show-bubbles"></div>
     <div id="show-caption"></div>
     <div id="show-pause" hidden>PAUSA</div>
   </div>
 
   <section id="show-desk" aria-label="Banco regia" hidden>
-    <div class="sd-tabs" role="tablist">
-      <button class="sd-tab" role="tab" id="sd-tab-mixer" aria-selected="true">MIXER</button>
-      <button class="sd-tab" role="tab" id="sd-tab-luci" aria-selected="false">LUCI</button>
-    </div>
-    <div class="sd-panel" id="sd-panel-mixer"></div>
-    <div class="sd-panel sd-lights" id="sd-panel-luci" hidden>
+    <div class="sd-block sd-lights" id="sd-lights">
+      <div class="sd-head"><span>LUCI</span><small>tieni premuta una memoria per salvarci le luci di adesso</small></div>
+      <div class="sd-mems" id="sd-mems"></div>
       <div class="sd-pars" id="sd-pars"></div>
-      <div class="sd-lights-bottom">
-        <div class="sd-mems" id="sd-mems"></div>
-        <div class="sd-dimmer">Dimmer<div class="fadewrap" id="sd-dimmer"></div></div>
-      </div>
-      <div class="sd-hint">Tocca un PAR per cambiargli colore · tocca una memoria per richiamarla, tienila premuta per salvarci le luci di adesso.</div>
     </div>
+    <div class="sd-block sd-mixer" id="sd-mixer"></div>
   </section>
 
   <div id="toolbar">
