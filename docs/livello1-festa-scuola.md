@@ -238,3 +238,25 @@ per provare il ritmo prima di portarla nel gioco.
   - risolto dal bidello al posto tuo: −5;
   - microfono lasciato su un ingresso diverso dal CH1: −2;
   - larsen: −5 (colpa del volume).
+
+## Stile dei personaggi: schede e chiavi (in prova)
+
+Prototipo: `prototipi/personaggi-punk.html`. Direzione: minimalista e punk.
+
+- **Scheda del personaggio**: corporatura (spalle, orlo della giacca), viso
+  (larghezza, altezza, mascella), capelli o copricapo, occhi, sopracciglia,
+  naso, bocca, vestito (abito, maglione, tonaca, camice), accessori (cuffie,
+  occhiali, alloro, scopa, scritta sulla maglia), tre gesti del braccio e i
+  suoi colori. Ogni pezzo ha un **ruolo** di colore (abito, pelle, capelli,
+  cravatta, accessorio, ombra…).
+- **Firma**: i ruoli che fanno riconoscere il personaggio (Tramp: ciuffo e
+  cravatta; DJ E=mc²: capelli e cuffie; Dante: cappuccio e alloro; Gerry:
+  occhiali, sorriso e scopa).
+- **Chiave di stile**: una regola che disegna qualunque scheda guardando solo
+  ruoli, colori e firma. Quattro candidate:
+  - *Stencil*: colori della scheda piatti, ombre nette, niente contorni.
+  - *Fotocopia*: scala di grigi a retino, firma in rosa fluo, bordo di carta.
+  - *Risograph*: colori caldi sull'inchiostro rosa, il resto sul blu, secondo
+    quanto sono scuri; due passate fuori registro, grana.
+  - *Sticker*: sagoma nera a spray, firma in colore acido, colature.
+- Un personaggio nuovo si aggiunge scrivendo solo la sua scheda.
