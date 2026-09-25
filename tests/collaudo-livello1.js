@@ -55,7 +55,9 @@ const N = parseInt(process.argv[2] || '40', 10), SEED0 = parseInt(process.argv[3
         const ty = pick(['par', 'stativo', 'mixer', 'pc', 'scheda', 'ampli', 'controller']);
         const c = pick(placedOfType(ty));
         if (ty === 'par') { const st = mountBase(c); S.deleteComponent(c.id); mountPar(st); }
-        else { const g = [c.gx, c.gy]; S.deleteComponent(c.id); P(ty, g[0], g[1]); if (ty === 'stativo') mountPar(placedOfType('stativo').find(x => !x.hasPar)); }
+        // lo stativo ha già coordinate al centro (1.5, 5.5, …): va rimesso
+        // nello stesso punto, non mezza cella più in là
+        else { const w = ty === 'stativo' ? gridToScreen(c.gx, c.gy) : gridToScreen(c.gx + .5, c.gy + .5); S.deleteComponent(c.id); S.placeComponentAt(ty, w.x, w.y); if (ty === 'stativo') mountPar(placedOfType('stativo').find(x => !x.hasPar)); }
       }
       const left = Object.entries(gameState.stock).filter(([k, v]) => v > 0);
       if (left.length) { out.wireFail.push(seed + ' stock ' + JSON.stringify(left)); continue; }
