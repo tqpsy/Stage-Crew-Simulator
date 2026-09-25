@@ -1,0 +1,311 @@
+<title>Stili del preside</title>
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@600;700&family=Inter:wght@400;500;600&display=swap">
+<style>
+  /* Confronto di stili per il personaggio: stessi colori e caratteri del gioco (tema scuro, come il gioco). */
+  :root{
+    color-scheme: dark;
+    --bg:#141519; --panel:#1c1d22; --raised:#24252b; --line:#34363e;
+    --text:#eee9df; --muted:#8b8e98; --amber:#f2a541;
+    --display:'Barlow Condensed','Arial Narrow',sans-serif; --ui:'Inter',system-ui,sans-serif;
+  }
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--bg);color:var(--text);font-family:var(--ui);padding-block:20px 32px}
+  .wrap{max-width:1100px;margin:0 auto;padding-inline:16px;display:grid;gap:18px}
+  h1{margin:0;font-family:var(--display);font-size:32px;letter-spacing:.03em;text-wrap:balance}
+  .lead{margin:0;color:var(--muted);font-size:15px;line-height:1.5;max-width:65ch}
+  .grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,460px),1fr));gap:16px}
+  .card{background:var(--panel);border:1px solid var(--line);border-radius:12px;overflow:hidden;display:grid}
+  canvas{display:block;width:100%;aspect-ratio:4/3;background:#000}
+  .txt{padding:12px 14px 14px;display:grid;gap:4px}
+  .txt b{font-family:var(--display);font-size:22px;letter-spacing:.04em;color:var(--amber)}
+  .txt b span{color:var(--muted);font-size:16px;margin-right:6px}
+  .txt p{margin:0;font-size:14px;line-height:1.45;color:#cfcac0}
+  .txt small{color:var(--muted);font-size:12.5px;line-height:1.4}
+  .bar{display:flex;gap:8px;flex-wrap:wrap;align-items:center}
+  .bar button{min-height:40px;padding:0 14px;background:var(--raised);border:1px solid var(--line);border-radius:8px;color:var(--text);font:600 14px var(--ui);cursor:pointer}
+  .bar button[aria-pressed=true]{border-color:var(--amber);color:var(--amber)}
+  .bar button:focus-visible{outline:2px solid var(--amber);outline-offset:2px}
+  @media (prefers-reduced-motion:reduce){ .note-motion{display:block} }
+</style>
+
+<div class="wrap">
+  <h1>Il Preside Tramp: quattro stili a confronto</h1>
+  <p class="lead">Stesso palco, stessa luce, stesso gesto mentre parla. Scegli lo stile del personaggio: gli altri personaggi del livello (il DJ, Dante, il bidello) seguiranno lo stesso.</p>
+  <div class="bar" role="group" aria-label="Luce sul palco">
+    <button id="l-bianco" aria-pressed="true">Luce bianca</button>
+    <button id="l-festa" aria-pressed="false">Festa (viola e blu)</button>
+    <button id="l-caldo" aria-pressed="false">Caldo</button>
+  </div>
+  <div class="grid">
+    <div class="card"><canvas id="c-a" width="800" height="600"></canvas><div class="txt"><b><span>A</span>Controluce</b><p>Sagoma scura bordata dalle luci del palco, come si vede davvero dalla regia. Si riconosce dal ciuffo e dalla cravatta.</p><small>Elegante e da concerto; la faccia quasi non si vede.</small></div></div>
+    <div class="card"><canvas id="c-b" width="800" height="600"></canvas><div class="txt"><b><span>B</span>Illustrazione piatta</b><p>Forme pulite senza contorni, proporzioni da adulto, ombre morbide in due toni. Lo stile delle illustrazioni moderne.</p><small>Leggibile anche piccolo sul telefono; la caricatura è più sobria.</small></div></div>
+    <div class="card"><canvas id="c-c" width="800" height="600"></canvas><div class="txt"><b><span>C</span>Pixel art</b><p>Grafica a pixel da gioco d'avventura anni '90: palco e personaggio disegnati a quadretti, luci comprese.</p><small>Molto "videogioco"; i dettagli dell'attrezzatura diventano più semplici.</small></div></div>
+    <div class="card"><canvas id="c-d" width="800" height="600"></canvas><div class="txt"><b><span>D</span>Caricatura a china</b><p>Vignetta da giornale: testa grande, tratto d'inchiostro che cambia spessore, colore ad acquerello e tratteggio nelle ombre.</p><small>La più "satira"; richiede più disegni per ogni personaggio.</small></div></div>
+  </div>
+</div>
+
+<script>
+(() => {
+  const LIGHTS = {
+    bianco: { key: [255, 244, 225], back: [200, 215, 255] },
+    festa: { key: [150, 110, 255], back: [70, 130, 255] },
+    caldo: { key: [255, 180, 90], back: [255, 140, 60] }
+  };
+  let light = LIGHTS.bianco;
+  ['bianco', 'festa', 'caldo'].forEach(k => {
+    const b = document.getElementById('l-' + k);
+    b.addEventListener('click', () => {
+      light = LIGHTS[k];
+      document.querySelectorAll('.bar button').forEach(x => x.setAttribute('aria-pressed', x === b));
+    });
+  });
+  const rgba = (c, a) => `rgba(${c[0]},${c[1]},${c[2]},${a})`;
+  const reduced = matchMedia('(prefers-reduced-motion: reduce)').matches;
+
+  /* ---------- palco comune (unità 400 × 300) ---------- */
+  function stage (g, opts) {
+    const { back } = opts;
+    // sipario
+    for (let x = 0; x < 400; x += 20) {
+      const gr = g.createLinearGradient(x, 0, x + 20, 0);
+      gr.addColorStop(0, '#12040a'); gr.addColorStop(0.45, '#431018'); gr.addColorStop(1, '#14050a');
+      g.fillStyle = gr; g.fillRect(x, 0, 20.5, 200);
+    }
+    // pavimento nero lucido
+    const fl = g.createLinearGradient(0, 200, 0, 300);
+    fl.addColorStop(0, '#0b0c10'); fl.addColorStop(1, '#16171c');
+    g.fillStyle = fl; g.fillRect(0, 200, 400, 100);
+    g.globalCompositeOperation = 'lighter';
+    // pozza sul sipario e sul pavimento
+    const k = light.key, b = light.back;
+    let gr = g.createRadialGradient(200, 150, 0, 200, 150, back ? 120 : 95);
+    gr.addColorStop(0, rgba(back ? b : k, back ? 0.55 : 0.28)); gr.addColorStop(0.85, rgba(back ? b : k, back ? 0.3 : 0.16)); gr.addColorStop(1, rgba(k, 0));
+    g.fillStyle = gr; g.fillRect(0, 0, 400, 200);
+    g.save(); g.translate(200, 286); g.scale(1, 0.16);
+    gr = g.createRadialGradient(0, 0, 0, 0, 0, 120);
+    gr.addColorStop(0, rgba(k, 0.45)); gr.addColorStop(1, rgba(k, 0));
+    g.fillStyle = gr; g.beginPath(); g.arc(0, 0, 120, 0, Math.PI * 2); g.fill(); g.restore();
+    // due tagli che attraversano il palco
+    [[-10, 120, 1], [410, 120, -1]].forEach(([x, y, d]) => {
+      const cg = g.createLinearGradient(x, y, 200, 150);
+      cg.addColorStop(0, rgba(b, 0.35)); cg.addColorStop(1, rgba(b, 0.02));
+      g.fillStyle = cg; g.beginPath(); g.moveTo(x, y - 6); g.lineTo(200 + d * 120, 110); g.lineTo(200 + d * 120, 190); g.lineTo(x, y + 6); g.closePath(); g.fill();
+    });
+    g.globalCompositeOperation = 'source-over';
+  }
+
+  /* ---------- geometria comune del preside (piedi in 0,0; y in su negativo) ---------- */
+  const lerp = (a, b, t) => a + (b - a) * t;
+  function armPts (side, p) {
+    const sx = 44 * side;
+    if (side < 0 || p <= 0) return [[sx, -156], [sx + 6 * side, -120], [sx + 4 * side, -86]];
+    return [[sx, -156], [lerp(50, 56, p), lerp(-120, -118, p)], [lerp(48, 20, p), lerp(-86, -136, p)]];
+  }
+  const HAIR = 'M-21 -210 Q-25 -233 -6 -237 Q18 -241 29 -229 Q35 -223 38 -213 Q31 -218 25 -218 Q27 -211 22 -207 Q14 -222 -2 -222 Q-16 -222 -21 -210 Z';
+  const JACKET = 'M-44 -160 Q-51 -157 -50 -144 L-46 -84 L46 -84 L50 -144 Q51 -157 44 -160 Q0 -171 -44 -160 Z';
+  function ellP (x, y, rx, ry) { const p = new Path2D(); p.ellipse(x, y, rx, ry, 0, 0, Math.PI * 2); return p; }
+  function polyP (pts) { const p = new Path2D(); p.moveTo(pts[0], pts[1]); for (let i = 2; i < pts.length; i += 2) p.lineTo(pts[i], pts[i + 1]); p.closePath(); return p; }
+  function armPath (pts) { const p = new Path2D(); p.moveTo(...pts[0]); p.lineTo(...pts[1]); p.lineTo(...pts[2]); return p; }
+
+  /* ---------- A: controluce ---------- */
+  function silhouette (g, pose, col) {
+    g.fillStyle = col; g.strokeStyle = col; g.lineCap = 'round'; g.lineJoin = 'round';
+    [polyP([-25, -90, -5, -90, -7, -6, -23, -6]), polyP([5, -90, 25, -90, 23, -6, 7, -6]), ellP(-16, -4, 13, 5), ellP(16, -4, 13, 5),
+      new Path2D(JACKET), ellP(0, -178, 9, 12), ellP(0, -205, 20, 25), ellP(0, -190, 19, 12), new Path2D(HAIR), ellP(-20, -204, 4, 7), ellP(20, -204, 4, 7)
+    ].forEach(p => g.fill(p));
+    g.lineWidth = 13;
+    [-1, 1].forEach(sd => { const a = armPts(sd, pose); g.stroke(armPath(a)); g.beginPath(); g.arc(a[2][0], a[2][1] + (sd > 0 && pose > 0.5 ? -4 : 4), 6.5, 0, Math.PI * 2); g.fill(); });
+  }
+  function drawA (g, t, pose, mouth) {
+    stage(g, { back: true });
+    g.save(); g.translate(200, 286); g.scale(1.05, 1.05);
+    silhouette(g, pose, rgba(light.back, 0.95)); g.translate(-3.2, 0);
+    silhouette(g, pose, rgba(light.key, 0.9)); g.translate(6.4, 0);
+    silhouette(g, pose, '#07080c'); g.translate(-3.2, 1.5);
+    silhouette(g, pose, '#07080c');
+    // quel poco che si vede: cravatta, bordo del ciuffo, un riflesso sugli occhi
+    g.fillStyle = 'rgba(140,20,26,0.8)'; g.fill(polyP([-4, -158, 4, -158, 7, -80, 0, -72, -7, -80]));
+    g.strokeStyle = rgba(light.key, 0.9); g.lineWidth = 2; g.stroke(new Path2D('M-20 -216 Q-22 -232 -6 -236 Q18 -240 28 -229'));
+    g.fillStyle = 'rgba(255,255,255,0.5)'; g.fillRect(-10, -209, 3, 1.2); g.fillRect(7, -209, 3, 1.2);
+    g.restore();
+  }
+
+  /* ---------- B: illustrazione piatta ---------- */
+  function flatTramp (g, pose, mouth, blink) {
+    const NAVY = '#2b3d6b', NAVY_D = '#1e2c52', NAVY_L = '#364b80', SKIN = '#ec9a5c', SKIN_D = '#d27f45';
+    g.lineCap = 'round'; g.lineJoin = 'round';
+    g.fillStyle = NAVY_D; g.fill(polyP([-25, -90, -5, -90, -7, -8, -23, -8]));
+    g.fillStyle = '#243662'; g.fill(polyP([5, -90, 25, -90, 23, -8, 7, -8]));
+    g.fillStyle = '#121216'; g.fill(ellP(-16, -5, 13, 5)); g.fill(ellP(16, -5, 13, 5));
+    // braccio sinistro dietro
+    let a = armPts(-1, pose); g.strokeStyle = NAVY_D; g.lineWidth = 13; g.stroke(armPath(a));
+    g.fillStyle = SKIN_D; g.fill(ellP(a[2][0], a[2][1] + 5, 5.5, 6));
+    // giacca con ombra laterale
+    g.fillStyle = NAVY; g.fill(new Path2D(JACKET));
+    g.fillStyle = NAVY_D; g.fill(new Path2D('M-44 -160 Q-51 -157 -50 -144 L-46 -84 L-30 -84 L-34 -150 Z'));
+    g.fillStyle = '#f2efe8'; g.fill(polyP([-10, -163, 10, -163, 0, -132]));
+    g.fillStyle = NAVY_L; g.fill(polyP([-10, -163, -20, -159, -6, -118, -2, -134])); g.fill(polyP([10, -163, 20, -159, 6, -118, 2, -134]));
+    g.fillStyle = '#d23a33'; g.fill(polyP([-4, -158, 4, -158, 7, -78, 0, -70, -7, -78]));
+    g.fillStyle = '#b52c27'; g.fill(polyP([0, -158, 4, -158, 7, -78, 0, -70]));
+    // collo e testa
+    g.fillStyle = SKIN_D; g.fill(ellP(0, -176, 9, 10));
+    g.fillStyle = SKIN; g.fill(ellP(0, -205, 20, 25)); g.fill(ellP(0, -191, 19, 12));
+    g.fillStyle = SKIN_D; g.fill(new Path2D('M-20 -206 Q-21 -186 -6 -180 Q-16 -190 -15 -206 Z'));
+    g.fillStyle = SKIN; g.fill(ellP(-20, -204, 3.5, 6)); g.fillStyle = SKIN_D; g.fill(ellP(20, -204, 3.5, 6));
+    g.fillStyle = '#f5cfa0'; g.fill(ellP(-8, -207, 6.5, 4)); g.fill(ellP(8, -207, 6.5, 4));
+    g.fillStyle = '#3a2418';
+    if (blink) { g.fillRect(-11, -207.5, 6, 1); g.fillRect(5, -207.5, 6, 1); } else { g.fill(ellP(-8, -207, 2.6, 1.5)); g.fill(ellP(8, -207, 2.6, 1.5)); }
+    g.fillStyle = '#e6c46a'; g.fill(new Path2D('M-14 -213 Q-8 -216 -3 -213 Q-8 -214 -14 -212 Z M14 -213 Q8 -216 3 -213 Q8 -214 14 -212 Z'));
+    g.fillStyle = SKIN_D; g.fill(new Path2D('M-1 -205 Q-4 -198 -3 -196 Q0 -195 3 -196 Q2 -198 1 -205 Z'));
+    g.fillStyle = 'rgba(220,90,70,0.22)'; g.fill(ellP(-12, -196, 4, 2.4)); g.fill(ellP(12, -196, 4, 2.4));
+    if (mouth > 0.12) { g.fillStyle = '#6a2418'; g.fill(ellP(0, -189, 2.6 + mouth * 1.2, 1.4 + mouth * 2.6)); }
+    else { g.fillStyle = '#b0604a'; g.fillRect(-4, -189.5, 8, 1.3); }
+    g.fillStyle = '#f0c850'; g.fill(new Path2D(HAIR));
+    g.fillStyle = '#fbe39a'; g.fill(new Path2D('M-14 -230 Q2 -240 22 -233 Q6 -234 -8 -226 Z'));
+    g.fillStyle = '#d2a53a'; g.fill(new Path2D('M22 -207 Q27 -212 25 -218 Q31 -218 38 -213 Q33 -209 22 -207 Z'));
+    // braccio destro: il gesto a pinza
+    a = armPts(1, pose); g.strokeStyle = NAVY; g.lineWidth = 13; g.stroke(armPath(a));
+    g.fillStyle = '#f2efe8'; g.fill(ellP(a[2][0], a[2][1], 5.5, 3.6));
+    g.fillStyle = SKIN; g.fill(ellP(a[2][0] - 1, a[2][1] + (pose > 0.5 ? -5 : 5), 5, 5.5));
+  }
+  function drawB (g, t, pose, mouth, blink) {
+    stage(g, {});
+    // ombra morbida a terra
+    g.fillStyle = 'rgba(0,0,0,0.45)'; g.beginPath(); g.ellipse(200, 287, 52, 7, 0, 0, Math.PI * 2); g.fill();
+    const off = offscreen(g.canvas.width, g.canvas.height);
+    const o = off.getContext('2d'); o.setTransform(1, 0, 0, 1, 0, 0); o.clearRect(0, 0, off.width, off.height);
+    o.setTransform(g.getTransform()); o.translate(200, 286); o.scale(1.05, 1.05);
+    flatTramp(o, pose, mouth, blink);
+    tintLayer(off, light.key, 0.35);
+    g.save(); g.setTransform(1, 0, 0, 1, 0, 0); g.drawImage(off, 0, 0); g.restore();
+  }
+  // colora il livello del personaggio con la luce del palco (moltiplica, poi un velo di sera);
+  // il multiply sporca anche il trasparente, quindi alla fine si ritaglia sulla sagoma
+  const masks = new Map();
+  function tintLayer (c, col, night) {
+    const key = c.width + 'x' + c.height;
+    if (!masks.has(key)) { const m = document.createElement('canvas'); m.width = c.width; m.height = c.height; masks.set(key, m); }
+    const m = masks.get(key), mg = m.getContext('2d');
+    mg.globalCompositeOperation = 'copy'; mg.drawImage(c, 0, 0);
+    const x = c.getContext('2d');
+    x.save(); x.setTransform(1, 0, 0, 1, 0, 0);
+    x.globalCompositeOperation = 'multiply'; x.fillStyle = rgba(col, 1); x.fillRect(0, 0, c.width, c.height);
+    x.globalCompositeOperation = 'source-atop'; x.fillStyle = `rgba(8,10,28,${night})`; x.fillRect(0, 0, c.width, c.height);
+    x.globalCompositeOperation = 'destination-in'; x.drawImage(m, 0, 0);
+    x.restore();
+  }
+  const offs = new Map();
+  function offscreen (w, h) {
+    const key = w + 'x' + h;
+    if (!offs.has(key)) { const c = document.createElement('canvas'); c.width = w; c.height = h; offs.set(key, c); }
+    return offs.get(key);
+  }
+
+  /* ---------- C: pixel art (scena disegnata piccola e ingrandita a quadretti) ---------- */
+  const PX = 4;
+  let low = null;
+  function drawC (g, t, pose, mouth, blink) {
+    const W = g.canvas.width / PX, H = g.canvas.height / PX;
+    if (!low || low.width !== W) { low = document.createElement('canvas'); low.width = W; low.height = H; }
+    const l = low.getContext('2d');
+    l.setTransform(W / 400, 0, 0, H / 300, 0, 0);
+    l.imageSmoothingEnabled = false;
+    stage(l, {});
+    // personaggio con contorno scuro di un pixel
+    const ch = offscreen(W, H + 1), c = ch.getContext('2d');
+    c.setTransform(1, 0, 0, 1, 0, 0); c.clearRect(0, 0, ch.width, ch.height);
+    c.setTransform(W / 400, 0, 0, H / 300, 0, 0); c.translate(200, 286); c.scale(1.05, 1.05);
+    flatTramp(c, pose > 0.5 ? 1 : 0, mouth > 0.4 ? 1 : 0, blink);
+    tintLayer(ch, light.key, 0.25);
+    l.setTransform(1, 0, 0, 1, 0, 0);
+    l.globalCompositeOperation = 'source-over';
+    [[1, 0], [-1, 0], [0, 1], [0, -1]].forEach(([dx, dy]) => { l.filter = 'brightness(0)'; l.drawImage(ch, dx, dy); });
+    l.filter = 'none'; l.drawImage(ch, 0, 0);
+    // colori ridotti: si arrotonda ogni pixel a una tavolozza da 16 bit
+    const img = l.getImageData(0, 0, W, H), d = img.data;
+    for (let i = 0; i < d.length; i += 4) { d[i] = Math.round(d[i] / 12) * 12; d[i + 1] = Math.round(d[i + 1] / 12) * 12; d[i + 2] = Math.round(d[i + 2] / 12) * 12; d[i + 3] = 255; }
+    l.putImageData(img, 0, 0);
+    g.save(); g.setTransform(1, 0, 0, 1, 0, 0); g.imageSmoothingEnabled = false; g.drawImage(low, 0, 0, g.canvas.width, g.canvas.height); g.restore();
+  }
+
+  /* ---------- D: caricatura a china ---------- */
+  function seeded (n) { let s = n * 9301 + 49297; return () => { s = (s * 9301 + 49297) % 233280; return s / 233280; }; }
+  function ink (g, p, w, n) {
+    // tratto a mano: due passate leggermente spostate, spessore che varia
+    const r = seeded(n);
+    g.strokeStyle = '#1a1210'; g.lineCap = 'round'; g.lineJoin = 'round';
+    g.lineWidth = w; g.stroke(p);
+    g.save(); g.translate((r() - 0.5) * 0.8, (r() - 0.5) * 0.8); g.lineWidth = w * 0.5; g.globalAlpha = 0.6; g.stroke(p); g.restore();
+  }
+  function wash (g, p, col) {
+    g.fillStyle = col; g.fill(p);
+  }
+  function hatch (g, clip, x0, y0, x1, y1, gap) {
+    g.save(); g.clip(clip); g.strokeStyle = 'rgba(26,18,16,0.55)'; g.lineWidth = 0.8;
+    for (let x = x0 - (y1 - y0); x < x1; x += gap) { g.beginPath(); g.moveTo(x, y1); g.lineTo(x + (y1 - y0), y0); g.stroke(); }
+    g.restore();
+  }
+  function inkTramp (g, pose, mouth, blink) {
+    const NAVY = '#33456f', SKIN = '#ef9f62';
+    // corpo normale, testa grande (1,45 volte) come nelle vignette
+    const legs = [polyP([-25, -90, -5, -90, -8, -8, -23, -8]), polyP([5, -90, 25, -90, 23, -8, 8, -8])];
+    legs.forEach((p, i) => { wash(g, p, '#27365a'); ink(g, p, 1.6, i + 1); });
+    [ellP(-16, -5, 13, 5), ellP(16, -5, 13, 5)].forEach((p, i) => { wash(g, p, '#16161a'); ink(g, p, 1.6, i + 3); });
+    let a = armPts(-1, pose), ap = armPath(a);
+    g.strokeStyle = '#1a1210'; g.lineWidth = 15; g.lineCap = 'round'; g.stroke(ap); g.strokeStyle = '#2b3b62'; g.lineWidth = 12; g.stroke(ap);
+    const jk = new Path2D(JACKET);
+    wash(g, jk, NAVY); hatch(g, jk, -52, -165, -24, -84, 4); ink(g, jk, 2, 5);
+    const shirt = polyP([-10, -163, 10, -163, 0, -132]); wash(g, shirt, '#f4efe4'); ink(g, shirt, 1.2, 6);
+    const tie = polyP([-4, -158, 4, -158, 8, -72, 0, -62, -8, -72]); wash(g, tie, '#d43a33'); hatch(g, tie, 0, -158, 9, -62, 2.5); ink(g, tie, 1.4, 7);
+    g.save(); g.translate(0, -172); g.scale(1.45, 1.45); g.translate(0, 172);
+    const head = new Path2D(); head.ellipse(0, -205, 20, 25, 0, 0, Math.PI * 2); head.ellipse(0, -190, 19.5, 12.5, 0, 0, Math.PI * 2);
+    wash(g, ellP(0, -178, 9, 10), '#d8844a');
+    wash(g, head, SKIN); hatch(g, head, -22, -212, -16, -186, 3); ink(g, ellP(0, -205, 20, 25), 1.3, 8);
+    ink(g, new Path2D('M-19 -196 Q-16 -178 0 -177 Q16 -178 19 -196'), 1.3, 9);
+    ink(g, new Path2D('M-10 -186 Q0 -183 10 -186'), 0.8, 10);   // doppio mento
+    wash(g, ellP(-8, -207, 6.5, 4), '#f7d6a8'); wash(g, ellP(8, -207, 6.5, 4), '#f7d6a8');
+    if (blink) { ink(g, new Path2D('M-11 -207 L-5 -207 M5 -207 L11 -207'), 1, 11); }
+    else { ink(g, new Path2D('M-11 -207 Q-8 -209 -5 -207 M5 -207 Q8 -209 11 -207'), 1.2, 12); g.fillStyle = '#1a1210'; g.fill(ellP(-8, -206.6, 1.2, 1)); g.fill(ellP(8, -206.6, 1.2, 1)); }
+    ink(g, new Path2D('M-14 -213 Q-8 -217 -3 -213 M14 -213 Q8 -217 3 -213'), 1.3, 13);
+    ink(g, new Path2D('M-1 -205 Q-4 -198 -2 -196 Q1 -195 3 -197'), 1, 14);
+    if (mouth > 0.12) { const m = ellP(0, -189, 2.4 + mouth, 1.4 + mouth * 2.4); wash(g, m, '#5a1f1a'); ink(g, m, 1, 15); }
+    else ink(g, new Path2D('M-3.5 -189 Q0 -191 3.5 -189'), 1.2, 16);
+    const hair = new Path2D(HAIR); wash(g, hair, '#f2cd55'); hatch(g, hair, 10, -240, 40, -205, 2.4); ink(g, hair, 1.5, 17);
+    ink(g, new Path2D('M-12 -228 Q4 -236 20 -231 M-6 -224 Q8 -230 22 -226'), 0.7, 18);
+    g.restore();
+    a = armPts(1, pose); ap = armPath(a);
+    g.strokeStyle = '#1a1210'; g.lineWidth = 15; g.stroke(ap); g.strokeStyle = NAVY; g.lineWidth = 12; g.stroke(ap);
+    const hand = ellP(a[2][0] - 1, a[2][1] + (pose > 0.5 ? -5 : 5), 5, 5.5); wash(g, hand, SKIN); ink(g, hand, 1.1, 19);
+  }
+  function drawD (g, t, pose, mouth, blink) {
+    stage(g, {});
+    g.fillStyle = 'rgba(0,0,0,0.45)'; g.beginPath(); g.ellipse(200, 287, 52, 7, 0, 0, Math.PI * 2); g.fill();
+    const off = offscreen(g.canvas.width, g.canvas.height), o = off.getContext('2d');
+    o.setTransform(1, 0, 0, 1, 0, 0); o.clearRect(0, 0, off.width, off.height);
+    o.setTransform(g.getTransform()); o.translate(200, 286); o.scale(0.9, 0.9);
+    inkTramp(o, pose, mouth, blink);
+    tintLayer(off, light.key, 0.25);
+    g.save(); g.setTransform(1, 0, 0, 1, 0, 0); g.drawImage(off, 0, 0); g.restore();
+  }
+
+  /* ---------- animazione: parla e gesticola ---------- */
+  const cards = [['c-a', drawA], ['c-b', drawB], ['c-c', drawC], ['c-d', drawD]].map(([id, fn]) => {
+    const c = document.getElementById(id), g = c.getContext('2d');
+    return { c, g, fn };
+  });
+  function frame (now) {
+    const t = reduced ? 1.2 : now / 1000;
+    const pose = 0.5 + 0.5 * Math.sin(t * 2.3) * Math.sin(t * 0.9 + 1);
+    const mouth = Math.abs(Math.sin(t * 11) * Math.sin(t * 4.3));
+    const blink = (t % 3.7) < 0.12;
+    cards.forEach(({ c, g, fn }) => {
+      g.setTransform(c.width / 400, 0, 0, c.height / 300, 0, 0);
+      g.globalCompositeOperation = 'source-over'; g.globalAlpha = 1;
+      fn(g, t, Math.max(0, pose), mouth, blink);
+    });
+    if (!reduced) requestAnimationFrame(frame);
+  }
+  requestAnimationFrame(frame);
+})();
+</script>
