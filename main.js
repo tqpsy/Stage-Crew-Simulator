@@ -1039,7 +1039,7 @@ function applyPowerAction (action) {
   if (ampsOn && mixerFlip) {
     gameState.procErrors = gameState.procErrors || [];
     gameState.procErrors.push('pop');
-    showToast('TUMP! Mixer acceso o spento con i finali già accesi: il colpo è finito nelle casse. I finali si accendono per ultimi e si spengono per primi.');
+    showToast('TUMP! Mixer acceso o spento con i finali già accesi: il colpo è finito nelle casse. I finali si accendono per ultimi e si spengono per primi.', 'bad');
     if (scene) scene.popSpeakers();
     SFX.tump();
   }
@@ -1072,7 +1072,7 @@ function checkOverloads () {
   const kw = tripped.map(ph => ph + ' ' + fmtKW(loads[ph], 1) + ' kW').join(', ');
   showToast(byPeak
     ? 'Magnetotermico scattato per il picco di accensione (' + kw + '): sono partiti insieme più apparecchi pesanti sulla stessa fase (anche accendendo la ciabatta a cui sono attaccati). Spegni finali e sub, riarma dal Quadro e riaccendili uno alla volta.'
-    : 'Magnetotermico scattato (' + kw + ' su ' + fmtKW(PHASE_BUDGET_W, 1) + ' kW): la fase è spenta. Togli carico o spostalo su un\'altra fase, spegni finali e sub, poi riarma dal Quadro e riaccendili uno alla volta.');
+    : 'Magnetotermico scattato (' + kw + ' su ' + fmtKW(PHASE_BUDGET_W, 1) + ' kW): la fase è spenta. Togli carico o spostalo su un\'altra fase, spegni finali e sub, poi riarma dal Quadro e riaccendili uno alla volta.', 'bad');
   if (window.__scene) window.__scene.sparkQuadro(tripped);
 }
 
@@ -1100,7 +1100,7 @@ function checkLiveCableChange (edge) {
   prot.tripped.rcd = true;
   gameState.rcdTrips = (gameState.rcdTrips || 0) + 1;
   SFX.rcd();
-  showToast('Salvavita scattato: hai collegato o scollegato un cavo di corrente sotto carico, con un apparecchio acceso. Spegni prima di staccare o attaccare, poi riarma il salvavita dal Quadro.');
+  showToast('Salvavita scattato: hai collegato o scollegato un cavo di corrente sotto carico, con un apparecchio acceso. Spegni prima di staccare o attaccare, poi riarma il salvavita dal Quadro.', 'bad');
   if (window.__scene) {
     window.__scene.sparkAtPort(edge.a, edge.aPort);
     window.__scene.sparkQuadro([]);
@@ -1293,8 +1293,9 @@ function showToast (msg, kind) {
   const toast = el('#toast');
   toastHeld = false; toast.classList.remove('hold');
   toast.textContent = msg;
-  toast.classList.remove('ok');
-  if (kind === 'ok') toast.classList.add('ok');
+  // di base è un avviso neutro; 'ok' per i successi, 'bad' solo per i guasti veri
+  toast.classList.remove('ok', 'bad');
+  if (kind === 'ok' || kind === 'bad') toast.classList.add(kind);
   toast.classList.add('show');
   clearTimeout(toastTimer);
   // i messaggi lunghi restano più a lungo: il tempo di leggerli
@@ -1309,7 +1310,7 @@ function holdToast () {
 function releaseToast () {
   if (!toastHeld) return;
   const toast = el('#toast');
-  showToast(toast.textContent, toast.classList.contains('ok') ? 'ok' : undefined);
+  showToast(toast.textContent, ['ok', 'bad'].find(k => toast.classList.contains(k)));
 }
 
 function updateStockUI () {
@@ -5548,9 +5549,9 @@ class StageScene extends Phaser.Scene {
       gameState.stats.failedTests++;
       saveLevel();
       setCircuitStatus('error');
-      if (kind === 'power') { showToast('Scintille! ' + hint); this.fxSparks(); }
-      else if (kind === 'audio') { showToast('L\'impianto gracchia: ' + hint); this.fxCrackle(); }
-      else { showToast('Le luci vanno in tilt: ' + hint); this.fxLightsTilt(); }
+      if (kind === 'power') { showToast('Scintille! ' + hint, 'bad'); this.fxSparks(); }
+      else if (kind === 'audio') { showToast('L\'impianto gracchia: ' + hint, 'bad'); this.fxCrackle(); }
+      else { showToast('Le luci vanno in tilt: ' + hint, 'bad'); this.fxLightsTilt(); }
     };
 
     // corrente

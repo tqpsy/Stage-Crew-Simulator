@@ -230,26 +230,47 @@
   .zoom-controls button:hover{ border-color:var(--amber); color:var(--amber); }
   .zoom-controls button#zoom-reset{ font-size:13px; }
 
+  /* notifica: una scheda discreta con un'icona, non un allarme.
+     Il rosso resta solo per i guasti veri (classe .bad) */
   #toast{
+    --toast-accent:#4aa3ff;
     position:absolute;
-    top:10px; left:50%;
-    transform:translate(-50%,-12px);
-    background:#1c1d22;
+    top:12px; left:50%;
+    transform:translate(-50%,-16px);
+    display:flex;
+    align-items:flex-start;
+    gap:10px;
+    background:rgba(36,37,43,.96);
+    color:var(--text-main);
     border:1px solid var(--hairline);
-    border-left:4px solid var(--red);
-    padding:8px 15px;
-    border-radius:4px;
+    padding:10px 14px 10px 10px;
+    border-radius:12px;
+    box-shadow:0 8px 24px rgba(0,0,0,.45);
     font-size:12.5px;
-    max-width:80%;
+    line-height:1.4;
+    width:max-content;
+    max-width:min(80%, 460px);
     text-align:left;
     opacity:0;
     pointer-events:none;
-    transition:opacity .2s ease, transform .2s ease;
+    transition:opacity .25s ease, transform .25s ease;
     z-index:150;
   }
+  #toast::before{
+    content:'i';
+    flex:0 0 20px;
+    height:20px;
+    border-radius:50%;
+    background:var(--toast-accent);
+    color:#141519;
+    font:700 12px/20px var(--font-ui);
+    text-align:center;
+  }
   #toast.show{ opacity:1; transform:translate(-50%,0); }
-  #toast.ok{ border-left-color:var(--green); }
-  /* durante lo show finale il messaggio aspetta: prima si guardano le luci */
+  #toast.ok{ --toast-accent:var(--green); }
+  #toast.ok::before{ content:'\2713'; }
+  #toast.bad{ --toast-accent:var(--red); border-color:rgba(224,80,63,.55); }
+  #toast.bad::before{ content:'!'; }
   #toast.show.hold{ opacity:0; visibility:hidden; }
 
   /* ---------- "Quale?": tocco a metà tra più dispositivi ---------- */
