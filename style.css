@@ -649,3 +649,110 @@
   .logo-opt.style-opt span{ font-size:10.5px; color:var(--text-muted); }
   .logo-auto{ display:flex; gap:8px; }
   .logo-auto .menu-btn{ flex:1; font-size:15px; padding:8px 6px; }
+
+  /* ---------- SPETTACOLO: il discorso del preside (spettacolo.js) ----------
+     Stessa pagina del montaggio: l'header diventa quello dello spettacolo e
+     la barra dei pezzi il banco regia (sotto il palco sul telefono, di lato
+     sul computer). Il palco resta la scena isometrica. */
+  .show-btn{ border-color:var(--amber); color:var(--amber); }
+  #show-head{ display:grid; gap:5px; width:100%; }
+  #show-head[hidden], #show-desk[hidden], #show-pause[hidden]{ display:none; }
+  body.in-show header{ flex-wrap:nowrap; padding:6px 12px; }
+  body.in-show .level-wrap, body.in-show .meters, body.in-show #toolbar,
+  body.in-show .layers-panel, body.in-show .zoom-controls, body.in-show #cable-banner{ display:none !important; }
+  .sh-row{ display:flex; align-items:center; gap:10px; min-width:0; }
+  .face-mini{ width:34px; height:34px; border-radius:50%; background:var(--bg-panel-raised); border:1px solid var(--hairline); overflow:hidden; flex:none; display:inline-block; }
+  .face-mini svg{ display:block; }
+  .sh-who{ font-family:var(--font-display); font-size:18px; letter-spacing:.03em; line-height:1; white-space:nowrap; }
+  .sh-who small{ display:block; font-family:var(--font-ui); font-size:11px; color:var(--text-muted); letter-spacing:0; margin-top:2px; }
+  .sh-timeline{ flex:1; height:8px; background:var(--bg-panel-raised); border-radius:4px; overflow:hidden; min-width:40px; }
+  .sh-timeline i{ display:block; height:100%; width:0; background:var(--amber); }
+  .sh-clock{ font-family:var(--font-display); font-size:22px; font-variant-numeric:tabular-nums; }
+  .sh-stat{ flex:1; display:flex; align-items:center; gap:8px; font-size:12px; color:var(--text-muted); text-transform:uppercase; letter-spacing:.06em; }
+  .sh-bar{ flex:1; height:10px; background:var(--bg-panel-raised); border-radius:5px; overflow:hidden; }
+  .sh-bar i{ display:block; height:100%; width:60%; background:#f2c53d; transition:width .3s, background .3s; }
+  .sh-pill{ min-width:44px; min-height:36px; border-radius:8px; background:var(--bg-panel-raised); border:1px solid var(--hairline); color:var(--text-main); font-size:16px; cursor:pointer; }
+
+  /* fumetti degli imprevisti, agganciati ai personaggi sul palco */
+  #show-bubbles{ position:absolute; inset:0; pointer-events:none; z-index:20; overflow:hidden; }
+  .bub{ position:absolute; pointer-events:auto; display:flex; gap:7px; align-items:center; max-width:min(250px, 72%);
+    background:#fffdf6; color:#1a1a1a; border-radius:12px; padding:6px 10px 6px 7px; box-shadow:0 4px 14px rgba(0,0,0,.5); cursor:pointer; font-size:13px; line-height:1.25; }
+  .bub::after{ content:""; position:absolute; bottom:-7px; left:var(--tail, 50%); margin-left:-7px; border:7px solid transparent; border-top-color:#fffdf6; border-bottom:0; }
+  .bub svg{ flex:none; }
+  .bub b{ display:block; font-weight:700; }
+  .bub small{ display:block; color:#6a5a3a; font-size:12px; }
+  .bub small[hidden]{ display:none; }
+  #show-caption{ position:absolute; left:8px; right:8px; bottom:8px; text-align:center; pointer-events:none; z-index:19; }
+  #show-caption b{ display:inline-block; background:rgba(10,10,12,.78); padding:5px 10px; border-radius:8px; font-weight:600; line-height:1.3; }
+  #show-caption small{ display:block; color:var(--text-muted); font-size:11px; margin-top:2px; }
+  #show-pause{ position:absolute; inset:0; z-index:25; display:grid; place-items:center; background:rgba(3,5,13,.82);
+    font-family:var(--font-display); font-size:40px; letter-spacing:.2em; color:var(--text-muted); }
+
+  /* banco regia */
+  #show-desk{ flex:none; height:44vh; height:44dvh; min-height:250px; background:var(--bg-panel); border-top:1px solid var(--hairline);
+    display:flex; flex-direction:column; padding:6px 10px 10px; gap:8px; }
+  .sd-tabs{ display:flex; gap:6px; }
+  .sd-tab{ flex:1; min-height:38px; background:var(--bg-panel-raised); border:1px solid var(--hairline); border-radius:8px; color:var(--text-muted);
+    font-family:var(--font-display); font-size:17px; letter-spacing:.08em; cursor:pointer; }
+  .sd-tab[aria-selected=true]{ color:var(--text-main); border-color:var(--amber); box-shadow:inset 0 -3px 0 var(--amber); }
+  .sd-panel{ flex:1; min-height:0; display:flex; gap:8px; }
+  .sd-panel[hidden]{ display:none; }
+  .sd-strip{ flex:1; min-width:0; background:var(--bg-panel-raised); border:1px solid var(--hairline); border-radius:10px; padding:6px 3px;
+    display:grid; grid-template-rows:auto 1fr auto; gap:6px; justify-items:center; }
+  .sd-strip.pulse, .sd-mem.pulse{ animation:sdPulse .5s ease-in-out 4; }
+  @keyframes sdPulse{ 50%{ border-color:var(--amber); box-shadow:0 0 0 3px rgba(242,165,65,.35); } }
+  .sd-name{ font-size:12px; color:var(--text-muted); text-transform:uppercase; letter-spacing:.06em; display:flex; align-items:center; gap:3px; white-space:nowrap; height:20px; }
+  .sd-name .face-mini{ width:20px; height:20px; }
+  .fadewrap{ display:flex; gap:5px; height:100%; min-height:0; }
+  .fader{ position:relative; width:28px; height:100%; touch-action:none; cursor:ns-resize; }
+  .fader:focus-visible{ outline:2px solid var(--amber); outline-offset:2px; }
+  .fader .track{ position:absolute; left:12px; width:4px; top:6px; bottom:6px; background:#0c0d10; border-radius:2px; }
+  .fader .knob{ position:absolute; left:0; width:28px; height:16px; margin-top:-8px; background:linear-gradient(#d8d4cb,#8f8b84); border-radius:3px; box-shadow:0 2px 4px #000; }
+  .fader .knob::after{ content:""; position:absolute; left:3px; right:3px; top:7px; height:2px; background:#222; }
+  .sd-meter{ position:relative; width:8px; height:100%; background:#0c0d10; border-radius:2px; overflow:hidden; }
+  .sd-meter .zone{ position:absolute; left:0; right:0; background:rgba(73,176,106,.28); }
+  .sd-meter i{ position:absolute; left:0; right:0; bottom:0; height:0; background:var(--green); }
+  .sd-mute{ width:100%; max-width:64px; min-height:34px; border:1px solid var(--hairline); background:#15161a; color:var(--text-main); border-radius:6px; font-size:11px; font-weight:700; letter-spacing:.06em; cursor:pointer; }
+  .sd-mute[aria-pressed=true]{ background:var(--red); border-color:var(--red); color:#fff; }
+  .sd-lights{ flex-direction:column; }
+  .sd-pars{ display:flex; gap:8px; justify-content:space-around; }
+  .sd-par{ display:grid; justify-items:center; gap:3px; background:none; border:0; padding:0; font-size:11px; color:var(--text-muted); cursor:pointer; min-width:48px; }
+  .sd-par .dot{ width:40px; height:40px; border-radius:50%; border:3px solid #2c2d33; box-shadow:0 0 14px currentColor; }
+  .sd-lights-bottom{ display:flex; gap:10px; flex:1; min-height:0; }
+  .sd-mems{ flex:1; display:grid; grid-template-columns:repeat(2,1fr); gap:6px; }
+  .sd-mem{ background:var(--bg-panel-raised); border:1px solid var(--hairline); border-radius:8px; padding:4px 8px; text-align:left; color:var(--text-main);
+    display:flex; flex-direction:column; justify-content:center; gap:2px; cursor:pointer; -webkit-user-select:none; user-select:none; -webkit-touch-callout:none; }
+  .sd-mem b{ font-family:var(--font-display); font-size:16px; letter-spacing:.04em; }
+  .sd-mem small{ font-size:10px; color:var(--text-muted); }
+  .sd-mem[aria-pressed=true]{ border-color:var(--amber); box-shadow:inset 0 0 0 1px var(--amber); }
+  .sd-dimmer{ display:grid; grid-template-rows:auto 1fr; gap:4px; justify-items:center; font-size:10px; color:var(--text-muted); text-transform:uppercase; }
+  .sd-hint{ font-size:12px; color:var(--text-muted); line-height:1.35; }
+  @media (max-height:700px){ .sd-hint{ display:none; } }
+
+  /* carte d'inizio e di fine */
+  .show-card{ width:min(420px,100%); background:var(--bg-panel); border:1px solid var(--hairline); border-radius:14px; padding:18px; display:grid; gap:12px; max-height:100%; overflow:auto; }
+  .sc-top{ display:flex; gap:14px; align-items:center; }
+  .sc-portrait{ width:96px; height:96px; border-radius:12px; background:linear-gradient(#2a3a5a,#1a2233); flex:none; overflow:hidden; border:2px solid var(--amber); }
+  .show-card h2{ margin:0; font-family:'Permanent Marker','Comic Sans MS',cursive; font-weight:400; font-size:26px; line-height:1.1; color:var(--amber); }
+  .sc-tag{ font-size:11px; letter-spacing:.08em; text-transform:uppercase; color:var(--text-muted); }
+  .show-card p{ margin:0; font-size:15px; line-height:1.5; }
+  .show-card ul{ margin:0; padding-left:18px; font-size:15px; line-height:1.5; }
+  .sc-toggle{ display:flex; align-items:center; justify-content:space-between; gap:10px; background:var(--bg-panel-raised); border:1px solid var(--hairline);
+    border-radius:10px; padding:8px 12px; font-size:13px; color:var(--text-main); cursor:pointer; }
+  .sc-toggle .sw{ width:38px; height:22px; border-radius:11px; background:#3a3c44; position:relative; flex:none; transition:background .2s; }
+  .sc-toggle .sw::after{ content:""; position:absolute; top:3px; left:3px; width:16px; height:16px; border-radius:50%; background:#fff; transition:left .2s; }
+  .sc-toggle[aria-pressed=true] .sw{ background:var(--green); }
+  .sc-toggle[aria-pressed=true] .sw::after{ left:19px; }
+  .sc-cta{ background:var(--amber); color:#1a1206; border:0; border-radius:10px; padding:12px; font-family:var(--font-display); font-size:22px; letter-spacing:.06em; cursor:pointer; }
+  .sc-results{ display:grid; grid-template-columns:repeat(3,1fr); gap:8px; text-align:center; }
+  .sc-results div{ background:var(--bg-panel-raised); border-radius:10px; padding:8px 4px; }
+  .sc-results b{ display:block; font-family:var(--font-display); font-size:26px; font-variant-numeric:tabular-nums; }
+  .sc-results span{ font-size:11px; color:var(--text-muted); text-transform:uppercase; letter-spacing:.06em; }
+
+  @media (min-width:900px){
+    body.in-show #app{ display:grid; grid-template-columns:minmax(0,1fr) 400px; grid-template-rows:auto minmax(0,1fr); }
+    body.in-show header{ grid-column:1 / -1; }
+    body.in-show #stage-wrap{ grid-column:1; grid-row:2; min-height:0; min-width:0; overflow:hidden; }
+    body.in-show #show-desk{ grid-column:2; grid-row:2; height:auto; border-top:0; border-left:1px solid var(--hairline); }
+  }
+  @media (prefers-reduced-motion:reduce){ .sd-strip.pulse, .sd-mem.pulse{ animation:none; border-color:var(--amber); } }

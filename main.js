@@ -1275,6 +1275,8 @@ function updateConnectionCounter () {
 }
 
 function setCircuitStatus (state) {
+  gameState.testOk = state === 'ok';   // l'ultimo Test impianto è riuscito e da allora non è cambiato nulla
+  if (window.Show) Show.refreshButton();
   const lamp = el('#circuit-lamp');
   const text = el('#circuit-text');
   lamp.classList.remove('ok', 'error');
@@ -1952,7 +1954,7 @@ function openMenu (page) {
 function closeMenu () {
   menuOpen = false;
   el('#menu-modal').classList.remove('show');
-  setSceneInput(true);
+  setSceneInput(!(window.Show && Show.active));   // nello spettacolo il palco non si tocca
   sceneKeyboard(true);
 }
 const cleanName = s => String(s || '').replace(/\s+/g, ' ').trim().slice(0, SERVICE_MAX);
@@ -5566,9 +5568,8 @@ class StageScene extends Phaser.Scene {
       : null;
     // prossimo obiettivo: il microfono per il discorso del preside
     const ch = micChannel();
-    // (lo spettacolo col discorso del preside non è ancora nel gioco:
-    // c'è solo il prototipo in prototipi/, quindi qui non si promette nulla)
-    const next = ch ? ' Microfono pronto sul CH ' + ch + ' per il discorso del preside.'
+    // col microfono collegato, a fine show arriva il preside (spettacolo.js)
+    const next = ch ? ' Microfono pronto sul CH ' + ch + ': il preside sta arrivando.'
       : ' Prossimo: arriva il preside. Monta l\'asta sul palco, il microfono sulla giraffa e collegalo con un XLR a un ingresso MIC del mixer.';
     this.repGain = gameActive ? addRecord() : 0;
     showToast('Impianto collaudato, si va in scena! ' + (tip ? 'Piccolo consiglio: ' + tip : 'Procedura perfetta.')
@@ -5696,7 +5697,7 @@ class StageScene extends Phaser.Scene {
     if (!this.liveBeams) this.liveBeams = this.add.graphics().setDepth(44).setBlendMode(Phaser.BlendModes.ADD);
     const g = this.liveBeams;
     g.clear();
-    if (this.fx) return;
+    if (this.fx || this.show) return;   // durante effetti e spettacolo i fasci li disegnano loro
     this.parBeamGeometry(placedOfType('par').filter(c => isRunning(c.id) && this.compVisuals[c.id]))
       .forEach(b => this.drawParBeam(g, b, 0xffe9c4, 0.5));
   }
@@ -5857,7 +5858,7 @@ class StageScene extends Phaser.Scene {
     // show saltato dalle impostazioni: solo la scritta
     if (settings().skipShow) {
       this.showBanner();
-      this.fxLater(2600, () => this.stopFx());
+      this.fxLater(2600, () => { this.stopFx(); Show.offer(); });
       return;
     }
     const BPM = 120, BEATS = 14, BEAT_MS = 60000 / BPM;
@@ -5930,7 +5931,8 @@ class StageScene extends Phaser.Scene {
 
     // finale: la scritta, poi torna il giorno
     this.fxLater(T_END - 800, () => this.showBanner());
-    this.fxLater(T_DAY + 1300, () => this.stopFx());
+    // poi, se il microfono è pronto, sale sul palco il preside
+    this.fxLater(T_DAY + 1300, () => { this.stopFx(); Show.offer(); });
   }
 
   /* ---------------- reset ---------------- */
@@ -6017,6 +6019,14 @@ class StageScene extends Phaser.Scene {
     gameState.stock = { ...snap.stock };
     gameState.nextIndex = { ...snap.nextIndex };
     gameState.edgeSeq = snap.edgeSeq;
+    // le posizioni sullo schermo dipendono dalla forma della finestra
+    // all'avvio (GAME_H, ORIGIN_Y): una partita salvata con una finestra di
+    // forma diversa (telefono girato, altro schermo) va riallineata alla griglia
+    const ref = Object.values(gameState.placed).find(c => c.gx != null && c.foot && c.screen);
+    if (ref) {
+      const cc = compCenter(ref), dy = gridToScreen(cc.gx, cc.gy).y - ref.screen.y;
+      if (Math.abs(dy) > 0.5) Object.values(gameState.placed).forEach(c => { if (c.screen) c.screen = { x: c.screen.x, y: c.screen.y + dy }; });
+    }
 
     Object.values(gameState.placed).forEach(c => {
       const def = COMPONENT_TYPES[c.type];
