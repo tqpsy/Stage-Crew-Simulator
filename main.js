@@ -2275,7 +2275,7 @@ const REAR_PANELS = {
     ] },
   ampli: { style: 'rack', left: 'fan', right: 'fuse', power: true, serial: 'CLASS-D POWER AMPLIFIER  ·  2 × 500 W @ 4 Ω',
     sections: [['INPUT', [['in_L', 'IN A (L)'], ['in_R', 'IN B (R)']]], ['OUTPUT', [['out_L', 'OUT CH1'], ['out_R', 'OUT CH2']]], ['POWER ~230V', [['power', 'MAINS IN']]]] },
-  par: { style: 'round', serial: 'LED PAR 7 × 10 W RGBW',
+  par: { style: 'round', dmx: true, serial: 'LED PAR 7 × 10 W RGBW',
     sections: [['POWER', [['power_in', 'POWER IN'], ['power_thru', 'POWER OUT']]], ['DMX 512', [['dmx_in', 'DMX IN'], ['dmx_thru', 'DMX THRU']]]] },
   mic: { style: 'round', serial: 'MICROFONO DINAMICO DA VOCE  ·  CARDIOIDE',
     sections: [['USCITA', [['out', 'XLR OUT']]]] },
@@ -2638,11 +2638,14 @@ function renderRoundPanel (ctx, comp, panel) {
   const D = 760, R = D / 2, ARM = 70;
   const W = D + ARM * 2, H = D + 20;
   const cx = W / 2, cy = R + 10;
-  const dmx = parDmx(comp);
-  const mode = PAR_MODES[dmx.mode];
-  const chCount = parseInt(mode.id, 10);
+  // display e tasti DMX solo sui fari (panel.dmx): il microfono ha lo
+  // stesso corpo tondo ma solo la sua presa, e non riceve corrente
+  const hasDmx = !!panel.dmx;
+  const dmx = hasDmx ? parDmx(comp) : null;
+  const mode = hasDmx ? PAR_MODES[dmx.mode] : null;
+  const chCount = hasDmx ? parseInt(mode.id, 10) : 0;
   // display acceso solo se il faro è alimentato
-  const powered = isPowered(comp.id);
+  const powered = hasDmx && isPowered(comp.id);
   const shown = !powered ? '' : (parMenuField === 'addr' ? 'A' + String(dmx.addr).padStart(3, '0') : mode.id);
   // sul telefono si inquadra solo il centro del disco (display e prese):
   // il bordo tondo resta visibile sopra e sotto
@@ -2654,7 +2657,7 @@ function renderRoundPanel (ctx, comp, panel) {
     <circle cx="${cx}" cy="${cy}" r="${R}" fill="${st.bg}" stroke="${st.edge}" stroke-width="3"/>
     <circle cx="${cx}" cy="${cy}" r="${R - 14}" fill="none" stroke="#0e0f12" stroke-width="10" stroke-dasharray="3 9"/>
     <circle cx="${cx}" cy="${cy}" r="${R - 30}" fill="none" stroke="${st.edge}" stroke-width="1.5"/>
-    <rect x="${cx - 150}" y="${cy - R + 52}" width="120" height="48" rx="6" fill="#0e0f12" stroke="#3a3d45"/>
+    ${hasDmx ? `<rect x="${cx - 150}" y="${cy - R + 52}" width="120" height="48" rx="6" fill="#0e0f12" stroke="#3a3d45"/>
     <text x="${cx - 90}" y="${cy - R + 86}" font-size="28" font-weight="700" fill="#e0503f" text-anchor="middle" font-family="monospace">${shown}</text>
     ${[['menu', 'MENU'], ['up', '▲'], ['down', '▼'], ['enter', 'ENTER']].map(([act, l], i) => `
       <g class="rp-btn" data-act="${act}" style="cursor:pointer">
@@ -2662,7 +2665,7 @@ function renderRoundPanel (ctx, comp, panel) {
         <text x="${cx + 2 + i * 44}" y="${cy - R + 81}" font-size="${act === 'up' || act === 'down' ? 14 : 9.5}" font-weight="700" fill="#cfd2d6" text-anchor="middle">${l}</text></g>`).join('')}
     ${!powered ? `<text x="${cx}" y="${cy - R + 124}" font-size="13" fill="#ffc27a" text-anchor="middle">Display spento: il faro non riceve corrente</text>` : ''}
     <text x="${cx}" y="${cy - R + 124}" font-size="13" fill="#cfd2d6" text-anchor="middle" opacity="${powered ? 1 : 0}">Indirizzo <tspan font-weight="700" fill="${parMenuField === 'addr' ? '#f2a541' : '#eee9df'}">${String(dmx.addr).padStart(3, '0')}</tspan> · Modalità <tspan font-weight="700" fill="${parMenuField === 'mode' ? '#f2a541' : '#eee9df'}">${escapeHtml(mode.name)}</tspan></text>
-    <text x="${cx}" y="${cy - R + 142}" font-size="11.5" fill="${st.sub}" text-anchor="middle" opacity="${powered ? 1 : 0}">occupa i canali ${dmx.addr}–${dmx.addr + chCount - 1} · MENU cambia voce, ▲▼ regolano</text>`;
+    <text x="${cx}" y="${cy - R + 142}" font-size="11.5" fill="${st.sub}" text-anchor="middle" opacity="${powered ? 1 : 0}">occupa i canali ${dmx.addr}–${dmx.addr + chCount - 1} · MENU cambia voce, ▲▼ regolano</text>` : ''}`;
   let y0 = cy - R + 176;
   panel.sections.forEach(([title, ports]) => {
     const w = sectionWidth(ports);
@@ -5563,7 +5566,9 @@ class StageScene extends Phaser.Scene {
       : null;
     // prossimo obiettivo: il microfono per il discorso del preside
     const ch = micChannel();
-    const next = ch ? ' Microfono pronto sul CH ' + ch + ': il preside può salire sul palco.'
+    // (lo spettacolo col discorso del preside non è ancora nel gioco:
+    // c'è solo il prototipo in prototipi/, quindi qui non si promette nulla)
+    const next = ch ? ' Microfono pronto sul CH ' + ch + ' per il discorso del preside.'
       : ' Prossimo: arriva il preside. Monta l\'asta sul palco, il microfono sulla giraffa e collegalo con un XLR a un ingresso MIC del mixer.';
     this.repGain = gameActive ? addRecord() : 0;
     showToast('Impianto collaudato, si va in scena! ' + (tip ? 'Piccolo consiglio: ' + tip : 'Procedura perfetta.')

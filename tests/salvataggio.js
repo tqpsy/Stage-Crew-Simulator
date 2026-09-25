@@ -71,6 +71,22 @@ const path = require('path');
     toggleDevicePower(m);
     S.runSystemTest();                    // fallisce: un test in più nelle statistiche
   });
+  // il microfono ha il corpo tondo come il PAR, ma nel suo pannello c'è
+  // solo l'uscita XLR: niente display DMX e niente avviso sulla corrente
+  const micPanel = await ev(() => {
+    const S = window.__scene, w = gridToScreen(4.5, 6.5);
+    S.placeComponentAt('asta', w.x, w.y);
+    const a = placedOfType('asta')[0];
+    const w2 = gridToScreen(a.gx + .5, a.gy + .5); S.placeComponentAt('mic', w2.x, w2.y);
+    const m = placedOfType('mic')[0];
+    openRearPanel(m.id);
+    const html = el('#rear-svg').innerHTML;
+    closeRearPanel();
+    // si toglie di nuovo, per non cambiare il resto del test
+    S.deleteComponent(m.id); S.deleteComponent(placedOfType('asta')[0].id);
+    return { dmx: /rp-btn|Indirizzo|DMX/.test(html), power: /corrente/.test(html), xlr: /XLR OUT/.test(html) };
+  });
+  check(!micPanel.dmx && !micPanel.power && micPanel.xlr, 'pannello del microfono sbagliato: ' + JSON.stringify(micPanel));
   const before = await ev(() => ({ placed: Object.keys(gameState.placed).sort(), edges: gameState.edges.length, on: placedOfType('mixer')[0].on, prot: { ...findQuadro().prot, tripped: undefined }, tests: gameState.stats.tests, failed: gameState.stats.failedTests }));
   check(before.edges === 2 && before.on && before.tests === 1 && before.failed === 1, 'preparazione non riuscita: ' + JSON.stringify(before));
 
