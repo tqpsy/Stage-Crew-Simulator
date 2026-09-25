@@ -50,12 +50,12 @@ const path = require('path');
     const r = await p.evaluate(() => {
       for (let i = 0; i < 40; i++) Show.step(0.1);
       const wrap = el('#stage-wrap').getBoundingClientRect();
-      return { t: Show.state.t, sw: document.documentElement.scrollWidth, bub: [...document.querySelectorAll('.bub')].map(x => { const q = x.getBoundingClientRect(); return [q.left - wrap.left, q.right - wrap.left, wrap.width]; }) };
+      return { t: Show.state.t, sw: document.documentElement.scrollWidth, bub: [...document.querySelectorAll('.alert')].map(x => { const q = x.getBoundingClientRect(); return [q.left - wrap.left, q.right - wrap.left, wrap.width]; }) };
     });
     check(r.sw <= W, 'scorrimento orizzontale a t=' + r.t.toFixed(0));
-    r.bub.forEach(([l, rr, w]) => { bubblesSeen++; check(l >= 0 && rr <= w + 1, 'fumetto fuori dal palco a t=' + r.t.toFixed(0)); });
+    r.bub.forEach(([l, rr, w]) => { bubblesSeen++; check(l >= 0 && rr <= w + 1, 'avviso fuori dal palco a t=' + r.t.toFixed(0)); });
   }
-  check(bubblesSeen > 0, 'nessun fumetto visto durante il discorso');
+  check(bubblesSeen > 0, 'nessun avviso visto durante il discorso');
   if (W < 700) {
     const lay = await p.evaluate(() => ({ stage: el('#stage-wrap').getBoundingClientRect().height, desk: el('#show-desk').getBoundingClientRect(), vh: innerHeight }));
     check(lay.desk.bottom <= lay.vh + 1 && lay.desk.height >= lay.vh * 0.3 && lay.stage >= lay.vh * 0.3, 'banco regia e palco non si dividono lo schermo: ' + JSON.stringify(lay));

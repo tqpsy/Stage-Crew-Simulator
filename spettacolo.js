@@ -214,40 +214,37 @@ const Show = (() => {
     if (dimPct) dimPct.textContent = Math.round(S.dimmer * 100) + '%';
   }
 
-  /* ---------- fumetti: HTML sopra il palco, agganciati ai punti del mondo ---------- */
+  /* ---------- avvisi della regia: schede in alto sul bordo del palco (non
+     sono parole del preside); sul palco resta solo un segnale su chi ha il
+     problema ---------- */
+  const WHO = { preside: 'Preside', 'spk-l': 'Cassa sinistra', 'spk-r': 'Cassa destra' };
   const bubbleEls = new Map();
-  const layer = $('#show-bubbles');
+  const layer = $('#show-alerts');
   function renderBubbles () {
     const live = new Set();
     S.events.filter(e => e.live).forEach(e => {
       live.add(e);
       let el = bubbleEls.get(e);
       if (!el) {
-        el = document.createElement('div'); el.className = 'bub'; el.setAttribute('role', 'button');
-        el.innerHTML = '<svg width="26" height="26" viewBox="0 0 26 26"><circle cx="13" cy="13" r="10" fill="none" stroke="#ddd" stroke-width="4"/><circle class="arc" cx="13" cy="13" r="10" fill="none" stroke-width="4" transform="rotate(-90 13 13)"/></svg><div><b></b><small></small></div>';
+        el = document.createElement('div'); el.className = 'alert'; el.setAttribute('role', 'button');
+        el.innerHTML = '<span class="al-ico"></span><div class="al-txt"><b></b><small></small></div><span class="al-who"></span><i class="al-bar"></i>';
         el.addEventListener('pointerdown', ev => { ev.stopPropagation(); tapBubble(e); });
+        el.querySelector('.al-ico').textContent = e.icon;
+        el.querySelector('b').textContent = e.text;
+        el.querySelector('.al-who').textContent = WHO[e.target] || '';
         layer.appendChild(el); bubbleEls.set(e, el);
       }
-      el.querySelector('b').textContent = e.icon + ' ' + e.text;
       const sm = el.querySelector('small'); sm.textContent = hints ? e.hint : ''; sm.hidden = !hints;
       const timed = e.win < 90;
       const left = timed ? Math.max(0, (e.deadline - S.t) / e.win) : Math.max(0, 1 - (S.t - e.at) / e.dur);
-      const arc = el.querySelector('.arc');
-      arc.setAttribute('stroke', left > 0.5 ? '#d9a21b' : '#e0503f');
-      arc.setAttribute('stroke-dasharray', `${(left * 62.8).toFixed(1)} 70`);
-      const [px, py] = View.anchor(e.target, S);
-      const W = layer.clientWidth, bw = el.offsetWidth, bh = el.offsetHeight;
-      // i fumetti che partono insieme si mettono uno sopra l'altro
-      const stack = [...live].filter(o => o !== e && o.target === e.target && o.at < e.at).length;
-      const lx = Math.max(6, Math.min(W - bw - 6, px - bw / 2));
-      el.style.left = lx + 'px';
-      el.style.top = Math.max(4, py - bh - 10 - stack * (bh + 6)) + 'px';
-      el.style.setProperty('--tail', Math.max(16, Math.min(bw - 16, px - lx)) + 'px');
+      const bar = el.querySelector('.al-bar');
+      bar.style.width = (left * 100).toFixed(1) + '%';
+      bar.style.background = left > 0.5 ? '#f2c53d' : '#e0503f';
     });
     bubbleEls.forEach((el, e) => { if (!live.has(e)) { el.remove(); bubbleEls.delete(e); } });
   }
   function clearBubbles () { bubbleEls.forEach(el => el.remove()); bubbleEls.clear(); }
-  // toccare il fumetto indica il comando da usare (solo coi suggerimenti)
+  // toccare l'avviso indica il comando da usare (solo coi suggerimenti)
   function tapBubble (e) {
     if (!hints) return;
     if (e.tab === 'mixer') pulse($('#sd-strip-' + (e.id === 'sigla' ? PC : S.micCh)));
@@ -527,18 +524,20 @@ window.Show = Show;
 
 /* ---------------------------------------------------------------------
    Vista dello spettacolo: il palco come lo vede il pubblico, disegnato in
-   un canvas. I PAR sono fari fissi (due tagli sugli stativi ai lati del
-   palco, due frontali nel pit): fasci fermi, netti e simmetrici, che
-   cambiano solo colore e intensità. La luce si vede nella foschia, fa una
-   pozza sul pavimento e sul fondale, colora il preside e ne proietta
-   l'ombra sul fondale.
+   un canvas in stile cartone animato (colori piatti, contorni spessi, a
+   metà tra South Park e i Simpson). I PAR sono fari fissi (due tagli sugli
+   stativi ai lati del palco, due frontali nel pit): fasci fermi, netti e
+   simmetrici, che cambiano solo colore e intensità. La luce fa una pozza
+   sul pavimento e sul sipario, colora il preside e ne proietta l'ombra.
    --------------------------------------------------------------------- */
 const View = (() => {
   const W = 1000, VIS_W = 800, VIS = [40, 600];   // mondo; parte che deve restare in vista
-  const HOME = 500, FEET = 442, WALL = 360;       // il preside all'asta; piede del fondale
+  const HOME = 500, FEET = 446, WALL = 360;       // il preside all'asta; piede del sipario
   const SPK = { l: 100, r: 900 };                  // casse (x) ai lati, davanti al palco
   const WALK = { l: 300, r: 700 };                // fin dove arriva il preside verso una cassa
-  const PRES_H = 190, PRES_K = PRES_H / 235;      // altezza del preside nel mondo / nel disegno
+  const PRES_H = 196, PRES_K = PRES_H / 200;      // altezza del preside nel mondo / nel disegno
+  const MOUTH = [60, 93];                         // bocca nel disegno
+  const INK = '#1b1410', NIGHT = 'rgba(10,12,34,0.5)';
   const PARS = [
     { kind: 'taglio', lens: [200, 300], end: [860, 352], r: 100 },
     { kind: 'front', lens: [340, 572], aim: [540, 292], r: 150 },
@@ -548,43 +547,47 @@ const View = (() => {
   const COLORS = { bianco: '#f4f1ea', rosso: '#e0503f', blu: '#3f7fe0', verde: '#49b06a', ambra: '#f2a541', viola: '#b36bff' };
   const rgb = hex => [1, 3, 5].map(i => parseInt(hex.slice(i, i + 2), 16));
   const rgba = (c, a) => `rgba(${c[0]},${c[1]},${c[2]},${Math.max(0, Math.min(1, a)).toFixed(3)})`;
+  // colore visto di sera: più scuro e un po' più blu
+  const dim = (hex, f = 0.5) => { const c = rgb(hex); return `rgb(${Math.round(c[0] * f + 8)},${Math.round(c[1] * f + 10)},${Math.round(c[2] * f + 26)})`; };
 
   const cv = document.getElementById('show-canvas');
   const ctx = cv.getContext('2d');
   let cw = 0, ch = 0, dpr = 1, s = 1, ox = 0, oy = 0;
   let bg = null, sprites = null, crowd = [], cheerAt = null;
 
-  /* ---------- il preside: la caricatura del ritratto, a figura intera ---------- */
+  /* ---------- il preside, in stile cartone: testa grande, occhi a palla,
+     ciuffo giallo, abbronzatura arancio e cravatta rossa lunghissima ---------- */
   const TRAMP = [
-    ['#121a2e', 'M24 134 L24 226 L47 226 L49 150 L51 150 L53 226 L76 226 L76 134 Z'],
-    ['#0b0b0d', 'M18 222 Q18 234 34 234 L49 234 L49 222 Z M51 222 L51 234 L66 234 Q82 234 82 222 Z'],
-    ['#1d2b4a', 'M14 140 L20 92 Q50 78 80 92 L86 140 Z'],
-    ['#1d2b4a', 'M14 96 Q6 120 10 150 L19 150 L22 104 Z M86 96 Q94 120 90 150 L81 150 L78 104 Z'],
-    ['#f0a35a', 'M14.5 154 a5 5 0 1 0 0.1 0 Z M85.5 154 a5 5 0 1 0 0.1 0 Z'],
-    ['#f4f1ea', 'M40 88 L50 104 L60 88 Z'],
-    ['#d6392f', 'M47 92 L53 92 L57 172 L50 180 L43 172 Z'],
-    ['#e8964f', 'M42 72 h16 v16 h-16 Z'],
-    ['#f0a35a', 'M26 52 a24 28 0 1 0 48 0 a24 28 0 1 0 -48 0 Z'],
-    ['#f7d7b0', 'M32 54 a6 4 0 1 0 12 0 a6 4 0 1 0 -12 0 Z M56 54 a6 4 0 1 0 12 0 a6 4 0 1 0 -12 0 Z'],
-    ['#2a1d12', 'M37 54 a2 2 0 1 0 4 0 a2 2 0 1 0 -4 0 Z M59 54 a2 2 0 1 0 4 0 a2 2 0 1 0 -4 0 Z'],
-    ['#f4d35e', 'M22 44 Q20 16 52 18 Q84 18 80 40 Q70 26 54 30 Q40 24 30 34 Q26 38 22 44 Z'],
-    ['#e9c23f', 'M48 20 Q70 12 84 26 Q78 22 66 24 Z']
+    ['#1c2440', 'M40 158 h16 v32 h-16 Z M64 158 h16 v32 h-16 Z'],
+    ['#141414', 'M28 194 a16 7 0 1 0 32 0 a16 7 0 1 0 -32 0 Z M60 194 a16 7 0 1 0 32 0 a16 7 0 1 0 -32 0 Z'],
+    ['#243a6b', 'M26 118 Q12 140 16 162 L28 162 Q28 142 38 124 Z M94 118 Q108 140 104 162 L92 162 Q92 142 82 124 Z'],
+    ['#f3a052', 'M22 166 a8 8 0 1 0 0.1 0 Z M98 166 a8 8 0 1 0 0.1 0 Z'],
+    ['#243a6b', 'M24 168 Q20 120 38 104 L82 104 Q100 120 96 168 Z'],
+    ['#f7f3ea', 'M48 104 L60 126 L72 104 Z'],
+    ['#d8332a', 'M55 110 L65 110 L69 176 L60 186 L51 176 Z'],
+    ['#f3a052', 'M20 62 Q20 18 60 18 Q100 18 100 62 Q100 106 60 108 Q20 106 20 62 Z'],
+    ['#f7f3ea', 'M34 62 a12 12 0 1 0 24 0 a12 12 0 1 0 -24 0 Z M62 62 a12 12 0 1 0 24 0 a12 12 0 1 0 -24 0 Z'],
+    ['#1b1410', 'M45 64 a3 3 0 1 0 6 0 a3 3 0 1 0 -6 0 Z M69 64 a3 3 0 1 0 6 0 a3 3 0 1 0 -6 0 Z'],
+    ['#e08a3e', 'M54 78 a6 6 0 1 0 12 0 a6 6 0 1 0 -12 0 Z'],
+    ['#f7d13c', 'M16 58 Q10 10 62 10 Q110 12 104 50 Q92 30 68 36 Q46 26 30 44 Q22 50 16 58 Z'],
+    ['#f7d13c', 'M60 12 Q92 0 112 28 Q98 20 82 24 Z']
   ].map(([c, d]) => [c, new Path2D(d)]);
-  const BROWS = new Path2D('M32 47 Q38 43 44 46 M56 46 Q62 43 68 47');
 
   function makeCanvas (w, h) { const c = document.createElement('canvas'); c.width = Math.max(1, Math.ceil(w)); c.height = Math.max(1, Math.ceil(h)); return c; }
-  // disegni del preside alla scala giusta: normale, al buio, colorato da ogni luce, sagoma per l'ombra
+  // disegni del preside alla scala giusta: di sera, colorato da ogni luce, sagoma per l'ombra
   function buildSprites () {
     const k = PRES_K * s * dpr;
-    const base = makeCanvas(100 * k, 236 * k), b = base.getContext('2d');
-    b.scale(k, k);
-    TRAMP.forEach(([c, p]) => { b.fillStyle = c; b.fill(p); });
-    b.strokeStyle = '#e9d27a'; b.lineWidth = 2.5; b.lineCap = 'round'; b.stroke(BROWS);
-    const variant = (fn) => { const c = makeCanvas(base.width, base.height), g = c.getContext('2d'); g.drawImage(base, 0, 0); fn(g, c); return c; };
+    const base = makeCanvas(124 * k, 204 * k), b = base.getContext('2d');
+    b.scale(k, k); b.translate(2, 2);
+    b.lineJoin = 'round'; b.lineCap = 'round'; b.strokeStyle = INK; b.lineWidth = 2.6;
+    TRAMP.forEach(([c, p]) => { b.fillStyle = c; b.fill(p); b.stroke(p); });
+    // sopracciglia e rughe da cartone
+    b.lineWidth = 2.2; b.beginPath(); b.moveTo(36, 46); b.lineTo(54, 50); b.moveTo(84, 46); b.lineTo(66, 50); b.stroke();
+    const variant = fn => { const c = makeCanvas(base.width, base.height), g = c.getContext('2d'); g.drawImage(base, 0, 0); fn(g, c); return c; };
     const cover = (g, c, style, op) => { g.globalCompositeOperation = op; g.fillStyle = style; g.fillRect(0, 0, c.width, c.height); };
     const out = {
       k, base,
-      dark: variant((g, c) => cover(g, c, 'rgba(6,8,16,0.8)', 'source-atop')),
+      dark: variant((g, c) => cover(g, c, 'rgba(10,12,34,0.55)', 'source-atop')),
       shadow: variant((g, c) => cover(g, c, '#000', 'source-in')),
       lit: {}, rim: {}
     };
@@ -598,101 +601,147 @@ const View = (() => {
       if (out.rim[key]) return out.rim[key];
       const c = makeCanvas(base.width, base.height), g = c.getContext('2d');
       g.drawImage(out.litOf(col), 0, 0);
-      const gr = g.createLinearGradient(side === 'l' ? 0 : c.width, 0, side === 'l' ? c.width * 0.55 : c.width * 0.45, 0);
-      gr.addColorStop(0, 'rgba(0,0,0,1)'); gr.addColorStop(1, 'rgba(0,0,0,0)');
+      const gr = g.createLinearGradient(side === 'l' ? 0 : c.width, 0, side === 'l' ? c.width * 0.5 : c.width * 0.5, 0);
+      gr.addColorStop(0, 'rgba(0,0,0,0.9)'); gr.addColorStop(1, 'rgba(0,0,0,0)');
       g.globalCompositeOperation = 'destination-in'; g.fillStyle = gr; g.fillRect(0, 0, c.width, c.height);
       return (out.rim[key] = c);
     };
     return out;
   }
 
-  /* ---------- fondo fisso: fondale, striscione, pedana, casse, stativi ---------- */
+  // traccia con contorno spesso da cartone
+  const inked = (g, path, fill, lw = 3) => { g.fillStyle = fill; g.fill(path); g.strokeStyle = INK; g.lineWidth = lw; g.lineJoin = 'round'; g.stroke(path); };
+  const rectP = (x, y, w, h) => { const p = new Path2D(); p.rect(x, y, w, h); return p; };
+  const circP = (x, y, r) => { const p = new Path2D(); p.arc(x, y, r, 0, Math.PI * 2); return p; };
+
+  /* ---------- fondo fisso: sipario, bandierine, striscione, pedana, casse ---------- */
   function buildBg () {
     const c = makeCanvas(cw * dpr, ch * dpr), g = c.getContext('2d');
-    g.setTransform(dpr, 0, 0, dpr, 0, 0);
-    g.fillStyle = '#0b0d15'; g.fillRect(0, 0, cw, ch);
     g.setTransform(s * dpr, 0, 0, s * dpr, ox * dpr, oy * dpr);
-    const x0 = -ox / s, x1 = (cw - ox) / s, y0 = -oy / s, y1 = (ch - oy) / s;
-    // fondale: tenda con le pieghe
-    for (let x = Math.floor(x0 / 28) * 28; x < x1; x += 28) {
-      const gr = g.createLinearGradient(x, 0, x + 28, 0);
-      gr.addColorStop(0, '#141a2c'); gr.addColorStop(0.5, '#1d2540'); gr.addColorStop(1, '#121728');
-      g.fillStyle = gr; g.fillRect(x, y0, 28.5, WALL - y0);
+    const x0 = -ox / s - 10, x1 = (cw - ox) / s + 10, y0 = -oy / s - 10, y1 = (ch - oy) / s + 10;
+    g.lineCap = 'round'; g.lineJoin = 'round';
+    // sipario rosso del palco della scuola, a pieghe
+    g.fillStyle = '#a3262d'; g.fillRect(x0, y0, x1 - x0, WALL - y0);
+    for (let x = Math.floor(x0 / 44) * 44; x < x1; x += 44) {
+      g.fillStyle = '#841c23'; g.fillRect(x + 26, y0, 18, WALL - y0);
+      g.fillStyle = '#b8363b'; g.fillRect(x + 8, y0, 6, WALL - y0);
+      g.strokeStyle = '#4a0f14'; g.lineWidth = 2; g.beginPath(); g.moveTo(x + 44, y0); g.lineTo(x + 44, WALL); g.stroke();
     }
-    const shade = g.createLinearGradient(0, WALL - 120, 0, WALL);
-    shade.addColorStop(0, 'rgba(0,0,0,0)'); shade.addColorStop(1, 'rgba(0,0,0,0.45)');
-    g.fillStyle = shade; g.fillRect(x0, WALL - 120, x1 - x0, 120);
-    // bandierine da festa, da una quinta all'altra
-    const flags = ['#b8453a', '#c99a2e', '#3d62a8', '#3f8a55'];
-    g.strokeStyle = '#3a3c44'; g.lineWidth = 1.5;
+    // mantovana a festoni con il bordo dorato
+    g.fillStyle = '#7a1a20';
+    g.beginPath(); g.moveTo(x0, y0); g.lineTo(x1, y0); g.lineTo(x1, 14);
+    for (let x = x1; x > x0 - 60; x -= 60) g.quadraticCurveTo(x - 30, 44, x - 60, 14);
+    g.closePath(); g.fill(); g.strokeStyle = INK; g.lineWidth = 3; g.stroke();
+    g.strokeStyle = '#d9a63a'; g.lineWidth = 3; g.beginPath();
+    for (let x = x1; x > x0 - 60; x -= 60) { g.moveTo(x, 10); g.quadraticCurveTo(x - 30, 38, x - 60, 10); }
+    g.stroke();
+    // bandierine da festa
+    const flags = ['#e0503f', '#f2c53d', '#3f7fe0', '#49b06a'];
     for (let row = 0; row < 2; row++) {
-      const yA = 26 + row * 16, sag = 34;
+      const yA = 48 + row * 16, sag = 30;
+      g.strokeStyle = INK; g.lineWidth = 2;
       g.beginPath(); g.moveTo(170, yA); g.quadraticCurveTo(500, yA + sag * 2, 830, yA); g.stroke();
-      for (let i = 0; i < 17; i++) {
-        const t = (i + 0.5) / 17, x = 170 + 660 * t, y = yA + sag * 2 * 2 * t * (1 - t);
-        g.fillStyle = flags[(i + row * 2) % flags.length]; g.globalAlpha = 0.75;
-        g.beginPath(); g.moveTo(x - 11, y); g.lineTo(x + 11, y); g.lineTo(x, y + 20); g.closePath(); g.fill();
+      for (let i = 0; i < 15; i++) {
+        const t = (i + 0.5) / 15, x = 170 + 660 * t, y = yA + sag * 2 * 2 * t * (1 - t);
+        const p = new Path2D(); p.moveTo(x - 12, y); p.lineTo(x + 12, y); p.lineTo(x, y + 22); p.closePath();
+        inked(g, p, flags[(i + row * 2) % flags.length], 2);
       }
-      g.globalAlpha = 1;
     }
     // striscione di stoffa appeso con due corde, dipinto a mano dai ragazzi
-    g.strokeStyle = '#4a4d55'; g.lineWidth = 1.5;
-    g.beginPath(); g.moveTo(322, y0); g.lineTo(322, 118); g.moveTo(678, y0); g.lineTo(678, 112); g.stroke();
-    g.save(); g.translate(500, 150); g.rotate(-0.018);
-    const cloth = new Path2D('M-184 -36 Q0 -30 184 -36 L186 38 Q0 50 -186 38 Z');
-    g.fillStyle = 'rgba(0,0,0,0.35)'; g.translate(4, 6); g.fill(cloth); g.translate(-4, -6);
-    const cg = g.createLinearGradient(0, -36, 0, 46);
-    cg.addColorStop(0, '#c9c0a8'); cg.addColorStop(1, '#a89f88');
-    g.fillStyle = cg; g.fill(cloth);
-    g.fillStyle = '#b8453a'; g.fillRect(-170, 26, 340, 5);
+    g.strokeStyle = INK; g.lineWidth = 2;
+    g.beginPath(); g.moveTo(322, 36); g.lineTo(322, 124); g.moveTo(678, 36); g.lineTo(678, 118); g.stroke();
+    g.save(); g.translate(500, 156); g.rotate(-0.02);
+    inked(g, new Path2D('M-184 -36 Q0 -28 184 -36 L186 38 Q0 50 -186 38 Z'), '#f2ead2', 3.5);
+    g.fillStyle = '#e0503f'; g.fillRect(-168, 25, 336, 6);
     g.fillStyle = '#1e3570'; g.textAlign = 'center'; g.textBaseline = 'middle';
     let fs = 60;
     do { g.font = '700 ' + fs + 'px "Barlow Condensed", "Arial Narrow", sans-serif'; fs -= 2; } while (fs > 14 && g.measureText('FESTA DELLA SCUOLA').width > 340);
     g.fillText('FESTA DELLA SCUOLA', 0, -3);
-    g.fillStyle = '#6b6350';
-    [-176, 176].forEach(x => { g.beginPath(); g.arc(x, -28, 3, 0, Math.PI * 2); g.fill(); });
     g.restore();
-    // pedana in prospettiva, con le assi che vanno verso il fondo
-    g.fillStyle = '#2b2119';
-    g.beginPath(); g.moveTo(230, WALL); g.lineTo(770, WALL); g.lineTo(870, 470); g.lineTo(130, 470); g.closePath(); g.fill();
-    g.strokeStyle = 'rgba(0,0,0,0.35)'; g.lineWidth = 1;
-    for (let i = 1; i < 12; i++) { const t = i / 12; g.beginPath(); g.moveTo(230 + 540 * t, WALL); g.lineTo(130 + 740 * t, 470); g.stroke(); }
-    g.fillStyle = '#17110c'; g.fillRect(130, 470, 740, 34);
-    g.fillStyle = '#060709'; g.fillRect(x0, 504, x1 - x0, y1 - 504);
+    // pedana di legno in prospettiva
+    const floor = new Path2D('M230 360 L770 360 L870 470 L130 470 Z');
+    inked(g, floor, '#b07a44', 3.5);
+    g.strokeStyle = '#8a5c30'; g.lineWidth = 2;
+    for (let i = 1; i < 10; i++) { const t = i / 10; g.beginPath(); g.moveTo(230 + 540 * t, WALL + 2); g.lineTo(130 + 740 * t, 468); g.stroke(); }
+    inked(g, rectP(130, 470, 740, 34), '#7a4f28', 3.5);
+    g.fillStyle = '#141416'; g.fillRect(x0, 506, x1 - x0, y1 - 506);
     // stativi dei tagli, ai lati del palco
     [200, 800].forEach(x => {
-      g.strokeStyle = '#3a3d45'; g.lineWidth = 4;
-      g.beginPath(); g.moveTo(x, 452); g.lineTo(x, 300); g.stroke();
-      g.lineWidth = 3; g.beginPath(); g.moveTo(x, 452); g.lineTo(x - 22, 468); g.moveTo(x, 452); g.lineTo(x + 22, 468); g.moveTo(x, 452); g.lineTo(x, 470); g.stroke();
-      g.fillStyle = '#1b1c21'; g.fillRect(x - 16, 288, 32, 24);
+      g.strokeStyle = INK; g.lineWidth = 8;
+      g.beginPath(); g.moveTo(x, 454); g.lineTo(x, 300); g.moveTo(x, 452); g.lineTo(x - 24, 470); g.moveTo(x, 452); g.lineTo(x + 24, 470); g.stroke();
+      g.strokeStyle = '#6a6d75'; g.lineWidth = 4;
+      g.beginPath(); g.moveTo(x, 454); g.lineTo(x, 300); g.moveTo(x, 452); g.lineTo(x - 24, 470); g.moveTo(x, 452); g.lineTo(x + 24, 470); g.stroke();
+      inked(g, rectP(x - 18, 286, 36, 28), '#2c2d33', 3);
     });
-    // casse: sub a terra e testa sul palo, davanti ai lati del palco
+    // casse: sub a terra e testa sul palo
     [SPK.l, SPK.r].forEach(x => {
-      g.fillStyle = '#101114'; g.fillRect(x - 42, 468, 84, 92);
-      g.fillStyle = '#07080a'; g.beginPath(); g.arc(x, 514, 28, 0, Math.PI * 2); g.fill();
-      g.strokeStyle = '#26282e'; g.lineWidth = 2; g.stroke();
-      g.strokeStyle = '#3a3d45'; g.lineWidth = 5; g.beginPath(); g.moveTo(x, 468); g.lineTo(x, 400); g.stroke();
-      g.fillStyle = '#131418'; g.fillRect(x - 32, 300, 64, 100);
-      g.fillStyle = '#07080a'; g.beginPath(); g.arc(x, 368, 20, 0, Math.PI * 2); g.fill();
-      g.beginPath(); g.arc(x, 322, 9, 0, Math.PI * 2); g.fill();
+      g.strokeStyle = INK; g.lineWidth = 9; g.beginPath(); g.moveTo(x, 470); g.lineTo(x, 398); g.stroke();
+      g.strokeStyle = '#6a6d75'; g.lineWidth = 5; g.beginPath(); g.moveTo(x, 470); g.lineTo(x, 398); g.stroke();
+      inked(g, rectP(x - 42, 468, 84, 92), '#2c2d33', 3.5);
+      inked(g, circP(x, 514, 27), '#4a4c54', 3); inked(g, circP(x, 514, 9), '#2c2d33', 2.5);
+      inked(g, rectP(x - 32, 300, 64, 100), '#2c2d33', 3.5);
+      inked(g, circP(x, 366, 20), '#4a4c54', 3); inked(g, circP(x, 366, 7), '#2c2d33', 2.5);
+      inked(g, circP(x, 322, 9), '#4a4c54', 2.5);
     });
-    // asta del microfono (il preside ci sta dietro): treppiede e palo
-    g.strokeStyle = '#4a4d55'; g.lineWidth = 3;
-    g.beginPath(); g.moveTo(506, 456); g.lineTo(506, 336); g.moveTo(506, 456); g.lineTo(488, 468); g.moveTo(506, 456); g.lineTo(524, 468); g.stroke();
+    // asta del microfono (il preside ci sta dietro)
+    g.strokeStyle = INK; g.lineWidth = 7;
+    g.beginPath(); g.moveTo(506, 458); g.lineTo(506, 380); g.moveTo(506, 458); g.lineTo(486, 472); g.moveTo(506, 458); g.lineTo(526, 472); g.stroke();
+    g.strokeStyle = '#8a8d95'; g.lineWidth = 3.5;
+    g.beginPath(); g.moveTo(506, 458); g.lineTo(506, 380); g.moveTo(506, 458); g.lineTo(486, 472); g.moveTo(506, 458); g.lineTo(526, 472); g.stroke();
+    // è sera: tutto un po' più scuro e blu, poi ci pensano le luci
+    g.setTransform(1, 0, 0, 1, 0, 0);
+    g.fillStyle = NIGHT; g.fillRect(0, 0, c.width, c.height);
     return c;
   }
 
-  // pubblico di spalle, file che arrivano fino al bordo in basso
+  // pubblico di spalle, a cartone: capelli, cappellini col pompon, codini
   function buildCrowd () {
     crowd = [];
     let seed = 11;
     const r = () => { seed = (seed * 16807) % 2147483647; return seed / 2147483647; };
-    const yEnd = (ch - oy) / s + 40;
-    for (let y = 578, row = 0; y < yEnd; y += 30, row++) {
-      for (let x = -ox / s - 40 + (row % 2) * 22; x < (cw - ox) / s + 40; x += 44 + r() * 6) {
-        crowd.push({ x: x + (r() - 0.5) * 8, y, rad: 15 + r() * 4 + row * 1.2, ph: r() * 6, arms: r() < 0.35 });
+    const pick = a => a[Math.floor(r() * a.length)];
+    const HAIR = ['#2a1d12', '#5a3a1e', '#c9962e', '#1a1a1a', '#8a3b1c', '#e8d38a'];
+    const SHIRT = ['#3f7fe0', '#e0503f', '#49b06a', '#f2c53d', '#9b5de5', '#e87a2e', '#2ec4e0'];
+    const yEnd = (ch - oy) / s + 60;
+    for (let y = 582, row = 0; y < yEnd; y += 34, row++) {
+      for (let x = -ox / s - 40 + (row % 2) * 24; x < (cw - ox) / s + 40; x += 50 + r() * 6) {
+        const style = pick(['short', 'short', 'long', 'pony', 'bald', 'beanie', 'spiky']);
+        crowd.push({ x: x + (r() - 0.5) * 8, y, rad: 17 + r() * 3 + row * 1.5, ph: r() * 6, arms: r() < 0.4,
+          style, hair: dim(pick(HAIR), 0.55), shirt: dim(pick(SHIRT), 0.5), hat: dim(pick(SHIRT), 0.55), skin: dim('#f0b27a', 0.55) });
       }
     }
+  }
+  function drawPerson (g, q, y, lightCol, la, cheering) {
+    const r = q.rad, x = q.x;
+    g.lineWidth = 2.5; g.strokeStyle = INK; g.lineJoin = 'round';
+    if (cheering && q.arms) {
+      [-1, 1].forEach(sd => {
+        g.strokeStyle = INK; g.lineWidth = r * 0.55; g.beginPath(); g.moveTo(x + sd * r * 0.9, y + r * 1.4); g.lineTo(x + sd * r * 1.3, y - r * 1.4); g.stroke();
+        g.strokeStyle = q.shirt; g.lineWidth = r * 0.36; g.stroke();
+        g.fillStyle = q.skin; g.beginPath(); g.arc(x + sd * r * 1.3, y - r * 1.5, r * 0.3, 0, Math.PI * 2); g.fill(); g.strokeStyle = INK; g.lineWidth = 2; g.stroke();
+      });
+    }
+    // spalle
+    g.fillStyle = q.shirt; g.strokeStyle = INK; g.lineWidth = 2.5;
+    g.beginPath(); g.moveTo(x - r * 1.8, y + 200); g.lineTo(x - r * 1.8, y + r * 1.9); g.quadraticCurveTo(x - r * 1.7, y + r * 0.9, x, y + r * 0.9);
+    g.quadraticCurveTo(x + r * 1.7, y + r * 0.9, x + r * 1.8, y + r * 1.9); g.lineTo(x + r * 1.8, y + 200); g.fill(); g.stroke();
+    // orecchie e testa vista da dietro
+    g.fillStyle = q.skin;
+    [-1, 1].forEach(sd => { g.beginPath(); g.arc(x + sd * r * 0.95, y + r * 0.1, r * 0.25, 0, Math.PI * 2); g.fill(); g.stroke(); });
+    g.beginPath(); g.arc(x, y, r, 0, Math.PI * 2); g.fill(); g.stroke();
+    if (q.style !== 'bald') {
+      g.fillStyle = q.style === 'beanie' ? q.hat : q.hair;
+      g.beginPath();
+      if (q.style === 'beanie') { g.arc(x, y, r, Math.PI * 1.02, -0.02); g.lineTo(x + r, y + r * 0.1); g.lineTo(x - r, y + r * 0.1); }
+      else if (q.style === 'spiky') { g.moveTo(x - r, y + r * 0.3); for (let i = 0; i <= 6; i++) { const a = Math.PI + (i / 6) * Math.PI; g.lineTo(x + Math.cos(a) * r * (i % 2 ? 1.35 : 0.95), y + Math.sin(a) * r * (i % 2 ? 1.35 : 0.95)); } g.lineTo(x + r, y + r * 0.3); }
+      else g.arc(x, y, r * (q.style === 'long' ? 1.05 : 1), Math.PI * 0.85, Math.PI * 2.15);
+      g.closePath(); g.fill(); g.stroke();
+      if (q.style === 'long') { g.beginPath(); g.rect(x - r * 1.02, y, r * 2.04, r * 1.2); g.fill(); g.stroke(); }
+      if (q.style === 'pony') { g.beginPath(); g.ellipse(x, y + r * 1.1, r * 0.3, r * 0.6, 0, 0, Math.PI * 2); g.fill(); g.stroke(); }
+      if (q.style === 'beanie') { g.fillStyle = '#e8e2d0'; g.beginPath(); g.arc(x, y - r * 1.05, r * 0.3, 0, Math.PI * 2); g.fill(); g.stroke(); }
+    }
+    // bordo illuminato dal palco
+    if (la > 0.02) { g.strokeStyle = rgba(lightCol, la); g.lineWidth = 2.5; g.beginPath(); g.arc(x, y, r + 1, Math.PI * 1.15, Math.PI * 1.85); g.stroke(); }
   }
 
   function fit () {
@@ -705,8 +754,9 @@ const View = (() => {
   }
 
   const presX = S => { const t = S.side ? WALK[S.side] : HOME; return HOME + (t - HOME) * S.walk; };
-  // da punto del mondo a pixel del riquadro del palco (per i fumetti)
+  // da punto del mondo a pixel del riquadro del palco
   const toStage = (x, y) => [ox + x * s, oy + y * s];
+  const anchorW = (target, S) => target === 'spk-l' ? [SPK.l, 280] : target === 'spk-r' ? [SPK.r, 280] : [presX(S), FEET - PRES_H - 18];
 
   function draw (S, now) {
     if (!bg || !S) return;
@@ -715,18 +765,19 @@ const View = (() => {
     g.globalCompositeOperation = 'source-over'; g.globalAlpha = 1;
     g.drawImage(bg, 0, 0);
     g.setTransform(s * dpr, 0, 0, s * dpr, ox * dpr, oy * dpr);
+    g.lineCap = 'round'; g.lineJoin = 'round';
     const t = S.t, px = presX(S), d = S.dimmer;
     const cols = S.pars.map(c => rgb(COLORS[c]));
     const light = PARS.map((p, i) => ({ p, c: cols[i], a: d }));
     const fall = (x, w) => Math.exp(-(((px - x) / w) ** 2));
 
-    // pozze di luce sul fondale e sul pavimento
+    // pozze di luce sul sipario e sul pavimento
     g.globalCompositeOperation = 'lighter';
     g.save(); g.beginPath(); g.rect(-2000, -2000, 5000, 2000 + WALL); g.clip();
     light.forEach(({ p, c, a }) => {
       if (p.kind !== 'front' || a < 0.01) return;
       const [x, y] = p.aim, gr = g.createRadialGradient(x, y, 0, x, y, p.r);
-      gr.addColorStop(0, rgba(c, 0.42 * a)); gr.addColorStop(0.7, rgba(c, 0.26 * a)); gr.addColorStop(0.97, rgba(c, 0.2 * a)); gr.addColorStop(1, rgba(c, 0));
+      gr.addColorStop(0, rgba(c, 0.34 * a)); gr.addColorStop(0.85, rgba(c, 0.26 * a)); gr.addColorStop(0.97, rgba(c, 0.22 * a)); gr.addColorStop(1, rgba(c, 0));
       g.fillStyle = gr; g.beginPath(); g.arc(x, y, p.r, 0, Math.PI * 2); g.fill();
     });
     g.restore();
@@ -735,124 +786,124 @@ const View = (() => {
       const x = p.kind === 'front' ? p.aim[0] : HOME, rx = p.kind === 'front' ? 190 : 150;
       g.save(); g.translate(x, FEET); g.scale(1, 0.16);
       const gr = g.createRadialGradient(0, 0, 0, 0, 0, rx);
-      gr.addColorStop(0, rgba(c, (p.kind === 'front' ? 0.34 : 0.2) * a)); gr.addColorStop(1, rgba(c, 0));
+      gr.addColorStop(0, rgba(c, (p.kind === 'front' ? 0.34 : 0.2) * a)); gr.addColorStop(0.8, rgba(c, (p.kind === 'front' ? 0.2 : 0.1) * a)); gr.addColorStop(1, rgba(c, 0));
       g.fillStyle = gr; g.beginPath(); g.arc(0, 0, rx, 0, Math.PI * 2); g.fill();
       g.restore();
     });
 
-    // ombre del preside sul fondale, una per ogni frontale
+    // ombre del preside sul sipario, morbide, una per ogni frontale
     g.globalCompositeOperation = 'source-over';
     const sp = sprites, sw = sp.base.width / (s * dpr), sh = sp.base.height / (s * dpr);
+    g.save(); g.beginPath(); g.rect(-2000, -2000, 5000, 2000 + WALL); g.clip();
+    if ('filter' in g) g.filter = 'blur(' + (3 * s * dpr).toFixed(1) + 'px)';
     light.forEach(({ p, a }) => {
       if (p.kind !== 'front' || a < 0.01) return;
-      const k = 1.12, sx = px + (px - p.lens[0]) * 0.22;
-      g.save(); g.beginPath(); g.rect(-2000, -2000, 5000, 2000 + WALL); g.clip();
-      g.globalAlpha = 0.4 * a * fall(p.aim[0], 260);
-      g.drawImage(sp.shadow, sx - sw * k / 2, WALL - 6 - sh * k + 34, sw * k, sh * k);
-      g.restore();
+      const k = 1.1, sx = px + (px - p.lens[0]) * 0.2;
+      g.globalAlpha = 0.3 * a * fall(p.aim[0], 260);
+      g.drawImage(sp.shadow, sx - sw * k / 2, WALL + 30 - sh * k, sw * k, sh * k);
     });
-    g.globalAlpha = 1;
+    g.restore(); g.globalAlpha = 1;
 
-    // il preside, illuminato dai fari che lo prendono
-    const bob = S.running && !S.paused && t > 4 && t < 82 ? Math.sin(t * 4) * 1.2 : 0;
-    const X = px - sw / 2, Y = FEET - sh + bob;
-    g.drawImage(sp.dark, X, Y, sw, sh);
-    light.forEach(({ p, a }, i) => {
-      if (p.kind !== 'front' || a < 0.01) return;
-      g.globalAlpha = Math.min(1, 0.62 * a * fall(p.aim[0], 190));
-      g.drawImage(sp.litOf(S.pars[i]), X, Y, sw, sh);
-    });
-    g.globalCompositeOperation = 'lighter';
-    light.forEach(({ p, a }, i) => {
-      if (p.kind !== 'taglio' || a < 0.01) return;
-      g.globalAlpha = Math.min(1, 0.9 * a * fall(HOME, 260));
-      g.drawImage(sp.rimOf(S.pars[i], p.lens[0] < 500 ? 'l' : 'r'), X, Y, sw, sh);
-    });
-    g.globalAlpha = 1; g.globalCompositeOperation = 'source-over';
-    // la bocca segue la voce
-    const talk = S.running && !S.paused && t > 4 && t < 82 && !S.jingle && S.micOk;
-    const open = talk ? 0.5 + Math.abs(Math.sin(t * 13) * Math.sin(t * 5.3)) * 1.6 : 0.5;
-    g.fillStyle = '#5a2418'; g.beginPath(); g.ellipse(px, Y + 69 * PRES_K, 4.6 * PRES_K, 2.6 * PRES_K * open, 0, 0, Math.PI * 2); g.fill();
-    // giraffa e microfono davanti alla bocca
-    g.strokeStyle = '#555861'; g.lineWidth = 3; g.lineCap = 'round';
-    g.beginPath(); g.moveTo(506, 336); g.lineTo(500, 318); g.stroke();
-    g.fillStyle = '#1a1b1f'; g.beginPath(); g.ellipse(499, 313, 4.5, 7, -0.3, 0, Math.PI * 2); g.fill();
-    g.fillStyle = '#6a6d75'; g.beginPath(); g.ellipse(498, 309, 4, 4, 0, 0, Math.PI * 2); g.fill();
-
-    // i fasci nella foschia: coni netti, più forti vicino al faro
+    // i fasci: coni netti che passano dietro al preside
     g.globalCompositeOperation = 'lighter';
     light.forEach(({ p, c, a }) => {
       if (a < 0.01) return;
       const [lx, ly] = p.lens, [tx, ty] = p.kind === 'front' ? p.aim : p.end;
       const dx = tx - lx, dy = ty - ly, len = Math.hypot(dx, dy), nx = -dy / len, ny = dx / len;
-      const cone = (r, al0, al1) => {
-        const gr = g.createLinearGradient(lx, ly, tx, ty);
-        gr.addColorStop(0, rgba(c, al0)); gr.addColorStop(0.35, rgba(c, al0 * 0.45)); gr.addColorStop(1, rgba(c, al1));
-        g.fillStyle = gr; g.beginPath();
-        g.moveTo(lx + nx * 7, ly + ny * 7); g.lineTo(tx + nx * r, ty + ny * r); g.lineTo(tx - nx * r, ty - ny * r); g.lineTo(lx - nx * 7, ly - ny * 7);
-        g.closePath(); g.fill();
-      };
-      const fadeEnd = p.kind === 'front' ? 0.05 : 0;
-      cone(p.r * 1.12, 0.07 * a, 0);                  // alone morbido
-      cone(p.r, 0.26 * a, fadeEnd * a);                // fascio
-      g.strokeStyle = rgba(c, 0.16 * a); g.lineWidth = 1.2;
-      g.beginPath(); g.moveTo(lx + nx * 7, ly + ny * 7); g.lineTo(tx + nx * p.r, ty + ny * p.r);
-      g.moveTo(lx - nx * 7, ly - ny * 7); g.lineTo(tx - nx * p.r, ty - ny * p.r); g.stroke();
+      const gr = g.createLinearGradient(lx, ly, tx, ty);
+      gr.addColorStop(0, rgba(c, 0.3 * a)); gr.addColorStop(0.4, rgba(c, 0.14 * a)); gr.addColorStop(1, rgba(c, (p.kind === 'front' ? 0.06 : 0) * a));
+      g.fillStyle = gr; g.beginPath();
+      g.moveTo(lx + nx * 8, ly + ny * 8); g.lineTo(tx + nx * p.r, ty + ny * p.r); g.lineTo(tx - nx * p.r, ty - ny * p.r); g.lineTo(lx - nx * 8, ly - ny * 8);
+      g.closePath(); g.fill();
+      g.strokeStyle = rgba(c, 0.22 * a); g.lineWidth = 1.5;
+      g.beginPath(); g.moveTo(lx + nx * 8, ly + ny * 8); g.lineTo(tx + nx * p.r, ty + ny * p.r);
+      g.moveTo(lx - nx * 8, ly - ny * 8); g.lineTo(tx - nx * p.r, ty - ny * p.r); g.stroke();
     });
 
-    // pubblico: di spalle, bordato dalla luce del palco; ondeggia se è contento
+    // il preside, colorato dai fari che lo prendono
     g.globalCompositeOperation = 'source-over';
+    const talk = S.running && !S.paused && t > 4 && t < 82 && !S.jingle;
+    const bob = talk ? Math.abs(Math.sin(t * 4)) * 2 : 0;
+    const X = px - sw / 2, Y = FEET - sh + 4 - bob;
+    g.drawImage(sp.dark, X, Y, sw, sh);
+    let lit = 0;
+    light.forEach(({ p, a }, i) => {
+      if (p.kind !== 'front' || a < 0.01) return;
+      const al = Math.min(1, 0.75 * a * fall(p.aim[0], 190));
+      lit += al;
+      g.globalAlpha = al; g.drawImage(sp.litOf(S.pars[i]), X, Y, sw, sh);
+    });
+    g.globalCompositeOperation = 'lighter';
+    light.forEach(({ p, a }, i) => {
+      if (p.kind !== 'taglio' || a < 0.01) return;
+      g.globalAlpha = Math.min(1, 0.7 * a * fall(HOME, 260));
+      g.drawImage(sp.rimOf(S.pars[i], p.lens[0] < 500 ? 'l' : 'r'), X, Y, sw, sh);
+    });
+    g.globalAlpha = 1; g.globalCompositeOperation = 'source-over';
+    // la bocca segue la voce: aperta a scatti, come nei cartoni
+    const mx = X + (MOUTH[0] + 2) * PRES_K, my = Y + (MOUTH[1] + 2) * PRES_K;
+    const open = talk && S.micOk ? Math.abs(Math.sin(t * 11) * Math.sin(t * 4.3)) : 0;
+    g.strokeStyle = INK; g.lineWidth = 2.2;
+    if (open > 0.15) {
+      g.fillStyle = lit > 0.4 ? '#5a1d14' : '#2e120d';
+      g.beginPath(); g.ellipse(mx, my, 9 * PRES_K, (3 + open * 9) * PRES_K, 0, 0, Math.PI * 2); g.fill(); g.stroke();
+    } else { g.beginPath(); g.moveTo(mx - 8 * PRES_K, my + 1); g.quadraticCurveTo(mx, my - 3, mx + 8 * PRES_K, my + 1); g.stroke(); }
+    // giraffa e microfono appena sotto la bocca (la bocca resta in vista)
+    g.strokeStyle = INK; g.lineWidth = 6; g.beginPath(); g.moveTo(506, 380); g.lineTo(492, 366); g.stroke();
+    g.strokeStyle = '#8a8d95'; g.lineWidth = 3; g.stroke();
+    g.save(); g.translate(488, 362); g.rotate(0.7);
+    g.fillStyle = '#2c2d33'; g.beginPath(); g.ellipse(0, 0, 4.5, 8, 0, 0, Math.PI * 2); g.fill(); g.lineWidth = 2.5; g.strokeStyle = INK; g.stroke();
+    g.fillStyle = '#9a9da5'; g.beginPath(); g.arc(0, -7, 5, 0, Math.PI * 2); g.fill(); g.stroke();
+    g.restore();
+
+    // pubblico di spalle: ondeggia se è contento, salta agli applausi
     const mix = [0, 1, 2].map(k => cols.reduce((sum, cc) => sum + cc[k], 0) / cols.length);
     const mood = S.grad / 100, moving = S.running && !S.paused && !reducedFx();
     const cheering = cheerAt != null ? Math.max(0, 1 - (now - cheerAt) / 6) : 0;
-    const back = moving ? mood : 0;
     crowd.forEach(q => {
-      let y = q.y + (moving ? Math.sin(t * (2 + mood * 3) + q.ph) * back * 3 : 0);
+      let y = q.y + (moving ? Math.sin(t * (2 + mood * 3) + q.ph) * mood * 3 : 0);
       if (cheering && !reducedFx()) y -= Math.abs(Math.sin(now * 7 + q.ph)) * 12 * cheering * (0.4 + mood);
-      const r = q.rad;
-      g.fillStyle = mood < 0.35 ? '#101117' : '#16171e';
-      if (cheering && q.arms && mood >= 0.4) {
-        g.strokeStyle = '#16171e'; g.lineWidth = r * 0.45; g.lineCap = 'round';
-        g.beginPath(); g.moveTo(q.x - r * 0.9, y + r * 1.2); g.lineTo(q.x - r * 1.3, y - r * 1.6); g.moveTo(q.x + r * 0.9, y + r * 1.2); g.lineTo(q.x + r * 1.3, y - r * 1.6); g.stroke();
-      }
-      g.beginPath(); g.ellipse(q.x, y + r * 2.1, r * 1.9, r * 1.4, 0, Math.PI, 0); g.fill();
-      g.fillRect(q.x - r * 1.9, y + r * 2.1, r * 3.8, 200);
-      g.beginPath(); g.arc(q.x, y, r, 0, Math.PI * 2); g.fill();
-      {
-        g.strokeStyle = rgba(mix, 0.12 + 0.4 * d); g.lineWidth = 2;
-        g.beginPath(); g.arc(q.x, y, r - 1, Math.PI * 1.1, Math.PI * 1.9); g.stroke();
-      }
+      drawPerson(g, q, y, mix, 0.2 + 0.45 * d, cheering && mood >= 0.4);
     });
 
-    // lenti accese dei PAR (i frontali si vedono da dietro, sopra le teste)
-    g.globalCompositeOperation = 'lighter';
+    // i frontali nel pit (visti da dietro, sopra le teste) e le lenti accese dei tagli
     light.forEach(({ p, c, a }) => {
       const [lx, ly] = p.lens;
+      g.globalCompositeOperation = 'source-over';
       if (p.kind === 'front') {
-        g.globalCompositeOperation = 'source-over';
-        g.fillStyle = '#1b1c21'; g.fillRect(lx - 17, ly - 14, 34, 28);
-        g.strokeStyle = '#3a3d45'; g.lineWidth = 4; g.beginPath(); g.moveTo(lx, ly + 14); g.lineTo(lx, ly + 90); g.stroke();
-        g.globalCompositeOperation = 'lighter';
-        const gr = g.createRadialGradient(lx, ly - 14, 0, lx, ly - 14, 40);
-        gr.addColorStop(0, rgba(c, 0.5 * a)); gr.addColorStop(1, rgba(c, 0));
-        g.fillStyle = gr; g.beginPath(); g.arc(lx, ly - 14, 40, 0, Math.PI * 2); g.fill();
-        return;
+        g.strokeStyle = INK; g.lineWidth = 8; g.beginPath(); g.moveTo(lx, ly + 14); g.lineTo(lx, ly + 90); g.stroke();
+        g.strokeStyle = '#6a6d75'; g.lineWidth = 4; g.stroke();
+        inked(g, rectP(lx - 18, ly - 14, 36, 28), dim('#2c2d33', 0.8), 3);
       }
-      const gr = g.createRadialGradient(lx, ly, 0, lx, ly, 34);
-      gr.addColorStop(0, rgba([255, 255, 255], 0.9 * a)); gr.addColorStop(0.25, rgba(c, 0.7 * a)); gr.addColorStop(1, rgba(c, 0));
-      g.fillStyle = gr; g.beginPath(); g.arc(lx + (lx < 500 ? 16 : -16), ly, 34, 0, Math.PI * 2); g.fill();
+      if (a < 0.01) return;
+      g.globalCompositeOperation = 'lighter';
+      const cx = p.kind === 'front' ? lx : lx + (lx < 500 ? 18 : -18), cy = p.kind === 'front' ? ly - 16 : ly;
+      const gr = g.createRadialGradient(cx, cy, 0, cx, cy, 30);
+      gr.addColorStop(0, rgba([255, 255, 255], 0.85 * a)); gr.addColorStop(0.3, rgba(c, 0.6 * a)); gr.addColorStop(1, rgba(c, 0));
+      g.fillStyle = gr; g.beginPath(); g.arc(cx, cy, 30, 0, Math.PI * 2); g.fill();
+    });
+    g.globalCompositeOperation = 'source-over';
+
+    // segnale su chi ha il problema (l'avviso vero sta in alto, dalla regia)
+    const seen = new Set();
+    S.events.forEach(e => {
+      if (!e.live || seen.has(e.target)) return;
+      seen.add(e.target);
+      const [x, y] = anchorW(e.target, S), jump = Math.abs(Math.sin(now * 5)) * 6;
+      inked(g, circP(x, y - jump, 13), '#f2c53d', 3);
+      g.fillStyle = INK; g.font = '700 20px "Barlow Condensed", "Arial Narrow", sans-serif'; g.textAlign = 'center'; g.textBaseline = 'middle';
+      g.fillText('!', x, y - jump + 1);
     });
 
     // larsen: onde gialle dalla cassa più vicina al preside
-    g.globalCompositeOperation = 'source-over';
     if (S.ring > 0.02) {
       const x = Math.abs(px - SPK.l) < Math.abs(px - SPK.r) ? SPK.l : SPK.r, dir = x < 500 ? 1 : -1;
       [22, 36, 50].forEach((rr, k) => {
-        g.strokeStyle = rgba([242, 197, 61], S.ring * (1 - k * 0.25)); g.lineWidth = 4;
+        g.strokeStyle = rgba([242, 197, 61], S.ring * (1 - k * 0.25)); g.lineWidth = 5;
         g.beginPath(); g.arc(x + dir * 30, 350, rr, dir > 0 ? -0.9 : Math.PI - 0.9, dir > 0 ? 0.9 : Math.PI + 0.9); g.stroke();
       });
     }
-    g.globalCompositeOperation = 'source-over'; g.globalAlpha = 1;
+    g.globalAlpha = 1;
   }
 
   return {
@@ -867,11 +918,8 @@ const View = (() => {
     applause () { cheerAt = performance.now() / 1000; },
     // quanto il preside è vicino a una cassa (0 lontano, 1 addosso)
     speakerNear (S) { const px = presX(S); return Math.max(0, Math.min(1, 1 - (Math.min(Math.abs(px - SPK.l), Math.abs(px - SPK.r)) - 150) / 250)); },
-    anchor (target, S) {
-      if (target === 'spk-l') return toStage(SPK.l + 20, 296);
-      if (target === 'spk-r') return toStage(SPK.r - 20, 296);
-      return toStage(presX(S), FEET - PRES_H - 6);
-    }
+    // dove sta, nel riquadro del palco, chi ha il problema
+    anchor (target, S) { return toStage(...anchorW(target, S)); }
   };
 })();
 
