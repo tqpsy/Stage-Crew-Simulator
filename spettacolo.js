@@ -622,15 +622,36 @@ const View = (() => {
     const shade = g.createLinearGradient(0, WALL - 120, 0, WALL);
     shade.addColorStop(0, 'rgba(0,0,0,0)'); shade.addColorStop(1, 'rgba(0,0,0,0.45)');
     g.fillStyle = shade; g.fillRect(x0, WALL - 120, x1 - x0, 120);
-    // striscione della festa, appeso al fondale
-    g.fillStyle = '#3a3528'; g.fillRect(318, 64, 364, 70);
-    g.strokeStyle = '#4a4434'; g.lineWidth = 2; g.strokeRect(318, 64, 364, 70);
-    g.fillStyle = '#6d2a22'; g.textAlign = 'center'; g.textBaseline = 'middle';
-    let fs = 36;
-    do { g.font = fs + 'px "Permanent Marker", "Comic Sans MS", cursive'; fs -= 2; } while (fs > 12 && g.measureText('FESTA DELLA SCUOLA').width > 330);
-    g.fillText('FESTA DELLA SCUOLA', 500, 101);
-    g.strokeStyle = '#2a2b30'; g.lineWidth = 1.5;
-    g.beginPath(); g.moveTo(330, 64); g.lineTo(330, y0); g.moveTo(670, 64); g.lineTo(670, y0); g.stroke();
+    // bandierine da festa, da una quinta all'altra
+    const flags = ['#b8453a', '#c99a2e', '#3d62a8', '#3f8a55'];
+    g.strokeStyle = '#3a3c44'; g.lineWidth = 1.5;
+    for (let row = 0; row < 2; row++) {
+      const yA = 26 + row * 16, sag = 34;
+      g.beginPath(); g.moveTo(170, yA); g.quadraticCurveTo(500, yA + sag * 2, 830, yA); g.stroke();
+      for (let i = 0; i < 17; i++) {
+        const t = (i + 0.5) / 17, x = 170 + 660 * t, y = yA + sag * 2 * 2 * t * (1 - t);
+        g.fillStyle = flags[(i + row * 2) % flags.length]; g.globalAlpha = 0.75;
+        g.beginPath(); g.moveTo(x - 11, y); g.lineTo(x + 11, y); g.lineTo(x, y + 20); g.closePath(); g.fill();
+      }
+      g.globalAlpha = 1;
+    }
+    // striscione di stoffa appeso con due corde, dipinto a mano dai ragazzi
+    g.strokeStyle = '#4a4d55'; g.lineWidth = 1.5;
+    g.beginPath(); g.moveTo(322, y0); g.lineTo(322, 118); g.moveTo(678, y0); g.lineTo(678, 112); g.stroke();
+    g.save(); g.translate(500, 150); g.rotate(-0.018);
+    const cloth = new Path2D('M-184 -36 Q0 -30 184 -36 L186 38 Q0 50 -186 38 Z');
+    g.fillStyle = 'rgba(0,0,0,0.35)'; g.translate(4, 6); g.fill(cloth); g.translate(-4, -6);
+    const cg = g.createLinearGradient(0, -36, 0, 46);
+    cg.addColorStop(0, '#c9c0a8'); cg.addColorStop(1, '#a89f88');
+    g.fillStyle = cg; g.fill(cloth);
+    g.fillStyle = '#b8453a'; g.fillRect(-170, 26, 340, 5);
+    g.fillStyle = '#1e3570'; g.textAlign = 'center'; g.textBaseline = 'middle';
+    let fs = 60;
+    do { g.font = '700 ' + fs + 'px "Barlow Condensed", "Arial Narrow", sans-serif'; fs -= 2; } while (fs > 14 && g.measureText('FESTA DELLA SCUOLA').width > 340);
+    g.fillText('FESTA DELLA SCUOLA', 0, -3);
+    g.fillStyle = '#6b6350';
+    [-176, 176].forEach(x => { g.beginPath(); g.arc(x, -28, 3, 0, Math.PI * 2); g.fill(); });
+    g.restore();
     // pedana in prospettiva, con le assi che vanno verso il fondo
     g.fillStyle = '#2b2119';
     g.beginPath(); g.moveTo(230, WALL); g.lineTo(770, WALL); g.lineTo(870, 470); g.lineTo(130, 470); g.closePath(); g.fill();

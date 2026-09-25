@@ -656,7 +656,7 @@
      sul computer). Il palco resta la scena isometrica. */
   .show-btn{ border-color:var(--amber); color:var(--amber); }
   #show-head{ display:grid; gap:5px; width:100%; }
-  #show-head[hidden], #show-desk[hidden], #show-pause[hidden]{ display:none; }
+  #show-head[hidden], #show-desk[hidden], #show-pause[hidden], #show-canvas[hidden]{ display:none; }
   body.in-show header{ flex-wrap:nowrap; padding:6px 12px; }
   body.in-show .level-wrap, body.in-show .meters, body.in-show #toolbar,
   body.in-show .layers-panel, body.in-show .zoom-controls, body.in-show #cable-banner{ display:none !important; }
