@@ -22,6 +22,7 @@ const N = parseInt(process.argv[2] || '40', 10), SEED0 = parseInt(process.argv[3
   // partita vera, così ogni azione passa anche dal salvataggio automatico
   await p.evaluate(() => startNewGame('Collaudo', serviceOffers([])[0]));
   await p.waitForFunction(() => !menuOpen);
+  await p.evaluate(() => closeSchedule());
   const res = await p.evaluate(async ({ N, SEED0 }) => {
     const sleep = ms => new Promise(r => setTimeout(r, ms));
     const out = { valid: 0, validFail: [], mut: {}, mutBad: [], wireFail: [] };

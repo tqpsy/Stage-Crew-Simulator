@@ -2079,7 +2079,7 @@ function openMenu (page) {
 function closeMenu () {
   menuOpen = false;
   el('#menu-modal').classList.remove('show');
-  setSceneInput(true);
+  setSceneInput(!scheduleOpen);
   sceneKeyboard(true);
 }
 const cleanName = s => String(s || '').replace(/\s+/g, ' ').trim().slice(0, NAME_MAX);
@@ -2098,7 +2098,7 @@ function startNewGame (player, offer, offers) {
     scene.resetLevel(true);      // azzera livello e statistiche e salva
     applySettings();
     closeMenu();
-    showToast('Ciao ' + playerName() + ', ' + serviceName() + ' ti manda alla festa della scuola: monta l\'impianto.', 'ok');
+    openSchedule(true);          // prima dei cavi, la scaletta della serata
   });
 }
 function continueGame () {
@@ -2110,6 +2110,73 @@ function continueGame () {
     closeMenu();
   });
 }
+
+/* ---------------- scaletta della serata ----------------
+   Il foglio di lavoro del livello: chi ti manda, dove, e gli orari della
+   serata dal carico allo smontaggio. Si apre all'inizio di una nuova
+   partita (prima di mettere mano ai cavi) e si riapre dal tasto 📋.
+   Le fasi senza "phase" non sono ancora nel gioco: si vedono come
+   "in arrivo", così il giocatore sa dove va a finire la serata. */
+const SCHEDULE = [
+  { time: '16:00', title: 'Arrivo e scarico', text: 'Il furgone accosta alla banchina della palestra e i case scendono.', phase: 'scarico' },
+  { time: '16:30', title: 'Montaggio impianto', text: 'Corrente dal Quadro, PC → scheda → mixer → finale → casse, 4 PAR in DMX dalla consolle.', phase: 'montaggio' },
+  { time: '19:30', title: 'Test impianto', text: 'Il collaudo: tutto acceso senza scatti né colpi nelle casse, audio e luci a posto.', phase: 'collaudo', rep: REP.phaseDone },
+  { time: '20:30', title: 'Apertura porte', text: 'Entrano famiglie e studenti; musica di sottofondo dal PC.' },
+  { time: '21:00', title: 'Discorso del Preside Tramp', text: 'Microfono su asta sul palco, sul CH 1 del mixer. Vuole essere sentito fino al parcheggio.' },
+  { time: '21:15', title: 'DJ E=mc²', text: 'Einstein alla consolle: mixer DJ → DI → mixer di sala, luci colorate al drop.' },
+  { time: '22:00', title: 'Dante unplugged', text: 'Voce e chitarra (via DI). Gli ingressi non bastano: cambio palco e via il DJ.' },
+  { time: '23:00', title: 'Smontaggio', text: 'Tutto nei case e i case nel furgone. Si torna a casa.' }
+];
+const collaudoDone = () => ('L' + LEVEL_ID + ':collaudo') in Profile.data.reputation.earned;
+function schedulePhaseState (phase) {
+  if (!phase) return 'soon';
+  if (phase === 'scarico') return 'done';
+  if (phase === 'montaggio') return collaudoDone() ? 'done' : 'now';
+  return collaudoDone() ? 'done' : 'next';
+}
+const SCHEDULE_STATE_LABEL = { done: 'Fatto', now: 'Adesso', next: 'Da fare', soon: 'In arrivo' };
+
+function renderSchedule () {
+  const info = Profile.data.serviceInfo;
+  const rows = [
+    ['Cliente', 'Scuola · festa di fine anno'],
+    ['Dove', 'Palestra: palco 4×4 m, allaccio CEE 400V trifase'],
+    ['Service', serviceName() + (info && info.boss ? ' · capo: ' + info.boss : '')],
+    ['Tecnico', playerName()]
+  ];
+  el('#schedule-info').innerHTML = rows.map(([k, v]) => '<dt>' + k + '</dt><dd>' + escapeHtml(v) + '</dd>').join('');
+  el('#schedule-list').innerHTML = SCHEDULE.map(s => {
+    const st = schedulePhaseState(s.phase);
+    return '<li class="sched-row ' + st + '">'
+      + '<span class="sched-time">' + s.time + '</span>'
+      + '<span class="sched-body"><b>' + escapeHtml(s.title) + '</b>'
+      + (s.rep ? ' <span class="sched-rep">+' + s.rep + ' reputazione</span>' : '')
+      + '<small>' + escapeHtml(s.text) + '</small></span>'
+      + '<span class="sched-state">' + SCHEDULE_STATE_LABEL[st] + '</span></li>';
+  }).join('');
+}
+// first: aperta dalla nuova partita; chiudendola si parte col montaggio
+let scheduleOpen = false, scheduleFirst = false;
+function openSchedule (first) {
+  scheduleOpen = true;
+  scheduleFirst = !!first;
+  renderSchedule();
+  el('#schedule-go').textContent = first ? 'Al lavoro!' : 'Torna al palco';
+  el('#schedule-modal').classList.add('show');
+  setSceneInput(false);
+}
+function closeSchedule () {
+  if (!scheduleOpen) return;
+  scheduleOpen = false;
+  el('#schedule-modal').classList.remove('show');
+  setTimeout(() => { if (!scheduleOpen && !rearPanelId && !openCaseName && !menuOpen) setSceneInput(true); }, 0);
+  if (scheduleFirst) showToast('Ciao ' + playerName() + ', ' + serviceName() + ' ti manda alla festa della scuola: sono le 16:30, monta l\'impianto. Il collaudo è alle 19:30.', 'ok');
+  scheduleFirst = false;
+}
+el('#schedule-btn').addEventListener('click', () => { SFX.button(); openSchedule(false); });
+el('#schedule-go').addEventListener('click', () => { SFX.button(); closeSchedule(); });
+el('#schedule-close').addEventListener('click', () => { SFX.button(); closeSchedule(); });
+el('#schedule-modal').addEventListener('click', ev => { if (ev.target.id === 'schedule-modal') closeSchedule(); });
 
 el('#menu-btn').addEventListener('click', () => { SFX.button(); openMenu('main'); });
 el('#menu-resume').addEventListener('click', () => { SFX.button(); continueGame(); });

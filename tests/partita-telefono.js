@@ -24,6 +24,8 @@ const OUT = process.env.SHOTS || null;
   await p.locator('#player-input').fill('Tecnico Telefono');
   taps++; await p.locator('#service-offers .offer-card').first().tap();
   taps++; await p.locator('#new-start').tap(); await p.waitForTimeout(150);
+  // la scaletta della serata, poi al lavoro
+  taps++; await p.locator('#schedule-go').tap(); await p.waitForTimeout(150);
   const toast = () => p.evaluate(() => el('#toast').textContent);
   const shot = n => OUT ? p.screenshot({ path: path.join(OUT, 'telefono-' + n + '.png') }) : null;
   // mondo -> pagina

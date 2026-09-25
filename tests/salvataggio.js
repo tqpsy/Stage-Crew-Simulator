@@ -57,6 +57,17 @@ const path = require('path');
   check(await p.$eval('#service-offers [data-offer="1"]', b => b.classList.contains('sel')), 'service scelto non evidenziato');
   await p.click('#new-start');
   check(!(await p.isVisible('#menu-modal')), 'il menù resta aperto dopo Inizia');
+  // prima del montaggio la scaletta della serata: si parte dal montaggio,
+  // lo spettacolo è ancora da venire; si riapre dal tasto in testata
+  check(await p.isVisible('#schedule-modal'), 'dopo Inizia manca la scaletta della serata');
+  check(await p.textContent('#schedule-list .sched-row.now') !== null && /Montaggio/.test(await p.textContent('#schedule-list .sched-row.now')), 'la scaletta non dice che adesso si monta');
+  check((await p.$$('#schedule-list .sched-row.done')).length === 1, 'la scaletta segna fatte fasi non giocate');
+  await p.click('#schedule-go');
+  check(!(await p.isVisible('#schedule-modal')), 'la scaletta resta aperta dopo Al lavoro');
+  check(await ev(() => window.__scene.input.enabled), 'la scena resta bloccata dopo la scaletta');
+  await p.click('#schedule-btn');
+  check(await p.isVisible('#schedule-modal') && (await p.textContent('#schedule-go')) === 'Torna al palco', 'il tasto in testata non riapre la scaletta');
+  await p.click('#schedule-close');
   const pick = offers[1], svc = pick.name.toUpperCase();
   const prof = await ev(() => ({ player: Profile.data.player, service: Profile.data.service, logo: Profile.data.logo, info: Profile.data.serviceInfo, used: Profile.data.usedServices }));
   check(prof.player === 'Wasd' && prof.service === pick.name && JSON.stringify(prof.logo) === JSON.stringify(pick.logo), 'tecnico o service non salvati: ' + JSON.stringify(prof));
@@ -108,6 +119,8 @@ const path = require('path');
   check(floor.d === -3 && floor.total === 0, 'la reputazione va sotto lo 0: ' + JSON.stringify(floor));
   await ev(() => addReputation(REP.beerRefused, 'birra rifiutata'));
   check(await ev(() => REP.slowChange) === -5, 'manca la regola del cambio palco lento');
+  // dopo il collaudo la scaletta segna fatti montaggio e test impianto
+  check(await ev(() => { renderSchedule(); return document.querySelectorAll('#schedule-list .sched-row.done').length; }) === 3, 'la scaletta non segna il collaudo fatto');
   check(await p.textContent('#service-tag') === 'MARCO · ' + svc + ' · REPUTAZIONE 5', 'reputazione non in testata: ' + await p.textContent('#service-tag'));
   await p.waitForTimeout(1500);          // un po' di tempo di gioco e il salvataggio differito
 
@@ -137,6 +150,7 @@ const path = require('path');
   await p.fill('#player-input', 'Nuova Tecnica');
   await p.click('#service-offers [data-offer="0"]');
   await p.click('#new-start');
+  await p.click('#schedule-go');
   const fresh = await ev(() => ({ placed: Object.keys(gameState.placed), edges: gameState.edges.length, tests: gameState.stats.tests, vol: SFX.volume, recs: (Profile.data.records[LEVEL_ID] || []).length, rep: reputation() }));
   check(fresh.placed.length === 1 && fresh.edges === 0 && fresh.tests === 0, 'Nuova partita non azzera il livello: ' + JSON.stringify(fresh));
   check(fresh.vol === 0.3 && fresh.recs === 2, 'Nuova partita perde impostazioni o record: ' + JSON.stringify(fresh));

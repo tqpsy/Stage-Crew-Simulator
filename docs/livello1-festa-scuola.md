@@ -20,6 +20,14 @@ col DJ, accendini e telefoni per il cantante).
 
 ## Scheda obiettivi
 
+**Fatto: scaletta della serata.** A ogni nuova partita, prima del montaggio, si
+apre il foglio di lavoro (cliente, luogo, service, tecnico) con gli orari della
+serata: 16:00 scarico, 16:30 montaggio, 19:30 test impianto, 20:30 porte,
+21:00 preside, 21:15 DJ, 22:00 cantante, 23:00 smontaggio. Ogni voce ha il suo
+stato (fatto / adesso / da fare / in arrivo); si riapre dal tasto 📋 in testata.
+Le fasi di spettacolo, quando arriveranno nel gioco, si agganciano qui
+(`SCHEDULE` in `main.js`).
+
 - Si apre a inizio livello e si può riaprire dall'header.
 - Una scheda per fase: **faccia illustrata del personaggio**, nome, due righe di
   descrizione, stato (bloccato / in corso / fatto), birre guadagnate.
