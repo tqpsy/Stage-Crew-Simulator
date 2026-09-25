@@ -1428,7 +1428,26 @@ const LOGO_ICONS = {
   fulmine: '<polygon points="57,12 27,56 47,56 41,88 73,42 53,42"/>',
   onda: '<path d="M18 50 C24 26 30 26 36 50 S48 74 54 50 S66 26 72 50 S80 66 84 58" fill="none" stroke="FG" stroke-width="8" stroke-linecap="round"/>',
   stella: '<polygon points="50,14 59,39 86,39 64,55 72,81 50,65 28,81 36,55 14,39 41,39"/>',
-  fader: '<rect x="26" y="18" width="6" height="64" rx="3"/><rect x="47" y="18" width="6" height="64" rx="3"/><rect x="68" y="18" width="6" height="64" rx="3"/><rect x="19" y="56" width="20" height="11" rx="2"/><rect x="40" y="30" width="20" height="11" rx="2"/><rect x="61" y="46" width="20" height="11" rx="2"/>'
+  fader: '<rect x="26" y="18" width="6" height="64" rx="3"/><rect x="47" y="18" width="6" height="64" rx="3"/><rect x="68" y="18" width="6" height="64" rx="3"/><rect x="19" y="56" width="20" height="11" rx="2"/><rect x="40" y="30" width="20" height="11" rx="2"/><rect x="61" y="46" width="20" height="11" rx="2"/>',
+  // simboli delle parole dei nomi dei service (vedi NAME_HINTS.icon)
+  microfono: '<rect x="38" y="10" width="24" height="40" rx="12"/><rect x="41" y="21" width="18" height="3" fill="BG"/><rect x="41" y="28" width="18" height="3" fill="BG"/><rect x="41" y="35" width="18" height="3" fill="BG"/><path d="M28 40 V46 A22 22 0 0 0 72 46 V40" fill="none" stroke="FG" stroke-width="6"/><rect x="47" y="67" width="6" height="13"/><rect x="33" y="79" width="34" height="7" rx="3"/>',
+  nastro: '<circle cx="44" cy="46" r="34"/><circle cx="44" cy="46" r="15" fill="BG"/><polygon points="44,70 86,70 91,74 86,77 91,80 44,80"/>',
+  fumo: '<circle cx="32" cy="60" r="15"/><circle cx="52" cy="48" r="20"/><circle cx="70" cy="62" r="13"/><rect x="28" y="60" width="48" height="16" rx="8"/><circle cx="74" cy="30" r="7"/><circle cx="86" cy="18" r="4"/>',
+  coriandoli: '<rect x="16" y="18" width="10" height="18" rx="2" transform="rotate(-25 21 27)"/><rect x="66" y="14" width="10" height="18" rx="2" transform="rotate(35 71 23)"/><rect x="40" y="62" width="10" height="18" rx="2" transform="rotate(60 45 71)"/><rect x="74" y="58" width="10" height="18" rx="2" transform="rotate(-40 79 67)"/><circle cx="46" cy="20" r="6"/><circle cx="20" cy="66" r="6"/><circle cx="84" cy="42" r="5"/><polygon points="50,34 56,46 69,48 59,57 62,70 50,63 38,70 41,57 31,48 44,46"/>',
+  sipario: '<rect x="10" y="12" width="80" height="12" rx="3"/><path d="M13 24 H45 C40 50 33 70 44 88 H13 Z"/><path d="M87 24 H55 C60 50 67 70 56 88 H87 Z"/><path d="M24 26 C22 50 20 70 23 86 M76 26 C78 50 80 70 77 86" fill="none" stroke="BG" stroke-width="2.5"/>',
+  spina: '<rect x="37" y="12" width="7" height="24" rx="2"/><rect x="56" y="12" width="7" height="24" rx="2"/><rect x="28" y="32" width="44" height="34" rx="9"/><path d="M50 66 V76 C50 88 70 90 78 82" fill="none" stroke="FG" stroke-width="7" stroke-linecap="round"/>',
+  palla: '<rect x="48" y="8" width="4" height="16"/><circle cx="50" cy="54" r="30"/><path d="M20 54 H80 M24 40 H76 M24 68 H76 M50 24 V84 M36 28 C29 44 29 64 36 80 M64 28 C71 44 71 64 64 80" fill="none" stroke="BG" stroke-width="3"/><polygon points="84,14 86,21 93,23 86,25 84,32 82,25 75,23 82,21"/>',
+  nota: '<ellipse cx="32" cy="74" rx="12" ry="9" transform="rotate(-20 32 74)"/><ellipse cx="72" cy="64" rx="12" ry="9" transform="rotate(-20 72 64)"/><rect x="38" y="24" width="6" height="50"/><rect x="78" y="14" width="6" height="50"/><polygon points="38,24 84,12 84,26 38,38"/>',
+  chitarra: '<path d="M52 52 L80 20" fill="none" stroke="FG" stroke-width="8" stroke-linecap="round"/><rect x="74" y="8" width="16" height="12" rx="3" transform="rotate(45 82 14)"/><circle cx="38" cy="68" r="21"/><circle cx="54" cy="52" r="14"/><circle cx="44" cy="62" r="7" fill="BG"/><rect x="24" y="72" width="14" height="4" rx="2" fill="BG" transform="rotate(-45 31 74)"/>',
+  tamburo: '<path d="M28 10 L48 30 M72 10 L52 30" fill="none" stroke="FG" stroke-width="5" stroke-linecap="round"/><path d="M16 40 V70 A34 11 0 0 0 84 70 V40 Z"/><ellipse cx="50" cy="40" rx="34" ry="11"/><ellipse cx="50" cy="40" rx="30" ry="8" fill="none" stroke="BG" stroke-width="3"/><polyline points="20,52 32,74 44,54 56,76 68,54 80,72" fill="none" stroke="BG" stroke-width="3"/>',
+  applauso: '<rect x="24" y="30" width="22" height="52" rx="11" transform="rotate(-18 35 56)"/><rect x="54" y="30" width="22" height="52" rx="11" transform="rotate(18 65 56)"/><path d="M50 8 V20 M32 12 L38 23 M68 12 L62 23" fill="none" stroke="FG" stroke-width="5" stroke-linecap="round"/>',
+  ciak: '<g transform="rotate(-14 16 40)"><rect x="16" y="26" width="68" height="12" rx="2"/><polygon points="30,26 39,26 32,38 23,38" fill="BG"/><polygon points="50,26 59,26 52,38 43,38" fill="BG"/><polygon points="70,26 79,26 72,38 63,38" fill="BG"/></g><rect x="16" y="42" width="68" height="44" rx="3"/><rect x="22" y="56" width="56" height="3" fill="BG"/><rect x="22" y="70" width="56" height="3" fill="BG"/>',
+  flightcase: '<rect x="40" y="16" width="20" height="9" rx="3"/><rect x="14" y="24" width="72" height="56" rx="5"/><rect x="14" y="49" width="72" height="3" fill="BG"/><g fill="none" stroke="BG" stroke-width="2.5"><rect x="17" y="27" width="11" height="11" rx="2"/><rect x="72" y="27" width="11" height="11" rx="2"/><rect x="17" y="66" width="11" height="11" rx="2"/><rect x="72" y="66" width="11" height="11" rx="2"/></g><rect x="36" y="45" width="7" height="11" rx="1" fill="BG"/><rect x="57" y="45" width="7" height="11" rx="1" fill="BG"/>',
+  spia: '<polygon points="10,80 90,80 90,58 30,28 10,40"/><circle cx="54" cy="60" r="13" fill="BG"/><circle cx="54" cy="60" r="5"/>',
+  americana: '<rect x="8" y="30" width="84" height="6" rx="2"/><rect x="8" y="64" width="84" height="6" rx="2"/><path d="M12 36 L26 64 L40 36 L54 64 L68 36 L82 64 L88 36" fill="none" stroke="FG" stroke-width="4" stroke-linejoin="round"/>',
+  scaletta: '<rect x="24" y="12" width="52" height="76" rx="4"/><rect x="32" y="26" width="36" height="4" fill="BG"/><rect x="32" y="38" width="28" height="4" fill="BG"/><rect x="32" y="50" width="34" height="4" fill="BG"/><rect x="32" y="62" width="22" height="4" fill="BG"/><rect x="32" y="74" width="30" height="4" fill="BG"/>',
+  cassetta: '<rect x="10" y="24" width="80" height="52" rx="6"/><rect x="24" y="34" width="52" height="18" rx="9" fill="BG"/><circle cx="36" cy="43" r="6"/><circle cx="64" cy="43" r="6"/><polygon points="28,76 72,76 66,62 34,62" fill="BG"/>',
+  biglietto: '<path d="M10 28 H90 V43 A7 7 0 0 0 90 57 V72 H10 V57 A7 7 0 0 0 10 43 Z"/><path d="M66 31 V69" fill="none" stroke="BG" stroke-width="3" stroke-dasharray="4 4"/><polygon points="38,36 42,46 53,46 44,52 48,63 38,56 28,63 32,52 23,46 34,46" fill="BG"/>'
 };
 const LOGO_COLORS = ['#f2a541', '#e0503f', '#3b7bff', '#49b06a', '#9b5de5', '#f2c53d', '#eee9df', '#1c1d22'];
 const defaultLogo = () => ({ shape: 'cerchio', icon: 'cassa', bg: '#1c1d22', fg: '#f2a541', style: 'tour' });
@@ -1656,26 +1675,46 @@ function drawStyledName (ctx, style, text, cx, cy, maxW, h, accent) {
    nome stesso in modo fisso, così lo stesso nome dà sempre lo stesso logo;
    "variant" propone altre idee sulla stessa base. */
 const NAME_HINTS = {
+  // un simbolo per ogni parola dei nomi dei service (SERVICE_WORDS), più
+  // qualche parola comune; vince la prima parola del nome che ne ha uno
   icon: [
-    ['fulmine', ['power', 'elettr', 'volt', 'energ', 'thunder', 'fulmin', 'spark', 'watt', 'ampere', 'flash', 'saetta']],
-    ['faro', ['luc', 'light', 'lux', 'lamp', 'fari', 'faro', 'spot', 'beam', 'ragg', 'lumen']],
-    ['cassa', ['sound', 'suon', 'audio', 'acust', 'bass', 'boom', 'speaker', 'cass', 'woof', 'decibel', 'rumor', 'noise', 'volume']],
-    ['onda', ['wave', 'onda', 'onde', 'freq', 'echo', 'vibe', 'radio', 'sonic', 'sonor', 'eco']],
-    ['stella', ['star', 'stell', 'show', 'galax', 'nova', 'super', 'vip', 'gold', 'oro', 'festa', 'party']],
-    ['fader', ['mix', 'fader', 'live', 'studio', 'console', 'regia', 'tech', 'pro', 'sistem', 'system']]
+    ['microfono', ['micro', 'mic', 'karaoke', 'prova', 'canta', 'voce', 'vocal', 'soundcheck']],
+    ['onda', ['wave', 'onda', 'onde', 'freq', 'echo', 'vibe', 'radio', 'sonic', 'sonor', 'eco', 'larsen', 'feedback', 'riverber', 'fili']],
+    ['cassa', ['sound', 'suon', 'audio', 'acust', 'bass', 'boom', 'speaker', 'cassa', 'casse', 'woof', 'subwoof', 'decibel', 'rumor', 'noise', 'volume', 'assordant', 'botto']],
+    ['faro', ['luc', 'light', 'lux', 'lamp', 'fari', 'faro', 'faret', 'spot', 'beam', 'ragg', 'lumen', 'controluc', 'occhio', 'ribalta']],
+    ['fulmine', ['power', 'elettr', 'volt', 'energ', 'thunder', 'fulmin', 'spark', 'watt', 'ampere', 'flash', 'saetta', 'strobo', 'atomic']],
+    ['fader', ['mix', 'fader', 'studio', 'console', 'regia']],
+    ['nastro', ['gaffer', 'nastro', 'tape', 'sistem']],
+    ['fumo', ['fumo', 'fumog', 'fog', 'smoke', 'nebbi']],
+    ['coriandoli', ['coriand', 'confett', 'paillett', 'glitter', 'festa', 'party']],
+    ['sipario', ['sipari', 'teatr', 'palco', 'pedana', 'stage', 'scena']],
+    ['spina', ['spina', 'ciabatt', 'prolung', 'jack', 'cavi', 'cavo', 'presa', 'stacca']],
+    ['palla', ['palla', 'disco', 'balera', 'dance', 'coreograf', 'club']],
+    ['nota', ['nota', 'note', 'ritornell', 'tono', 'levare', 'fanfar', 'music', 'melod', 'bis', 'stecca']],
+    ['chitarra', ['chitarr', 'guitar', 'rock', 'band']],
+    ['tamburo', ['tambur', 'grancass', 'drum', 'batter']],
+    ['applauso', ['applaus', 'claque']],
+    ['ciak', ['ciak', 'buona', 'take', 'film']],
+    ['flightcase', ['flight', 'case', 'roadie', 'carico', 'furgon', 'truck', 'tourn']],
+    ['spia', ['spia', 'monitor']],
+    ['americana', ['americana', 'truss']],
+    ['scaletta', ['scalett', 'setlist', 'scaletta']],
+    ['cassetta', ['playback', 'registrat', 'cassett', 'nastrin']],
+    ['biglietto', ['esaurit', 'fila', 'bigliett', 'ticket', 'sold']],
+    ['stella', ['star', 'stell', 'galax', 'galatt', 'cosmic', 'nova', 'super', 'vip', 'diva', 'groupie']]
   ],
   bg: [
-    ['#e0503f', ['ross', 'red', 'fuoco', 'fire', 'rock', 'inferno', 'lava', 'rubin']],
-    ['#3b7bff', ['blu', 'blue', 'azzurr', 'mare', 'sea', 'sky', 'ciel', 'ice', 'ghiacc', 'ocean']],
+    ['#e0503f', ['ross', 'red', 'fuoco', 'fire', 'rock', 'inferno', 'lava', 'rubin', 'fiamm', 'bollent']],
+    ['#3b7bff', ['blu', 'blue', 'azzurr', 'mare', 'sea', 'sky', 'ciel', 'ice', 'ghiacc', 'ocean', 'elettric']],
     ['#49b06a', ['verd', 'green', 'bosc', 'forest', 'smerald', 'lime']],
-    ['#f2c53d', ['oro', 'gold', 'sole', 'sun', 'giall', 'yellow', 'ambra']],
+    ['#f2c53d', ['oro', 'gold', 'sole', 'sun', 'giall', 'yellow', 'ambra', 'dorat']],
     ['#9b5de5', ['viola', 'purple', 'magic', 'mistic', 'lilla', 'violet']],
-    ['#1c1d22', ['ner', 'black', 'dark', 'night', 'nott', 'buio', 'shadow', 'ombra']],
+    ['#1c1d22', ['nero', 'nera', 'black', 'dark', 'night', 'nott', 'buio', 'shadow', 'ombra', 'mezzanott']],
     ['#eee9df', ['bianc', 'white', 'neve', 'snow', 'luna', 'moon']],
     ['#f2a541', ['arancio', 'orange', 'tramont', 'sunset']]
   ],
   style: [
-    ['neon', ['neon', 'night', 'nott', 'club', 'disco', 'dance', 'electro']],
+    ['neon', ['neon', 'night', 'nott', 'club', 'disco', 'dance', 'electro', 'balera', 'mezzanott']],
     ['led', ['led', 'digit', 'pixel', 'tech', 'screen', 'video', 'matrix']],
     ['tour', ['rock', 'metal', 'tour', 'band', 'star', 'road']],
     ['stencil', ['crew', 'case', 'stage', 'palco', 'work', 'tecnic', 'truck', 'camion', 'furgon']],
@@ -1683,19 +1722,25 @@ const NAME_HINTS = {
     ['gaffer', ['garage', 'nastro', 'tape', 'gaffer', 'artigian', 'bottega', 'fai da te']]
   ]
 };
+const FIRM_WORDS = new Set(['srl', 'snc', 'spa', 'productions', 'group', 'live', 'eventi', 'entertainment',
+  'international', 'soci', 'figli', 'sound', 'brothers', 'show', 'fratelli', 'sorelle']);
 function logoFromName (name, variant) {
   variant = variant || 0;
   // parole del nome, senza accenti e senza la parola "service" (la hanno tutti);
   // una parola chiave vale se una parola del nome comincia così ("luc" → Luci)
   const words = String(name || '').toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '')
     .split(/[^a-z0-9]+/).filter(w => w && w !== 'service');
+  // il simbolo racconta una parola vera del nome: la prima che ne ha uno,
+  // saltando le parole da ditta ("Srl", "Productions", "Live"…)
+  const iconFor = w => (NAME_HINTS.icon.find(([, keys]) => keys.some(k => w.startsWith(k))) || [])[0];
+  const nameIcon = words.filter(w => w.length > 1 && !FIRM_WORDS.has(w)).map(iconFor).find(Boolean);
   const rand = seededRand(words.join(' ') + '#' + variant);
   const pickHint = list => {
     const hit = list.filter(([, keys]) => keys.some(k => words.some(w => w.startsWith(k))));
     return hit.length ? hit[variant % hit.length][0] : null;
   };
   const pick = arr => arr[Math.floor(rand() * arr.length)];
-  const icon = pickHint(NAME_HINTS.icon) || (variant % 2 ? pick(Object.keys(LOGO_ICONS)) : 'iniziali');
+  const icon = nameIcon || (variant % 2 ? pick(Object.keys(LOGO_ICONS)) : 'iniziali');
   const bg = pickHint(NAME_HINTS.bg) || pick(LOGO_COLORS.filter(c => c !== '#eee9df'));
   const fg = logoFg(bg, pick);
   const style = pickHint(NAME_HINTS.style) || pick(Object.keys(BRAND_STYLES));
@@ -1796,7 +1841,7 @@ function serviceOffers (used, rand) {
     const head = serviceKey(name).split(' ').filter(w => !/^(fratelli|sorelle)$/.test(w))[0];
     if (name.length > SERVICE_NAME_MAX || seen.has(serviceKey(name)) || heads.has(head)) continue;
     seen.add(serviceKey(name)); heads.add(head);
-    const logo = logoFromName(name, Math.floor(r() * 6));
+    const logo = logoFromName(name);
     if (bgs.includes(logo.bg)) {
       logo.bg = randItem(LOGO_COLORS.filter(c => c !== '#eee9df' && !bgs.includes(c)), r);
       logo.fg = logoFg(logo.bg, arr => randItem(arr, r));

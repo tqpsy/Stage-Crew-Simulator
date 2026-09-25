@@ -41,6 +41,12 @@ const path = require('path');
   check(many.n === 450 && many.uniq === 450, 'nomi di service ripetuti: ' + JSON.stringify(many));
   check(await ev(() => logoFromName('Service Rossi').bg) === '#e0503f', '"Rossi" non dà il rosso');
   check(await ev(() => logoFromName('Power').icon) === 'fulmine', '"Power" non dà il fulmine');
+  // il simbolo del logo racconta una parola del nome, sempre
+  const noIcon = await ev(() => SERVICE_WORDS.nouns.map(n => n[0]).concat(SERVICE_WORDS.whole).filter(w => !LOGO_ICONS[logoFromName(w).icon]));
+  check(!noIcon.length, 'parole senza simbolo nel logo: ' + noIcon);
+  check(offers.every(o => o.logo.icon !== 'iniziali'), 'un service proposto ha le iniziali invece di un simbolo: ' + offers.map(o => o.name + '=' + o.logo.icon));
+  const icons = await ev(() => ['Fratelli Gaffer Srl', 'Karaoke & Riverbero', 'Macchina del Fumo Live', 'Tutto Esaurito Sound', 'Subwoofer Ruggente S.p.A.'].map(n => logoFromName(n).icon));
+  check(JSON.stringify(icons) === JSON.stringify(['nastro', 'microfono', 'fumo', 'biglietto', 'cassa']), 'simbolo che non segue il nome: ' + icons);
   check(await ev(() => serviceInitials('Larsen & Diva S.n.c.')) === 'LD', 'iniziali sbagliate');
   // senza nome o senza service non si parte
   check(await p.$eval('#new-start', b => b.disabled), 'si può iniziare senza nome né service');
