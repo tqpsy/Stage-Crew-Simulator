@@ -1,0 +1,238 @@
+<title>Tramp punk</title>
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@600;700&family=Inter:wght@400;500;600&display=swap">
+<style>
+  /* Studio del personaggio: una sola sagoma, quattro trattamenti. Tema scuro come il gioco. */
+  :root{
+    color-scheme: dark;
+    --bg:#101012; --panel:#19191c; --line:#2e2f35; --text:#eee9df; --muted:#8b8e98; --amber:#f2a541;
+    --display:'Barlow Condensed','Arial Narrow',sans-serif; --ui:'Inter',system-ui,sans-serif;
+  }
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--bg);color:var(--text);font-family:var(--ui);padding-block:20px 32px}
+  .wrap{max-width:1100px;margin:0 auto;padding-inline:16px;display:grid;gap:18px}
+  h1{margin:0;font-family:var(--display);font-size:32px;letter-spacing:.03em}
+  .lead{margin:0;color:var(--muted);font-size:15px;line-height:1.5;max-width:65ch}
+  .grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,250px),1fr));gap:14px}
+  .card{background:var(--panel);border:1px solid var(--line);border-radius:10px;overflow:hidden;display:grid}
+  canvas{display:block;width:100%;aspect-ratio:3/4;background:#000}
+  .txt{padding:10px 12px 12px;display:grid;gap:3px}
+  .txt b{font-family:var(--display);font-size:21px;letter-spacing:.04em;color:var(--amber)}
+  .txt b span{color:var(--muted);margin-right:6px}
+  .txt p{margin:0;font-size:13.5px;line-height:1.45;color:#cfcac0}
+</style>
+
+<div class="wrap">
+  <h1>Preside Tramp, versione punk</h1>
+  <p class="lead">Una sola sagoma disegnata come un manifesto, quattro trattamenti con pochissimi colori. Gesticola a tre pose mentre parla.</p>
+  <div class="grid">
+    <div class="card"><canvas id="c-a" width="600" height="800"></canvas><div class="txt"><b><span>A</span>Stencil</b><p>Quattro toni piatti e tagli netti, da manifesto a spray. Niente contorni.</p></div></div>
+    <div class="card"><canvas id="c-b" width="600" height="800"></canvas><div class="txt"><b><span>B</span>Fotocopia</b><p>Bianco e nero a retino, ritagliato dalla fanzine; ciuffo e cravatta in rosa fluo.</p></div></div>
+    <div class="card"><canvas id="c-c" width="600" height="800"></canvas><div class="txt"><b><span>C</span>Risograph</b><p>Due inchiostri, rosa e blu, stampati un po' fuori registro, con la grana della carta.</p></div></div>
+    <div class="card"><canvas id="c-d" width="600" height="800"></canvas><div class="txt"><b><span>D</span>Sticker</b><p>Sagoma nera a spray con un solo colore acido, bordo sfumato e colature.</p></div></div>
+  </div>
+</div>
+
+<script>
+(() => {
+  const reduced = matchMedia('(prefers-reduced-motion: reduce)').matches;
+  const P = d => new Path2D(d);
+
+  /* ---------- la sagoma: unità con i piedi in (0,0), alta 250, y in su negativo.
+     Posa: peso sulla gamba sinistra, busto in avanti, mento in su. ---------- */
+  // braccio rastremato: spalla, gomito, polso, con spessori diversi
+  function limb (a, b, c, w0, w1, w2) {
+    const n = (p, q) => { const dx = q[0] - p[0], dy = q[1] - p[1], l = Math.hypot(dx, dy) || 1; return [-dy / l, dx / l]; };
+    const n1 = n(a, b), n2 = n(b, c), nm = [(n1[0] + n2[0]) / 2, (n1[1] + n2[1]) / 2];
+    const p = new Path2D();
+    p.moveTo(a[0] + n1[0] * w0, a[1] + n1[1] * w0);
+    p.lineTo(b[0] + nm[0] * w1, b[1] + nm[1] * w1);
+    p.lineTo(c[0] + n2[0] * w2, c[1] + n2[1] * w2);
+    p.lineTo(c[0] - n2[0] * w2, c[1] - n2[1] * w2);
+    p.lineTo(b[0] - nm[0] * w1, b[1] - nm[1] * w1);
+    p.lineTo(a[0] - n1[0] * w0, a[1] - n1[1] * w0);
+    p.closePath();
+    return p;
+  }
+  const mix = (a, b, t) => [a[0] + (b[0] - a[0]) * t, a[1] + (b[1] - a[1]) * t];
+  // tre gesti: la pinza davanti al petto, il dito alzato, la mano avanti
+  const GESTURES = [
+    { e: [66, -126], w: [38, -150], hand: 'pinch' },
+    { e: [70, -150], w: [62, -196], hand: 'finger' },
+    { e: [62, -128], w: [70, -150], hand: 'open' }
+  ];
+  function figure (pose, mouth, blink) {
+    // pose: numero reale; parte intera = gesto, parte decimale = passaggio al successivo
+    const i = Math.floor(pose) % 3, j = (i + 1) % 3, f = pose - Math.floor(pose);
+    const k = f < 0.7 ? 0 : (f - 0.7) / 0.3, ease = k * k * (3 - 2 * k);
+    const G = GESTURES[i], H = GESTURES[j];
+    const elbow = mix(G.e, H.e, ease), wrist = mix(G.w, H.w, ease), hand = ease < 0.5 ? G.hand : H.hand;
+    const L = {};
+    L.legs = P('M-30 -100 L-1 -100 L-6 -8 L-30 -8 Z M3 -100 L30 -100 L38 -8 L12 -8 Z');
+    L.legShade = P('M-30 -100 L-18 -100 L-20 -8 L-30 -8 Z M20 -100 L30 -100 L38 -8 L28 -8 Z');
+    L.shoes = P('M-38 0 L-37 -9 Q-30 -13 -4 -11 L-3 0 Z M10 0 L12 -11 Q38 -13 46 -6 L46 0 Z');
+    // braccio sinistro a riposo, dietro la giacca
+    L.armBack = limb([-50, -164], [-60, -122], [-54, -84], 12, 10, 8);
+    L.handBack = P('M-60 -86 Q-62 -74 -54 -72 Q-46 -72 -47 -84 Z');
+    // la giacca: enorme, squadrata, aperta sotto il bottone
+    L.jacket = P('M-50 -176 Q-64 -172 -64 -152 L-60 -94 L-12 -88 L-2 -132 L4 -132 L14 -88 L60 -94 L62 -154 Q62 -172 48 -176 Q0 -188 -50 -176 Z');
+    L.jacketShade = P('M-50 -176 Q-64 -172 -64 -152 L-60 -94 L-40 -92 L-44 -156 Q-44 -170 -36 -178 Z M14 -88 L60 -94 L61 -120 Q40 -110 18 -104 Z');
+    L.shirt = P('M-14 -180 L14 -180 L0 -132 Z M-2 -132 L4 -132 L14 -88 L-12 -88 Z');
+    L.lapels = P('M-14 -180 L-27 -176 L-7 -136 L-3 -146 Z M14 -180 L27 -176 L7 -136 L3 -146 Z');
+    L.tie = P('M-6 -178 L6 -178 L4 -169 L-4 -169 Z M-4 -169 L4 -169 L10 -76 L1 -64 L-9 -76 Z');
+    L.tieShade = P('M1 -169 L4 -169 L10 -76 L1 -64 Z');
+    L.neck = P('M-10 -186 L10 -186 L11 -177 L-11 -177 Z');
+    // testa: mascella larga, doppio mento, mento in su
+    L.face = P('M-23 -212 C-25 -230 -12 -238 2 -238 C17 -238 25 -228 24 -212 C24 -198 20 -188 12 -182 C6 -178 -6 -178 -13 -182 C-21 -188 -23 -200 -23 -212 Z');
+    L.faceShade = P('M13 -236 C22 -228 25 -214 24 -204 C22 -192 17 -184 10 -181 C14 -193 17 -206 13 -236 Z');
+    L.ears = P('M-23 -214 Q-30 -212 -28 -202 Q-26 -198 -22 -200 Z M24 -214 Q31 -212 29 -202 Q27 -198 23 -200 Z');
+    L.pale = P('M-17 -216 Q-9 -221 -2 -215 Q-9 -210 -17 -213 Z M3 -215 Q10 -221 18 -216 Q18 -212 10 -210 Q5 -211 3 -215 Z');
+    L.eyes = blink ? P('M-15 -215 L-4 -215 L-4 -214 L-15 -214 Z M5 -215 L16 -215 L16 -214 L5 -214 Z')
+      : P('M-15 -215 Q-9 -218 -4 -215 Q-9 -213.5 -15 -215 Z M5 -215 Q11 -218 16 -215 Q11 -213.5 5 -215 Z');
+    L.brows = P('M-18 -222 L-3 -225 L-3 -222 L-17 -219 Z M4 -225 L19 -222 L18 -219 L4 -222 Z');
+    L.nose = P('M1 -214 L6 -199 L-1 -197 Z');
+    const mo = 2 + mouth * 4;
+    L.mouth = mouth > 0.1 ? P(`M-4 -190 a4.5 ${mo / 2 + 1} 0 1 0 9 0 a4.5 ${mo / 2 + 1} 0 1 0 -9 0 Z`) : P('M-6 -190 Q0 -193 6 -190 L6 -188.5 Q0 -191 -6 -188.5 Z');
+    // il ciuffo: un cuneo biondo pettinato in avanti, oltre la fronte
+    L.hair = P('M24 -212 C31 -226 30 -244 14 -252 C-2 -259 -26 -254 -34 -240 C-39 -232 -37 -224 -31 -220 C-31 -228 -24 -232 -14 -231 C-2 -231 12 -229 19 -222 L24 -212 Z M24 -212 L27 -200 L23 -201 Z M-23 -218 L-26 -206 L-23 -205 Z');
+    L.hairShade = P('M-31 -220 C-31 -228 -24 -232 -14 -231 C-2 -231 12 -229 19 -222 L24 -212 C26 -224 18 -236 2 -238 C-14 -239 -28 -234 -31 -220 Z');
+    // braccio che gesticola, davanti
+    L.armFront = limb([50, -166], elbow, wrist, 14, 12, 9);
+    L.cuff = P(`M${wrist[0] - 7} ${wrist[1]} a7 4.5 0 1 0 14 0 a7 4.5 0 1 0 -14 0 Z`);
+    const [hx, hy] = wrist, up = hy < -140 ? -1 : 1;
+    L.hand = hand === 'finger'
+      ? P(`M${hx - 6} ${hy - 2} Q${hx - 7} ${hy - 12} ${hx} ${hy - 12} L${hx + 1} ${hy - 26} Q${hx + 5} ${hy - 27} ${hx + 5} ${hy - 22} L${hx + 6} ${hy - 6} Q${hx + 4} ${hy + 2} ${hx - 6} ${hy - 2} Z`)
+      : hand === 'pinch'
+        ? P(`M${hx - 7} ${hy - 1} Q${hx - 10} ${hy - 11} ${hx - 2} ${hy - 13} Q${hx + 4} ${hy - 16} ${hx + 3} ${hy - 9} Q${hx + 8} ${hy - 8} ${hx + 6} ${hy - 1} Q${hx} ${hy + 4} ${hx - 7} ${hy - 1} Z`)
+        : P(`M${hx - 8} ${hy} L${hx - 14} ${hy - 12 * up} L${hx - 8} ${hy - 14 * up} L${hx - 2} ${hy - 16 * up} L${hx + 4} ${hy - 13 * up} L${hx + 7} ${hy - 2} Q${hx} ${hy + 4} ${hx - 8} ${hy} Z`);
+    L.pinchHole = hand === 'pinch' ? P(`M${hx - 3} ${hy - 7} a2 2 0 1 0 4 0 a2 2 0 1 0 -4 0 Z`) : null;
+    return L;
+  }
+  // ordine di disegno e ruolo di ogni pezzo
+  const ORDER = [
+    ['armBack', 'suitDark'], ['handBack', 'skinDark'], ['legs', 'suit'], ['legShade', 'suitDark'], ['shoes', 'dark'],
+    ['jacket', 'suit'], ['jacketShade', 'suitDark'], ['shirt', 'shirt'], ['tie', 'tie'], ['tieShade', 'tieDark'], ['lapels', 'suitDark'],
+    ['neck', 'skinDark'], ['ears', 'skin'], ['face', 'skin'], ['faceShade', 'skinDark'], ['pale', 'pale'], ['eyes', 'dark'], ['brows', 'hairDark'],
+    ['nose', 'skinDark'], ['mouth', 'mouth'], ['hair', 'hair'], ['hairShade', 'hairDark'],
+    ['armFront', 'suit'], ['cuff', 'shirt'], ['hand', 'skin'], ['pinchHole', 'dark']
+  ];
+  function paint (g, L, colors) {
+    ORDER.forEach(([k, role]) => { if (!L[k] || !colors[role]) return; g.fillStyle = colors[role]; g.fill(L[k]); });
+  }
+
+  /* ---------- sfondo: palco nero con un occhio di bue ---------- */
+  function spot (g, W, H, tint) {
+    g.fillStyle = '#060607'; g.fillRect(0, 0, W, H);
+    const gr = g.createRadialGradient(W / 2, H * 0.52, 0, W / 2, H * 0.52, W * 0.55);
+    gr.addColorStop(0, tint); gr.addColorStop(1, 'rgba(0,0,0,0)');
+    g.fillStyle = gr; g.fillRect(0, 0, W, H);
+    g.fillStyle = 'rgba(255,255,255,0.05)'; g.beginPath(); g.ellipse(W / 2, H * 0.9, W * 0.3, H * 0.03, 0, 0, Math.PI * 2); g.fill();
+  }
+  const place = (g, W, H) => { const k = H / 300; g.translate(W / 2 - 4 * k, H * 0.9); g.scale(k, k); };
+
+  /* A: stencil, quattro toni */
+  const STENCIL = { suit: '#1d2f4d', suitDark: '#0c1220', dark: '#0c0c0e', shirt: '#efe3c6', tie: '#d7263d', tieDark: '#9c1b2c',
+    skin: '#e8763f', skinDark: '#b6482a', pale: '#efe3c6', hair: '#f3d88a', hairDark: '#c79c44', mouth: '#3a0d10' };
+  function drawA (g, W, H, st) {
+    spot(g, W, H, 'rgba(239,227,198,0.16)');
+    g.save(); place(g, W, H); paint(g, figure(st.pose, st.mouth, st.blink), STENCIL); g.restore();
+  }
+
+  /* B: fotocopia a retino, un colore fluo */
+  let bufB = null, maskB = null;
+  function drawB (g, W, H, st) {
+    if (!bufB) { bufB = document.createElement('canvas'); bufB.width = W; bufB.height = H; maskB = document.createElement('canvas'); maskB.width = W; maskB.height = H; }
+    const L = figure(st.pose, st.mouth, st.blink);
+    // la figura in scala di grigi
+    const b = bufB.getContext('2d'); b.setTransform(1, 0, 0, 1, 0, 0); b.clearRect(0, 0, W, H);
+    b.save(); place(b, W, H);
+    paint(b, L, { suit: '#8a8a8a', suitDark: '#3a3a3a', dark: '#000', shirt: '#fff', tie: '#fff', tieDark: '#ddd', skin: '#d8d8d8', skinDark: '#8a8a8a', pale: '#fff', hair: '#fff', hairDark: '#bbb', mouth: '#000' });
+    b.restore();
+    // carta: fondo grigio sporco e sagoma ritagliata con bordo bianco irregolare
+    g.fillStyle = '#1b1b1d'; g.fillRect(0, 0, W, H);
+    const m = maskB.getContext('2d'); m.setTransform(1, 0, 0, 1, 0, 0); m.clearRect(0, 0, W, H);
+    m.save(); place(m, W, H); m.fillStyle = '#f4f1e8';
+    m.lineJoin = 'miter'; m.strokeStyle = '#f4f1e8'; m.lineWidth = 7;
+    ORDER.forEach(([k]) => { if (L[k]) { m.fill(L[k]); m.stroke(L[k]); } });
+    m.restore();
+    g.save(); g.translate(3, 2); g.rotate(-0.012); g.drawImage(maskB, 0, 0); g.restore();
+    // retino: un punto nero per ogni cella, grande quanto è scuro il grigio
+    const img = b.getImageData(0, 0, W, H).data, cell = 5;
+    g.fillStyle = '#0d0d0d';
+    for (let y = cell / 2; y < H; y += cell) for (let x = cell / 2; x < W; x += cell) {
+      const i = ((y | 0) * W + (x | 0)) * 4;
+      if (img[i + 3] < 128) continue;
+      const dark = 1 - img[i] / 255;
+      if (dark > 0.94) { g.fillRect(x - cell / 2, y - cell / 2, cell, cell); continue; }
+      const r = Math.sqrt(dark) * cell * 0.62;
+      if (r > 0.4) { g.beginPath(); g.arc(x, y, r, 0, Math.PI * 2); g.fill(); }
+    }
+    // il colore fluo stampato sopra: ciuffo e cravatta
+    g.save(); place(g, W, H); g.globalCompositeOperation = 'multiply';
+    g.fillStyle = '#ff2e88'; ['hair', 'tie'].forEach(k => g.fill(L[k]));
+    g.restore();
+  }
+
+  /* C: risograph, due inchiostri fuori registro */
+  let grain = null;
+  function drawC (g, W, H, st) {
+    g.fillStyle = '#f2ecdc'; g.fillRect(0, 0, W, H);
+    const L = figure(st.pose, st.mouth, st.blink);
+    g.save(); g.globalCompositeOperation = 'multiply';
+    // inchiostro rosa: pelle, capelli, cravatta
+    g.save(); place(g, W, H); g.translate(-1.2, 0.8);
+    paint(g, L, { skin: '#ff5aa0', skinDark: '#ff5aa0', ears: '#ff5aa0', hair: '#ffb3d0', hairDark: '#ff7ab4', tie: '#ff4f98', tieDark: '#ff4f98', mouth: '#ff4f98', handBack: '#ff5aa0' });
+    g.restore();
+    // inchiostro blu: abito, ombre, tratti del viso
+    g.save(); place(g, W, H); g.translate(1.2, -0.6);
+    paint(g, L, { suit: '#2d5bd7', suitDark: '#1a3a9c', dark: '#1a3a9c', skinDark: 'rgba(45,91,215,0.22)', hairDark: 'rgba(45,91,215,0.35)', tieDark: 'rgba(45,91,215,0.4)' });
+    g.restore();
+    g.restore();
+    // grana della carta
+    if (!grain) {
+      grain = document.createElement('canvas'); grain.width = 160; grain.height = 160;
+      const q = grain.getContext('2d'), id = q.createImageData(160, 160);
+      for (let i = 0; i < id.data.length; i += 4) { const v = Math.random() * 255; id.data[i] = id.data[i + 1] = id.data[i + 2] = v; id.data[i + 3] = 40; }
+      q.putImageData(id, 0, 0);
+    }
+    g.fillStyle = g.createPattern(grain, 'repeat'); g.fillRect(0, 0, W, H);
+    // titolo stampato in basso, come un volantino
+    g.fillStyle = '#2d5bd7'; g.font = '700 38px "Barlow Condensed", "Arial Narrow", sans-serif'; g.textAlign = 'center';
+    g.fillText('TRAMP!', W / 2 + 1, H - 22);
+  }
+
+  /* D: sticker a spray, nero e un colore acido */
+  let bufD = null;
+  function drawD (g, W, H, st) {
+    g.fillStyle = '#2a2a2d'; g.fillRect(0, 0, W, H);
+    // muro di cemento: qualche macchia
+    for (let i = 0; i < 18; i++) { g.fillStyle = `rgba(255,255,255,${0.012 + (i % 3) * 0.008})`; g.beginPath(); g.arc((i * 137) % W, (i * 89) % H, 40 + (i * 23) % 60, 0, Math.PI * 2); g.fill(); }
+    const L = figure(st.pose, st.mouth, st.blink);
+    if (!bufD) { bufD = document.createElement('canvas'); bufD.width = W; bufD.height = H; }
+    const b = bufD.getContext('2d'); b.setTransform(1, 0, 0, 1, 0, 0); b.clearRect(0, 0, W, H);
+    b.save(); place(b, W, H);
+    b.fillStyle = '#0a0a0a'; ORDER.forEach(([k]) => { if (L[k]) b.fill(L[k]); });
+    // colore acido: ciuffo, cravatta e le "finestre" del viso ritagliate nello stencil
+    b.fillStyle = '#c6ff1a'; ['hair', 'tie', 'pale'].forEach(k => b.fill(L[k]));
+    b.fillStyle = '#0a0a0a'; ['hairShade', 'eyes', 'tieShade'].forEach(k => b.fill(L[k]));
+    b.restore();
+    // spruzzo: alone sfocato sotto e figura netta sopra
+    g.save(); if ('filter' in g) g.filter = 'blur(5px)'; g.globalAlpha = 0.5; g.drawImage(bufD, 0, 0); g.restore();
+    g.drawImage(bufD, 0, 0);
+    // colature di vernice dal ciuffo e dalla cravatta
+    g.save(); place(g, W, H);
+    g.fillStyle = '#c6ff1a';
+    [[-27, -221, 16], [21, -214, 22], [1, -64, 18]].forEach(([x, y, l]) => { g.fillRect(x, y, 1.4, l); g.beginPath(); g.arc(x + 0.7, y + l, 1.6, 0, Math.PI * 2); g.fill(); });
+    g.restore();
+  }
+
+  const cards = [['c-a', drawA], ['c-b', drawB], ['c-c', drawC], ['c-d', drawD]].map(([id, fn]) => ({ c: document.getElementById(id), fn }));
+  function frame (now) {
+    const t = reduced ? 0.4 : now / 1000;
+    const st = { pose: t / 1.6, mouth: Math.abs(Math.sin(t * 11) * Math.sin(t * 4.3)), blink: (t % 3.7) < 0.12 };
+    cards.forEach(({ c, fn }) => { const g = c.getContext('2d'); g.setTransform(1, 0, 0, 1, 0, 0); g.globalCompositeOperation = 'source-over'; g.globalAlpha = 1; fn(g, c.width, c.height, st); });
+    if (!reduced) requestAnimationFrame(frame);
+  }
+  requestAnimationFrame(frame);
+})();
+</script>
