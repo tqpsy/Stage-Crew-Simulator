@@ -20,7 +20,7 @@ const N = parseInt(process.argv[2] || '40', 10), SEED0 = parseInt(process.argv[3
   await p.goto('file://' + path.join(__dirname, '..', 'index.html'));
   await p.waitForFunction(() => window.__scene, null, { timeout: 20000 });
   // partita vera, così ogni azione passa anche dal salvataggio automatico
-  await p.evaluate(() => startNewGame('Collaudo'));
+  await p.evaluate(() => startNewGame('Collaudo', serviceOffers([])[0]));
   await p.waitForFunction(() => !menuOpen);
   const res = await p.evaluate(async ({ N, SEED0 }) => {
     const sleep = ms => new Promise(r => setTimeout(r, ms));

@@ -1342,27 +1342,30 @@ document.querySelectorAll('.tab-btn').forEach(btn => {
 });
 
 /* ---------------------------------------------------------------------
-   PARTITA — nome del service, salvataggio automatico, impostazioni e
+   PARTITA — il tecnico (nome) e il service per cui lavora, scelto tra
+   tre offerte; salvataggio automatico, impostazioni e
    record. Tutto sta in un solo oggetto nella memoria del browser, con un
    numero di versione: se un giorno il formato cambia si converte, invece
    di perdere la partita. "Nuova partita" azzera il livello ma tiene
    impostazioni e record.
-   Il valore principale del service è la REPUTAZIONE (vedi addReputation):
-   parte da 0, sale con le fasi completate, i guasti gestiti bene e le
-   birre rifiutate, scende se un guasto è gestito male. Un nuovo service
-   (Nuova partita) riparte da zero.
+   Il valore principale del tecnico è la REPUTAZIONE (vedi addReputation):
+   è sua, non del service. Parte da 0, sale con le fasi completate, i
+   guasti gestiti bene e le birre rifiutate, scende se un guasto è gestito
+   male. Un nuovo tecnico (Nuova partita) riparte da zero.
    I record preparano gli highscore: per ogni collaudo riuscito si tengono
    i dati grezzi (tempo di gioco, test fatti e falliti, scatti, colpi nelle
    casse).
    --------------------------------------------------------------------- */
 const SAVE_KEY = 'scs-save';
-const SAVE_VERSION = 2;
+const SAVE_VERSION = 3;
 const LEVEL_ID = 1;
 const RECORDS_KEEP = 20;       // record tenuti per livello
-const SERVICE_MAX = 24;        // caratteri del nome del service
+const NAME_MAX = 24;           // caratteri del nome del tecnico
+const SERVICE_NAME_MAX = 28;   // caratteri del nome (inventato) di un service
+const USED_SERVICES_KEEP = 400; // nomi di service già proposti, da non riproporre
 
 function defaultProfile () {
-  return { v: SAVE_VERSION, service: '', settings: { volume: 0.8, reducedFx: false, skipShow: false }, logo: null, level: null, records: {}, reputation: { total: 0, earned: {}, log: [] } };
+  return { v: SAVE_VERSION, player: '', service: '', serviceInfo: null, usedServices: [], settings: { volume: 0.8, reducedFx: false, skipShow: false }, logo: null, level: null, records: {}, reputation: { total: 0, earned: {}, log: [] } };
 }
 const Profile = (() => {
   let data = defaultProfile();
@@ -1375,6 +1378,15 @@ const Profile = (() => {
       const done = Object.keys((d.reputation && d.reputation.byLevel) || {}).filter(l => d.reputation.byLevel[l] > 0);
       d.reputation = { total: done.length * 5, earned: Object.fromEntries(done.map(l => ['L' + l + ':collaudo', 5])), log: [] };
       d.v = 2;
+    }
+    // versione 2: il giocatore era il titolare del service (nome e logo
+    // scelti da lui); ora è un tecnico che lavora per un service e la
+    // reputazione è la sua. Il vecchio service resta come datore di lavoro.
+    if (d && d.v === 2) {
+      d.player = '';
+      d.serviceInfo = null;
+      d.usedServices = d.service ? [d.service] : [];
+      d.v = 3;
     }
     if (d && d.v === SAVE_VERSION) data = { ...defaultProfile(), ...d, settings: { ...defaultProfile().settings, ...d.settings }, reputation: { ...defaultProfile().reputation, ...d.reputation } };
     else if (!raw && localStorage.getItem('scs-muted') === '1') data.settings.volume = 0;   // vecchio tasto muto
@@ -1395,12 +1407,14 @@ window.addEventListener('pagehide', () => Profile.flush());
 
 const settings = () => Profile.data.settings;
 const reducedFx = () => !!settings().reducedFx;
-const serviceName = () => Profile.data.service || 'Il tuo service';
+const serviceName = () => Profile.data.service || 'Il service';
+const playerName = () => Profile.data.player || 'Tecnico';
 
 /* ---------------- logo del service ----------------
-   Si sceglie uno dei loghi pronti o se ne crea uno: forma, simbolo e due
-   colori. È un disegno vettoriale (SVG), quindi resta nitido a ogni
-   misura: in testata, nel menù e dipinto sulla fiancata del furgone. */
+   Ogni service proposto a inizio partita ha il suo logo, inventato dal
+   nome: forma, simbolo e due colori. È un disegno vettoriale (SVG), quindi
+   resta nitido a ogni misura: in testata, nel menù e dipinto sulla
+   fiancata del furgone. */
 const LOGO_SHAPES = {
   cerchio: '<circle cx="50" cy="50" r="46"/>',
   quadrato: '<rect x="5" y="5" width="90" height="90" rx="18"/>',
@@ -1417,17 +1431,11 @@ const LOGO_ICONS = {
   fader: '<rect x="26" y="18" width="6" height="64" rx="3"/><rect x="47" y="18" width="6" height="64" rx="3"/><rect x="68" y="18" width="6" height="64" rx="3"/><rect x="19" y="56" width="20" height="11" rx="2"/><rect x="40" y="30" width="20" height="11" rx="2"/><rect x="61" y="46" width="20" height="11" rx="2"/>'
 };
 const LOGO_COLORS = ['#f2a541', '#e0503f', '#3b7bff', '#49b06a', '#9b5de5', '#f2c53d', '#eee9df', '#1c1d22'];
-const LOGO_PRESETS = [
-  { shape: 'cerchio', icon: 'cassa', bg: '#1c1d22', fg: '#f2a541', style: 'tour' },
-  { shape: 'scudo', icon: 'fulmine', bg: '#e0503f', fg: '#eee9df', style: 'stencil' },
-  { shape: 'esagono', icon: 'faro', bg: '#3b7bff', fg: '#f2c53d', style: 'fasci' },
-  { shape: 'quadrato', icon: 'fader', bg: '#1c1d22', fg: '#49b06a', style: 'led' },
-  { shape: 'cerchio', icon: 'onda', bg: '#9b5de5', fg: '#eee9df', style: 'neon' },
-  { shape: 'scudo', icon: 'iniziali', bg: '#f2a541', fg: '#1c1d22', style: 'gaffer' }
-];
-const defaultLogo = () => ({ ...LOGO_PRESETS[0] });
+const defaultLogo = () => ({ shape: 'cerchio', icon: 'cassa', bg: '#1c1d22', fg: '#f2a541', style: 'tour' });
+// iniziali delle prime due parole vere del nome (senza "Service", "&",
+// "Srl", "S.p.A."…)
 function serviceInitials (name) {
-  const words = String(name || '').split(/\s+/).filter(w => w && !/^service$/i.test(w));
+  const words = String(name || '').split(/\s+/).filter(w => /^[a-zà-ú]/i.test(w) && !/^(service|srl|snc|spa|s\.[a-z.]+)$/i.test(w));
   const ini = words.slice(0, 2).map(w => w[0]).join('').toUpperCase();
   return ini || 'SC';
 }
@@ -1689,13 +1697,117 @@ function logoFromName (name, variant) {
   const pick = arr => arr[Math.floor(rand() * arr.length)];
   const icon = pickHint(NAME_HINTS.icon) || (variant % 2 ? pick(Object.keys(LOGO_ICONS)) : 'iniziali');
   const bg = pickHint(NAME_HINTS.bg) || pick(LOGO_COLORS.filter(c => c !== '#eee9df'));
-  // simbolo in contrasto col fondo: su fondo scuro un colore acceso,
-  // su fondo acceso il bianco o il nero
-  const dark = bg === '#1c1d22' || bg === '#9b5de5' || bg === '#3b7bff' || bg === '#e0503f';
-  const fg = bg === '#1c1d22' ? pick(['#f2a541', '#f2c53d', '#49b06a', '#3b7bff', '#e0503f'])
-    : dark ? pick(['#eee9df', '#f2c53d'].filter(c => c !== bg)) : pick(['#1c1d22', '#1c1d22', '#e0503f'].filter(c => c !== bg));
+  const fg = logoFg(bg, pick);
   const style = pickHint(NAME_HINTS.style) || pick(Object.keys(BRAND_STYLES));
   return { shape: pick(Object.keys(LOGO_SHAPES)), icon, bg, fg, style };
+}
+// simbolo in contrasto col fondo: su fondo scuro un colore acceso,
+// su fondo acceso il bianco o il nero
+function logoFg (bg, pick) {
+  const dark = bg === '#1c1d22' || bg === '#9b5de5' || bg === '#3b7bff' || bg === '#e0503f';
+  return bg === '#1c1d22' ? pick(['#f2a541', '#f2c53d', '#49b06a', '#3b7bff', '#e0503f'])
+    : dark ? pick(['#eee9df', '#f2c53d'].filter(c => c !== bg)) : pick(['#1c1d22', '#1c1d22', '#e0503f'].filter(c => c !== bg));
+}
+
+/* ---------------- i service che cercano un tecnico ----------------
+   A ogni Nuova partita il tecnico riceve tre offerte di lavoro da tre
+   service con nomi assurdi presi dal mondo dello spettacolo. I nomi si
+   compongono a caso da questi pezzi (migliaia di combinazioni) e un nome
+   già proposto in una partita precedente non torna più (usedServices). */
+const SERVICE_WORDS = {
+  // parole dello spettacolo, col genere per accordare l'aggettivo
+  nouns: [
+    ['Larsen', 'm'], ['Feedback', 'm'], ['Riverbero', 'm'], ['Faretto', 'm'], ['Fader', 'm'],
+    ['Subwoofer', 'm'], ['Gaffer', 'm'], ['Coriandolo', 'm'], ['Mixer', 'm'], ['Jack', 'm'],
+    ['Sipario', 'm'], ['Microfono', 'm'], ['Applauso', 'm'], ['Soundcheck', 'm'], ['Decibel', 'm'],
+    ['Controluce', 'm'], ['Occhio di Bue', 'm'], ['Stroboscopio', 'm'], ['Fumogeno', 'm'], ['Karaoke', 'm'],
+    ['Playback', 'm'], ['Ritornello', 'm'], ['Roadie', 'm'], ['Flight Case', 'm'], ['Tamburello', 'm'],
+    ['Paillette', 'f'], ['Ciabatta', 'f'], ['Macchina del Fumo', 'f'], ['Spia', 'f'], ['Palla Stroboscopica', 'f'],
+    ['Prolunga', 'f'], ['Diva', 'f'], ['Groupie', 'f'], ['Fanfara', 'f'], ['Balera', 'f'],
+    ['Scaletta', 'f'], ['Pedana', 'f'], ['Americana', 'f'], ['Stecca', 'f'], ['Rockstar', 'f'],
+    ['Claque', 'f'], ['Coreografia', 'f'], ['Grancassa', 'f'], ['Chitarra Elettrica', 'f']
+  ],
+  // aggettivi [maschile, femminile]
+  adjectives: [
+    ['Furioso', 'Furiosa'], ['Ribelle', 'Ribelle'], ['Stonato', 'Stonata'], ['Cosmico', 'Cosmica'],
+    ['Ruggente', 'Ruggente'], ['Bollente', 'Bollente'], ['Selvaggio', 'Selvaggia'], ['Imperiale', 'Imperiale'],
+    ['Leggendario', 'Leggendaria'], ['Instancabile', 'Instancabile'], ['Scatenato', 'Scatenata'], ['Stellare', 'Stellare'],
+    ['Magnifico', 'Magnifica'], ['Distratto', 'Distratta'], ['Nervoso', 'Nervosa'], ['Tamarro', 'Tamarra'],
+    ['Glorioso', 'Gloriosa'], ['Sudato', 'Sudata'], ['Elettrico', 'Elettrica'], ['Volante', 'Volante'],
+    ['Disperato', 'Disperata'], ['Galattico', 'Galattica'], ['Sgangherato', 'Sgangherata'], ['Irresistibile', 'Irresistibile'],
+    ['Mondiale', 'Mondiale'], ['Atomico', 'Atomica'], ['Assordante', 'Assordante'], ['Dorato', 'Dorata']
+  ],
+  // complementi che vanno bene con ogni parola
+  tails: [
+    'a Palla', 'in Fiamme', 'senza Frontiere', 'di Mezzanotte', 'col Botto', 'da Stadio', 'al Neon',
+    'a Tutto Volume', 'fuori Tempo', "all'Ultimo Minuto", 'negli Occhi', 'sotto Pressione', 'in Tournée',
+    'del Sabato Sera', 'a Ruota Libera', 'senza Fili', 'in Prima Fila', 'in Diretta', 'di Periferia',
+    'da Balera', 'in Saldo', 'in Mutande', 'a Gettoni', 'fino all\'Alba'
+  ],
+  // nomi fatti, già buffi da soli
+  whole: [
+    'Prova Prova Sa Sa', 'Fumo negli Occhi', 'Mic Drop', 'Palco Morto', 'Uno Due Tre Prova', 'Tutto Esaurito',
+    'Luci della Ribalta', 'Cavi e Cavalli', 'Buona la Prima', 'Ultima Fila', 'Staccami la Spina',
+    'Applausi Registrati', 'Bis e Tris', 'Canta che ti Passa', 'Nastro Americano', 'Spina Staccata',
+    'Mezzo Tono Sotto', 'Sempre in Levare', 'Ci Vediamo al Carico', 'Tanto Lo Sistemiamo'
+  ],
+  // forme societarie e parole da ditta
+  firms: ['Srl', 'S.n.c.', 'S.p.A.', 'Service', 'Productions', '& Figli', 'Group', 'Live', 'Eventi',
+    'Entertainment', 'International', '& Soci', 'Sound', 'Brothers', 'Show']
+};
+// quello che il service fa di solito: tre specialità diverse per le tre
+// offerte. Per ora è il carattere della ditta; con più livelli sceglierà
+// che lavori arrivano (sagre, teatri, concerti).
+const SERVICE_KINDS = {
+  piazza: 'Sagre, piazze e feste di paese',
+  teatro: 'Teatri, convention e matrimoni',
+  concerti: 'Concerti, club e festival'
+};
+const SERVICE_BOSSES = {
+  names: ['Gianni', 'Mirella', 'Sandro', 'Loredana', 'Tonino', 'Rita', 'Bruno', 'Ornella', 'Franco',
+    'Patrizia', 'Walter', 'Katia', 'Enzo', 'Moira', 'Dario', 'Gigliola', 'Nando', 'Samantha'],
+  nicknames: ['Cinque Minuti', 'Due Fasi', 'Tanto Lo Sistemiamo', 'Nastro Americano', 'Prova Prova',
+    'Sempre in Ritardo', 'Mixer Umano', 'Quello del Furgone', 'Occhio di Bue', 'Senza Scaletta',
+    'Mai Una Gioia', 'Trifase', 'Ultimo a Smontare', 'Decibel', 'Ci Pensa Lui', 'Salvavita']
+};
+const randItem = (arr, rand) => arr[Math.floor((rand || Math.random)() * arr.length)];
+const serviceKey = name => String(name).toLowerCase().replace(/[^a-z0-9àèéìòù]+/g, ' ').trim();
+function randomServiceName (rand) {
+  const W = SERVICE_WORDS, r = rand || Math.random;
+  const [noun, g] = randItem(W.nouns, r);
+  const firm = () => randItem(W.firms, r);
+  switch (Math.floor(r() * 5)) {
+    case 0: return noun + ' ' + randItem(W.adjectives, r)[g === 'f' ? 1 : 0] + ' ' + firm();
+    case 1: return noun + ' ' + randItem(W.tails, r) + (r() < 0.5 ? ' ' + firm() : '');
+    case 2: { const other = randItem(W.nouns.filter(n => n[0] !== noun), r)[0]; return noun + ' & ' + other; }
+    case 3: return (r() < 0.5 ? 'Fratelli ' : 'Sorelle ') + noun + (r() < 0.4 ? ' ' + firm() : '');
+    default: return randItem(W.whole, r) + ' ' + firm();
+  }
+}
+/* tre offerte con nomi mai visti (né tra loro né nelle partite prima),
+   parole di testa diverse, specialità, capi e colori del marchio diversi */
+function serviceOffers (used, rand) {
+  const r = rand || Math.random;
+  const seen = new Set((used || []).map(serviceKey));
+  const kinds = Object.keys(SERVICE_KINDS).sort(() => r() - 0.5);
+  const bgs = [], heads = new Set(), bossWords = new Set(), offers = [];
+  for (let tries = 0; offers.length < 3 && tries < 500; tries++) {
+    const name = randomServiceName(r);
+    const head = serviceKey(name).split(' ').filter(w => !/^(fratelli|sorelle)$/.test(w))[0];
+    if (name.length > SERVICE_NAME_MAX || seen.has(serviceKey(name)) || heads.has(head)) continue;
+    seen.add(serviceKey(name)); heads.add(head);
+    const logo = logoFromName(name, Math.floor(r() * 6));
+    if (bgs.includes(logo.bg)) {
+      logo.bg = randItem(LOGO_COLORS.filter(c => c !== '#eee9df' && !bgs.includes(c)), r);
+      logo.fg = logoFg(logo.bg, arr => randItem(arr, r));
+    }
+    bgs.push(logo.bg);
+    const bossName = randItem(SERVICE_BOSSES.names.filter(n => !bossWords.has(n)), r);
+    const nick = randItem(SERVICE_BOSSES.nicknames.filter(n => !bossWords.has(n)), r);
+    bossWords.add(bossName); bossWords.add(nick);
+    offers.push({ name, logo, kind: kinds[offers.length], boss: bossName + ' «' + nick + '»' });
+  }
+  return offers;
 }
 
 // immagine del logo (SVG) pronta per il canvas, con una piccola memoria
@@ -1726,7 +1838,7 @@ async function renderBrand (canvas, logo, name, W, H) {
     ctx.save(); ctx.shadowColor = 'rgba(0,0,0,.6)'; ctx.shadowBlur = H * 0.08; ctx.shadowOffsetY = H * 0.03;
     ctx.drawImage(img, pad, (H - ls) / 2, ls, ls); ctx.restore();
   }
-  const tx = pad * 2 + ls, tw = W - tx - pad, text = (name || 'Il tuo service').toUpperCase();
+  const tx = pad * 2 + ls, tw = W - tx - pad, text = (name || serviceName()).toUpperCase();
   const accent = brandAccent(lg);
   drawStyledName(ctx, lg.style || 'tour', text, tx + tw / 2, H * 0.42, tw, H * 0.5, accent);
   ctx.save();
@@ -1772,7 +1884,7 @@ function saveLevel () {
      la pazienza del pubblico;
    - apparecchio rotto: 0, non è colpa del giocatore.
    Parte da 0 e non va sotto lo 0. Ogni fase (e ogni richiesta extra) conta
-   una volta sola per service: rifarla non aggiunge altro. I numeri sono
+   una volta sola per tecnico: rifarla non aggiunge altro. I numeri sono
    quelli del documento di design e del prototipo del preside. */
 const REP = {
   phaseDone: 5,        // fase completata (oggi: il collaudo dell'impianto)
@@ -1807,7 +1919,7 @@ function addReputation (amount, reason, onceKey) {
 function addRecord () {
   const st = gameState.stats;
   const rec = {
-    at: Date.now(), service: Profile.data.service,
+    at: Date.now(), player: Profile.data.player, service: Profile.data.service,
     playMs: st.playMs, tests: st.tests, failedTests: st.failedTests,
     trips: gameState.trips || 0, rcdTrips: gameState.rcdTrips || 0,
     pops: (gameState.procErrors || []).filter(x => x === 'pop').length
@@ -1829,7 +1941,7 @@ function applySettings () {
   SFX.setVolume(settings().volume);
   const tag = el('#service-tag');
   if (tag) tag.textContent = gameActive || Profile.data.service
-    ? (Profile.data.service || serviceName()).toUpperCase() + ' · REPUTAZIONE ' + reputation()
+    ? (playerName() + ' · ' + serviceName()).toUpperCase() + ' · REPUTAZIONE ' + reputation()
     : 'STAGE CREW SIMULATOR';
   const logo = el('#service-logo');
   if (logo) logo.innerHTML = gameActive || Profile.data.service ? logoSVG(serviceLogo(), Profile.data.service, 30) : '';
@@ -1851,95 +1963,51 @@ function sceneKeyboard (on) {
 function whenScene (fn) {
   if (window.__scene) fn(window.__scene); else setTimeout(() => whenScene(fn), 50);
 }
-// nuova partita in preparazione (nome e logo non ancora confermati) e
-// logo che si sta modificando nella pagina del logo
-// auto: il logo segue il nome mentre lo si scrive (finché non lo si ritocca a mano)
-let draft = { name: '', logo: defaultLogo(), auto: true, variant: 0 };
-let logoEdit = null;
+// nuova partita in preparazione: nome del tecnico, le tre offerte e quella scelta
+let draft = { player: '', offers: [], pick: null };
 
 function showMenuPage (page, keep) {
   document.querySelectorAll('#menu-modal .menu-page').forEach(p => { p.hidden = p.dataset.page !== page; });
   const canResume = gameActive || !!Profile.data.level;
   el('#menu-resume').hidden = !canResume;
-  el('#menu-resume').textContent = gameActive ? 'Riprendi' : 'Continua · ' + serviceName() + ' · ★ ' + reputation();
+  el('#menu-resume').textContent = gameActive ? 'Riprendi' : 'Continua · ' + playerName() + ' · ' + serviceName() + ' · ★ ' + reputation();
   el('#menu-new').classList.toggle('primary', !canResume);
   el('#new-warning').hidden = !Profile.data.level;
-  el('#set-service-row').hidden = !gameActive;
-  el('#set-logo-row').hidden = !gameActive;
-  if (page === 'new') {
-    const i = el('#service-input');
-    if (!keep) {
-      const auto = !Profile.data.service;
-      draft = { name: Profile.data.service, logo: auto ? logoFromName('') : { ...serviceLogo() }, auto, variant: 0 };
-      i.value = draft.name; setTimeout(() => i.focus(), 30);
-    }
-    brandPreview(el('#new-logo'), draft.logo, draft.name, 300, 90);
+  el('#set-player-row').hidden = !gameActive;
+  if (page === 'new' && !keep) {
+    draft = { player: Profile.data.player, offers: serviceOffers(Profile.data.usedServices), pick: null };
+    const i = el('#player-input');
+    i.value = draft.player; setTimeout(() => i.focus(), 30);
+    renderOffers();
   }
-  if (page === 'logo') renderLogoEditor();
   if (page === 'settings') {
     el('#set-volume').value = Math.round(settings().volume * 100);
     el('#set-reduced').checked = !!settings().reducedFx;
     el('#set-skipshow').checked = !!settings().skipShow;
-    el('#set-service').value = Profile.data.service;
-    brandPreview(el('#set-logo'), serviceLogo(), Profile.data.service, 300, 90);
+    el('#set-player').value = Profile.data.player;
   }
 }
 
-/* pagina del logo: loghi pronti, forma, simbolo e colori. Fondo e simbolo
-   non possono avere lo stesso colore: se succede si scambiano. */
-function renderLogoEditor () {
-  const { logo } = logoEdit, name = logoEdit.name();
-  brandPreview(el('#logo-preview'), logo, name, 300, 96);
-  const opt = (html, sel, fn, extra) => {
+/* le tre offerte di lavoro: marchio del service, che lavori fa e chi è il
+   capo. Si tocca quella che si vuole; Inizia vuole anche il nome. */
+function renderOffers () {
+  const list = el('#service-offers');
+  list.innerHTML = '';
+  draft.offers.forEach((o, i) => {
     const b = document.createElement('button');
-    b.type = 'button'; b.className = 'logo-opt' + (sel ? ' sel' : '') + (extra ? ' ' + extra : '');
-    b.innerHTML = html;
-    b.addEventListener('click', () => { SFX.button(); fn(); if (logoEdit.back === 'new') draft.auto = false; logoChanged(); });
-    return b;
-  };
-  const fill = (id, items) => { const row = el(id); row.innerHTML = ''; items.forEach(b => row.appendChild(b)); };
-  const same = (a, b) => ['shape', 'icon', 'bg', 'fg', 'style'].every(k => (a[k] || 'tour') === (b[k] || 'tour'));
-  fill('#logo-presets', LOGO_PRESETS.map((pr, i) => {
-    const b = opt(logoSVG(pr, name, 38), same(pr, logo), () => Object.assign(logo, pr));
-    b.dataset.preset = i; return b;
-  }));
-  fill('#logo-shapes', Object.keys(LOGO_SHAPES).map(k => {
-    const b = opt(logoSVG({ ...logo, shape: k }, name, 38), logo.shape === k, () => { logo.shape = k; });
-    b.title = k; b.dataset.shape = k; return b;
-  }));
-  fill('#logo-icons', Object.keys(LOGO_ICONS).map(k => {
-    const b = opt(logoSVG({ ...logo, icon: k }, name, 38), logo.icon === k, () => { logo.icon = k; });
-    b.title = k; b.dataset.icon = k; return b;
-  }));
-  // stili della scritta: ognuno con l'anteprima del nome
-  const text = (name || 'Il tuo service').toUpperCase();
-  fill('#logo-styles', Object.entries(BRAND_STYLES).map(([k, label]) => {
-    const b = opt('', (logo.style || 'tour') === k, () => { logo.style = k; }, 'style-opt');
-    b.dataset.style = k;
-    const c = document.createElement('canvas'), dpr = Math.min(3, window.devicePixelRatio || 1);
-    c.width = 136 * dpr; c.height = 40 * dpr; c.style.width = '136px'; c.style.height = '40px';
-    b.appendChild(c);
-    const cap = document.createElement('span'); cap.textContent = label; b.appendChild(cap);
-    brandFonts().then(() => drawStyledName(c.getContext('2d'), k, text, c.width / 2, c.height / 2, c.width * 0.94, c.height * 0.72, brandAccent(logo)));
-    return b;
-  }));
-  const setColor = (key, other, c) => { if (logo[other] === c) logo[other] = logo[key]; logo[key] = c; };
-  ['bg', 'fg'].forEach(key => fill('#logo-' + key, LOGO_COLORS.map(c => {
-    const b = opt('', logo[key] === c, () => setColor(key, key === 'bg' ? 'fg' : 'bg', c), 'swatch');
-    b.style.background = c; b.dataset.color = c; return b;
-  })));
+    b.type = 'button'; b.className = 'offer-card'; b.dataset.offer = i;
+    b.innerHTML = '<span class="logo-preview"></span>'
+      + '<span class="offer-kind">' + escapeHtml(SERVICE_KINDS[o.kind]) + '</span>'
+      + '<span class="offer-boss">Capo: ' + escapeHtml(o.boss) + '</span>';
+    b.addEventListener('click', () => { SFX.button(); draft.pick = i; updateNewForm(); });
+    list.appendChild(b);
+    brandPreview(b.querySelector('.logo-preview'), o.logo, o.name, 300, 72);
+  });
+  updateNewForm();
 }
-// logo dal nome: la prima idea, o una nuova a ogni tocco di "Un'altra idea"
-function logoFromNameInEditor (next) {
-  logoEdit.variant = next ? (logoEdit.variant || 0) + 1 : 0;
-  Object.assign(logoEdit.logo, logoFromName(logoEdit.name(), logoEdit.variant));
-  if (logoEdit.back === 'new') { draft.auto = !next; draft.variant = logoEdit.variant; }
-  logoChanged();
-}
-function logoChanged () {
-  renderLogoEditor();
-  // dalle impostazioni il logo cambia subito anche in testata e sul furgone
-  if (logoEdit.live) { Profile.save(); applySettings(); }
+function updateNewForm () {
+  document.querySelectorAll('#service-offers .offer-card').forEach(b => b.classList.toggle('sel', +b.dataset.offer === draft.pick));
+  el('#new-start').disabled = !cleanName(draft.player) || draft.pick == null;
 }
 function openMenu (page) {
   menuOpen = true;
@@ -1955,18 +2023,23 @@ function closeMenu () {
   setSceneInput(true);
   sceneKeyboard(true);
 }
-const cleanName = s => String(s || '').replace(/\s+/g, ' ').trim().slice(0, SERVICE_MAX);
+const cleanName = s => String(s || '').replace(/\s+/g, ' ').trim().slice(0, NAME_MAX);
 
-function startNewGame (name, logo) {
-  Profile.data.service = cleanName(name);
-  Profile.data.logo = { ...(logo || logoFromName(Profile.data.service)) };
-  Profile.data.reputation = defaultProfile().reputation;   // nuovo service, reputazione da costruire
+// nuovo tecnico: reputazione da costruire, al lavoro per il service scelto;
+// i nomi delle tre offerte non verranno più proposti
+function startNewGame (player, offer, offers) {
+  Profile.data.player = cleanName(player);
+  Profile.data.service = offer.name;
+  Profile.data.logo = { ...offer.logo };
+  Profile.data.serviceInfo = { kind: offer.kind, boss: offer.boss };
+  Profile.data.usedServices = (offers || [offer]).map(o => o.name).concat(Profile.data.usedServices || []).slice(0, USED_SERVICES_KEEP);
+  Profile.data.reputation = defaultProfile().reputation;
   whenScene(scene => {
     gameActive = true;
     scene.resetLevel(true);      // azzera livello e statistiche e salva
     applySettings();
     closeMenu();
-    showToast('Benvenuti, ' + serviceName() + ': montate l\'impianto per la festa della scuola.', 'ok');
+    showToast('Ciao ' + playerName() + ', ' + serviceName() + ' ti manda alla festa della scuola: monta l\'impianto.', 'ok');
   });
 }
 function continueGame () {
@@ -1984,34 +2057,21 @@ el('#menu-resume').addEventListener('click', () => { SFX.button(); continueGame(
 el('#menu-new').addEventListener('click', () => { SFX.button(); showMenuPage('new'); });
 el('#menu-settings').addEventListener('click', () => { SFX.button(); showMenuPage('settings'); });
 el('#new-cancel').addEventListener('click', () => { SFX.button(); showMenuPage('main'); });
-el('#new-form').addEventListener('submit', ev => { ev.preventDefault(); SFX.button(); startNewGame(el('#service-input').value, draft.logo); });
-el('#service-input').addEventListener('input', ev => {
-  draft.name = ev.target.value;
-  if (draft.auto) draft.logo = logoFromName(draft.name, draft.variant);
-  brandPreview(el('#new-logo'), draft.logo, draft.name, 300, 90);   // nome e iniziali seguono quello che si scrive
+el('#new-form').addEventListener('submit', ev => {
+  ev.preventDefault();
+  if (el('#new-start').disabled) return;
+  SFX.button(); startNewGame(draft.player, draft.offers[draft.pick], draft.offers);
 });
-el('#new-logo-btn').addEventListener('click', () => {
-  SFX.button();
-  logoEdit = { logo: draft.logo, name: () => draft.name, back: 'new', variant: draft.variant };
-  showMenuPage('logo');
-});
-el('#set-logo-btn').addEventListener('click', () => {
-  SFX.button();
-  Profile.data.logo = { ...serviceLogo() };
-  logoEdit = { logo: Profile.data.logo, name: () => Profile.data.service, back: 'settings', live: true };
-  showMenuPage('logo');
-});
-el('#logo-from-name').addEventListener('click', () => { SFX.button(); logoFromNameInEditor(false); });
-el('#logo-another').addEventListener('click', () => { SFX.button(); logoFromNameInEditor(true); });
-el('#logo-done').addEventListener('click', () => { SFX.button(); showMenuPage(logoEdit.back, true); });
+el('#player-input').addEventListener('input', ev => { draft.player = ev.target.value; updateNewForm(); });
 el('#settings-back').addEventListener('click', () => { SFX.button(); Profile.flush(); showMenuPage('main'); });
 el('#set-volume').addEventListener('input', ev => { settings().volume = ev.target.value / 100; SFX.setVolume(settings().volume); Profile.save(); });
 el('#set-volume').addEventListener('change', () => SFX.button());
 el('#set-reduced').addEventListener('change', ev => { settings().reducedFx = ev.target.checked; Profile.save(); });
 el('#set-skipshow').addEventListener('change', ev => { settings().skipShow = ev.target.checked; Profile.save(); });
-el('#set-service').addEventListener('change', ev => {
-  Profile.data.service = cleanName(ev.target.value);
-  ev.target.value = Profile.data.service;
+el('#set-player').addEventListener('change', ev => {
+  const name = cleanName(ev.target.value);
+  if (name) Profile.data.player = name;
+  ev.target.value = Profile.data.player;
   applySettings(); Profile.save();
 });
 applySettings();

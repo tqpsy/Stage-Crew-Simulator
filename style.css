@@ -630,22 +630,20 @@
   .service-logo:empty{ display:none; }
   .service-logo svg{ width:30px; height:30px; display:block; }
   .level-wrap{ display:flex; align-items:center; gap:8px; }
-  .logo-pick{ display:flex; flex-direction:column; align-items:stretch; gap:8px; }
-  .logo-pick[hidden]{ display:none; }
-  .logo-pick .menu-btn{ flex:1; font-size:16px; padding:9px 10px; }
   .logo-preview{ display:flex; justify-content:center; padding:6px 0; border-radius:8px;
     background:radial-gradient(ellipse at 50% 40%, #2a2c34, #101114 75%); }
   .logo-preview canvas{ display:block; max-width:100%; }
-  .logo-label{ font-size:12px; color:var(--text-muted); margin-bottom:-4px; }
-  .logo-row{ display:flex; flex-wrap:wrap; gap:6px; }
-  .logo-opt{
-    background:#101114; border:2px solid var(--hairline); border-radius:8px;
-    padding:3px; cursor:pointer; line-height:0;
+
+  /* ---------- OFFERTE DI LAVORO (nuova partita) ---------- */
+  .offer-list{ display:flex; flex-direction:column; gap:8px; }
+  .offer-card{
+    display:flex; flex-direction:column; align-items:stretch; gap:3px; text-align:left;
+    background:#101114; border:2px solid var(--hairline); border-radius:10px;
+    padding:4px 6px 7px; cursor:pointer; color:var(--text-main); font-family:var(--font-ui);
   }
-  .logo-opt svg{ width:38px; height:38px; }
-  .logo-opt.sel{ border-color:var(--amber); }
-  .logo-opt.swatch{ width:34px; height:34px; padding:0; }
-  .logo-opt.style-opt{ display:flex; flex-direction:column; align-items:center; gap:2px; padding:4px 4px 3px; line-height:1; background:#0b0c0f; }
-  .logo-opt.style-opt span{ font-size:10.5px; color:var(--text-muted); }
-  .logo-auto{ display:flex; gap:8px; }
-  .logo-auto .menu-btn{ flex:1; font-size:15px; padding:8px 6px; }
+  .offer-card:hover{ border-color:var(--text-muted); }
+  .offer-card.sel{ border-color:var(--amber); box-shadow:0 0 0 2px rgba(242,165,65,.25); }
+  .offer-card .logo-preview{ padding:2px 0; }
+  .offer-kind{ font-size:13px; font-weight:600; padding:0 4px; }
+  .offer-boss{ font-size:12px; color:var(--text-muted); padding:0 4px; }
+  .menu-btn:disabled{ opacity:.45; cursor:default; }
