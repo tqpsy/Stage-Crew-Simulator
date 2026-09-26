@@ -50,7 +50,7 @@
 
     <div id="show-head" hidden>
       <div class="sh-row">
-        <span class="face-mini"><svg viewBox="12 10 76 76" width="34" height="34"><use href="#tramp"/></svg></span>
+        <span class="face-mini"><canvas class="ritratto" data-chi="tramp" width="68" height="68"></canvas></span>
         <div class="sh-who">PRESIDE TRAMP<small>Discorso di benvenuto</small></div>
         <div class="sh-timeline" aria-label="Avanzamento del discorso"><i id="sh-tl"></i></div>
         <div class="sh-clock" id="sh-clock">21:00</div>
@@ -300,7 +300,7 @@
 <div class="modal-overlay" id="show-intro">
   <div class="show-card">
     <div class="sc-top">
-      <div class="sc-portrait"><svg viewBox="8 8 84 84" width="96" height="96"><use href="#tramp"/></svg></div>
+      <div class="sc-portrait"><canvas class="ritratto" data-chi="tramp" width="192" height="192"></canvas></div>
       <div><div class="sc-tag">Obiettivo 1 · 21:00</div><h2>Il discorso del Preside Tramp</h2></div>
     </div>
     <p>Parla un quarto d'ora e vuole essere sentito fino al parcheggio. Nessuno capisce una parola di quello che dice, ma guai se non si sente.</p>
@@ -318,7 +318,7 @@
 <div class="modal-overlay" id="show-outro">
   <div class="show-card">
     <div class="sc-top">
-      <div class="sc-portrait"><svg viewBox="8 8 84 84" width="96" height="96"><use href="#tramp"/></svg></div>
+      <div class="sc-portrait"><canvas class="ritratto" data-chi="tramp" width="192" height="192"></canvas></div>
       <div><div class="sc-tag">Obiettivo 1 · fine</div><h2 id="show-outro-title">Applausi!</h2></div>
     </div>
     <div class="sc-results">
@@ -332,27 +332,8 @@
   </div>
 </div>
 
-<svg width="0" height="0" style="position:absolute" aria-hidden="true">
-  <defs>
-    <!-- Preside Tramp, caricatura: ciuffo giallo, abbronzatura arancio, cravatta rossa lunghissima -->
-    <symbol id="tramp" viewBox="0 0 100 140">
-      <path d="M14 140 L20 92 Q50 78 80 92 L86 140 Z" fill="#1d2b4a"/>
-      <path d="M40 88 L50 104 L60 88 Z" fill="#f4f1ea"/>
-      <path d="M47 92 L53 92 L56 136 L50 140 L44 136 Z" fill="#d6392f"/>
-      <rect x="42" y="72" width="16" height="16" rx="4" fill="#e8964f"/>
-      <ellipse cx="50" cy="52" rx="24" ry="28" fill="#f0a35a"/>
-      <ellipse cx="38" cy="54" rx="6" ry="4" fill="#f7d7b0"/>
-      <ellipse cx="62" cy="54" rx="6" ry="4" fill="#f7d7b0"/>
-      <circle cx="39" cy="54" r="2" fill="#2a1d12"/><circle cx="61" cy="54" r="2" fill="#2a1d12"/>
-      <path d="M32 47 Q38 43 44 46 M56 46 Q62 43 68 47" stroke="#e9d27a" stroke-width="2.5" fill="none" stroke-linecap="round"/>
-      <ellipse cx="50" cy="69" rx="5" ry="3.5" fill="#b8573a"/>
-      <path d="M22 44 Q20 16 52 18 Q84 18 80 40 Q70 26 54 30 Q40 24 30 34 Q26 38 22 44 Z" fill="#f4d35e"/>
-      <path d="M48 20 Q70 12 84 26 Q78 22 66 24 Z" fill="#e9c23f"/>
-    </symbol>
-  </defs>
-</svg>
-
 <script src="main.js"></script>
+<script src="personaggi.js"></script>
 <script src="spettacolo.js"></script>
 </body>
 </html>

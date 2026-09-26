@@ -239,24 +239,28 @@ per provare il ritmo prima di portarla nel gioco.
   - microfono lasciato su un ingresso diverso dal CH1: −2;
   - larsen: −5 (colpa del volume).
 
-## Stile dei personaggi: schede e chiavi (in prova)
+## Stile dei personaggi (deciso)
 
-Prototipo: `prototipi/personaggi-punk.html`. Direzione: minimalista e punk.
+**Stencil · Manifesto** è lo stile di tutti i personaggi, presenti e futuri.
+Codice: `personaggi.js`; foglio di prova: `prototipi/stencil-manifesto.html`.
 
-- **Scheda del personaggio**: corporatura (spalle, orlo della giacca), viso
-  (larghezza, altezza, mascella), capelli o copricapo, occhi, sopracciglia,
-  naso, bocca, vestito (abito, maglione, tonaca, camice), accessori (cuffie,
-  occhiali, alloro, scopa, scritta sulla maglia), tre gesti del braccio e i
-  suoi colori. Ogni pezzo ha un **ruolo** di colore (abito, pelle, capelli,
-  cravatta, accessorio, ombra…).
-- **Firma**: i ruoli che fanno riconoscere il personaggio (Tramp: ciuffo e
-  cravatta; DJ E=mc²: capelli e cuffie; Dante: cappuccio e alloro; Gerry:
-  occhiali, sorriso e scopa).
-- **Chiave di stile**: una regola che disegna qualunque scheda guardando solo
-  ruoli, colori e firma. Quattro candidate:
-  - *Stencil*: colori della scheda piatti, ombre nette, niente contorni.
-  - *Fotocopia*: scala di grigi a retino, firma in rosa fluo, bordo di carta.
-  - *Risograph*: colori caldi sull'inchiostro rosa, il resto sul blu, secondo
-    quanto sono scuri; due passate fuori registro, grana.
-  - *Sticker*: sagoma nera a spray, firma in colore acido, colature.
+- **Scheda del personaggio**: proporzioni (il corpo si allarga o si allunga,
+  la testa resta grande), viso, capelli o copricapo, occhi, sopracciglia, naso,
+  bocca, vestito, accessori, tre gesti (col braccio davanti e la posa del
+  braccio dietro) e un colore base per materiale. La **firma** sono gli
+  elementi che lo fanno riconoscere.
+- **La chiave** ricava da ogni colore quattro toni (luce, base, ombra, ombra
+  profonda); luce sempre da davanti a sinistra; niente contorni né sfumature;
+  mani più grandi del vero, come nei manifesti.
+- **Espressioni** per tutti: normale, arrabbiato (rosso in faccia), sorpreso,
+  contento. Le sceglie il gioco.
+- **Sul palco** il personaggio si tinge col colore dei frontali e i tagli gli
+  disegnano il bordo.
 - Un personaggio nuovo si aggiunge scrivendo solo la sua scheda.
+
+**Personaggi confermati**: solo il **Preside Tramp**. Le schede di DJ E=mc²,
+Dante unplugged e bidello Gerry in `personaggi.js` sono esempi che mostrano la
+chiave, da confermare (la voce "Personaggi" tra i Decisi resta da rivedere).
+
+Altre chiavi provate e scartate (in `prototipi/`): fotocopia, risograph,
+sticker e le varianti dello stencil.

@@ -95,8 +95,11 @@ const Personaggi = (() => {
   /* =====================================================================
      SCHEDE
      ===================================================================== */
+  // Confermato: solo il Preside Tramp. Le altre schede sono esempi che mostrano
+  // la chiave, da confermare.
   const SCHEDE = {
     tramp: {
+      confermato: true,
       nome: 'Preside Tramp', firma: 'ciuffo e cravatta',
       vestito: 'abito', spalle: 62, orlo: -92, mento: -180, viso: { w: 47, h: 60, mascella: 0.9 },
       capelli: 'onda', occhi: 'fessura', sopracciglia: 'chiare', naso: 'corto', bocca: 'o', accessori: ['spilla'],
@@ -480,6 +483,15 @@ const Personaggi = (() => {
     g.save(); g.setTransform(1, 0, 0, 1, 0, 0); g.drawImage(lay, 0, 0); g.restore();
   }
 
-  return { SCHEDE, toni, costruisci, disegna, ESPRESSIONI: ['normale', 'arrabbiato', 'sorpreso', 'contento'] };
+  // ritratto a mezzo busto in un canvas (header, carte, mixer): la testa riempie il riquadro
+  function ritratto (cv, C, espressione) {
+    const g = cv.getContext('2d'), W = cv.width, H = cv.height;
+    g.setTransform(1, 0, 0, 1, 0, 0); g.clearRect(0, 0, W, H);
+    const by = C.corpo ? C.corpo.y : 1, cy = C.mento * by + (C.curvo || 0) - C.viso.h * 0.42, k = H / 100;
+    g.translate(W / 2, H * 0.5 - cy * k); g.scale(k, k);
+    disegna(g, C, { t: 0.4, gesto: 0.15, parla: 0, batte: false, espressione: espressione || 'normale' });
+  }
+
+  return { SCHEDE, toni, costruisci, disegna, ritratto, ESPRESSIONI: ['normale', 'arrabbiato', 'sorpreso', 'contento'] };
 })();
 if (typeof window !== 'undefined') window.Personaggi = Personaggi;
