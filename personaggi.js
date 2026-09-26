@@ -101,28 +101,32 @@ const Personaggi = (() => {
       vestito: 'abito', spalle: 62, orlo: -92, mento: -180, viso: { w: 47, h: 60, mascella: 0.9 },
       capelli: 'onda', occhi: 'fessura', sopracciglia: 'chiare', naso: 'corto', bocca: 'o', accessori: ['spilla'],
       colori: { abito: '#23355a', pantaloni: '#23355a', camicia: '#efe6d2', cravatta: '#d7263d', pelle: '#e8793f', capelli: '#f1d27e', scarpe: '#18181b', occhi: '#221612', bocca: '#4a1612', accessorio: '#d9b04a' },
-      gesti: [{ gomito: [66, -126], polso: [38, -150], mano: 'pinza', testa: -0.04 }, { gomito: [70, -150], polso: [62, -196], mano: 'dito', testa: 0.05 }, { gomito: [62, -128], polso: [72, -150], mano: 'aperta', testa: 0 }]
+      corpo: { x: 1.14, y: 0.9 }, curvo: 0,
+      gesti: [{ gomito: [66, -126], polso: [38, -150], mano: 'pinza', testa: -0.04, dietro: 'tasca' }, { gomito: [70, -150], polso: [62, -196], mano: 'dito', testa: 0.05, dietro: 'fianco' }, { gomito: [62, -128], polso: [72, -150], mano: 'aperta', testa: 0, dietro: 'tasca' }]
     },
     einstein: {
       nome: 'DJ E=mc²', firma: 'capelli elettrici e cuffie',
       vestito: 'maglione', spalle: 50, orlo: -96, mento: -178, viso: { w: 44, h: 56, mascella: 0.4 },
       capelli: 'nuvola', occhi: 'stanchi', sopracciglia: 'folte', naso: 'patata', bocca: 'baffi', accessori: ['cuffie', 'scritta'],
       colori: { abito: '#5b5d66', pantaloni: '#2e2922', camicia: '#5b5d66', scritta: '#efe6d2', pelle: '#efc19a', capelli: '#f2efe8', scarpe: '#18181b', occhi: '#221612', bocca: '#4a1a14', accessorio: '#d7263d' },
-      gesti: [{ gomito: [60, -140], polso: [30, -206], mano: 'pugno', testa: 0.06 }, { gomito: [66, -150], polso: [58, -204], mano: 'aperta', testa: -0.05 }, { gomito: [58, -122], polso: [68, -142], mano: 'dito', testa: 0.02 }]
+      corpo: { x: 0.94, y: 0.84 }, curvo: 6,
+      gesti: [{ gomito: [60, -140], polso: [40, -170], mano: 'pugno', testa: 0.06, dietro: 'orecchio' }, { gomito: [66, -150], polso: [58, -204], mano: 'aperta', testa: -0.05, dietro: 'fianco' }, { gomito: [58, -122], polso: [68, -142], mano: 'dito', testa: 0.02, dietro: 'orecchio' }]
     },
     dante: {
       nome: 'Dante unplugged', firma: 'cappuccio rosso e alloro',
       vestito: 'tonaca', spalle: 50, orlo: -6, mento: -182, viso: { w: 38, h: 58, mascella: 0.1 },
       capelli: 'cappuccio', occhi: 'severi', sopracciglia: 'pesanti', naso: 'aquilino', bocca: 'broncio', accessori: ['alloro'],
       colori: { abito: '#b3202c', camicia: '#efe6d2', cappello: '#b3202c', pelle: '#e2b28a', scarpe: '#2a1a12', occhi: '#221612', bocca: '#5a2018', accessorio: '#5f8f3a', cintura: '#2e1d14' },
-      gesti: [{ gomito: [64, -150], polso: [76, -196], mano: 'aperta', testa: 0.04 }, { gomito: [62, -130], polso: [44, -150], mano: 'aperta', testa: -0.03 }, { gomito: [70, -148], polso: [86, -178], mano: 'dito', testa: 0.06 }]
+      corpo: { x: 0.9, y: 1.06 }, curvo: 0,
+      gesti: [{ gomito: [64, -150], polso: [76, -196], mano: 'aperta', testa: 0.04, dietro: 'fianco' }, { gomito: [62, -130], polso: [44, -150], mano: 'aperta', testa: -0.03, dietro: 'anca' }, { gomito: [70, -148], polso: [86, -178], mano: 'dito', testa: 0.06, dietro: 'fianco' }]
     },
     gerry: {
       nome: 'Bidello Gerry', firma: 'occhiali, sorriso e scopa',
       vestito: 'camice', spalle: 52, orlo: -60, mento: -184, viso: { w: 42, h: 64, mascella: 0.5 },
       capelli: 'ordinati', occhi: 'felici', sopracciglia: 'arcuate', naso: 'lungo', bocca: 'sorriso', accessori: ['occhiali', 'scopa', 'penna'],
       colori: { abito: '#2f5e9e', pantaloni: '#2a2d33', camicia: '#efe6d2', pelle: '#efb48a', capelli: '#bdbab2', scarpe: '#18181b', occhi: '#221612', bocca: '#4a1a14', denti: '#ffffff', montatura: '#141417', legno: '#a4733c', setole: '#d9b45a', penna: '#d7263d' },
-      gesti: [{ gomito: [64, -130], polso: [58, -168], mano: 'pollice', testa: 0.05 }, { gomito: [62, -128], polso: [40, -150], mano: 'aperta', testa: -0.03 }, { gomito: [68, -150], polso: [64, -194], mano: 'aperta', testa: 0.04 }]
+      corpo: { x: 0.86, y: 1.12 }, curvo: 0,
+      gesti: [{ gomito: [64, -130], polso: [58, -168], mano: 'pollice', testa: 0.05, dietro: 'fianco' }, { gomito: [62, -128], polso: [40, -150], mano: 'aperta', testa: -0.03, dietro: 'fianco' }, { gomito: [68, -150], polso: [64, -194], mano: 'aperta', testa: 0.04, dietro: 'fianco' }]
     }
   };
 
@@ -132,7 +136,9 @@ const Personaggi = (() => {
      ===================================================================== */
   function costruisci (C, st) {
     const L = [];
-    const add = (mat, tono, p, extra) => { if (p) L.push(Object.assign({ mat, tono, p }, extra)); };
+    const add = (mat, tono, p, extra) => { if (p) L.push(Object.assign({ mat, tono, p, gruppo: 'corpo' }, extra)); };
+    const addMano = (m, ancora, tono) => { add('pelle', tono || 'b', m.base, { gruppo: 'mano', ancora }); add('pelle', 's', m.ombra, { gruppo: 'mano', ancora }); if (m.buco) add('pelle', 'd', m.buco, { gruppo: 'mano', ancora }); };
+    const espr = st.espressione || 'normale';
     const S = C.spalle, orlo = C.orlo, mento = C.mento, fw = C.viso.w, fh = C.viso.h, top = mento - fh;
     // gesto del braccio davanti, con passaggio morbido al successivo
     const g0 = Math.floor(st.gesto), f = st.gesto - g0, i = ((g0 % 3) + 3) % 3, j = (i + 1) % 3;
@@ -153,18 +159,37 @@ const Personaggi = (() => {
     add('scarpe', 'l', P('M-34 -9 Q-28 -12 -14 -11 L-14 -9 Q-26 -10 -33 -7 Z M16 -11 Q30 -12 38 -8 L37 -7 Q28 -10 16 -9 Z'));
     add('scarpe', 'd', P('M-38 0 L-38 -3 L-4 -3 L-4 0 Z M11 0 L11 -3 L46 -3 L46 0 Z'));
 
-    // ---- braccio dietro, a riposo (il bidello ci tiene la scopa)
-    const bp = [-S + 8, orlo + 8], bs = [-S + 12, -166], be = [-S + 1, -124];
-    add('abito', 's', limb(bs, be, bp, 12, 10, 8));
-    add('abito', 'd', limbShade(bs, be, bp, 12, 10, 8));
-    add('pelle', 's', P(`M${bp[0] - 7} ${bp[1] + 1} Q${bp[0] - 9} ${bp[1] + 12} ${bp[0]} ${bp[1] + 14} Q${bp[0] + 8} ${bp[1] + 13} ${bp[0] + 7} ${bp[1]} Z`));
+    // ---- braccio dietro: lungo il fianco, in tasca, pugno sul fianco, mano sulla cuffia
+    const eyW = top + fh * 0.4;
+    const DIETRO = {
+      fianco: { e: [-S + 1, -124], w: [-S + 8, orlo + 8], mano: 'giu' },
+      tasca: { e: [-S - 6, -130], w: [-S + 16, -106], mano: null },
+      anca: { e: [-S - 22, -132], w: [-S + 2, -104], mano: 'pugno' },
+      orecchio: { e: [-S - 16, -150], w: [-fw / 2 - 12, eyW + 22], mano: 'aperta' }
+    };
+    const D0 = DIETRO[G.dietro || 'fianco'], D1 = DIETRO[H.dietro || 'fianco'];
+    const bs = [-S + 12, -166], be = mix(D0.e, D1.e, e), bp = mix(D0.w, D1.w, e);
+    const posaDietro = e < 0.5 ? (G.dietro || 'fianco') : (H.dietro || 'fianco');
+    const dietroDavanti = posaDietro === 'orecchio' ? 'testa' : posaDietro === 'fianco' ? null : 'corpo';
+    function dietroBraccio () {
+      const davanti = !!dietroDavanti;
+      add('abito', davanti ? 'b' : 's', limb(bs, be, bp, 12, 10, 8));
+      add('abito', davanti ? 's' : 'd', limbShade(bs, be, bp, 12, 10, 8));
+      const kind = e < 0.5 ? D0.mano : D1.mano;
+      if (kind === 'giu') addMano({ base: P(`M${bp[0] - 7} ${bp[1] + 1} Q${bp[0] - 9} ${bp[1] + 12} ${bp[0]} ${bp[1] + 14} Q${bp[0] + 8} ${bp[1] + 13} ${bp[0] + 7} ${bp[1]} Z`), ombra: P(`M${bp[0] + 2} ${bp[1] + 1} L${bp[0] + 7} ${bp[1]} Q${bp[0] + 8} ${bp[1] + 13} ${bp[0]} ${bp[1] + 14} Q${bp[0] + 4} ${bp[1] + 8} ${bp[0] + 2} ${bp[1] + 1} Z`) }, bp, davanti ? 'b' : 's');
+      else if (kind === 'pugno') addMano(mano('pugno', bp[0], bp[1] + 6, -1), [bp[0], bp[1] + 6]);
+      else if (kind === 'aperta') addMano(mano('aperta', bp[0], bp[1] + 2, -1), [bp[0], bp[1] + 2]);
+      else { add('abito', 'd', P(`M${bp[0] - 9} ${bp[1] - 2} L${bp[0] + 9} ${bp[1] - 4} L${bp[0] + 9} ${bp[1] + 1} L${bp[0] - 9} ${bp[1] + 3} Z`)); }   // la mano sparisce in tasca
+    }
+    if (!dietroDavanti) dietroBraccio();
     if (C.accessori.includes('scopa')) {
-      add('legno', 'b', P(`M${bp[0] - 2} -238 L${bp[0] + 2} -238 L${bp[0] + 3} -26 L${bp[0] - 3} -26 Z`));
-      add('legno', 's', P(`M${bp[0] + 0.5} -238 L${bp[0] + 2} -238 L${bp[0] + 3} -26 L${bp[0] + 1} -26 Z`));
-      add('setole', 'b', P(`M${bp[0] - 22} 0 L${bp[0] - 14} -26 L${bp[0] + 14} -26 L${bp[0] + 22} 0 Z`));
-      add('setole', 's', P(`M${bp[0] + 4} -26 L${bp[0] + 14} -26 L${bp[0] + 22} 0 L${bp[0] + 8} 0 Z`));
-      add('setole', 'd', P(`M${bp[0] - 15} -28 L${bp[0] + 15} -28 L${bp[0] + 14} -20 L${bp[0] - 14} -20 Z`));
-      add('pelle', 'b', P(`M${bp[0] - 6} ${bp[1] + 2} Q${bp[0] - 8} ${bp[1] + 10} ${bp[0]} ${bp[1] + 11} Q${bp[0] + 7} ${bp[1] + 10} ${bp[0] + 6} ${bp[1] + 2} Z`));
+      const sx = -S + 8, sy = orlo + 8;
+      add('legno', 'b', P(`M${sx - 2} -238 L${sx + 2} -238 L${sx + 3} -26 L${sx - 3} -26 Z`));
+      add('legno', 's', P(`M${sx + 0.5} -238 L${sx + 2} -238 L${sx + 3} -26 L${sx + 1} -26 Z`));
+      add('setole', 'b', P(`M${sx - 22} 0 L${sx - 14} -26 L${sx + 14} -26 L${sx + 22} 0 Z`));
+      add('setole', 's', P(`M${sx + 4} -26 L${sx + 14} -26 L${sx + 22} 0 L${sx + 8} 0 Z`));
+      add('setole', 'd', P(`M${sx - 15} -28 L${sx + 15} -28 L${sx + 14} -20 L${sx - 14} -20 Z`));
+      addMano({ base: P(`M${sx - 7} ${sy + 2} Q${sx - 9} ${sy + 10} ${sx} ${sy + 12} Q${sx + 8} ${sy + 10} ${sx + 7} ${sy + 2} Z`), ombra: P(`M${sx + 2} ${sy + 2} L${sx + 7} ${sy + 2} Q${sx + 8} ${sy + 10} ${sx} ${sy + 12} Z`) }, [sx, sy + 6]);
     }
 
     // ---- il corpo, secondo il vestito
@@ -219,10 +244,12 @@ const Personaggi = (() => {
     }
     if (C.accessori.includes('scritta')) L.push({ mat: 'scritta', tono: 'b', testo: 'E=mc²', x: -2, y: -128, size: 20 });
 
+    if (dietroDavanti === 'corpo') dietroBraccio();
+
     // ---- testa (con l'inclinazione del gesto)
     const piv = [0, mento + 6];
     const T = (x, y) => { const c = Math.cos(inclina), s = Math.sin(inclina), dx = x - piv[0], dy = y - piv[1]; return [piv[0] + dx * c - dy * s, piv[1] + dx * s + dy * c]; };
-    const head = []; const addH = (mat, tono, p, extra) => { if (p) head.push(Object.assign({ mat, tono, p }, extra)); };
+    const head = []; const addH = (mat, tono, p, extra) => { if (p) head.push(Object.assign({ mat, tono, p, gruppo: 'testa' }, extra)); };
     // collo, con l'ombra portata dal mento
     add('pelle', 's', P(`M-10 ${mento - 6} L10 ${mento - 6} L11 ${mento + 4} L-11 ${mento + 4} Z`));
     add('pelle', 'd', P(`M-10 ${mento - 2} Q0 ${mento + 4} 10 ${mento - 2} L10 ${mento - 6} L-10 ${mento - 6} Z`));
@@ -241,22 +268,30 @@ const Personaggi = (() => {
     addH('pelle', 'l', P(`M${-fw * 0.36} ${ey + 8} Q${-fw * 0.3} ${ey + 4} ${-fw * 0.2} ${ey + 8} Q${-fw * 0.28} ${ey + 12} ${-fw * 0.36} ${ey + 8} Z M${-fw * 0.3} ${top + fh * 0.16} Q${-fw * 0.15} ${top + fh * 0.07} 0 ${top + fh * 0.1} Q${-fw * 0.15} ${top + fh * 0.13} ${-fw * 0.3} ${top + fh * 0.2} Z`));
     // occhi
     if (C.occhi === 'fessura') addH('pelle', 'l', P(`M${-ex - 8} ${ey} Q${-ex} ${ey - 5} ${-ex + 7} ${ey + 1} Q${-ex} ${ey + 6} ${-ex - 8} ${ey + 3} Z M${ex - 7} ${ey + 1} Q${ex} ${ey - 5} ${ex + 8} ${ey} Q${ex + 8} ${ey + 4} ${ex} ${ey + 6} Q${ex - 5} ${ey + 5} ${ex - 7} ${ey + 1} Z`));
+    const tipoOcchi = espr === 'sorpreso' ? 'tondi' : espr === 'contento' ? 'felici' : espr === 'arrabbiato' ? (C.occhi === 'fessura' ? 'fessura' : 'severi') : C.occhi;
+    if (tipoOcchi === 'tondi' && !st.batte) {
+      addH('bianco', 'b', P(`M${-ex - 6} ${ey} a6 5.5 0 1 0 12 0 a6 5.5 0 1 0 -12 0 Z M${ex - 6} ${ey} a6 5.5 0 1 0 12 0 a6 5.5 0 1 0 -12 0 Z`));
+    }
     const occhi = st.batte ? `M${-ex - 5} ${ey} h10 v1.3 h-10 Z M${ex - 5} ${ey} h10 v1.3 h-10 Z` : {
+      tondi: `M${-ex - 2.4} ${ey} a2.4 2.8 0 1 0 4.8 0 a2.4 2.8 0 1 0 -4.8 0 Z M${ex - 2.4} ${ey} a2.4 2.8 0 1 0 4.8 0 a2.4 2.8 0 1 0 -4.8 0 Z`,
       fessura: `M${-ex - 5} ${ey} Q${-ex} ${ey - 3} ${-ex + 5} ${ey} Q${-ex} ${ey + 1.6} ${-ex - 5} ${ey} Z M${ex - 5} ${ey} Q${ex} ${ey - 3} ${ex + 5} ${ey} Q${ex} ${ey + 1.6} ${ex - 5} ${ey} Z`,
       stanchi: `M${-ex - 4} ${ey - 1} Q${-ex} ${ey - 4} ${-ex + 4} ${ey + 1} Q${-ex} ${ey + 3} ${-ex - 4} ${ey - 1} Z M${ex - 4} ${ey + 1} Q${ex} ${ey - 4} ${ex + 4} ${ey - 1} Q${ex} ${ey + 3} ${ex - 4} ${ey + 1} Z`,
       severi: `M${-ex - 5} ${ey - 1} L${-ex + 5} ${ey + 1} L${-ex + 4} ${ey + 2.6} L${-ex - 5} ${ey + 1} Z M${ex - 5} ${ey + 1} L${ex + 5} ${ey - 1} L${ex + 5} ${ey + 1} L${ex - 4} ${ey + 2.6} Z`,
       felici: `M${-ex - 5} ${ey + 1} Q${-ex} ${ey - 5} ${-ex + 5} ${ey + 1} L${-ex + 4} ${ey + 2} Q${-ex} ${ey - 2} ${-ex - 4} ${ey + 2} Z M${ex - 5} ${ey + 1} Q${ex} ${ey - 5} ${ex + 5} ${ey + 1} L${ex + 4} ${ey + 2} Q${ex} ${ey - 2} ${ex - 4} ${ey + 2} Z`
-    }[C.occhi];
+    }[tipoOcchi];
     addH('occhi', 'b', P(occhi));
-    if (C.occhi === 'stanchi') addH('pelle', 's', P(`M${-ex - 5} ${ey + 3} Q${-ex} ${ey + 7} ${-ex + 5} ${ey + 3} Q${-ex} ${ey + 5} ${-ex - 5} ${ey + 3} Z M${ex - 5} ${ey + 3} Q${ex} ${ey + 7} ${ex + 5} ${ey + 3} Q${ex} ${ey + 5} ${ex - 5} ${ey + 3} Z`));
+    if (tipoOcchi === 'stanchi') addH('pelle', 's', P(`M${-ex - 5} ${ey + 3} Q${-ex} ${ey + 7} ${-ex + 5} ${ey + 3} Q${-ex} ${ey + 5} ${-ex - 5} ${ey + 3} Z M${ex - 5} ${ey + 3} Q${ex} ${ey + 7} ${ex + 5} ${ey + 3} Q${ex} ${ey + 5} ${ex - 5} ${ey + 3} Z`));
     // sopracciglia
     const soprM = C.sopracciglia === 'pesanti' ? 'occhi' : 'capelli', soprT = C.sopracciglia === 'pesanti' ? 'b' : 's';
+    const tipoSopr = espr === 'arrabbiato' ? 'aggrottate' : espr === 'sorpreso' ? 'alzate' : C.sopracciglia;
     addH(soprM, soprT, P({
+      aggrottate: `M${-ex - 10} ${ey - 11} L${-ex + 7} ${ey - 5} L${-ex + 6} ${ey - 1.5} L${-ex - 9} ${ey - 7.5} Z M${ex - 7} ${ey - 5} L${ex + 10} ${ey - 11} L${ex + 9} ${ey - 7.5} L${ex - 6} ${ey - 1.5} Z`,
+      alzate: `M${-ex - 9} ${ey - 10} Q${-ex} ${ey - 19} ${-ex + 8} ${ey - 11} L${-ex + 7} ${ey - 8.5} Q${-ex} ${ey - 15} ${-ex - 8} ${ey - 7.5} Z M${ex + 9} ${ey - 10} Q${ex} ${ey - 19} ${ex - 8} ${ey - 11} L${ex - 7} ${ey - 8.5} Q${ex} ${ey - 15} ${ex + 8} ${ey - 7.5} Z`,
       chiare: `M${-ex - 9} ${ey - 7} L${-ex + 6} ${ey - 10} L${-ex + 6} ${ey - 7} L${-ex - 8} ${ey - 4} Z M${ex - 6} ${ey - 10} L${ex + 9} ${ey - 7} L${ex + 8} ${ey - 4} L${ex - 6} ${ey - 7} Z`,
       folte: `M${-ex - 11} ${ey - 5} Q${-ex - 6} ${ey - 16} ${-ex + 7} ${ey - 9} Q${-ex} ${ey - 7} ${-ex - 11} ${ey - 5} Z M${ex + 11} ${ey - 5} Q${ex + 6} ${ey - 16} ${ex - 7} ${ey - 9} Q${ex} ${ey - 7} ${ex + 11} ${ey - 5} Z`,
       pesanti: `M${-ex - 8} ${ey - 8} L${-ex + 7} ${ey - 4} L${-ex + 6} ${ey - 1} L${-ex - 8} ${ey - 5} Z M${ex - 7} ${ey - 4} L${ex + 8} ${ey - 8} L${ex + 8} ${ey - 5} L${ex - 6} ${ey - 1} Z`,
       arcuate: `M${-ex - 8} ${ey - 5} Q${-ex} ${ey - 13} ${-ex + 7} ${ey - 6} L${-ex + 6} ${ey - 4} Q${-ex} ${ey - 10} ${-ex - 7} ${ey - 3} Z M${ex + 8} ${ey - 5} Q${ex} ${ey - 13} ${ex - 7} ${ey - 6} L${ex - 6} ${ey - 4} Q${ex} ${ey - 10} ${ex + 7} ${ey - 3} Z`
-    }[C.sopracciglia]));
+    }[tipoSopr]));
     // naso: ombra a destra e luce sul dorso
     addH('pelle', 's', P({
       corto: `M1 ${ey} L6 ${ey + 15} L-1 ${ey + 17} Z`,
@@ -268,16 +303,25 @@ const Personaggi = (() => {
     if (C.naso === 'patata') addH('pelle', 's', ell(-4, ey + 16, 4, 3.5));
     // bocca
     const my = ey + (C.naso === 'lungo' ? 30 : 24), ap = st.parla, mo = 2 + ap * 4;
-    if (C.bocca === 'o') addH('bocca', 'b', ap > 0.1 ? ell(0, my, 4.5, mo / 2 + 1) : P(`M-6 ${my} Q0 ${my - 3} 6 ${my} L6 ${my + 1.5} Q0 ${my - 1} -6 ${my + 1.5} Z`));
-    if (C.bocca === 'broncio') addH('bocca', 'b', ap > 0.1 ? ell(0, my + 1, 5, mo / 2 + 0.5) : P(`M-7 ${my + 3} Q0 ${my - 2} 7 ${my + 3} L7 ${my + 4.5} Q0 ${my} -7 ${my + 4.5} Z`));
-    if (C.bocca === 'sorriso') {
+    const tipoBocca = espr === 'sorpreso' ? 'stupore' : espr === 'arrabbiato' ? 'ringhio' : espr === 'contento' && C.bocca !== 'sorriso' ? 'soddisfatto' : C.bocca;
+    if (tipoBocca === 'stupore') addH('bocca', 'b', ell(0, my + 2, 5.5 + ap, 6.5 + ap * 2));
+    if (tipoBocca === 'ringhio') {
+      addH('bocca', 'b', P(`M-10 ${my + 1} Q0 ${my - 4} 10 ${my + 1} L9 ${my + 6 + ap * 2} Q0 ${my + 3 + ap * 2} -9 ${my + 6 + ap * 2} Z`));
+      addH('denti', 'b', P(`M-8 ${my} Q0 ${my - 3} 8 ${my} L8 ${my + 2} Q0 ${my - 1} -8 ${my + 2} Z`));
+    }
+    if (tipoBocca === 'soddisfatto') addH('bocca', 'b', P(`M-10 ${my - 1} Q0 ${my + 7 + ap * 5} 10 ${my - 1} Q0 ${my + 3} -10 ${my - 1} Z`));
+    if (espr === 'contento') addH('guance', 'b', P(`M${-fw * 0.42} ${ey + 13} a5 3 0 1 0 10 0 a5 3 0 1 0 -10 0 Z M${fw * 0.42 - 10} ${ey + 13} a5 3 0 1 0 10 0 a5 3 0 1 0 -10 0 Z`));
+    if (espr === 'arrabbiato') addH('guance', 's', P(`M${-fw * 0.2} ${ey - 13} l3 3 l-3 3 M${fw * 0.2 - 4} ${ey - 16} h1`));
+    if (tipoBocca === 'o') addH('bocca', 'b', ap > 0.1 ? ell(0, my, 4.5, mo / 2 + 1) : P(`M-6 ${my} Q0 ${my - 3} 6 ${my} L6 ${my + 1.5} Q0 ${my - 1} -6 ${my + 1.5} Z`));
+    if (tipoBocca === 'broncio') addH('bocca', 'b', ap > 0.1 ? ell(0, my + 1, 5, mo / 2 + 0.5) : P(`M-7 ${my + 3} Q0 ${my - 2} 7 ${my + 3} L7 ${my + 4.5} Q0 ${my} -7 ${my + 4.5} Z`));
+    if (tipoBocca === 'sorriso') {
       const h = 5 + ap * 4;
       addH('bocca', 'b', P(`M-12 ${my - 2} Q0 ${my + h + 4} 12 ${my - 2} Q0 ${my + 2} -12 ${my - 2} Z`));
       addH('denti', 'b', P(`M-10 ${my - 1} Q0 ${my + 3} 10 ${my - 1} L9 ${my + 2} Q0 ${my + 5} -9 ${my + 2} Z`));
       addH('pelle', 's', P(`M-14 ${my - 4} Q-16 ${my} -13 ${my + 3} L-12 ${my + 2} Q-14 ${my} -12 ${my - 3} Z M14 ${my - 4} Q16 ${my} 13 ${my + 3} L12 ${my + 2} Q14 ${my} 12 ${my - 3} Z`));
     }
     if (C.bocca === 'baffi') {
-      if (ap > 0.1) addH('bocca', 'b', ell(0, my + 5, 4, mo / 2));
+      if (ap > 0.1 && tipoBocca === 'baffi') addH('bocca', 'b', ell(0, my + 5, 4, mo / 2));
       addH('capelli', 'b', P(`M-15 ${my + 2} Q-11 ${my - 7} 0 ${my - 5} Q11 ${my - 7} 15 ${my + 2} Q8 ${my + 1} 0 ${my + 1} Q-8 ${my + 1} -15 ${my + 2} Z`));
       addH('capelli', 's', P(`M2 ${my - 5} Q11 ${my - 7} 15 ${my + 2} Q8 ${my + 1} 2 ${my + 1} Z`));
     }
@@ -337,18 +381,17 @@ const Personaggi = (() => {
       addH('montatura', 'b', P(`M${-ex - 10} ${ey - 7} h19 v14 h-19 Z M${-ex - 8} ${ey - 5} v10 h15 v-10 Z M${ex - 9} ${ey - 7} h19 v14 h-19 Z M${ex - 7} ${ey - 5} v10 h15 v-10 Z M-4 ${ey - 3} h8 v2 h-8 Z`), { rule: 'evenodd' });
       addH('vetro', 'b', P(`M${-ex - 7} ${ey - 4} l5 0 l-4 8 l-2 0 Z M${ex - 6} ${ey - 4} l5 0 l-4 8 l-2 0 Z`), { colore: 'rgba(255,255,255,0.45)' });
     }
-    head.forEach(h => { h.pivot = inclina; });
-    L.push(...head.map(h => Object.assign(h, { testa: true })));
+    L.push(...head);
+    if (dietroDavanti === 'testa') dietroBraccio();
 
     // ---- braccio che gesticola, davanti
     const ps = [S - 12, -166];
     add('abito', 'b', limb(ps, gomito, polso, 14, 12, 9));
     add('abito', 's', limbShade(ps, gomito, polso, 14, 12, 9));
     add('camicia', 'b', ell(polso[0], polso[1], 7, 4.5));
-    const m = mano(tipoMano, polso[0], polso[1] - (polso[1] < -140 ? 2 : -10), 1);
-    add('pelle', 'b', m.base); add('pelle', 's', m.ombra);
-    if (m.buco) add('pelle', 'd', m.buco);
-    return { pezzi: L, perno: piv, inclina };
+    const hy = polso[1] - (polso[1] < -140 ? 2 : -10);
+    addMano(mano(tipoMano, polso[0], hy, 1), [polso[0], hy]);
+    return { pezzi: L, perno: piv, inclina, corpo: C.corpo || { x: 1, y: 1 }, mento, curvo: C.curvo || 0 };
   }
 
   /* =====================================================================
@@ -360,17 +403,33 @@ const Personaggi = (() => {
     if (!b || b.width !== w || b.height !== h) { b = document.createElement('canvas'); b.width = w; b.height = h; buffers.set(key, b); }
     return b;
   }
-  function colore (C, pezzo) {
+  const EXTRA = { denti: '#f7f3ea', bianco: '#f4efe4', guance: '#e0503f' };
+  function mixHex (a, b, t) { const A = hexRgb(a), B = hexRgb(b); return '#' + A.map((v, i) => Math.round(v + (B[i] - v) * t).toString(16).padStart(2, '0')).join(''); }
+  function colore (C, pezzo, st) {
     if (pezzo.colore) return pezzo.colore;
-    const base = C.colori[pezzo.mat];
+    if (pezzo.mat === 'guance') return pezzo.tono === 's' ? null : 'rgba(224,80,63,0.3)';
+    let base = C.colori[pezzo.mat] || EXTRA[pezzo.mat];
+    if (base && pezzo.mat === 'pelle' && st && st.espressione === 'arrabbiato') base = mixHex(base, '#d7263d', 0.32);
     return base ? toni(base)[pezzo.tono] : null;
   }
-  function stendi (g, C, figura) {
-    const { pezzi, perno, inclina } = figura;
-    pezzi.forEach(pz => {
-      const col = colore(C, pz); if (!col) return;
-      g.save();
-      if (pz.testa) { g.translate(perno[0], perno[1]); g.rotate(inclina); g.translate(-perno[0], -perno[1]); }
+  // ogni pezzo al suo posto: il corpo con le proporzioni della scheda, la
+  // testa (che resta grande, come nelle caricature) sul collo e inclinata,
+  // le mani ingrandite sul polso come nei manifesti
+  const MANO = 1.3;
+  function piazza (g, pz, fig) {
+    const { x: bx, y: by } = fig.corpo;
+    if (pz.gruppo === 'testa') {
+      g.translate(0, (by - 1) * fig.mento + fig.curvo);
+      g.translate(fig.perno[0], fig.perno[1]); g.rotate(fig.inclina); g.translate(-fig.perno[0], -fig.perno[1]);
+    } else if (pz.gruppo === 'mano') {
+      const [ax, ay] = pz.ancora;
+      g.translate(ax * bx, ay * by); g.scale(MANO, MANO); g.translate(-ax, -ay);
+    } else g.scale(bx, by);
+  }
+  function stendi (g, C, fig, st) {
+    fig.pezzi.forEach(pz => {
+      const col = colore(C, pz, st); if (!col) return;
+      g.save(); piazza(g, pz, fig);
       g.fillStyle = col;
       if (pz.testo) { g.font = `700 ${pz.size}px "Barlow Condensed","Arial Narrow",sans-serif`; g.textAlign = 'center'; g.textBaseline = 'middle'; g.fillText(pz.testo, pz.x, pz.y); }
       else { if (pz.clip) { g.beginPath(); g.rect(...pz.clip); g.clip(); } g.fill(pz.p, pz.rule || 'nonzero'); }
@@ -378,15 +437,11 @@ const Personaggi = (() => {
     });
   }
   // la sagoma intera in un solo colore (per il bordo di luce dei tagli e per le ombre)
-  function sagoma (g, figura, col) {
-    const { pezzi, perno, inclina } = figura;
+  function sagoma (g, fig, col) {
     g.fillStyle = col;
-    pezzi.forEach(pz => {
-      if (!pz.p) return;
-      g.save();
-      if (pz.testa) { g.translate(perno[0], perno[1]); g.rotate(inclina); g.translate(-perno[0], -perno[1]); }
-      g.fill(pz.p, pz.rule || 'nonzero');
-      g.restore();
+    fig.pezzi.forEach(pz => {
+      if (!pz.p || pz.colore || pz.mat === 'guance') return;
+      g.save(); piazza(g, pz, fig); g.fill(pz.p, pz.rule || 'nonzero'); g.restore();
     });
   }
 
@@ -398,7 +453,7 @@ const Personaggi = (() => {
     const fig = costruisci(C, st);
     // leggero ondeggiare del corpo sui piedi
     const sway = Math.sin(st.t * 1.3) * 0.008 + (st.parla > 0.1 ? Math.sin(st.t * 5) * 0.004 : 0);
-    if (!luce) { g.save(); g.rotate(sway); stendi(g, C, fig); g.restore(); return; }
+    if (!luce) { g.save(); g.rotate(sway); stendi(g, C, fig, st); g.restore(); return; }
     const m = g.getTransform(), W = g.canvas.width, H = g.canvas.height;
     const lay = buffer('lay', W, H), lg = lay.getContext('2d');
     lg.setTransform(1, 0, 0, 1, 0, 0); lg.clearRect(0, 0, W, H);
@@ -412,7 +467,7 @@ const Personaggi = (() => {
     // il personaggio, tinto dalla luce principale
     const pl = buffer('pl', W, H), pg = pl.getContext('2d');
     pg.setTransform(1, 0, 0, 1, 0, 0); pg.clearRect(0, 0, W, H);
-    pg.setTransform(m); pg.rotate(sway); stendi(pg, C, fig);
+    pg.setTransform(m); pg.rotate(sway); stendi(pg, C, fig, st);
     pg.setTransform(1, 0, 0, 1, 0, 0);
     const mask = buffer('mask', W, H), mg = mask.getContext('2d');
     mg.globalCompositeOperation = 'copy'; mg.drawImage(pl, 0, 0);
@@ -425,6 +480,6 @@ const Personaggi = (() => {
     g.save(); g.setTransform(1, 0, 0, 1, 0, 0); g.drawImage(lay, 0, 0); g.restore();
   }
 
-  return { SCHEDE, toni, costruisci, disegna };
+  return { SCHEDE, toni, costruisci, disegna, ESPRESSIONI: ['normale', 'arrabbiato', 'sorpreso', 'contento'] };
 })();
 if (typeof window !== 'undefined') window.Personaggi = Personaggi;
