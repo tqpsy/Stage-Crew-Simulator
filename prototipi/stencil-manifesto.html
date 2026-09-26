@@ -1,0 +1,143 @@
+<title>Stencil Manifesto</title>
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@600;700&family=Inter:wght@400;500;600&display=swap">
+<style>
+  /* La chiave "Stencil · Manifesto" rifinita. Tema scuro come il gioco. */
+  :root{
+    color-scheme: dark;
+    --bg:#0e0e10; --panel:#18181b; --raised:#222226; --line:#2e2f35; --text:#eee9df; --muted:#8b8e98; --amber:#f2a541;
+    --display:'Barlow Condensed','Arial Narrow',sans-serif; --ui:'Inter',system-ui,sans-serif;
+  }
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--bg);color:var(--text);font-family:var(--ui);padding-block:20px 32px}
+  .wrap{max-width:1180px;margin:0 auto;padding-inline:16px;display:grid;gap:18px}
+  h1{margin:0;font-family:var(--display);font-size:32px;letter-spacing:.03em;text-wrap:balance}
+  h2{margin:6px 0 0;font-family:var(--display);font-size:22px;letter-spacing:.05em;color:var(--amber)}
+  .lead{margin:0;color:var(--muted);font-size:15px;line-height:1.5;max-width:72ch}
+  .bar{display:flex;gap:8px;flex-wrap:wrap}
+  .bar button{min-height:40px;padding:0 14px;background:var(--raised);border:1px solid var(--line);border-radius:8px;color:var(--text);font:600 14px var(--ui);cursor:pointer}
+  .bar button[aria-pressed=true]{border-color:var(--amber);color:var(--amber)}
+  .bar button:focus-visible{outline:2px solid var(--amber);outline-offset:2px}
+  .grid{display:grid;grid-template-columns:repeat(4,1fr);gap:12px}
+  @media (max-width:760px){ .grid{grid-template-columns:repeat(2,1fr)} }
+  figure{margin:0;background:var(--panel);border:1px solid var(--line);border-radius:10px;overflow:hidden}
+  canvas{display:block;width:100%;background:#000}
+  .big canvas{aspect-ratio:3/4}
+  figcaption{padding:7px 10px 9px;font-size:12.5px;color:var(--muted);line-height:1.35}
+  figcaption b{color:var(--text);font-weight:600;display:block;font-size:13.5px}
+  .minis{display:flex;gap:10px;flex-wrap:wrap}
+  .minis canvas{width:150px;height:150px;border-radius:8px;border:1px solid var(--line)}
+  .rules{margin:0;padding-left:18px;color:#cfcac0;font-size:13.5px;line-height:1.55;max-width:80ch}
+  .tones{display:flex;gap:14px;flex-wrap:wrap}
+  .tone{display:grid;gap:4px;font-size:11.5px;color:var(--muted)}
+  .tone div{display:flex;border-radius:6px;overflow:hidden;border:1px solid var(--line)}
+  .tone i{width:26px;height:22px;display:block}
+</style>
+
+<div class="wrap">
+  <h1>Stencil · Manifesto</h1>
+  <p class="lead">La chiave scelta, rifinita. Forme piatte e tagli netti, niente contorni; ogni materiale in quattro toni ricavati da un solo colore della scheda; luce principale davanti a sinistra. Sul palco la luce dei fari tinge i colori e i tagli accendono il bordo.</p>
+  <div class="bar" role="group" aria-label="Luce">
+    <button data-l="pura" aria-pressed="true">Colori puri</button>
+    <button data-l="bianco" aria-pressed="false">Bianco pieno</button>
+    <button data-l="festa" aria-pressed="false">Festa (tagli viola, front blu)</button>
+    <button data-l="caldo" aria-pressed="false">Caldo</button>
+    <button data-l="poca" aria-pressed="false">Poca luce</button>
+  </div>
+  <div class="grid big" id="big"></div>
+
+  <h2>Alla misura del gioco</h2>
+  <p class="lead">Sul telefono il personaggio sul palco è alto circa 110 pixel: qui ognuno alla sua misura vera, con la stessa luce.</p>
+  <div class="minis" id="minis"></div>
+
+  <h2>Le regole della chiave</h2>
+  <ul class="rules">
+    <li>La scheda dà un solo colore per materiale (abito, pelle, capelli, cravatta, accessori…). La chiave ne ricava quattro toni: luce, base, ombra, ombra profonda. Le ombre girano verso il blu, le luci verso il caldo.</li>
+    <li>La luce viene sempre da davanti a sinistra: ombra netta sul lato destro di ogni volume, sotto il mento, sotto il braccio; luce sui bordi a sinistra (spalla, zigomo, ciuffi, dorso del naso).</li>
+    <li>Niente contorni e niente sfumature: le forme si toccano e basta. I dettagli sono forme a sé (tasche, bottoni, pieghe, coste del maglione).</li>
+    <li>Sul palco il personaggio si tinge col colore della luce principale e si scurisce se è debole; i tagli laterali gli disegnano un bordo del loro colore.</li>
+  </ul>
+  <div class="tones" id="tones"></div>
+</div>
+
+<script src="../personaggi.js"></script>
+<script>
+(() => {
+  const reduced = matchMedia('(prefers-reduced-motion: reduce)').matches;
+  const LUCI = {
+    pura: null,
+    bianco: { chiave: [255, 246, 232], intensita: 1, taglio: [255, 250, 240], intensitaTaglio: 0.6, spot: 'rgba(255,244,225,0.22)' },
+    festa: { chiave: [120, 150, 255], intensita: 0.9, taglio: [190, 110, 255], intensitaTaglio: 1, spot: 'rgba(120,150,255,0.22)' },
+    caldo: { chiave: [255, 190, 120], intensita: 0.95, taglio: [255, 150, 70], intensitaTaglio: 0.7, spot: 'rgba(255,180,100,0.22)' },
+    poca: { chiave: [230, 225, 255], intensita: 0.35, taglio: [120, 140, 255], intensitaTaglio: 0.5, spot: 'rgba(120,130,200,0.1)' }
+  };
+  let luce = LUCI.pura;
+  document.querySelectorAll('.bar button').forEach(b => b.addEventListener('click', () => {
+    luce = LUCI[b.dataset.l];
+    document.querySelectorAll('.bar button').forEach(x => x.setAttribute('aria-pressed', x === b));
+  }));
+
+  const ids = Object.keys(Personaggi.SCHEDE);
+  const big = document.getElementById('big');
+  const cards = ids.map((id, i) => {
+    const C = Personaggi.SCHEDE[id];
+    const f = document.createElement('figure');
+    f.innerHTML = `<canvas width="480" height="640"></canvas><figcaption><b>${C.nome}</b>firma: ${C.firma}</figcaption>`;
+    big.appendChild(f);
+    return { c: f.querySelector('canvas'), C, fase: i * 1.1 };
+  });
+
+  // toni ricavati per ogni materiale (per controllo)
+  const tones = document.getElementById('tones');
+  ids.forEach(id => {
+    const C = Personaggi.SCHEDE[id];
+    ['abito', 'pelle', C.colori.capelli ? 'capelli' : 'cappello'].forEach(mat => {
+      const t = Personaggi.toni(C.colori[mat]);
+      const d = document.createElement('div'); d.className = 'tone';
+      d.innerHTML = `<div>${['l', 'b', 's', 'd'].map(k => `<i style="background:${t[k]}"></i>`).join('')}</div>${C.nome.split(' ').pop()} · ${mat}`;
+      tones.appendChild(d);
+    });
+  });
+
+  function fondo (g, W, H, tint) {
+    g.fillStyle = '#070708'; g.fillRect(0, 0, W, H);
+    const gr = g.createRadialGradient(W / 2, H * 0.55, 0, W / 2, H * 0.55, W * 0.62);
+    gr.addColorStop(0, tint || 'rgba(239,227,198,0.13)'); gr.addColorStop(1, 'rgba(0,0,0,0)');
+    g.fillStyle = gr; g.fillRect(0, 0, W, H);
+    g.fillStyle = 'rgba(255,255,255,0.05)'; g.beginPath(); g.ellipse(W / 2, H * 0.935, W * 0.28, H * 0.022, 0, 0, Math.PI * 2); g.fill();
+  }
+  const stato = (t, fase) => {
+    const tt = t + fase;
+    return { t: tt, gesto: tt / 1.7, parla: Math.max(0, Math.sin(tt * 11) * Math.sin(tt * 4.3)), batte: (tt % 3.9) < 0.12 };
+  };
+  const dpr = Math.min(2, window.devicePixelRatio || 1);
+  const minis = cards.map(({ C, fase }) => {
+    const c = document.createElement('canvas'); c.width = c.height = Math.round(150 * dpr);
+    c.setAttribute('aria-label', C.nome + ' alla misura del gioco');
+    document.getElementById('minis').appendChild(c);
+    return { c, C, fase };
+  });
+  function frame (now) {
+    const t = reduced ? 0.6 : now / 1000;
+    cards.forEach(({ c, C, fase }) => {
+      const g = c.getContext('2d'); g.setTransform(1, 0, 0, 1, 0, 0);
+      fondo(g, c.width, c.height, luce && luce.spot);
+      const k = c.height / 300;
+      g.translate(c.width / 2, c.height * 0.935); g.scale(k, k);
+      Personaggi.disegna(g, C, stato(t, fase), luce);
+    });
+    // alla misura del telefono: 110 pixel CSS di altezza
+    minis.forEach(({ c, C, fase }) => {
+      const g = c.getContext('2d'), W = c.width, H = c.height, dpr = W / 150;
+      g.setTransform(1, 0, 0, 1, 0, 0);
+      g.fillStyle = '#12060a'; g.fillRect(0, 0, W, H * 0.78);
+      g.fillStyle = '#0c0d10'; g.fillRect(0, H * 0.78, W, H * 0.22);
+      if (luce) { const gr = g.createRadialGradient(W / 2, H * 0.5, 0, W / 2, H * 0.5, W * 0.6); gr.addColorStop(0, luce.spot); gr.addColorStop(1, 'rgba(0,0,0,0)'); g.fillStyle = gr; g.fillRect(0, 0, W, H); }
+      g.translate(W / 2, H * 0.9); const k = (110 * dpr) / 250; g.scale(k, k);
+      Personaggi.disegna(g, C, stato(t, fase), luce);
+    });
+    if (!reduced) requestAnimationFrame(frame);
+  }
+  requestAnimationFrame(frame);
+})();
+</script>
