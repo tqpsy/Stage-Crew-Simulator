@@ -69,6 +69,62 @@ const path = require('path');
   check(await p.evaluate(() => !Show.active && !document.body.classList.contains('in-show') && window.__scene.scale.height === GAME_H), 'il ritorno al palco non ripristina la vista');
   check(await p.evaluate(() => el('#circuit-text').textContent === 'IMPIANTO OK'), 'lo spettacolo ha cambiato lo stato dell\'impianto');
 
+  // ---- guasto del cavo e reputazione, in una partita vera che parte da reputazione 0.
+  // Si tengono solo apertura e finale, così il test non dipende dal caso.
+  await p.evaluate(() => {
+    gameActive = true; Profile.data.reputation = { total: 0, earned: {}, log: [] }; Profile.data.fasi = {};
+    window.__discorso = piano => {
+      Show.start(); Show.manualTime(true);
+      const S = Show.state, step = sec => { for (let i = 0; i < Math.round(sec * 10); i++) Show.step(0.1); };
+      S.events = S.events.filter(e => e.id === 'apertura' || e.id === 'finale');
+      S.pars = ['bianco', 'bianco', 'bianco', 'bianco']; S.dimmer = 1; S.fad[S.micCh] = 0.55; S.fad.pc = 0;
+      step(12);
+      piano(S, step);
+      step(Math.max(0, 80.5 - S.t)); S.pars = ['viola', 'blu', 'blu', 'viola']; S.dimmer = 0.3; S.fad.pc = 0.7; step(11);
+      return { ...Show.result, tot: reputation(), fase: Profile.data.fasi['L1:preside'], birre: birreDelService(), note: [...document.querySelectorAll('#show-r-notes li')].map(li => li.textContent) };
+    };
+  });
+  // A · connettore sfilato, trovato e riattaccato in fretta: +5 +3
+  const A = await p.evaluate(() => __discorso((S, step) => {
+    Show.guasto('mic'); step(0.3);
+    Show.tocca('cavo'); step(0.2); Show.tocca('mic');            // uno alla volta: il secondo tocco non parte
+    const unoAllaVolta = S.task && S.task.spot === 'cavo';
+    step(1.2); const cavoOk = S.fault.stato.cavo === 'ok';
+    Show.tocca('mic'); step(1.2); const trovato = S.fault.stato.mic === 'guasto';
+    Show.ripara(); step(2.5);
+    window.__A = { unoAllaVolta, cavoOk, trovato, risolto: !S.fault && S.guastoRapido };
+  }));
+  const a1 = await p.evaluate(() => window.__A);
+  check(a1.unoAllaVolta && a1.cavoOk && a1.trovato && a1.risolto, 'guasto al microfono non gestito come previsto: ' + JSON.stringify(a1));
+  check(A.rep === 8 && A.tot === 8, 'reputazione del discorso A sbagliata: ' + JSON.stringify({ rep: A.rep, tot: A.tot }));
+  // B · cavo schiacciato, cavo nuovo collegato al CH3 e trovato tardi: +5 −2 (e sostituisce A)
+  const B = await p.evaluate(() => __discorso((S, step) => {
+    Show.guasto('cavo'); step(0.3);
+    Show.tocca('cavo'); step(1.2); Show.ripara(); step(3.5); Show.collega(3); step(6);
+    window.__B = { ancoraMuto: !!S.fault, ch: S.micCh };
+    S.fad[3] = 0.55; step(2);
+  }));
+  const b1 = await p.evaluate(() => window.__B);
+  check(b1.ancoraMuto && b1.ch === 3, 'col cavo sul CH3 a fader giù il guasto non doveva risolversi da solo: ' + JSON.stringify(b1));
+  check(B.rep === 3 && B.tot === 3 && B.fase.rep === 3, 'il discorso B non prende il posto di A: ' + JSON.stringify({ rep: B.rep, tot: B.tot }));
+  check(B.note.some(n => /Prende il posto del discorso precedente \(\+8/.test(n)), 'il verbale non dice che B sostituisce A');
+  // C · cavo uscito dal mixer, nessuno lo trova: arriva il bidello, +5 −5
+  const C = await p.evaluate(() => __discorso((S, step) => { Show.guasto('ing'); step(26); }));
+  check(C.rep === 0 && C.tot === 0, 'bidello: reputazione sbagliata: ' + JSON.stringify({ rep: C.rep, tot: C.tot }));
+  check(C.note.some(n => /bidello/.test(n)), 'il verbale non parla del bidello');
+  // D · tocco vero sul palco: durante il guasto il dito sul microfono avvia il controllo
+  const D = await p.evaluate(() => {
+    Show.start(); Show.manualTime(true); const S = Show.state;
+    S.events = S.events.filter(e => e.id === 'apertura'); for (let i = 0; i < 60; i++) Show.step(0.1);
+    Show.guasto('mic'); Show.step(0.1);
+    const r = el('#stage-wrap').getBoundingClientRect(), [x, y] = View.punto('mic');
+    return { x: r.left + x, y: r.top + y };
+  });
+  await p.mouse.click(D.x, D.y);
+  check(await p.evaluate(() => Show.state.task && Show.state.task.spot === 'mic'), 'il tocco sul microfono non avvia il controllo');
+  check(await p.evaluate(() => !el('#show-fix').hidden), 'durante il controllo non compare il riquadro del lavoro');
+  await p.evaluate(() => Show.exit());
+
   console.log('PROBLEMI:', problems);
   console.log('ERRORI JS:', errs);
   await b.close();

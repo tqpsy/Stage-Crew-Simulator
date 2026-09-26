@@ -264,3 +264,23 @@ chiave, da confermare (la voce "Personaggi" tra i Decisi resta da rivedere).
 
 Altre chiavi provate e scartate (in `prototipi/`): fotocopia, risograph,
 sticker e le varianti dello stencil.
+
+## Fasi di spettacolo: punteggio e guasto (deciso)
+
+- **Conta l'ultimo discorso.** Ogni discorso del preside è una partita a sé
+  (imprevisti, parole e azioni diverse). Si può rifare quante volte si vuole,
+  ma il risultato nuovo (reputazione e birre) prende il posto di quello
+  precedente, anche se è peggiore. Nel salvataggio: `fasi['L1:preside']`.
+- **Reputazione di un discorso** (regole di `REP`): +5 discorso portato a
+  termine; +3 guasto risolto entro 8 s (0 se più lento); −5 guasto trovato dal
+  bidello; −5 larsen (una volta sola per discorso, anche se fischia più volte);
+  −2 microfono lasciato su un ingresso diverso dal CH1. Il dilemma "più volume!"
+  cambia solo il gradimento.
+- **Birre**: un service nuovo parte da 0. Un discorso ne dà una se non ci sono
+  stati larsen né colpi nelle casse, una se il pubblico è almeno al 70%.
+- **Guasto del cavo**: si tocca direttamente sul palco dove si vede il
+  problema (microfono, cavo, presa verso il mixer); ogni controllo e ogni
+  riparazione richiede tempo, una cosa alla volta. Cause: connettore sfilato
+  (si riattacca), sedia sopra il cavo (XLR nuovo dal baule, poi si ricollega),
+  cavo uscito dal mixer (si ricollega). Ricollegato a un ingresso sbagliato, la
+  voce arriva su un altro canale col fader giù. Dopo 24 s lo trova il bidello.

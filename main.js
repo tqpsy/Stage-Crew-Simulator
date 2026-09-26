@@ -1358,13 +1358,13 @@ document.querySelectorAll('.tab-btn').forEach(btn => {
    casse).
    --------------------------------------------------------------------- */
 const SAVE_KEY = 'scs-save';
-const SAVE_VERSION = 2;
+const SAVE_VERSION = 3;
 const LEVEL_ID = 1;
 const RECORDS_KEEP = 20;       // record tenuti per livello
 const SERVICE_MAX = 24;        // caratteri del nome del service
 
 function defaultProfile () {
-  return { v: SAVE_VERSION, service: '', settings: { volume: 0.8, reducedFx: false, skipShow: false }, logo: null, level: null, records: {}, reputation: { total: 0, earned: {}, log: [] } };
+  return { v: SAVE_VERSION, service: '', settings: { volume: 0.8, reducedFx: false, skipShow: false }, logo: null, level: null, records: {}, reputation: { total: 0, earned: {}, log: [] }, fasi: {} };
 }
 const Profile = (() => {
   let data = defaultProfile();
@@ -1378,7 +1378,9 @@ const Profile = (() => {
       d.reputation = { total: done.length * 5, earned: Object.fromEntries(done.map(l => ['L' + l + ':collaudo', 5])), log: [] };
       d.v = 2;
     }
-    if (d && d.v === SAVE_VERSION) data = { ...defaultProfile(), ...d, settings: { ...defaultProfile().settings, ...d.settings }, reputation: { ...defaultProfile().reputation, ...d.reputation } };
+    // versione 2: arrivano i risultati delle fasi di spettacolo (conta l'ultima volta)
+    if (d && d.v === 2) { d.fasi = {}; d.v = 3; }
+    if (d && d.v === SAVE_VERSION) data = { ...defaultProfile(), ...d, settings: { ...defaultProfile().settings, ...d.settings }, reputation: { ...defaultProfile().reputation, ...d.reputation }, fasi: { ...(d.fasi || {}) } };
     else if (!raw && localStorage.getItem('scs-muted') === '1') data.settings.volume = 0;   // vecchio tasto muto
   } catch (e) { /* memoria non disponibile o salvataggio illeggibile: si parte da zero */ }
   let timer = null;
@@ -1802,6 +1804,24 @@ function addReputation (amount, reason, onceKey) {
   applySettings();
   return delta;
 }
+
+/* Fasi di spettacolo (il discorso del preside…): si possono rifare, e conta
+   sempre l'ultima volta. Il nuovo risultato (reputazione e birre) toglie
+   quello della volta prima e prende il suo posto, anche se è peggiore.
+   Restituisce la reputazione prima e dopo, e il risultato sostituito. */
+function registraFase (key, risultato, reason) {
+  const R = Profile.data.reputation, prima = R.total, vecchio = Profile.data.fasi[key] || null;
+  const base = Math.max(0, prima - (vecchio ? vecchio.delta : 0));
+  const dopo = Math.max(0, base + risultato.rep);
+  Profile.data.fasi[key] = { ...risultato, delta: dopo - base, at: Date.now() };
+  R.total = dopo;
+  R.log = [{ at: Date.now(), amount: dopo - prima, reason }].concat(R.log || []).slice(0, REP_LOG_KEEP);
+  Profile.save();
+  applySettings();
+  return { prima, dopo, vecchio };
+}
+// birre guadagnate dal service: la somma dell'ultimo risultato di ogni fase
+const birreDelService = () => Object.values(Profile.data.fasi || {}).reduce((n, f) => n + (f.birre || 0), 0);
 
 // un collaudo riuscito entra nei record del livello (i migliori per primi:
 // meno errori, poi meno tempo) e, la prima volta, vale una fase completata;

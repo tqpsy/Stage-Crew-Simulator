@@ -157,7 +157,12 @@ const path = require('path');
   await ev(() => { Profile.flush = () => {}; localStorage.setItem('scs-save', JSON.stringify({ v: 1, service: 'Vecchio', settings: { volume: 0.5 }, level: null, records: {}, reputation: { total: 150, byLevel: { 1: 150 } } })); });
   await open();
   const conv = await ev(() => ({ v: Profile.data.v, rep: reputation(), once: Profile.data.reputation.earned['L1:collaudo'], vol: SFX.volume, again: (gameActive = true, addRecord()) }));
-  check(JSON.stringify(conv) === JSON.stringify({ v: 2, rep: 5, once: 5, vol: 0.5, again: 0 }), 'conversione dalla versione 1 sbagliata: ' + JSON.stringify(conv));
+  check(JSON.stringify(conv) === JSON.stringify({ v: 3, rep: 5, once: 5, vol: 0.5, again: 0 }), 'conversione dalla versione 1 sbagliata: ' + JSON.stringify(conv));
+  // dalla versione 2 alla 3: la partita resta com'era e arrivano le fasi di spettacolo (vuote)
+  await ev(() => { Profile.flush = () => {}; localStorage.setItem('scs-save', JSON.stringify({ v: 2, service: 'Due', settings: { volume: 0.4 }, level: null, records: {}, reputation: { total: 12, earned: { 'L1:collaudo': 5 }, log: [] } })); });
+  await open();
+  const conv2 = await ev(() => ({ v: Profile.data.v, service: Profile.data.service, rep: reputation(), fasi: Profile.data.fasi, birre: birreDelService() }));
+  check(JSON.stringify(conv2) === JSON.stringify({ v: 3, service: 'Due', rep: 12, fasi: {}, birre: 0 }), 'conversione dalla versione 2 sbagliata: ' + JSON.stringify(conv2));
 
   console.log('PROBLEMI:', JSON.stringify(problems, null, 1));
   console.log('ERRORI JS:', errs);
