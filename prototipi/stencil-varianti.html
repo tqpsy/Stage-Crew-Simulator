@@ -1,0 +1,375 @@
+<title>Stencil in quattro versioni</title>
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@600;700&family=Inter:wght@400;500;600&display=swap">
+<style>
+  /* Chiavi di stile: ogni personaggio è una scheda di parametri, ogni stile una regola che la disegna.
+     Tema scuro come il gioco. */
+  :root{
+    color-scheme: dark;
+    --bg:#101012; --panel:#19191c; --line:#2e2f35; --text:#eee9df; --muted:#8b8e98; --amber:#f2a541;
+    --display:'Barlow Condensed','Arial Narrow',sans-serif; --ui:'Inter',system-ui,sans-serif;
+  }
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--bg);color:var(--text);font-family:var(--ui);padding-block:20px 32px}
+  .wrap{max-width:1180px;margin:0 auto;padding-inline:16px;display:grid;gap:22px}
+  h1{margin:0;font-family:var(--display);font-size:32px;letter-spacing:.03em;text-wrap:balance}
+  .lead{margin:0;color:var(--muted);font-size:15px;line-height:1.5;max-width:70ch}
+  section{display:grid;gap:10px}
+  h2{margin:0;font-family:var(--display);font-size:24px;letter-spacing:.04em;color:var(--amber)}
+  h2 span{color:var(--muted);margin-right:8px}
+  .rules{margin:0;padding-left:18px;color:#cfcac0;font-size:13.5px;line-height:1.5;max-width:80ch}
+  .row{display:grid;grid-template-columns:repeat(4,1fr);gap:10px}
+  @media (max-width:700px){ .row{grid-template-columns:repeat(2,1fr)} }
+  figure{margin:0;background:var(--panel);border:1px solid var(--line);border-radius:10px;overflow:hidden}
+  canvas{display:block;width:100%;aspect-ratio:3/4;background:#000}
+  figcaption{padding:6px 10px 8px;font-size:12.5px;color:var(--muted)}
+  figcaption b{color:var(--text);font-weight:600}
+</style>
+
+<div class="wrap">
+  <h1>La chiave Stencil in quattro versioni</h1>
+  <p class="lead">Stesse schede dei personaggi, quattro varianti della chiave Stencil: colori piatti, tagli netti, niente contorni. Cambia la regola che sceglie i colori e la superficie su cui si stampa.</p>
+  <div id="rows"></div>
+</div>
+
+<script>
+(() => {
+  const reduced = matchMedia('(prefers-reduced-motion: reduce)').matches;
+  const P = d => new Path2D(d);
+
+  /* =====================================================================
+     SCHEDE DEI PERSONAGGI. Unità: piedi in (0,0), y in su negativo, alti ~250.
+     ===================================================================== */
+  const CHARS = [
+    { id: 'tramp', name: 'Preside Tramp', firma: 'ciuffo e cravatta',
+      outfit: 'suit', shoulders: 62, hem: -92, chin: -180, face: { w: 47, h: 60, jaw: 0.9 },
+      hair: 'swoop', eyes: 'slit', brows: 'light', nose: 'short', mouth: 'o', extras: [],
+      gestures: [{ e: [66, -126], w: [38, -150], hand: 'pinch' }, { e: [70, -150], w: [62, -196], hand: 'finger' }, { e: [62, -128], w: [70, -150], hand: 'open' }],
+      palette: { suit: '#1d2f4d', suitDark: '#0c1220', pants: '#1d2f4d', shirt: '#efe3c6', tie: '#d7263d', tieDark: '#9c1b2c', skin: '#e8763f', skinDark: '#b6482a',
+        pale: '#efe3c6', hair: '#f3d88a', hairDark: '#c79c44', dark: '#0c0c0e', mouth: '#3a0d10' },
+      firmaRoles: ['hair', 'hairDark', 'tie', 'tieDark'] },
+    { id: 'einstein', name: 'DJ E=mc²', firma: 'capelli elettrici e cuffie',
+      outfit: 'sweater', shoulders: 50, hem: -96, chin: -178, face: { w: 44, h: 56, jaw: 0.4 },
+      hair: 'wild', eyes: 'droopy', brows: 'bushy', nose: 'bulb', mouth: 'mustache', extras: ['headphones', 'print'],
+      gestures: [{ e: [60, -138], w: [30, -208], hand: 'fist' }, { e: [66, -150], w: [58, -206], hand: 'open' }, { e: [58, -122], w: [66, -140], hand: 'finger' }],
+      palette: { suit: '#5d5e66', suitDark: '#34353b', pants: '#2b2620', shirt: '#5d5e66', print: '#efe3c6', skin: '#f0c29c', skinDark: '#c48d66', pale: '#f0c29c',
+        hair: '#f4f1ea', hairDark: '#b9b6ad', dark: '#0c0c0e', mouth: '#3a1a14', accent: '#d7263d', accentDark: '#7a1520' },
+      firmaRoles: ['hair', 'hairDark', 'accent', 'accentDark'] },
+    { id: 'dante', name: 'Dante unplugged', firma: 'cappuccio rosso e alloro',
+      outfit: 'robe', shoulders: 50, hem: -6, chin: -182, face: { w: 38, h: 58, jaw: 0.1 },
+      hair: 'hood', eyes: 'stern', brows: 'heavy', nose: 'aquiline', mouth: 'frown', extras: ['laurel'],
+      gestures: [{ e: [64, -150], w: [74, -196], hand: 'open' }, { e: [62, -130], w: [44, -150], hand: 'open' }, { e: [70, -148], w: [86, -176], hand: 'finger' }],
+      palette: { suit: '#b3202c', suitDark: '#6e1018', shirt: '#efe3c6', skin: '#e3b48c', skinDark: '#ad7b58', pale: '#e3b48c', hat: '#b3202c', hatDark: '#6e1018',
+        dark: '#0c0c0e', mouth: '#4a1a14', accent: '#5f8f3a', accentDark: '#35561f', belt: '#2a1a12' },
+      firmaRoles: ['hat', 'hatDark', 'accent', 'accentDark'] },
+    { id: 'gerry', name: 'Bidello Gerry', firma: 'occhiali, sorriso e scopa',
+      outfit: 'coat', shoulders: 52, hem: -60, chin: -184, face: { w: 42, h: 64, jaw: 0.5 },
+      hair: 'neat', eyes: 'happy', brows: 'arched', nose: 'long', mouth: 'grin', extras: ['glasses', 'broom'],
+      gestures: [{ e: [64, -130], w: [58, -168], hand: 'thumb' }, { e: [62, -128], w: [40, -150], hand: 'open' }, { e: [68, -150], w: [64, -194], hand: 'open' }],
+      palette: { suit: '#2f5e9e', suitDark: '#1c3a66', pants: '#2a2d33', shirt: '#efe3c6', skin: '#efb48a', skinDark: '#c4825a', pale: '#efb48a', hair: '#b9b6ad', hairDark: '#7e7b74',
+        dark: '#0c0c0e', mouth: '#3a1a14', teeth: '#ffffff', frame: '#111114', prop: '#a0703a', propDark: '#5a3a1a', accent: '#d9b45a', accentDark: '#8a6a2a' },
+      firmaRoles: ['frame', 'teeth', 'accent', 'accentDark'] }
+  ];
+
+  /* =====================================================================
+     COSTRUZIONE: dalla scheda ai pezzi, ognuno col suo ruolo di colore
+     ===================================================================== */
+  function limb (a, b, c, w0, w1, w2) {
+    const n = (p, q) => { const dx = q[0] - p[0], dy = q[1] - p[1], l = Math.hypot(dx, dy) || 1; return [-dy / l, dx / l]; };
+    const n1 = n(a, b), n2 = n(b, c), nm = [(n1[0] + n2[0]) / 2, (n1[1] + n2[1]) / 2];
+    const p = new Path2D();
+    p.moveTo(a[0] + n1[0] * w0, a[1] + n1[1] * w0); p.lineTo(b[0] + nm[0] * w1, b[1] + nm[1] * w1); p.lineTo(c[0] + n2[0] * w2, c[1] + n2[1] * w2);
+    p.lineTo(c[0] - n2[0] * w2, c[1] - n2[1] * w2); p.lineTo(b[0] - nm[0] * w1, b[1] - nm[1] * w1); p.lineTo(a[0] - n1[0] * w0, a[1] - n1[1] * w0);
+    p.closePath(); return p;
+  }
+  const mix = (a, b, t) => [a[0] + (b[0] - a[0]) * t, a[1] + (b[1] - a[1]) * t];
+  const ellipse = (x, y, rx, ry) => P(`M${x - rx} ${y} a${rx} ${ry} 0 1 0 ${rx * 2} 0 a${rx} ${ry} 0 1 0 ${-rx * 2} 0 Z`);
+  function seeded (n) { let s = n; return () => { s = (s * 16807) % 2147483647; return s / 2147483647; }; }
+
+  function hand (kind, hx, hy) {
+    const up = hy < -140 ? -1 : 1;
+    switch (kind) {
+      case 'finger': return P(`M${hx - 6} ${hy - 2} Q${hx - 7} ${hy - 12} ${hx} ${hy - 12} L${hx + 1} ${hy - 26} Q${hx + 5} ${hy - 27} ${hx + 5} ${hy - 22} L${hx + 6} ${hy - 6} Q${hx + 4} ${hy + 2} ${hx - 6} ${hy - 2} Z`);
+      case 'pinch': return P(`M${hx - 7} ${hy - 1} Q${hx - 10} ${hy - 11} ${hx - 2} ${hy - 13} Q${hx + 4} ${hy - 16} ${hx + 3} ${hy - 9} Q${hx + 8} ${hy - 8} ${hx + 6} ${hy - 1} Q${hx} ${hy + 4} ${hx - 7} ${hy - 1} Z`);
+      case 'fist': return P(`M${hx - 8} ${hy - 2} Q${hx - 9} ${hy - 14} ${hx} ${hy - 14} Q${hx + 9} ${hy - 14} ${hx + 8} ${hy - 2} Q${hx} ${hy + 4} ${hx - 8} ${hy - 2} Z`);
+      case 'thumb': return P(`M${hx - 8} ${hy} Q${hx - 9} ${hy - 12} ${hx} ${hy - 12} L${hx - 2} ${hy - 24} Q${hx + 3} ${hy - 26} ${hx + 5} ${hy - 20} L${hx + 7} ${hy - 11} Q${hx + 9} ${hy - 2} ${hx} ${hy + 2} Z`);
+      default: return P(`M${hx - 8} ${hy} L${hx - 14} ${hy - 12 * up} L${hx - 8} ${hy - 14 * up} L${hx - 2} ${hy - 16 * up} L${hx + 4} ${hy - 13 * up} L${hx + 7} ${hy - 2} Q${hx} ${hy + 4} ${hx - 8} ${hy} Z`);
+    }
+  }
+
+  function build (C, pose, mouthOpen, blink) {
+    const L = [];
+    const add = (role, p, extra) => { if (p) L.push(Object.assign({ role, p }, extra)); };
+    const S = C.shoulders, hem = C.hem, chin = C.chin, fw = C.face.w, fh = C.face.h, top = chin - fh;
+    // gesto del braccio davanti
+    const i = Math.floor(pose) % 3, j = (i + 1) % 3, f = pose - Math.floor(pose);
+    const k = f < 0.7 ? 0 : (f - 0.7) / 0.3, ease = k * k * (3 - 2 * k);
+    const G = C.gestures[i], H = C.gestures[j];
+    const elbow = mix(G.e, H.e, ease), wrist = mix(G.w, H.w, ease), handKind = ease < 0.5 ? G.hand : H.hand;
+
+    // gambe e scarpe (la tonaca le copre)
+    if (C.outfit !== 'robe') {
+      add('pants', P(`M-30 ${hem - 8} L-1 ${hem - 8} L-6 -8 L-30 -8 Z M3 ${hem - 8} L30 ${hem - 8} L38 -8 L12 -8 Z`));
+      add('suitDark', P(`M-30 ${hem - 8} L-18 ${hem - 8} L-20 -8 L-30 -8 Z M20 ${hem - 8} L30 ${hem - 8} L38 -8 L28 -8 Z`), { soft: true });
+    }
+    add('dark', P('M-38 0 L-37 -9 Q-30 -13 -4 -11 L-3 0 Z M10 0 L12 -11 Q38 -13 46 -6 L46 0 Z'));
+    // braccio dietro, a riposo (il bidello ci tiene la scopa)
+    const bw = [-S + 8, hem + 8];
+    add('suitDark', limb([-S + 12, -166], [-S + 2, -124], bw, 12, 10, 8));
+    add('skinDark', P(`M${bw[0] - 6} ${bw[1] - 2} Q${bw[0] - 8} ${bw[1] + 10} ${bw[0]} ${bw[1] + 12} Q${bw[0] + 8} ${bw[1] + 12} ${bw[0] + 7} ${bw[1]} Z`));
+    if (C.extras.includes('broom')) {
+      add('prop', P(`M${bw[0] - 2} -236 L${bw[0] + 2} -236 L${bw[0] + 3} -24 L${bw[0] - 3} -24 Z`));
+      add('accent', P(`M${bw[0] - 22} 0 L${bw[0] - 14} -26 L${bw[0] + 14} -26 L${bw[0] + 22} 0 Z`));
+      add('accentDark', P(`M${bw[0] - 14} -26 L${bw[0] + 14} -26 L${bw[0] + 13} -20 L${bw[0] - 13} -20 Z`));
+    }
+    // il corpo secondo il vestito
+    const body = {
+      suit: `M${-S + 12} -176 Q${-S - 2} -172 ${-S - 2} -152 L${-S + 2} ${hem} L-12 ${hem + 4} L-2 -132 L4 -132 L14 ${hem + 4} L${S - 2} ${hem} L${S} -154 Q${S} -172 ${S - 14} -176 Q0 -188 ${-S + 12} -176 Z`,
+      sweater: `M${-S + 10} -178 Q${-S - 4} -172 ${-S - 6} -150 L${-S} ${hem} Q0 ${hem + 8} ${S} ${hem} L${S + 4} -150 Q${S + 2} -172 ${S - 10} -178 Q0 -186 ${-S + 10} -178 Z`,
+      robe: `M${-S + 10} -178 Q${-S - 4} -172 ${-S - 6} -148 L${-S - 18} -6 Q0 2 ${S + 18} -6 L${S + 6} -148 Q${S + 4} -172 ${S - 10} -178 Q0 -186 ${-S + 10} -178 Z`,
+      coat: `M${-S + 10} -178 Q${-S - 4} -172 ${-S - 6} -150 L${-S - 8} ${hem} L${S + 8} ${hem} L${S + 6} -150 Q${S + 4} -172 ${S - 10} -178 Q0 -188 ${-S + 10} -178 Z`
+    }[C.outfit];
+    add('suit', P(body));
+    add('suitDark', P(`M${-S + 12} -176 Q${-S - 2} -172 ${-S - 2} -152 L${C.outfit === 'robe' ? -S - 18 : -S + 2} ${C.outfit === 'robe' ? -6 : hem} L${C.outfit === 'robe' ? -S : -S + 22} ${C.outfit === 'robe' ? -6 : hem + 2} L${-S + 18} -156 Q${-S + 18} -170 ${-S + 26} -178 Z`), { soft: true });
+    if (C.outfit === 'suit') {
+      add('shirt', P(`M-14 -180 L14 -180 L0 -132 Z M-2 -132 L4 -132 L14 ${hem + 4} L-12 ${hem + 4} Z`));
+      add('tie', P(`M-6 -178 L6 -178 L4 -169 L-4 -169 Z M-4 -169 L4 -169 L10 ${hem + 16} L1 ${hem + 28} L-9 ${hem + 16} Z`));
+      add('tieDark', P(`M1 -169 L4 -169 L10 ${hem + 16} L1 ${hem + 28} Z`), { soft: true });
+      add('suitDark', P('M-14 -180 L-27 -176 L-7 -136 L-3 -146 Z M14 -180 L27 -176 L7 -136 L3 -146 Z'));
+    } else if (C.outfit === 'sweater') {
+      add('suitDark', P(`M-16 -180 Q0 -170 16 -180 L14 -176 Q0 -166 -14 -176 Z M${-S} ${hem - 6} Q0 ${hem + 2} ${S} ${hem - 6} L${S} ${hem} Q0 ${hem + 8} ${-S} ${hem} Z`));
+    } else if (C.outfit === 'robe') {
+      add('shirt', P('M-12 -181 Q0 -174 12 -181 L10 -176 Q0 -170 -10 -176 Z'));
+      add('belt', P(`M${-S - 8} -104 L${S + 8} -104 L${S + 9} -96 L${-S - 9} -96 Z`));
+      add('suitDark', P('M-6 -96 L-2 -96 L-8 -6 L-14 -6 Z M10 -96 L14 -96 L22 -6 L16 -6 Z'), { soft: true });
+    } else if (C.outfit === 'coat') {
+      add('shirt', P('M-12 -180 L12 -180 L0 -158 Z'));
+      add('suitDark', P(`M-12 -180 L-24 -176 L-4 -150 L0 -158 Z M12 -180 L24 -176 L4 -150 L0 -158 Z M-1 -150 L1 -150 L1 ${hem} L-1 ${hem} Z M${S - 30} -114 L${S - 8} -114 L${S - 8} -98 L${S - 30} -98 Z`));
+      [-140, -118, -96, -74].forEach(y => add('dark', ellipse(4, y, 2.2, 2.2)));
+    }
+    if (C.extras.includes('print')) L.push({ role: 'print', text: 'E=mc²', x: 0, y: -128, size: 20 });
+    // collo e testa
+    add('skinDark', P(`M-10 ${chin - 6} L10 ${chin - 6} L11 ${chin + 4} L-11 ${chin + 4} Z`));
+    const jw = fw * (0.26 + 0.2 * C.face.jaw);
+    const face = `M${-fw / 2} ${top + fh * 0.45} C${-fw / 2} ${top + fh * 0.08} ${-fw * 0.26} ${top} 0 ${top} C${fw * 0.26} ${top} ${fw / 2} ${top + fh * 0.08} ${fw / 2} ${top + fh * 0.45} C${fw / 2} ${top + fh * 0.78} ${jw} ${chin} 0 ${chin} C${-jw} ${chin} ${-fw / 2} ${top + fh * 0.78} ${-fw / 2} ${top + fh * 0.45} Z`;
+    const ey = top + fh * 0.4;   // altezza degli occhi
+    add('skin', P(`M${-fw / 2 + 1} ${ey + 1} Q${-fw / 2 - 7} ${ey + 3} ${-fw / 2 - 5} ${ey + 12} Q${-fw / 2 - 3} ${ey + 16} ${-fw / 2 + 1} ${ey + 14} Z M${fw / 2 - 1} ${ey + 1} Q${fw / 2 + 7} ${ey + 3} ${fw / 2 + 5} ${ey + 12} Q${fw / 2 + 3} ${ey + 16} ${fw / 2 - 1} ${ey + 14} Z`));
+    add('skin', P(face));
+    add('skinDark', P(face), { clip: [fw * 0.22, top - 10, fw, fh + 20], soft: true });
+    // occhi, sopracciglia, naso, bocca
+    const ex = fw * 0.21;
+    if (C.eyes === 'slit') add('pale', P(`M${-ex - 8} ${ey} Q${-ex} ${ey - 5} ${-ex + 7} ${ey + 1} Q${-ex} ${ey + 6} ${-ex - 8} ${ey + 3} Z M${ex - 7} ${ey + 1} Q${ex} ${ey - 5} ${ex + 8} ${ey} Q${ex + 8} ${ey + 4} ${ex} ${ey + 6} Q${ex - 5} ${ey + 5} ${ex - 7} ${ey + 1} Z`));
+    const eyePath = blink ? `M${-ex - 5} ${ey} h10 v1.2 h-10 Z M${ex - 5} ${ey} h10 v1.2 h-10 Z` : {
+      slit: `M${-ex - 5} ${ey} Q${-ex} ${ey - 3} ${-ex + 5} ${ey} Q${-ex} ${ey + 1.5} ${-ex - 5} ${ey} Z M${ex - 5} ${ey} Q${ex} ${ey - 3} ${ex + 5} ${ey} Q${ex} ${ey + 1.5} ${ex - 5} ${ey} Z`,
+      droopy: `M${-ex - 4} ${ey - 1} Q${-ex} ${ey - 4} ${-ex + 4} ${ey + 1} Q${-ex} ${ey + 3} ${-ex - 4} ${ey - 1} Z M${ex - 4} ${ey + 1} Q${ex} ${ey - 4} ${ex + 4} ${ey - 1} Q${ex} ${ey + 3} ${ex - 4} ${ey + 1} Z`,
+      stern: `M${-ex - 5} ${ey - 1} L${-ex + 5} ${ey + 1} L${-ex + 4} ${ey + 2.5} L${-ex - 5} ${ey + 1} Z M${ex - 5} ${ey + 1} L${ex + 5} ${ey - 1} L${ex + 5} ${ey + 1} L${ex - 4} ${ey + 2.5} Z`,
+      happy: `M${-ex - 5} ${ey + 1} Q${-ex} ${ey - 5} ${-ex + 5} ${ey + 1} L${-ex + 4} ${ey + 2} Q${-ex} ${ey - 2} ${-ex - 4} ${ey + 2} Z M${ex - 5} ${ey + 1} Q${ex} ${ey - 5} ${ex + 5} ${ey + 1} L${ex + 4} ${ey + 2} Q${ex} ${ey - 2} ${ex - 4} ${ey + 2} Z`
+    }[C.eyes];
+    add('dark', P(eyePath));
+    if (C.eyes === 'droopy') add('skinDark', P(`M${-ex - 5} ${ey + 3} Q${-ex} ${ey + 7} ${-ex + 5} ${ey + 3} Q${-ex} ${ey + 5} ${-ex - 5} ${ey + 3} Z M${ex - 5} ${ey + 3} Q${ex} ${ey + 7} ${ex + 5} ${ey + 3} Q${ex} ${ey + 5} ${ex - 5} ${ey + 3} Z`));
+    const browRole = C.brows === 'heavy' ? 'dark' : 'hairDark';
+    add(browRole, P({
+      light: `M${-ex - 9} ${ey - 7} L${-ex + 6} ${ey - 10} L${-ex + 6} ${ey - 7} L${-ex - 8} ${ey - 4} Z M${ex - 6} ${ey - 10} L${ex + 9} ${ey - 7} L${ex + 8} ${ey - 4} L${ex - 6} ${ey - 7} Z`,
+      bushy: `M${-ex - 11} ${ey - 5} Q${-ex - 6} ${ey - 16} ${-ex + 7} ${ey - 9} Q${-ex} ${ey - 7} ${-ex - 11} ${ey - 5} Z M${ex + 11} ${ey - 5} Q${ex + 6} ${ey - 16} ${ex - 7} ${ey - 9} Q${ex} ${ey - 7} ${ex + 11} ${ey - 5} Z`,
+      heavy: `M${-ex - 8} ${ey - 8} L${-ex + 7} ${ey - 4} L${-ex + 6} ${ey - 1} L${-ex - 8} ${ey - 5} Z M${ex - 7} ${ey - 4} L${ex + 8} ${ey - 8} L${ex + 8} ${ey - 5} L${ex - 6} ${ey - 1} Z`,
+      arched: `M${-ex - 8} ${ey - 5} Q${-ex} ${ey - 13} ${-ex + 7} ${ey - 6} L${-ex + 6} ${ey - 4} Q${-ex} ${ey - 10} ${-ex - 7} ${ey - 3} Z M${ex + 8} ${ey - 5} Q${ex} ${ey - 13} ${ex - 7} ${ey - 6} L${ex - 6} ${ey - 4} Q${ex} ${ey - 10} ${ex + 7} ${ey - 3} Z`
+    }[C.brows]));
+    add('skinDark', P({
+      short: `M1 ${ey} L6 ${ey + 15} L-1 ${ey + 17} Z`,
+      bulb: `M-2 ${ey} L2 ${ey} L5 ${ey + 12} Q7 ${ey + 18} 0 ${ey + 19} Q-7 ${ey + 18} -5 ${ey + 12} Z`,
+      aquiline: `M-1 ${ey - 2} Q8 ${ey + 8} 7 ${ey + 18} Q3 ${ey + 22} -3 ${ey + 18} L2 ${ey + 14} Z`,
+      long: `M0 ${ey} L6 ${ey + 20} Q2 ${ey + 23} -3 ${ey + 20} Z`
+    }[C.nose]));
+    const my = ey + (C.nose === 'long' ? 30 : 24), mo = 2 + mouthOpen * 4;
+    if (C.mouth === 'o') add('mouth', mouthOpen > 0.1 ? ellipse(0, my, 4.5, mo / 2 + 1) : P(`M-6 ${my} Q0 ${my - 3} 6 ${my} L6 ${my + 1.5} Q0 ${my - 1} -6 ${my + 1.5} Z`));
+    if (C.mouth === 'frown') add('mouth', mouthOpen > 0.1 ? ellipse(0, my + 1, 5, mo / 2 + 0.5) : P(`M-7 ${my + 3} Q0 ${my - 2} 7 ${my + 3} L7 ${my + 4.5} Q0 ${my} -7 ${my + 4.5} Z`));
+    if (C.mouth === 'grin') {
+      const h = 5 + mouthOpen * 4;
+      add('mouth', P(`M-12 ${my - 2} Q0 ${my + h + 4} 12 ${my - 2} Q0 ${my + 2} -12 ${my - 2} Z`));
+      add('teeth', P(`M-10 ${my - 1} Q0 ${my + 3} 10 ${my - 1} L9 ${my + 2} Q0 ${my + 5} -9 ${my + 2} Z`));
+    }
+    if (C.mouth === 'mustache') {
+      add('mouth', mouthOpen > 0.1 ? ellipse(0, my + 5, 4, mo / 2) : null);
+      add('hair', P(`M-14 ${my + 2} Q-10 ${my - 7} 0 ${my - 5} Q10 ${my - 7} 14 ${my + 2} Q8 ${my + 1} 0 ${my + 1} Q-8 ${my + 1} -14 ${my + 2} Z`));
+    }
+    // capelli o copricapo
+    const hw = fw / 2;
+    if (C.hair === 'swoop') {
+      add('hair', P(`M${hw} ${top + 26} C${hw + 7} ${top + 12} ${hw + 6} ${top - 6} ${hw - 10} ${top - 14} C${hw - 26} ${top - 21} ${-hw - 3} ${top - 16} ${-hw - 11} ${top - 2} C${-hw - 16} ${top + 6} ${-hw - 14} ${top + 14} ${-hw - 8} ${top + 18} C${-hw - 8} ${top + 10} ${-hw - 1} ${top + 6} ${-hw + 9} ${top + 7} C${-hw + 21} ${top + 7} ${hw - 11} ${top + 9} ${hw - 4} ${top + 16} L${hw} ${top + 26} Z M${hw} ${top + 26} L${hw + 3} ${top + 38} L${hw - 1} ${top + 37} Z`));
+      add('hairDark', P(`M${-hw - 8} ${top + 18} C${-hw - 8} ${top + 10} ${-hw - 1} ${top + 6} ${-hw + 9} ${top + 7} C${-hw + 21} ${top + 7} ${hw - 11} ${top + 9} ${hw - 4} ${top + 16} L${hw} ${top + 26} C${hw + 2} ${top + 14} ${hw - 6} ${top + 2} ${-hw + 25} ${top} C${-hw + 9} ${top - 1} ${-hw - 5} ${top + 4} ${-hw - 8} ${top + 18} Z`), { soft: true });
+    } else if (C.hair === 'wild') {
+      // nuvola spettinata: ciuffi tondi di misura diversa, più gonfi ai lati, fronte stempiata
+      const r = seeded(11), n = 11, pts = [];
+      for (let a = 0; a <= n; a++) {
+        const t = Math.PI * (0.9 + (a / n) * 1.2);
+        const side = Math.abs(Math.cos(t));                       // 1 ai lati, 0 in cima
+        const rx = hw + 10 + side * 16, ry = fh * 0.5 + 8 - side * 4;
+        pts.push([Math.cos(t) * rx, top + fh * 0.42 + Math.sin(t) * ry]);
+      }
+      let d = `M${pts[0][0].toFixed(1)} ${pts[0][1].toFixed(1)}`;
+      for (let a = 1; a < pts.length; a++) {
+        const [x0, y0] = pts[a - 1], [x1, y1] = pts[a], mx = (x0 + x1) / 2, my = (y0 + y1) / 2;
+        const ox = mx, oy = my - (top + fh * 0.42), l = Math.hypot(ox, oy) || 1, bump = 7 + r() * 11;
+        d += ` Q${(mx + ox / l * bump).toFixed(1)} ${(my + oy / l * bump).toFixed(1)} ${x1.toFixed(1)} ${y1.toFixed(1)}`;
+      }
+      d += ` L${hw - 1} ${top + fh * 0.46} C${hw - 4} ${top + 10} ${hw - 14} ${top + 12} ${hw - 20} ${top + 14} Q0 ${top + 2} ${-hw + 18} ${top + 13} C${-hw + 10} ${top + 12} ${-hw + 3} ${top + 12} ${-hw + 1} ${top + fh * 0.46} Z`;
+      add('hair', P(d));
+      // ciocche in ombra che scappano ai lati
+      add('hairDark', P(`M${-hw - 4} ${top + fh * 0.6} Q${-hw - 22} ${top + fh * 0.52} ${-hw - 20} ${top + fh * 0.3} Q${-hw - 12} ${top + fh * 0.46} ${-hw - 2} ${top + fh * 0.44} Z M${hw + 4} ${top + fh * 0.62} Q${hw + 24} ${top + fh * 0.58} ${hw + 22} ${top + fh * 0.34} Q${hw + 14} ${top + fh * 0.5} ${hw + 2} ${top + fh * 0.46} Z M-6 ${top - 6} Q0 ${top - 16} 10 ${top - 12} Q2 ${top - 8} -2 ${top - 2} Z`));
+    } else if (C.hair === 'hood') {
+      add('hat', P(`M${-hw - 7} ${chin - 4} C${-hw - 12} ${top + fh * 0.4} ${-hw - 10} ${top - 12} 4 ${top - 16} C${hw + 16} ${top - 18} ${hw + 12} ${top + fh * 0.4} ${hw + 7} ${chin - 4} L${hw - 2} ${chin - 12} C${hw + 1} ${top + fh * 0.5} ${hw} ${top + 8} 0 ${top + 6} C${-hw} ${top + 8} ${-hw - 1} ${top + fh * 0.5} ${-hw + 2} ${chin - 12} Z M${hw + 6} ${top - 10} Q${hw + 22} ${top - 8} ${hw + 24} ${top + 12} Q${hw + 14} ${top} ${hw + 4} ${top} Z`));
+      add('hatDark', P(`M${hw + 7} ${chin - 4} L${hw - 2} ${chin - 12} C${hw + 1} ${top + fh * 0.5} ${hw} ${top + 8} ${hw - 8} ${top + 7} C${hw + 8} ${top + 6} ${hw + 12} ${top + fh * 0.4} ${hw + 7} ${chin - 4} Z`), { soft: true });
+    } else if (C.hair === 'neat') {
+      add('hair', P(`M${-hw - 2} ${top + 22} C${-hw - 4} ${top + 2} ${-hw + 8} ${top - 8} 4 ${top - 8} C${hw + 2} ${top - 8} ${hw + 4} ${top + 6} ${hw + 1} ${top + 22} L${hw - 3} ${top + 14} C${hw - 6} ${top + 6} ${-6} ${top + 5} ${-8} ${top + 4} L${-hw + 3} ${top + 14} Z`));
+      add('hairDark', P(`M-8 ${top + 4} L-4 ${top - 7} L-2 ${top - 7} L-5 ${top + 4} Z`));
+    }
+    // accessori
+    if (C.extras.includes('laurel')) {
+      for (let a = 0; a < 7; a++) {
+        const t = Math.PI * (1.08 + a * 0.14), x = Math.cos(t) * (hw + 4), y = top + 14 + Math.sin(t) * 12;
+        add(a % 2 ? 'accent' : 'accentDark', P(`M${x - 6} ${y} Q${x} ${y - 7} ${x + 6} ${y} Q${x} ${y + 5} ${x - 6} ${y} Z`));
+      }
+    }
+    if (C.extras.includes('headphones')) {
+      add('accentDark', P(`M${-hw - 8} ${ey + 8} C${-hw - 12} ${top - 30} ${hw + 12} ${top - 30} ${hw + 8} ${ey + 8} L${hw + 3} ${ey + 8} C${hw + 6} ${top - 23} ${-hw - 6} ${top - 23} ${-hw - 3} ${ey + 8} Z`));
+      add('accent', P(`M${-hw - 14} ${ey - 4} h12 v22 h-12 Z M${hw + 2} ${ey - 4} h12 v22 h-12 Z`));
+    }
+    if (C.extras.includes('glasses')) {
+      add('frame', P(`M${-ex - 10} ${ey - 7} h19 v14 h-19 Z M${-ex - 8} ${ey - 5} v10 h15 v-10 Z M${ex - 9} ${ey - 7} h19 v14 h-19 Z M${ex - 7} ${ey - 5} v10 h15 v-10 Z M-4 ${ey - 3} h8 v2 h-8 Z`), { rule: 'evenodd' });
+    }
+    // braccio che gesticola, davanti
+    add('suit', limb([S - 12, -166], elbow, wrist, 14, 12, 9));
+    add('shirt', ellipse(wrist[0], wrist[1], 7, 4.5));
+    add('skin', hand(handKind, wrist[0], wrist[1]));
+    return L;
+  }
+
+  /* =====================================================================
+     CHIAVI DI STILE: ognuna sa solo trattare ruoli e colori, non chi disegna
+     ===================================================================== */
+  const hexRgb = h => [1, 3, 5].map(i => parseInt(h.slice(i, i + 2), 16));
+  const lum = h => { const [r, g, b] = hexRgb(h); return (0.299 * r + 0.587 * g + 0.114 * b) / 255; };
+  function hsl (h) { const [r, g, b] = hexRgb(h).map(v => v / 255), mx = Math.max(r, g, b), mn = Math.min(r, g, b), l = (mx + mn) / 2, d = mx - mn;
+    if (!d) return [0, 0, l]; const s = d / (1 - Math.abs(2 * l - 1)); let hh = mx === r ? ((g - b) / d) % 6 : mx === g ? (b - r) / d + 2 : (r - g) / d + 4; hh *= 60; if (hh < 0) hh += 360; return [hh, s, l]; }
+  function paint (g, L, colorOf) {
+    L.forEach(l => {
+      const col = colorOf(l); if (!col) return;
+      g.fillStyle = col;
+      if (l.text) { g.font = `700 ${l.size}px "Barlow Condensed","Arial Narrow",sans-serif`; g.textAlign = 'center'; g.textBaseline = 'middle'; g.fillText(l.text, l.x, l.y); return; }
+      if (l.clip) { g.save(); g.beginPath(); g.rect(...l.clip); g.clip(); g.fill(l.p); g.restore(); return; }
+      g.fill(l.p, l.rule || 'nonzero');
+    });
+  }
+  const place = (g, W, H) => { const k = H / 310; g.translate(W / 2, H * 0.93); g.scale(k, k); };
+  const bufs = new Map();
+  const buf = (key, W, H) => { if (!bufs.has(key)) { const c = document.createElement('canvas'); c.width = W; c.height = H; bufs.set(key, c); } return bufs.get(key); };
+
+  // fondo comune: palco nero con occhio di bue, o carta, o muro
+  function spotBg (g, W, H, tint) {
+    g.fillStyle = '#060607'; g.fillRect(0, 0, W, H);
+    const gr = g.createRadialGradient(W / 2, H * 0.52, 0, W / 2, H * 0.52, W * 0.6);
+    gr.addColorStop(0, tint); gr.addColorStop(1, 'rgba(0,0,0,0)'); g.fillStyle = gr; g.fillRect(0, 0, W, H);
+  }
+  // posterizza per luminosità: la stessa regola per tutti i personaggi
+  const poster = (c, tones, cuts) => { const v = lum(c); for (let i = 0; i < cuts.length; i++) if (v < cuts[i]) return tones[i]; return tones[tones.length - 1]; };
+
+  const STYLES = [
+    { id: 'manifesto', name: 'Manifesto', rules: [
+        'I colori della scheda di ogni personaggio, piatti; ombre in un tono più scuro, tagli netti.',
+        'Niente contorni: le forme si toccano e basta.',
+        'Fondo nero con occhio di bue caldo.'],
+      draw (g, W, H, C, L) {
+        spotBg(g, W, H, 'rgba(239,227,198,0.16)');
+        g.save(); place(g, W, H); paint(g, L, l => l.text ? C.palette.print || '#efe3c6' : C.palette[l.role]); g.restore();
+      } },
+    { id: 'tre', name: 'Tre inchiostri', rules: [
+        'Tutti i personaggi con gli stessi tre colori: blu notte per le parti scure, crema per le chiare, rosso per le medie.',
+        'La firma è sempre rossa (le sue ombre blu notte): il cast diventa una serie coordinata.',
+        'Fondo crema con i raggi rossi dietro, come un manifesto di propaganda.'],
+      draw (g, W, H, C, L) {
+        const NAVY = '#16213a', RED = '#d7263d', CREAM = '#efe3c6';
+        g.fillStyle = CREAM; g.fillRect(0, 0, W, H);
+        g.save(); g.translate(W / 2, H * 0.36); g.fillStyle = 'rgba(215,38,61,0.16)';
+        for (let i = 0; i < 18; i++) { g.rotate(Math.PI / 9); g.beginPath(); g.moveTo(0, 0); g.lineTo(-W * 0.08, -W); g.lineTo(W * 0.08, -W); g.closePath(); g.fill(); }
+        g.restore();
+        g.save(); place(g, W, H);
+        paint(g, L, l => {
+          if (l.text) return CREAM;
+          if (C.firmaRoles.includes(l.role)) return l.role.endsWith('Dark') ? NAVY : RED;
+          const c = C.palette[l.role]; if (!c) return null;
+          if (l.role === 'skin' || l.role === 'pale' || l.role === 'teeth') return CREAM;
+          return poster(c, [NAVY, RED, CREAM], [0.3, 0.62]);
+        });
+        g.restore();
+      } },
+    { id: 'bn', name: 'Bianco e nero + rosso', rules: [
+        'Soglia secca: ogni parte o è nera o è bianca, secondo quanto è scura.',
+        'Solo la firma resta a colori, in un unico rosso.',
+        'Fondo grigio cemento, così si leggono sia il nero sia il bianco.'],
+      draw (g, W, H, C, L) {
+        const INK = '#111111', PAPER = '#f1ede4', RED = '#e0262e';
+        g.fillStyle = '#a9a59c'; g.fillRect(0, 0, W, H);
+        g.fillStyle = 'rgba(0,0,0,0.06)'; for (let i = 0; i < 40; i++) g.fillRect((i * 97) % W, (i * 61) % H, 2 + (i % 3), 2);
+        g.save(); place(g, W, H);
+        paint(g, L, l => {
+          if (l.text) return PAPER;
+          if (C.firmaRoles.includes(l.role)) return l.role.endsWith('Dark') ? INK : RED;
+          const c = C.palette[l.role]; if (!c) return null;
+          if (l.role === 'skin' || l.role === 'pale' || l.role === 'teeth' || l.role === 'shirt') return PAPER;
+          if (l.soft) return ['skin', 'skinDark', 'hairDark'].includes(l.role) ? null : INK;
+          return poster(c, [INK, PAPER], [0.55]);
+        });
+        g.restore();
+      } },
+    { id: 'tagliato', name: 'Stencil tagliato', rules: [
+        'I colori della scheda, stesi a spray.',
+        'Tra una forma e l\'altra restano i "ponti": le fessure dove la mascherina di cartone non è tagliata.',
+        'Spray che sbava ai bordi, muro di cemento con le macchie.'],
+      draw (g, W, H, C, L) {
+        g.fillStyle = '#6d6b66'; g.fillRect(0, 0, W, H);
+        for (let i = 0; i < 26; i++) { g.fillStyle = `rgba(${i % 2 ? 0 : 255},${i % 2 ? 0 : 255},${i % 2 ? 0 : 255},${0.03 + (i % 4) * 0.012})`; g.beginPath(); g.arc((i * 131) % W, (i * 71) % H, 20 + (i * 29) % 70, 0, Math.PI * 2); g.fill(); }
+        const b = buf('st' + W, W, H), bg = b.getContext('2d');
+        bg.setTransform(1, 0, 0, 1, 0, 0); bg.clearRect(0, 0, W, H);
+        bg.save(); place(bg, W, H);
+        paint(bg, L, l => l.text ? '#f1ede4' : C.palette[l.role] || null);
+        // i ponti: fessure sottili solo attorno alle isole piccole (ciuffo, cravatta, occhi, accessori)
+        bg.globalCompositeOperation = 'destination-out'; bg.lineWidth = 1.4; bg.strokeStyle = '#000';
+        const ISLANDS = ['hair', 'hat', 'tie', 'pale', 'teeth', 'frame', 'accent', 'mouth'];
+        L.forEach(l => { if (l.p && !l.soft && ISLANDS.includes(l.role)) bg.stroke(l.p); });
+        bg.restore();
+        g.save(); if ('filter' in g) g.filter = 'blur(4px)'; g.globalAlpha = 0.35; g.drawImage(b, 0, 0); g.restore();
+        g.drawImage(b, 0, 0);
+      } }
+  ];
+
+  /* ---------- pagina: una riga per chiave, un riquadro per personaggio ---------- */
+  const rows = document.getElementById('rows');
+  const cells = [];
+  STYLES.forEach((st, si) => {
+    const sec = document.createElement('section');
+    sec.innerHTML = `<h2><span>${'ABCD'[si]}</span>${st.name}</h2><ul class="rules">${st.rules.map(r => `<li>${r}</li>`).join('')}</ul><div class="row"></div>`;
+    const row = sec.querySelector('.row');
+    CHARS.forEach((C, ci) => {
+      const fig = document.createElement('figure');
+      fig.innerHTML = `<canvas width="360" height="480"></canvas><figcaption><b>${C.name}</b> · firma: ${C.firma}</figcaption>`;
+      row.appendChild(fig);
+      cells.push({ c: fig.querySelector('canvas'), st, C, phase: ci * 0.9 });
+    });
+    rows.appendChild(sec);
+  });
+  let lastSlow = 0;
+  function frame (now) {
+    const t = reduced ? 0.4 : now / 1000, slow = now - lastSlow > 90;
+    if (slow) lastSlow = now;
+    cells.forEach(({ c, st, C, phase }) => {
+      if (st.id === 'fotocopia' && !slow && !reduced) return;   // il retino costa: si ridisegna più di rado
+      const tt = t + phase;
+      const L = build(C, tt / 1.6, Math.abs(Math.sin(tt * 11) * Math.sin(tt * 4.3)), (tt % 3.7) < 0.12);
+      const g = c.getContext('2d'); g.setTransform(1, 0, 0, 1, 0, 0); g.globalCompositeOperation = 'source-over'; g.globalAlpha = 1;
+      st.draw(g, c.width, c.height, C, L);
+    });
+    if (!reduced) requestAnimationFrame(frame);
+  }
+  requestAnimationFrame(frame);
+})();
+</script>
