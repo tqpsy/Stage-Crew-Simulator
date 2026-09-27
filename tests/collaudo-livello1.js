@@ -23,6 +23,8 @@ const N = parseInt(process.argv[2] || '40', 10), SEED0 = parseInt(process.argv[3
   await p.evaluate(() => startNewGame('Collaudo', serviceOffers([])[0]));
   await p.waitForFunction(() => !menuOpen);
   await p.evaluate(() => closeSchedule());
+  // qui si provocano errori apposta: il capo non deve fermarli (ha il suo test, capo.js)
+  await p.evaluate(() => { settings().bossTips = false; });
   const res = await p.evaluate(async ({ N, SEED0 }) => {
     const sleep = ms => new Promise(r => setTimeout(r, ms));
     const out = { valid: 0, validFail: [], mut: {}, mutBad: [], wireFail: [] };
@@ -37,10 +39,11 @@ const N = parseInt(process.argv[2] || '40', 10), SEED0 = parseInt(process.argv[3
       const P = (ty, gx, gy) => { const w = gridToScreen(gx + .5, gy + .5); S.placeComponentAt(ty, w.x, w.y); };
       const subSpots = shuffle([[1, 8], [7, 8]]);
       P('sub', ...subSpots[0]); P('sub', ...subSpots[1]); P('top', 1, 8); P('top', 7, 8);
-      // mixer e consolle in quinta o in regia di sala (FOH), a caso
-      if (rng() < 0.5) P('mixer', 7, 5); else P('mixer', 6, 13);
-      P('ampli', 6, 4);
-      if (rng() < 0.5) P('controller', 7, 7); else P('controller', 7, 13);
+      // tavolo regia in Off Stage; sopra la regia, sotto il rack del finale,
+      // in ordine a caso
+      P('tavolo', 7, 5);
+      const onTable = ty => { const v = S.compVisuals[placedOfType('tavolo')[0].id].container; S.placeComponentAt(ty, v.x, v.y); };
+      shuffle(['mixer', 'ampli', 'controller', 'pc', 'scheda']).forEach(onTable);
       // stativi: un frontale per lato nel Pit, un taglio per lato del palco,
       // in posizioni a caso; poi un PAR montato su ciascuno (in ordine a caso)
       const standAt = [pick([[0, 8], [0, 9], [2, 9], [3, 9]]), pick([[5, 9], [6, 9], [8, 9], [9, 9]]),
@@ -51,11 +54,12 @@ const N = parseInt(process.argv[2] || '40', 10), SEED0 = parseInt(process.argv[3
       // asta microfonica sul palco con il microfono sulla giraffa
       P('asta', 2 + Math.floor(rng() * 4), 4 + Math.floor(rng() * 3));
       S.placeComponentAt('mic', S.compVisuals[placedOfType('asta')[0].id].container.x, S.compVisuals[placedOfType('asta')[0].id].container.y);
-      P('quadro', 4, 2); P('ciabatta_cee', 6, 2); P('ciabatta', 3, 13); P('pc', 4, 13); P('scheda', 5, 13);
+      P('quadro', 4, 2); P('ciabatta_cee', 6, 2); P('ciabatta', 3, 13);
       if (rng() < 0.5) {
         const ty = pick(['par', 'stativo', 'mixer', 'pc', 'scheda', 'ampli', 'controller']);
         const c = pick(placedOfType(ty));
         if (ty === 'par') { const st = mountBase(c); S.deleteComponent(c.id); mountPar(st); }
+        else if (MOUNTS[ty]) { S.deleteComponent(c.id); onTable(ty); }
         // lo stativo ha già coordinate al centro (1.5, 5.5, …): va rimesso
         // nello stesso punto, non mezza cella più in là
         else { const w = ty === 'stativo' ? gridToScreen(c.gx, c.gy) : gridToScreen(c.gx + .5, c.gy + .5); S.deleteComponent(c.id); S.placeComponentAt(ty, w.x, w.y); if (ty === 'stativo') mountPar(placedOfType('stativo').find(x => !x.hasPar)); }

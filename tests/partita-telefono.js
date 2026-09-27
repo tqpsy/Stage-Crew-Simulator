@@ -1,6 +1,7 @@
 /* Partita completa su telefono, solo con tocchi veri (come un giocatore):
-   posa dai pulsanti, cavi dai bauli, prese dai pannelli, quadro, accensioni
-   e Test impianto, col percorso più corto. Conta i tocchi e segnala ogni
+   i tre giri del montaggio (corrente, audio, luci) con la loro prova, posa
+   dai pulsanti, cavi dai bauli, prese dai pannelli, quadro, accensioni e
+   Test impianto, col percorso più corto. Conta i tocchi e segnala ogni
    tocco che non apre il dispositivo giusto o che cade su qualcosa che
    copre la scena.
 
@@ -72,35 +73,46 @@ const OUT = process.env.SHOTS || null;
     if (await p.evaluate(() => el('#rear-modal').classList.contains('show'))) { problems.push('pannello rimasto aperto dopo ' + a + '->' + bb); await p.evaluate(() => closeRearPanel()); }
     if (n2 !== n + 1) { problems.push('cavo ' + cable + ' ' + a + '.' + ap + ' -> ' + bb + '.' + bp + ' NON collegato: ' + await toast()); await shot('fail-' + a + '-' + bb); }
   };
-  // ---------- posa
+  // prova del giro in corso (il pulsante in basso) e controllo del giro dopo
+  const prova = async (giro) => {
+    await tapSel('#run-btn');
+    const now = await p.evaluate(() => gameState.giro);
+    log.push('prova giro ' + giro + ': ' + await toast());
+    if (now !== giro + 1) { problems.push('prova del giro ' + giro + ' non superata: ' + await toast()); await p.evaluate(g => { gameState.giro = g; updateGiroUI(); }, giro + 1); }
+  };
+  const brk = async keys => { await openDev('quadro_1'); for (const k of keys) await tapSel('#rear-svg .rp-brk[data-brk="' + k + '"]'); await tapSel('#rear-close'); };
+  const switchOn = async ids => { for (const id of ids) { await openDev(id); await tapSel('#rear-svg .rp-switch'); await tapSel('#rear-close'); await p.waitForTimeout(750); } };
+  // all'inizio si possono aprire solo Corrente e Cavi
+  if (!(await p.evaluate(() => document.querySelector('.tab-btn[data-tab="audio"]').classList.contains('locked')))) problems.push('scheda Audio aperta prima del giro audio');
+  // ---------- giro 1: corrente
   await place('corrente', 'quadro', [[4, 2]]);
+  await wire('cee_tri', 'allaccio', 'out', 'quadro_1', 'in');
+  await brk(['main', 'rcd']);
+  await prova(0);
+  // ---------- giro 2: audio (posa, cavi a fase L1 spenta, poi accensione)
+  const t0 = taps;
   await place('audio', 'sub', [[1, 8], [7, 8]]);
   await place('audio', 'top', []); // la testa si tocca sopra il sub
   for (const sid of ['sub_1', 'sub_2']) { const before = await p.evaluate(() => gameState.stock.top); await tapAt(await devPt(sid)); if (await p.evaluate(() => gameState.stock.top) !== before - 1) problems.push('testa su ' + sid + ' non montata: ' + await toast()); }
-  await place('audio', 'mixer', [[7, 5]]);
+  // tavolo regia in Off Stage; mixer, finale (nel rack sotto), PC e scheda
+  // si posano toccando il tavolo
+  await place('strutture', 'tavolo', [[7, 5]]);
+  const onTable = async (tabName, type) => {
+    await tab(tabName); await tapSel('.piece[data-type="' + type + '"]');
+    const before = await p.evaluate(t => gameState.stock[t], type);
+    await tapAt(await devPt('tavolo_1'));
+    if (await p.evaluate(t => gameState.stock[t], type) !== before - 1) problems.push(type + ' sul tavolo non posato: ' + await toast());
+  };
+  await onTable('audio', 'mixer');
   // asta microfonica sul palco, poi il microfono si tocca sopra l'asta
   await place('audio', 'asta', [[3, 6]]);
   await place('audio', 'mic', []);
   { const before = await p.evaluate(() => gameState.stock.mic); await tapAt(await devPt('asta_1')); if (await p.evaluate(() => gameState.stock.mic) !== before - 1) problems.push('microfono su asta_1 non montato: ' + await toast()); }
-  await place('regia', 'ampli', [[6, 4]]);
-  await place('regia', 'pc', [[4, 13]]);
-  await place('regia', 'scheda', [[5, 13]]);
-  // stativi: frontali nel Pit (uno per lato), tagli ai lati del palco;
-  // poi il PAR si tocca sopra ogni stativo
-  await place('luci', 'stativo', [[2, 9], [6, 9], [1, 5], [6, 6]]);
-  await place('luci', 'par', []);
-  for (const sid of ['stativo_1', 'stativo_2', 'stativo_3', 'stativo_4']) { const before = await p.evaluate(() => gameState.stock.par); await tapAt(await devPt(sid)); if (await p.evaluate(() => gameState.stock.par) !== before - 1) problems.push('PAR su ' + sid + ' non montato: ' + await toast()); }
-  await place('luci', 'controller', [[7, 7]]);
-  log.push('posa: ' + taps + ' tocchi, stock=' + JSON.stringify(await p.evaluate(() => Object.fromEntries(Object.entries(gameState.stock).filter(([k, v]) => v)))));
-  await shot('posa');
-  const t0 = taps;
-  // ---------- cavi (minimo: niente ciabatte, PC dal Quadro con l'adattatore)
-  await wire('cee_tri', 'allaccio', 'out', 'quadro_1', 'in');
-  for (const [d, pp] of [['mixer_1', 'power'], ['controller_1', 'power'], ['ampli_1', 'power'], ['sub_1', 'power'], ['sub_2', 'power'], ['par_1', 'power_in']]) await wire('cee_powercon', 'quadro_1', 'out_1', d, pp);
+  await onTable('regia', 'ampli');
+  await onTable('regia', 'pc');
+  await onTable('regia', 'scheda');
+  for (const [d, pp] of [['mixer_1', 'power'], ['ampli_1', 'power'], ['sub_1', 'power'], ['sub_2', 'power']]) await wire('cee_powercon', 'quadro_1', 'out_1', d, pp);
   await wire('cee_schuko', 'quadro_1', 'out_1', 'pc_1', 'power');
-  for (const [a, c] of [['par_1', 'par_2'], ['par_2', 'par_3'], ['par_3', 'par_4']]) await wire('powercon', a, 'power_thru', c, 'power_in');
-  await wire('dmx', 'controller_1', 'dmx_1', 'par_1', 'dmx_in');
-  for (const [a, c] of [['par_1', 'par_2'], ['par_2', 'par_3'], ['par_3', 'par_4']]) await wire('dmx', a, 'dmx_thru', c, 'dmx_in');
   await wire(null, 'scheda_1', 'usb', 'pc_1', 'usb');
   await wire('jack', 'scheda_1', 'out_L', 'mixer_1', 'in_5'); await wire('jack', 'scheda_1', 'out_R', 'mixer_1', 'in_6');
   await wire('xlr', 'mixer_1', 'main_L', 'ampli_1', 'in_L'); await wire('xlr', 'mixer_1', 'main_R', 'ampli_1', 'in_R');
@@ -108,23 +120,35 @@ const OUT = process.env.SHOTS || null;
   await wire('speakon', 'sub_1', 'spk_thru', 'top_1', 'spk_in'); await wire('speakon', 'sub_2', 'spk_thru', 'top_2', 'spk_in');
   await wire('xlr', 'mic_1', 'out', 'mixer_1', 'in_1');
   if (await p.evaluate(() => micChannel()) !== 1) problems.push('microfono non risulta sul CH 1');
-  log.push('cavi: ' + (taps - t0) + ' tocchi, contatore ' + await p.evaluate(() => el('#conn-val').textContent) + ', cavi=' + await p.evaluate(() => gameState.edges.length));
-  await shot('cavi');
-  // ---------- accensione
+  await brk(['L1']);
+  await switchOn(['mixer_1', 'pc_1', 'ampli_1', 'sub_1', 'sub_2']);
+  await prova(1);
+  log.push('giro audio: ' + (taps - t0) + ' tocchi');
+  await shot('audio');
+  // ---------- giro 3: luci, su una fase libera (L2) armata alla fine
   const t1 = taps;
-  await openDev('quadro_1');
-  for (const k of ['main', 'rcd', 'L1']) await tapSel('#rear-svg .rp-brk[data-brk="' + k + '"]');
-  await tapSel('#rear-close');
-  for (const id of ['mixer_1', 'controller_1', 'pc_1', 'ampli_1', 'sub_1', 'sub_2']) {
-    await openDev(id); await tapSel('#rear-svg .rp-switch'); await tapSel('#rear-close'); await p.waitForTimeout(750);
-  }
-  log.push('accensione: ' + (taps - t1) + ' tocchi; scatti=' + await p.evaluate(() => (gameState.trips || 0) + '/' + (gameState.rcdTrips || 0)) + ' pops=' + await p.evaluate(() => (gameState.procErrors || []).length));
+  // stativi: frontali nel Pit (uno per lato), tagli ai lati del palco;
+  // poi il PAR si tocca sopra ogni stativo
+  await place('strutture', 'stativo', [[2, 9], [6, 9], [1, 5], [6, 6]]);
+  await place('luci', 'par', []);
+  for (const sid of ['stativo_1', 'stativo_2', 'stativo_3', 'stativo_4']) { const before = await p.evaluate(() => gameState.stock.par); await tapAt(await devPt(sid)); if (await p.evaluate(() => gameState.stock.par) !== before - 1) problems.push('PAR su ' + sid + ' non montato: ' + await toast()); }
+  await onTable('luci', 'controller');
+  for (const [d, pp] of [['controller_1', 'power'], ['par_1', 'power_in']]) await wire('cee_powercon', 'quadro_1', 'out_2', d, pp);
+  for (const [a, c] of [['par_1', 'par_2'], ['par_2', 'par_3'], ['par_3', 'par_4']]) await wire('powercon', a, 'power_thru', c, 'power_in');
+  await wire('dmx', 'controller_1', 'dmx_1', 'par_1', 'dmx_in');
+  for (const [a, c] of [['par_1', 'par_2'], ['par_2', 'par_3'], ['par_3', 'par_4']]) await wire('dmx', a, 'dmx_thru', c, 'dmx_in');
+  await brk(['L2']);
+  await switchOn(['controller_1']);
+  await prova(2);
+  log.push('giro luci: ' + (taps - t1) + ' tocchi; contatore ' + await p.evaluate(() => el('#conn-val').textContent) + ', cavi=' + await p.evaluate(() => gameState.edges.length));
+  log.push('scatti=' + await p.evaluate(() => (gameState.trips || 0) + '/' + (gameState.rcdTrips || 0)) + ' pops=' + await p.evaluate(() => (gameState.procErrors || []).length));
+  await shot('cavi');
   await tapSel('#run-btn');
   log.push('TEST: ' + await toast() + ' | ' + await p.evaluate(() => el('#circuit-text').textContent));
   // il collaudo riuscito entra nei record, per i futuri highscore
   const recs = await p.evaluate(() => (Profile.data.records[LEVEL_ID] || []).map(r => r.player + ' test=' + r.tests));
   log.push('record: ' + recs.join(', '));
-  if (recs.length !== 1 || !/Tecnico Telefono test=1/.test(recs[0])) problems.push('record del collaudo mancante o sbagliato: ' + recs);
+  if (recs.length !== 1 || !/Tecnico Telefono test=4/.test(recs[0])) problems.push('record del collaudo mancante o sbagliato: ' + recs);
   // collaudo riuscito = fase completata: +5 reputazione
   const rep = await p.evaluate(() => reputation());
   log.push('reputazione: ' + rep);

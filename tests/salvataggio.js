@@ -83,7 +83,7 @@ const path = require('path');
   await ev(() => {
     const S = window.__scene;
     const P = (ty, gx, gy) => { const w = gridToScreen(gx + .5, gy + .5); S.placeComponentAt(ty, w.x, w.y); };
-    P('quadro', 4, 2); P('mixer', 7, 5); P('par', 2, 5);
+    P('quadro', 4, 2); P('tavolo', 7, 5); { const v = S.compVisuals.tavolo_1.container; S.placeComponentAt('mixer', v.x, v.y); } P('par', 2, 5);
     const q = placedOfType('quadro')[0].id;
     selectCable('cee_tri'); openRearPanel('allaccio'); onRearPortClick('allaccio', 'out'); openRearPanel(q); onRearPortClick(q, 'in'); if (rearPanelId) closeRearPanel();
     selectCable('cee_powercon'); openRearPanel(q); onRearPortClick(q, 'out_1'); const m = placedOfType('mixer')[0].id; openRearPanel(m); onRearPortClick(m, 'power'); if (rearPanelId) closeRearPanel();
