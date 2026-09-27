@@ -1179,9 +1179,72 @@ function checkLiveCableChange (edge) {
 // ogni manovra entra nella cronologia, così annulla/ripeti restano coerenti
 function saveHistory () { if (window.__scene) window.__scene.pushHistory(); }
 
+/* CAPO SQUADRA TUTOR (solo livello 1) — la prima volta che un'azione sta per
+   causare un errore di procedura, il capo la ferma e spiega perché. Una
+   volta sola per tipo di errore e per tecnico: se il giocatore la rifà, la
+   fa davvero, con le sue conseguenze. Si spegne dalle impostazioni. */
+const TUTOR_LEVELS = new Set([1]);
+const TUTOR_TIPS = {
+  live: 'Fermo! Da una parte c\'è tensione e dall\'altra un apparecchio acceso: attaccare o staccare così fa l\'arco e salta il salvavita. Spegni prima.',
+  pop: 'Aspetta! Il finale è acceso: se accendi o spegni il mixer adesso, il colpo finisce dritto nelle casse. Prima spegni il finale.',
+  ampliFirst: 'Il finale per ultimo! Prima mixer e PC, poi finale e sub: così le casse non prendono colpi.',
+  inrush: 'Piano! Su questa fase è appena partito un apparecchio pesante: se accendi anche questo insieme, il picco fa saltare il magnetotermico. Uno alla volta.',
+  overload: 'Questa fase è già carica: se accendi anche questo, salta il magnetotermico. Spostalo su un\'altra fase del Quadro.'
+};
+function bossName () {
+  const b = Profile.data.serviceInfo && Profile.data.serviceInfo.boss;
+  return b ? b.split(' ')[0] : 'Il capo';
+}
+// true se il capo ha fermato l'azione (la prima volta)
+function tutorWarn (key) {
+  if (!gameActive || !TUTOR_LEVELS.has(LEVEL_ID) || settings().bossTips === false) return false;
+  const seen = Profile.data.tutorSeen = Profile.data.tutorSeen || {};
+  if (seen[key]) return false;
+  seen[key] = true;
+  Profile.save();
+  SFX.button();
+  showToast(bossName() + ': «' + TUTOR_TIPS[key] + '» (Se lo rifai, lo fai davvero.)', 'boss');
+  return true;
+}
+/* cosa succederebbe accendendo o spegnendo un apparecchio: si prova
+   l'azione, si guarda e si rimette tutto com'era */
+function predictToggle (c) {
+  const before = runningSet();
+  c.on = !c.on;
+  const after = runningSet();
+  const steady = livePhaseLoads(false), peak = livePhaseLoads(true);
+  after.forEach(id => {
+    if (before.has(id)) return;
+    const k = INRUSH_FACTOR[gameState.placed[id].type], ph = phaseOf(id);
+    if (k && ph) peak[ph] += COMPONENT_TYPES[gameState.placed[id].type].powerW * (k - 1);
+  });
+  c.on = !c.on;
+  const q = findQuadro(), prot = q ? quadroProt(q) : {};
+  const types = set => [...set].map(id => gameState.placed[id].type);
+  const ampsOn = [...after].some(id => gameState.placed[id].type === 'ampli' && before.has(id));
+  const mixerFlip = Object.values(gameState.placed).some(x => x.type === 'mixer' && before.has(x.id) !== after.has(x.id));
+  const phases = ['L1', 'L2', 'L3'].filter(ph => prot[ph]);
+  return {
+    pop: ampsOn && mixerFlip,
+    ampliFirst: c.type === 'ampli' && after.has(c.id) && !before.has(c.id) && placedOfType('mixer').length > 0 && !types(after).includes('mixer'),
+    overload: phases.some(ph => steady[ph] > PHASE_BUDGET_W),
+    inrush: phases.some(ph => steady[ph] <= PHASE_BUDGET_W && peak[ph] > PHASE_PEAK_W)
+  };
+}
+// un cavo di corrente attaccato (adding) o staccato farebbe l'arco?
+function wouldArc (edge, adding) {
+  if (!POWER_CABLE_IDS.has(edge.signal) || edge.a === 'allaccio') return false;
+  if (adding) gameState.edges.push(edge);
+  const risk = portEnergized(edge.a, edge.aPort) && loadRunningDownstream(edge.b);
+  if (adding) gameState.edges.pop();
+  return !!risk;
+}
+
 function toggleDevicePower (compId) {
   const c = gameState.placed[compId];
   if (!c) return;
+  const risk = predictToggle(c);
+  if (['pop', 'overload', 'inrush', 'ampliFirst'].some(k => risk[k] && tutorWarn(k))) return;
   applyPowerAction(() => { c.on = !c.on; });
   if (c.on) SFX.powerOn(c.type); else SFX.powerOff();
   saveHistory();
@@ -1364,8 +1427,8 @@ function showToast (msg, kind) {
   toastHeld = false; toast.classList.remove('hold');
   toast.textContent = msg;
   // di base è un avviso neutro; 'ok' per i successi, 'bad' solo per i guasti veri
-  toast.classList.remove('ok', 'bad');
-  if (kind === 'ok' || kind === 'bad') toast.classList.add(kind);
+  toast.classList.remove('ok', 'bad', 'boss');
+  if (kind === 'ok' || kind === 'bad' || kind === 'boss') toast.classList.add(kind);
   toast.classList.add('show');
   clearTimeout(toastTimer);
   // i messaggi lunghi restano più a lungo: il tempo di leggerli
@@ -1380,7 +1443,7 @@ function holdToast () {
 function releaseToast () {
   if (!toastHeld) return;
   const toast = el('#toast');
-  showToast(toast.textContent, ['ok', 'bad'].find(k => toast.classList.contains(k)));
+  showToast(toast.textContent, ['ok', 'bad', 'boss'].find(k => toast.classList.contains(k)));
 }
 
 function updateStockUI () {
@@ -1449,7 +1512,7 @@ const SERVICE_NAME_MAX = 28;   // caratteri del nome (inventato) di un service
 const USED_SERVICES_KEEP = 400; // nomi di service già proposti, da non riproporre
 
 function defaultProfile () {
-  return { v: SAVE_VERSION, player: '', service: '', serviceInfo: null, usedServices: [], settings: { volume: 0.8, reducedFx: false, skipShow: false, testMusic: true }, logo: null, level: null, records: {}, reputation: { total: 0, earned: {}, log: [] } };
+  return { v: SAVE_VERSION, player: '', service: '', serviceInfo: null, usedServices: [], settings: { volume: 0.8, reducedFx: false, skipShow: false, testMusic: true, bossTips: true }, tutorSeen: {}, logo: null, level: null, records: {}, reputation: { total: 0, earned: {}, log: [] } };
 }
 const Profile = (() => {
   let data = defaultProfile();
@@ -2115,6 +2178,7 @@ function showMenuPage (page, keep) {
     el('#set-reduced').checked = !!settings().reducedFx;
     el('#set-skipshow').checked = !!settings().skipShow;
     el('#set-testmusic').checked = settings().testMusic !== false;
+    el('#set-bosstips').checked = settings().bossTips !== false;
     el('#set-player').value = Profile.data.player;
   }
 }
@@ -2165,6 +2229,7 @@ function startNewGame (player, offer, offers) {
   Profile.data.serviceInfo = { kind: offer.kind, boss: offer.boss };
   Profile.data.usedServices = (offers || [offer]).map(o => o.name).concat(Profile.data.usedServices || []).slice(0, USED_SERVICES_KEEP);
   Profile.data.reputation = defaultProfile().reputation;
+  Profile.data.tutorSeen = {};   // il nuovo tecnico non ha ancora sentito i consigli del capo
   whenScene(scene => {
     gameActive = true;
     scene.resetLevel(true);      // azzera livello e statistiche e salva
@@ -2266,6 +2331,7 @@ el('#set-volume').addEventListener('input', ev => { settings().volume = ev.targe
 el('#set-volume').addEventListener('change', () => SFX.button());
 el('#set-reduced').addEventListener('change', ev => { settings().reducedFx = ev.target.checked; Profile.save(); });
 el('#set-skipshow').addEventListener('change', ev => { settings().skipShow = ev.target.checked; Profile.save(); });
+el('#set-bosstips').addEventListener('change', ev => { settings().bossTips = ev.target.checked; Profile.save(); });
 el('#set-testmusic').addEventListener('change', ev => { settings().testMusic = ev.target.checked; Profile.save(); if (window.__scene) window.__scene.updateSignalFlow(); });
 el('#set-player').addEventListener('change', ev => {
   const name = cleanName(ev.target.value);
@@ -5590,11 +5656,14 @@ class StageScene extends Phaser.Scene {
     }
 
     const edge = {
-      id: gameState.edgeSeq++,
+      id: gameState.edgeSeq,
       a: outSide.componentId, aPort: outSide.portId,
       b: inSide.componentId, bPort: inSide.portId,
       signal: gameState.selectedCable
     };
+    // il capo ferma il primo collegamento sotto carico (il cavo resta in mano)
+    if (wouldArc(edge, true) && tutorWarn('live')) return;
+    gameState.edgeSeq++;
     // collegare sotto tensione fa scattare il salvavita; altrimenti il
     // dispositivo appena alimentato (se già acceso) parte davvero
     const rcdBefore = gameState.rcdTrips || 0;
@@ -5742,6 +5811,7 @@ class StageScene extends Phaser.Scene {
     if (idx >= 0) {
       // scollegare sotto tensione fa l'arco: salvavita
       const edge = gameState.edges[idx];
+      if (wouldArc(edge, false) && tutorWarn('live')) return;
       applyPowerAction(() => { arced = checkLiveCableChange(edge); gameState.edges.splice(gameState.edges.indexOf(edge), 1); });
       if (!arced) SFX.cableOut(CABLE_TYPES[edge.signal].endpoints[0]);
     }

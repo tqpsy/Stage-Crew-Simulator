@@ -58,6 +58,9 @@ ciabatte con interruttore generale, rack precablati.
   crearne uno per il livello) e `tests/partita-telefono.js`, così ogni
   soluzione reale viene promossa e ogni errore bocciato col messaggio
   giusto.
+- Il capo squadra tutor vale solo per il livello 1 (`TUTOR_LEVELS`):
+  `tests/capo.js` controlla che fermi ogni errore una volta sola. I test che
+  provocano errori apposta spengono i consigli (`settings().bossTips`).
 
 ## Partita, menù e highscore
 

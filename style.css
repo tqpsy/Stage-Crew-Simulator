@@ -272,6 +272,9 @@
   #toast.bad{ --toast-accent:var(--red); border-color:rgba(224,80,63,.55); }
   #toast.bad::before{ content:'!'; }
   #toast.show.hold{ opacity:0; visibility:hidden; }
+  /* il capo squadra che ferma un errore prima che succeda */
+  #toast.boss{ --toast-accent:var(--amber); border-color:rgba(242,165,65,.6); }
+  #toast.boss::before{ content:'!'; }
 
   /* ---------- "Quale?": tocco a metà tra più dispositivi ---------- */
   #pick-menu{ display:none; position:fixed; inset:0; z-index:140; }

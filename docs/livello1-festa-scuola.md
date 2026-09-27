@@ -104,7 +104,16 @@ corti) e in FOH va solo il mixer.
   montaggio»). Durante lo show e gli effetti del test tace (`musicReach`,
   `updateSignalFlow`).
 
-**Da fare:** punti 4, 5 (in parte già nelle prove dei giri), 8-11 della lista
+- **capo squadra tutor** (punto 4): la prima volta che un'azione sta per
+  causare un errore di procedura, il capo del service la ferma e spiega:
+  cavo di corrente attaccato o staccato sotto carico (salvavita), mixer
+  toccato col finale acceso (colpo nelle casse), finale acceso prima del
+  mixer, due pesanti insieme sulla stessa fase (picco) o fase troppo carica
+  (magnetotermico). Una volta sola per tipo e per tecnico: se lo rifai, lo
+  fai davvero. Solo livello 1, si spegne dalle impostazioni («Consigli del
+  capo prima degli errori»). Test: `tests/capo.js`.
+
+**Da fare:** punto 5 (in parte già nelle prove dei giri), 8-11 della lista
 sopra.
 
 ## Scheda obiettivi
