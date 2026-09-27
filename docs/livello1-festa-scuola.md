@@ -86,9 +86,18 @@ corti) e in FOH va solo il mixer.
   cavo, la finestra resta aperta: PC → scheda → mixer → finale si cablano
   senza uscire.
 
-- i due coperchi del rack stanno in piedi contro il fianco del case.
+- i due coperchi del rack stanno in piedi contro il fianco del case;
+- **cavo giusto a portata di mano** (punto 3): toccando una presa senza
+  cavo in mano (o con uno che non ci entra) il pannello elenca i cavi dei
+  bauli che ci entrano, adattatori compresi; toccandone uno lo si prende e
+  il primo capo va subito in quella presa. Con un capo in mano i dispositivi
+  che hanno una presa adatta libera si illuminano di verde;
+- **posa guidata** (punto 6): armando o trascinando un pezzo si colorano di
+  verde le celle libere della sua zona; per i pezzi che si montano sopra un
+  altro (testa, PAR, microfono, regia sul tavolo) si cerchiano le basi libere.
 
-**Da fare:** punti 3-11 della lista sopra.
+**Da fare:** punti 4, 5 (in parte già nelle prove dei giri), 7-11 della lista
+sopra.
 
 ## Scheda obiettivi
 

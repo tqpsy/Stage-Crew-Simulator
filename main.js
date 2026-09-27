@@ -3169,6 +3169,30 @@ function showRearDetail (compId, portId) {
   }));
 }
 
+/* i cavi dei bauli che entrano in una presa, come pulsanti nel pannello:
+   toccarne uno lo prende e ne infila subito un capo nella presa */
+function cablesFor (signal) {
+  return Object.values(CABLE_CASES).flatMap(c => c.items.map(it => ({ ...it, caseTitle: c.title })))
+    .filter(it => CABLE_TYPES[it.cable].endpoints.includes(signal));
+}
+function showCableChoice (compId, portId) {
+  const p = getPortDef(compId, portId);
+  const box = el('#rear-detail');
+  const items = cablesFor(p.signal);
+  const held = gameState.selectedCable;
+  box.innerHTML = '<div class="rear-detail-head">' + escapeHtml(portLabel(compId, portId)) + ' · ' + escapeHtml(SIGNAL_LABEL[p.signal])
+    + (held ? ' — il cavo ' + escapeHtml(cableName(held)) + ' non entra qui. Prendi' : ' — prendi') + ' un cavo dal baule:</div>'
+    + '<div class="rear-picks">' + items.map(it => '<button class="rear-pick" data-cable="' + it.cable + '"><span class="tape-fluo" style="background:' + tapeColorOf(it.cable) + '">'
+      + escapeHtml(it.tape) + '</span><small>' + escapeHtml(it.info) + ' · baule ' + escapeHtml(it.caseTitle) + '</small></button>').join('') + '</div>';
+  box.scrollIntoView({ block: 'nearest', behavior: reducedFx() ? 'auto' : 'smooth' });
+  box.querySelectorAll('.rear-pick').forEach(b => b.addEventListener('click', () => {
+    SFX.pick();
+    selectCable(b.dataset.cable);
+    box.innerHTML = '';
+    onRearPortClick(compId, portId);
+  }));
+}
+
 // seleziona un cavo come farebbe il suo pulsante nella scheda Cavi
 function selectCable (cableId) {
   gameState.selectedCable = cableId;
@@ -3224,6 +3248,10 @@ function onRearPortClick (compId, portId) {
     showRearDetail(compId, portId);
     return;
   }
+  // niente cavo in mano (o uno che qui non entra, senza capi in sospeso):
+  // si propongono i cavi dei bauli che entrano in questa presa
+  const heldFits = gameState.selectedCable && CABLE_TYPES[gameState.selectedCable].endpoints.includes(p.signal);
+  if (!gameState.pendingPort && !heldFits) { showCableChoice(compId, portId); return; }
   el('#rear-detail').innerHTML = '';
   const edgesBefore = gameState.edges.length;
   const rcdBefore = gameState.rcdTrips || 0;
@@ -3241,8 +3269,8 @@ function onRearPortClick (compId, portId) {
   if (connected || picked) {
     // cavo collegato, o primo capo scelto: si torna alla scena
     closeRearPanel();
-    if (picked && p.lead) showToast('Spina in mano: tocca il dispositivo con la presa ' + SIGNAL_LABEL[p.signal] + ' dove infilarla.', 'ok');
-    else if (picked) showToast('Cavo in mano: ora tocca il dispositivo da collegare.', 'ok');
+    if (picked && p.lead) showToast('Spina in mano: tocca il dispositivo con la presa ' + SIGNAL_LABEL[p.signal] + ' dove infilarla (quelli in verde hanno una presa adatta libera).', 'ok');
+    else if (picked) showToast('Cavo in mano: ora tocca il dispositivo da collegare (quelli in verde hanno una presa adatta libera).', 'ok');
     else if (!arced) showToast('Collegato: ' + compLabel(compId) + ' · ' + portLabel(compId, portId) + '.', 'ok');
     return;
   }
@@ -3556,7 +3584,7 @@ function stagePointFromClient (clientX, clientY) {
 function disarmPiece () {
   gameState.selectedPieceType = null;
   document.querySelectorAll('.piece').forEach(p => p.classList.remove('armed'));
-  if (window.__scene) window.__scene.clearDropPreview();
+  if (window.__scene) { window.__scene.clearDropPreview(); window.__scene.showZoneHint(null); }
 }
 
 function armPiece (type, pieceEl) {
@@ -3564,7 +3592,11 @@ function armPiece (type, pieceEl) {
   if (window.__scene) { window.__scene.clearMoveSelection(); window.__scene.clearEdgeSelection(); window.__scene.cancelPending(); }
   gameState.selectedPieceType = type;
   document.querySelectorAll('.piece').forEach(p => p.classList.toggle('armed', p === pieceEl));
-  showToast('Pezzo selezionato: tocca il pavimento per posarlo (toccalo di nuovo per annullare).');
+  const free = window.__scene ? window.__scene.showZoneHint(type) : 1;
+  const m = MOUNTS[type];
+  if (m && !free) showToast(m.missing);
+  else showToast(m ? 'Pezzo selezionato: tocca ' + (m.base === 'tavolo' ? 'il tavolo regia' : 'una base libera cerchiata in verde') + ' per montarlo (tocca di nuovo il pezzo per annullare).'
+    : 'Pezzo selezionato: tocca una delle celle verdi per posarlo (tocca di nuovo il pezzo per annullare).');
 }
 
 document.querySelectorAll('.piece').forEach(piece => {
@@ -3591,6 +3623,7 @@ document.addEventListener('pointermove', ev => {
     ghost.classList.add('drag-ghost');
     document.body.appendChild(ghost);
     pieceDown.ghost = ghost;
+    if (window.__scene) window.__scene.showZoneHint(pieceDown.type);
   }
   if (pieceDown.dragging) {
     pieceDown.ghost.style.left = ev.clientX + 'px';
@@ -3612,7 +3645,7 @@ document.addEventListener('pointerup', ev => {
   if (dragging) {
     ghost.remove();
     stageWrap.classList.remove('drag-over');
-    if (window.__scene) window.__scene.clearDropPreview();
+    if (window.__scene) { window.__scene.clearDropPreview(); window.__scene.showZoneHint(gameState.selectedPieceType); }
     const { over } = stagePointFromClient(ev.clientX, ev.clientY);
     if (over && window.__scene) {
       if (gameState.stock[type] <= 0) showToast('Esaurito in questo livello: ' + COMPONENT_TYPES[type].label + '.');
@@ -3629,7 +3662,7 @@ document.addEventListener('pointercancel', ev => {
   if (pieceDown.dragging && pieceDown.ghost) {
     pieceDown.ghost.remove();
     stageWrap.classList.remove('drag-over');
-    if (window.__scene) window.__scene.clearDropPreview();
+    if (window.__scene) { window.__scene.clearDropPreview(); window.__scene.showZoneHint(gameState.selectedPieceType); }
   }
   window.__draggedType = null;
   pieceDown = null;
@@ -3990,6 +4023,7 @@ class StageScene extends Phaser.Scene {
 
     this.edgeGraphics = this.add.graphics().setDepth(5);
     this.previewGraphics = this.add.graphics().setDepth(6);
+    this.zoneGraphics = this.add.graphics().setDepth(5.5);
 
     this.drawGround();
     this.drawZoneOutlines();
@@ -4089,7 +4123,7 @@ class StageScene extends Phaser.Scene {
     // barra "cavo in mano": si aggiorna solo quando cambia il capo in attesa
     const pend = gameState.pendingPort;
     const pendKey = pend ? pend.componentId + '/' + pend.portId + '/' + gameState.selectedCable : '';
-    if (pendKey !== this.pendingKey) { this.pendingKey = pendKey; updateCableBanner(); }
+    if (pendKey !== this.pendingKey) { this.pendingKey = pendKey; updateCableBanner(); this.highlightTargets(); }
     let dx = 0, dy = 0;
     if (this.cursors.left.isDown || this.wasd.left.isDown) dx -= speed;
     if (this.cursors.right.isDown || this.wasd.right.isDown) dx += speed;
@@ -5308,6 +5342,42 @@ class StageScene extends Phaser.Scene {
 
   clearDropPreview () { this.previewGraphics.clear(); }
 
+  /* posa guidata: con un pezzo in mano si colorano le celle libere della sua
+     zona (o si cerchiano le basi libere, per i pezzi che si montano sopra un
+     altro). Restituisce quante ce ne sono; null spegne tutto. */
+  showZoneHint (type) {
+    const g = this.zoneGraphics;
+    if (!g) return 0;
+    g.clear();
+    if (!type || !COMPONENT_TYPES[type] || gameState.stock[type] <= 0) return 0;
+    const m = MOUNTS[type];
+    if (m) {
+      const bases = Object.values(gameState.placed).filter(c => c.type === m.base && !c[m.link]);
+      g.lineStyle(3, 0x49b06a, 0.9);
+      bases.forEach(b => {
+        const v = this.compVisuals[b.id];
+        if (!v) return;
+        const oy = (v.def.body.oy || 0);
+        g.strokeEllipse(v.container.x, v.container.y + oy, Math.max(56, v.def.body.w * 0.9), Math.max(40, v.def.body.h * 0.7));
+      });
+      return bases.length;
+    }
+    const pred = ZONE_PREDICATES[type] || (() => true);
+    let n = 0;
+    g.fillStyle(0x49b06a, 0.2);
+    for (let cx = 0; cx < VENUE_W; cx += CELL) {
+      for (let cy = 0; cy < VENUE_H; cy += CELL) {
+        if (!pred(cx, cy) || this.occupied[cellKey(cx, cy)]) continue;
+        const i = 0.04;
+        const p0 = gridToScreen(cx + i, cy + i), p1 = gridToScreen(cx + CELL - i, cy + i),
+              p2 = gridToScreen(cx + CELL - i, cy + CELL - i), p3 = gridToScreen(cx + i, cy + CELL - i);
+        g.fillPoints([p0, p1, p2, p3], true);
+        n++;
+      }
+    }
+    return n;
+  }
+
   /* ---------------- piazzamento componenti ---------------- */
   handleExternalDrop (type, clientX, clientY) {
     this.clearDropPreview();
@@ -5365,6 +5435,7 @@ class StageScene extends Phaser.Scene {
     if (!type) return;
     this.placeComponentAt(type, worldX, worldY);
     if (gameState.stock[type] <= 0) disarmPiece();
+    else this.showZoneHint(type);   // le celle appena occupate non sono più verdi
   }
 
   // base libera più vicina a un punto (sub per la testa, stativo per il PAR)
@@ -5651,6 +5722,28 @@ class StageScene extends Phaser.Scene {
   }
 
   // il dispositivo da cui parte il cavo in mano resta cerchiato in arancione
+  /* dove può finire l'altro capo del cavo in mano: i dispositivi con una
+     presa libera adatta (il segnale giusto, la direzione opposta) */
+  compatibleTargets () {
+    const pend = gameState.pendingPort, cable = CABLE_TYPES[gameState.selectedCable];
+    const pdef = pend && getPortDef(pend.componentId, pend.portId);
+    if (!pdef || !cable) return [];
+    // un adattatore collega due connettori diversi
+    const want = cable.endpoints.length === 2 ? cable.endpoints.filter(x => x !== pdef.signal) : cable.endpoints;
+    return Object.keys(gameState.placed).filter(id => id !== pend.componentId &&
+      COMPONENT_TYPES[gameState.placed[id].type].ports.some(pt => want.includes(pt.signal) && pt.dir !== pdef.dir &&
+        (pt.multi || !portHasConnection(id, pt.id))));
+  }
+  highlightTargets () {
+    const pend = gameState.pendingPort;
+    (this.targetIds || []).forEach(id => {
+      const v = this.compVisuals[id];
+      if (v && !(pend && id === pend.componentId) && id !== this.assemblyId) this.setGlow(v, false);
+    });
+    this.targetIds = this.compatibleTargets();
+    this.targetIds.forEach(id => { const v = this.compVisuals[id]; if (v) this.setGlow(v, true, 0x49b06a); });
+  }
+
   highlightPending (componentId, portId, on) {
     const v = this.compVisuals[componentId];
     if (v) this.setGlow(v, on, 0xf2a541);
