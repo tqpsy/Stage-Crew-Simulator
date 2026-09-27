@@ -247,7 +247,8 @@ per provare il ritmo prima di portarla nel gioco.
   imprevisti addosso.
 - **La reputazione misura la professionalità, non la sfortuna**:
   - il guasto capita: 0;
-  - risolto entro 8 s: +3 e applausi del pubblico (+6 gradimento);
+  - risolto in fretta: +3 e applausi del pubblico (+6 gradimento). «In fretta»
+    dipende dal guasto (vedi *Tempi del guasto* sotto);
   - risolto lentamente: 0;
   - risolto dal bidello al posto tuo: −5;
   - microfono ricollegato a un ingresso diverso da quello cablato al montaggio: −2;
@@ -286,3 +287,23 @@ Il guasto si risolve ricordando il cablaggio, non premendo un pulsante.
   presa sbagliata o spina storta fanno perdere qualche secondo di silenzio.
 - Il prototipo ha nella scheda iniziale la scelta del guasto da provare
   (a caso, microfono, cavo, ingresso, mixer).
+
+### Tempi del guasto
+
+Misurati giocando senza errori (mezzo secondo di reazione tra un tocco e
+l'altro): mixer 3 s, ingresso 6 s, microfono 7 s, cavo 11,5 s (15,6 s se prima
+si controllano microfono e ingresso, perché il filo staccato non si vede). Con
+una soglia unica di 8 s il cavo non poteva mai dare gli applausi, e con un
+paio di errori arrivava quasi sempre il bidello. Ora limite e applausi
+dipendono dalla causa, con circa 5 s di margine per gli applausi e 15 s per il
+limite:
+
+| Guasto | Applausi entro | Tempo limite (poi il bidello) |
+|---|---|---|
+| Mixer | 8 s | 20 s |
+| Ingresso | 11 s | 22 s |
+| Microfono | 12 s | 24 s |
+| Cavo | 17 s | 32 s |
+
+Il tempo limite si accorcia con la stanchezza, come le altre finestre di
+reazione. Il prossimo imprevisto arriva solo dopo il tempo limite del guasto.

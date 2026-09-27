@@ -381,11 +381,13 @@
     tap: () => ({ win: 3.5, dur: 5, target: 'preside', icon: '👊', text: 'Batte sul microfono per provarlo', hint: 'premi MUTE, poi riapri il canale', tab: 'mixer',
       ok: () => S.mute[S.micCh] || voiceOut() < 0.2 || !S.micOk,
       fail () { S.pops++; sfx.pop(); hit(-8, 'BUM BUM nelle casse.'); }, after: 'Ora riapri il canale!' }),
-    cavo: () => ({ win: 24, dur: 24, target: 'preside', icon: '🔇', text: 'Non si sente più niente!', hint: 'guarda palco e mixer, poi apri GUASTO', tab: 'guasto',
-      start () { startFault(); }, ok: () => S.micOk && voiceOut() > 0.3,
+    cavo: () => ({ win: 24, dur: 60, target: 'preside', icon: '🔇', text: 'Non si sente più niente!', hint: 'guarda palco e mixer, poi apri GUASTO', tab: 'guasto',
+      // tempo limite secondo la causa: più lavoro serve, più tempo c'è (la stanchezza lo accorcia)
+      start () { startFault(); this.win = FAULT_TIME[S.faultCause].limit; this.deadline = S.t + this.win * (1 - S.fatigue / 250); },
+      ok: () => S.micOk && voiceOut() > 0.3,
       onSolved () {
         const secs = Math.round(S.t - this.at);
-        if (secs <= 8) { S.grad = clamp(S.grad + 6); S.repDelta += 3; sfx.applause(85); toast('Applausi per il tecnico!', 'ok'); S.notes.push('Guasto risolto in ' + secs + ' s: il pubblico ha applaudito il tecnico (+3 reputazione).'); }
+        if (secs <= FAULT_TIME[S.faultCause].bonus) { S.grad = clamp(S.grad + 6); S.repDelta += 3; sfx.applause(85); toast('Applausi per il tecnico!', 'ok'); S.notes.push('Guasto risolto in ' + secs + ' s: il pubblico ha applaudito il tecnico (+3 reputazione).'); }
         else S.notes.push('Guasto risolto in ' + secs + ' s.');
       },
       fail () { endFault(); S.micCh = S.wired; S.micOk = true; S.mute[S.wired] = false; $('#mute-' + S.wired).setAttribute('aria-pressed', 'false'); S.fad[S.wired] = Math.max(S.fad[S.wired], 0.55); S.repDelta -= 5; S.notes.push('Il guasto l\'ha trovato il bidello al posto tuo (−5 reputazione).'); hit(-10, 'Il bidello ha trovato il guasto prima di te. Figuraccia.'); } }),
@@ -404,6 +406,7 @@
     if (forceCause && !ids.includes('cavo')) ids[4] = 'cavo';   // guasto scelto a mano: esce di sicuro
     // il guasto, se esce, va tra i primi due e ha la scena tutta per sé
     const ci = ids.indexOf('cavo');
+    S.faultCause = forceCause || pick(['mic', 'cavo', 'ing', 'mixer']);
     if (ci > 1) { ids.splice(ci, 1); ids.splice(Math.floor(Math.random() * 2), 0, 'cavo'); }
     // l'entrata ha una scadenza fissa: quando il preside arriva al leggio
     const evs = [{ id: 'apertura', at: 0.5, until: ARRIVE, win: ARRIVE - 0.5, target: 'preside', icon: '🎤', text: 'Sale sul palco', hint: 'frontali accesi in bianco prima che arrivi, CH' + S.wired + ' su, musica PC giù', tab: 'luci',
@@ -412,7 +415,7 @@
     let at = rnd(12, 15);
     ids.forEach((id, i) => {
       evs.push(Object.assign({ id, at }, POOL[id]()));
-      at += id === 'cavo' ? 26 : i >= 2 ? rnd(6, 10) : rnd(10, 14);    // verso la fine si accavallano
+      at += id === 'cavo' ? FAULT_TIME[S.faultCause].limit + 4 : i >= 2 ? rnd(6, 10) : rnd(10, 14);    // verso la fine si accavallano
       at = Math.min(at, 72);
     });
     evs.push({ id: 'finale', at: 82, win: 7, target: 'preside', icon: '🎉', text: 'Ha finito il discorso', hint: 'memoria Festa e musica su', tab: 'luci',
@@ -447,10 +450,13 @@
     ...[5, 6].map(n => ({ label: 'LINE ' + n, sub: 'jack in', no: 'LINE ' + n + ' è un ingresso jack: l\'XLR non entra.' })),
     ...['L', 'R'].map(s => ({ label: 'MAIN ' + s, sub: 'XLR out', no: 'MAIN ' + s + ' è un\'uscita: maschio contro maschio, non entra.' }))
   ];
+  // secondi entro cui arrivano gli applausi (+3 reputazione) e tempo limite prima che arrivi il bidello:
+  // circa 5 s e 15 s di margine sul tempo che serve giocando senza errori
+  const FAULT_TIME = { mixer: { bonus: 8, limit: 20 }, ing: { bonus: 11, limit: 22 }, mic: { bonus: 12, limit: 24 }, cavo: { bonus: 17, limit: 32 } };
   let forceCause = null;   // per provare il prototipo: quale guasto far uscire (null = a caso)
 
   function startFault () {
-    const cause = forceCause || pick(['mic', 'cavo', 'ing', 'mixer']);
+    const cause = S.faultCause;
     S.fault = { cause, nodes: { mic: 'unk', cavo: 'unk', ing: 'unk', mixer: 'unk' }, step: null, rot: 0, plugged: null };
     S.patchNeeded = false;
     if (cause === 'mixer') {
