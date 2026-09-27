@@ -237,6 +237,11 @@ per provare il ritmo prima di portarla nel gioco.
 - **Pubblico paziente all'inizio**: nei primi 5 s di silenzio il gradimento cala
   appena; poi il preside se ne accorge («Tramp? TRAMP?») e cala di più; solo un
   silenzio lungo fa crollare il pubblico.
+- **Entrata al buio**: lo spettacolo parte con le luci spente. Il preside sale
+  sul palco camminando da sinistra fino al leggio (circa 7 s); i **frontali**
+  (PAR 2 e 3; PAR 1 e 4 sono i tagli) vanno accesi in bianco entro quando si
+  posiziona, altrimenti comincia al buio. Finché i frontali sono spenti il
+  preside resta in ombra e il pubblico scontenta.
 - **Al massimo un guasto per spettacolo**, tra i primi imprevisti e senza altri
   imprevisti addosso.
 - **La reputazione misura la professionalità, non la sfortuna**:
