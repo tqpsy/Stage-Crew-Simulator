@@ -570,8 +570,10 @@ function buildExpectedConnections () {
   const missing = t => COMPONENT_TYPES[t].label + ' da posare';
   // ogni posto dice a parole cosa serve e a quale impianto appartiene
   // (corrente, audio, luci): il Test impianto reagisce in modo diverso
-  let cat = 'power';
-  const slot = (ok, what, ...cs) => ({ ok: !!ok, what, cat, ids: cs.filter(Boolean).map(c => c.id) });
+  // giro del montaggio in cui si fa (vedi GIRI): la corrente di ogni
+  // apparecchio va col giro del suo impianto
+  let cat = 'power', giro = 'corrente';
+  const slot = (ok, what, ...cs) => ({ ok: !!ok, what, cat, giro, ids: cs.filter(Boolean).map(c => c.id) });
   const list = [];
   const mixer = one('mixer'), ampli = one('ampli'), pc = one('pc'), scheda = one('scheda');
 
@@ -580,12 +582,13 @@ function buildExpectedConnections () {
   list.push(slot(allaccio && quadro && portEdgeExists(allaccio.id, 'out', quadro.id, 'in', 'cee_tri'),
     quadro ? 'Allaccio → ' + L(quadro) + ' (CEE 400V)' : missing('quadro'), quadro));
   Object.entries(REQUIRED_POWER).forEach(([t, n]) => {
+    giro = t === 'controller' || t === 'par' ? 'luci' : 'audio';
     const cs = placedOfType(t);
     for (let i = 0; i < n; i++) list.push(slot(cs[i] && wiredToQuadro(cs[i].id), cs[i] ? 'corrente a ' + L(cs[i]) : missing(t), cs[i]));
   });
 
   // audio: PC -> scheda
-  cat = 'audio';
+  cat = 'audio'; giro = 'audio';
   list.push(slot(pc && scheda && portEdgeExists(pc.id, 'usb', scheda.id, 'usb', 'usbc'),
     pc && scheda ? 'USB-C da ' + L(scheda) + ' a ' + L(pc) : missing(pc ? 'scheda' : 'pc'), pc, scheda));
   // scheda out L/R -> un ingresso jack del mixer ciascuna
@@ -602,12 +605,12 @@ function buildExpectedConnections () {
   });
 
   // DMX: ogni PAR in catena dalla consolle
-  cat = 'lights';
+  cat = 'lights'; giro = 'luci';
   const pars = placedOfType('par');
   for (let i = 0; i < 4; i++) list.push(slot(pars[i] && dmxUniverse(pars[i].id) != null, pars[i] ? 'DMX dalla consolle a ' + L(pars[i]) : missing('par'), pars[i]));
 
   // finale -> ogni Sub, ogni Sub -> la testa agganciata sopra
-  cat = 'audio';
+  cat = 'audio'; giro = 'audio';
   const subs = subsLeftToRight();
   for (let i = 0; i < 2; i++) {
     const sub = subs[i];
@@ -1272,6 +1275,7 @@ function updateConnectionCounter () {
   if (val) val.textContent = `${result.madeCount} / ${result.totalCount}`;
   const fill = el('#conn-fill');
   if (fill) fill.style.width = Math.min(100, (result.madeCount / result.totalCount) * 100) + '%';
+  if (typeof updateFoglio === 'function') updateFoglio();
 }
 
 function setCircuitStatus (state) {
@@ -1931,7 +1935,8 @@ function saveLevel () {
     placed: gameState.placed, edges: gameState.edges, stock: gameState.stock,
     nextIndex: gameState.nextIndex, edgeSeq: gameState.edgeSeq,
     trips: gameState.trips || 0, rcdTrips: gameState.rcdTrips || 0,
-    procErrors: gameState.procErrors || [], stats: gameState.stats
+    procErrors: gameState.procErrors || [], stats: gameState.stats,
+    giro: gameState.giro, giroFails: gameState.giroFails
   };
   Profile.save();
 }
@@ -3542,9 +3547,119 @@ document.addEventListener('pointercancel', ev => {
   pieceDown = null;
 });
 
-/* Run button */
+/* ---------------------------------------------------------------------
+   GIRI DEL MONTAGGIO — come una squadra vera, il livello 1 si monta in tre
+   giri: prima la corrente, poi l'audio, poi le luci. Ogni giro ha la sua
+   prova; le schede del giro dopo si aprono quando la prova passa. Dopo le
+   luci resta il Test impianto: il collaudo completo con lo show.
+   Il foglio di montaggio (in basso a sinistra sopra la scena) mostra cosa
+   chiede il giro in corso e si spunta da solo mentre si lavora.
+   --------------------------------------------------------------------- */
+const GIRI = [
+  { id: 'corrente', title: 'Corrente', tabs: ['corrente', 'cavi'], button: 'PROVA CORRENTE' },
+  { id: 'audio', title: 'Audio', tabs: ['audio', 'regia'], button: 'PROVA AUDIO' },
+  { id: 'luci', title: 'Luci', tabs: ['luci'], button: 'PROVA LUCI' }
+];
+const GIRO_COLLAUDO = GIRI.length;   // tutti i giri fatti: si collauda
+gameState.giro = 0;
+gameState.giroFails = [0, 0, 0];
+
+// schede aperte fino al giro indicato (compreso)
+function unlockedTabs (giro) {
+  return GIRI.slice(0, Math.min(giro, GIRI.length - 1) + 1).flatMap(g => g.tabs);
+}
+
+/* cosa chiede un giro: i collegamenti del suo impianto (dall'elenco del
+   Test impianto) più quello che non è un cavo (quadro armato, apparecchi
+   accesi, stereo, frontali e tagli). Ogni voce: { ok, what, ids, kind }
+   dove kind dice che indizio dare se manca. */
+function giroChecks (giro) {
+  const g = GIRI[giro];
+  if (!g) return [];
+  const list = buildExpectedConnections().filter(x => x.giro === g.id)
+    .map(x => ({ ok: x.ok, what: x.what, ids: x.ids, kind: / da (posare|montare)/.test(x.what) ? 'place' : 'wire' }));
+  const running = types => {
+    const cs = types.flatMap(t => placedOfType(t));
+    return { ok: cs.length > 0 && cs.every(c => isRunning(c.id)), ids: cs.filter(c => !isRunning(c.id)).map(c => c.id) };
+  };
+  if (g.id === 'corrente') {
+    const q = findQuadro(), prot = q && quadroProt(q);
+    list.push({ ok: !!(prot && prot.main && prot.rcd), what: 'Quadro armato: generale e salvavita', ids: q ? [q.id] : [], kind: 'arm' });
+  } else if (g.id === 'audio') {
+    const r = running(['mixer', 'pc', 'scheda', 'ampli', 'sub']);
+    list.push({ ok: r.ok, what: 'Accesi: mixer, PC, finale e sub (finale e sub per ultimi)', ids: r.ids, kind: 'on' });
+    const wired = list.every(x => x.ok);
+    const swapped = stereoCheck();
+    list.push({ ok: wired && !swapped, what: 'Cassa sinistra a sinistra, destra a destra', ids: swapped || [], kind: 'stereo' });
+  } else if (g.id === 'luci') {
+    const r = running(['controller', 'par']);
+    list.push({ ok: r.ok && placedOfType('par').length === AVAILABLE_STOCK.par, what: 'Accesi: consolle luci e PAR', ids: r.ids, kind: 'on' });
+    const lights = lightingCheck();
+    list.push({ ok: !lights && placedOfType('par').length === AVAILABLE_STOCK.par, what: 'Due frontali nel Pit e due tagli ai lati', ids: lights ? lights.ids : [], kind: 'lights' });
+    const ov = dmxOverlaps();
+    list.push({ ok: !ov.length, what: 'Indirizzi DMX senza sovrapposizioni', ids: [], kind: 'dmx' });
+  }
+  return list;
+}
+
+// il giro in corso è già a posto? (senza effetti: serve a ricaricare le
+// partite salvate prima dei giri)
+const giroPasses = giro => giroChecks(giro).every(x => x.ok);
+
+function updateGiroUI () {
+  const giro = gameState.giro;
+  const open = unlockedTabs(giro);
+  document.querySelectorAll('.tab-btn').forEach(b => {
+    const locked = !open.includes(b.dataset.tab);
+    b.classList.toggle('locked', locked);
+    b.title = locked ? 'Si apre con un giro successivo del montaggio' : '';
+  });
+  // la scheda aperta si è appena chiusa (reset): si torna alla corrente
+  const active = document.querySelector('.tab-btn.active');
+  if (active && active.classList.contains('locked')) document.querySelector('.tab-btn[data-tab="corrente"]').click();
+  const btn = el('#run-btn');
+  if (btn) btn.textContent = '▶ ' + (giro < GIRO_COLLAUDO ? GIRI[giro].button : 'TEST IMPIANTO');
+  updateFoglio();
+}
+
+// foglio di montaggio: il giro in corso, voce per voce
+let foglioOpen = window.innerWidth >= 700;
+function updateFoglio () {
+  const box = el('#foglio');
+  if (!box) return;
+  const giro = gameState.giro;
+  const steps = GIRI.map((g, i) => '<span class="fg-step ' + (i < giro ? 'done' : i === giro ? 'now' : '') + '">'
+    + (i < giro ? '✓ ' : '') + g.title + '</span>').join('<span class="fg-sep">›</span>');
+  let head, body = '';
+  if (giro < GIRO_COLLAUDO) {
+    const list = giroChecks(giro);
+    const done = list.filter(x => x.ok).length;
+    head = 'Giro ' + GIRI[giro].title + ' · ' + done + '/' + list.length;
+    body = '<ul class="fg-list">' + list.map(x => '<li class="' + (x.ok ? 'ok' : '') + '">' + (x.ok ? '✓' : '○') + ' ' + escapeHtml(x.what) + '</li>').join('') + '</ul>';
+  } else {
+    head = 'Montaggio finito · Test impianto';
+    body = '<p class="fg-note">Tutti i giri sono passati. Il collaudo prova tutto insieme: se hai toccato qualcosa nel frattempo, lo scopre.</p>';
+  }
+  box.innerHTML = '<button class="fg-head" id="foglio-toggle">📝 ' + head + '<span class="fg-caret">' + (foglioOpen ? '▾' : '▸') + '</span></button>'
+    + (foglioOpen ? '<div class="fg-body"><div class="fg-steps">' + steps + '</div>' + body + '</div>' : '');
+  el('#foglio-toggle').addEventListener('click', () => { foglioOpen = !foglioOpen; SFX.button(); updateFoglio(); });
+}
+
+// cambio di scheda verso una chiusa: si spiega perché
+document.querySelectorAll('.tab-btn').forEach(btn => {
+  btn.addEventListener('click', ev => {
+    if (!btn.classList.contains('locked')) return;
+    ev.stopImmediatePropagation();
+    const g = GIRI.find(x => x.tabs.includes(btn.dataset.tab));
+    showToast('La scheda ' + btn.textContent.trim() + ' si apre col giro ' + (g ? g.title : '') + ': prima finisci il giro ' + GIRI[gameState.giro].title + ' e fai la sua prova.');
+  }, true);
+});
+
+/* Run button: la prova del giro in corso, o il Test impianto a montaggio finito */
 el('#run-btn').addEventListener('click', () => {
-  if (window.__scene) window.__scene.runSystemTest();
+  if (!window.__scene) return;
+  if (gameState.giro < GIRO_COLLAUDO) window.__scene.runGiroTest();
+  else window.__scene.runSystemTest();
 });
 
 /* ---------------------------------------------------------------------
@@ -5684,6 +5799,64 @@ class StageScene extends Phaser.Scene {
     this.pushHistory();
   }
 
+  /* ---------------- PROVA DEL GIRO: controlla solo quello che chiede il
+     giro in corso (vedi GIRI) e fa vedere e sentire l'esito, come il Test
+     impianto. Gli indizi crescono coi tentativi andati male nello stesso
+     giro: prima vago, poi il pezzo colpevole in rosso, poi il capo dice
+     esattamente cosa manca. ---------------- */
+  runGiroTest () {
+    this.stopFx();
+    const giro = gameState.giro;
+    const g = GIRI[giro];
+    if (!g) return;
+    Object.values(this.compVisuals).forEach(v => this.setGlow(v, false));
+    this.refreshLive();
+    const list = giroChecks(giro);
+    const result = runValidation();
+    const miss = list.find(x => !x.ok);
+    gameState.stats.tests++;
+    if (!miss && !result.overPhase && !result.overBudget) {
+      gameState.giro++;
+      gameState.giroFails[giro] = 0;
+      SFX.success();
+      const next = GIRI[gameState.giro];
+      const msg = {
+        corrente: 'Prova corrente superata: il Quadro è sotto tensione.',
+        audio: 'Prova audio superata: la musica del PC esce dalle casse! Per le luci usa una fase libera del Quadro: cabla con quella fase spenta e armala alla fine.',
+        luci: 'Prova luci superata: i PAR rispondono alla consolle.'
+      }[g.id];
+      showToast(msg + (next ? ' Adesso il giro ' + next.title + ': si apre la scheda ' + next.tabs.map(t => t[0].toUpperCase() + t.slice(1)).join(' e ') + '.'
+        : ' Il montaggio è finito: fai il Test impianto, il collaudo di tutto insieme.'), 'ok');
+      if (g.id === 'audio') { const stop = SFX.beat(124, 8); this.time.delayedCall(4000, stop); }
+      saveLevel();
+      updateGiroUI();
+      return;
+    }
+    gameState.stats.failedTests++;
+    const n = ++gameState.giroFails[giro];
+    const boss = (Profile.data.serviceInfo && Profile.data.serviceInfo.boss || 'Il capo').split(' ')[0];
+    let hint;
+    if (result.overPhase) hint = 'una fase del Quadro è troppo carica.';
+    else if (result.overBudget) hint = 'chiedi troppa potenza.';
+    else hint = {
+      place: 'manca ancora un pezzo da posare.',
+      wire: g.id === 'corrente' ? 'il Quadro non riceve corrente dall\'allaccio.' : g.id === 'luci' ? 'qualche PAR non sente la consolle o non ha corrente.' : 'il segnale (o la corrente) si perde per strada.',
+      arm: 'il Quadro è davvero armato?',
+      on: 'qualcosa è ancora spento.',
+      stereo: 'destra e sinistra si sono scambiate.',
+      lights: (lightingCheck() || {}).msg || 'le luci non sono al loro posto.',
+      dmx: 'due PAR si pestano i piedi sull\'indirizzo.'
+    }[miss.kind];
+    // secondo tentativo: il pezzo colpevole in rosso; dal terzo parla il capo
+    if (miss && n >= 2) miss.ids.forEach(id => { const v = this.compVisuals[id]; if (v) this.setGlow(v, true); });
+    const exact = miss && n >= 3 ? ' ' + boss + ' ti indica il foglio: «' + miss.what + '».' : '';
+    setCircuitStatus('error');
+    saveLevel();
+    if (g.id === 'corrente') { showToast('Niente corrente: ' + hint + exact, 'bad'); this.fxSparks(); }
+    else if (g.id === 'audio') { showToast('Le casse restano mute: ' + hint + exact, 'bad'); this.fxCrackle(); }
+    else { showToast('Le luci non rispondono: ' + hint + exact, 'bad'); this.fxLightsTilt(); }
+  }
+
   /* ---------------- TEST IMPIANTO: collaudo tecnico (potenza + segnale + PC di
      regia), prima ancora che arrivino i musicisti. Il vero soundcheck con gli
      strumenti è una fase successiva, separata da questa.
@@ -5943,6 +6116,7 @@ class StageScene extends Phaser.Scene {
     if (q) this.updateQuadroPhaseBars(q.id);
     this.drawLiveBeams();
     if (rearPanelId) renderRearPanel();
+    updateFoglio();
   }
 
   // scintille sulle prese delle fasi scattate (o al centro del Quadro)
@@ -6159,6 +6333,8 @@ class StageScene extends Phaser.Scene {
     gameState.tested = false;
     gameState.trips = 0; gameState.rcdTrips = 0; gameState.procErrors = []; gameState.inrush = [];
     gameState.stats = freshStats();
+    gameState.giro = 0; gameState.giroFails = [0, 0, 0];
+    updateGiroUI();
 
     updateCableHand();
     updateStockUI();
@@ -6248,6 +6424,14 @@ class StageScene extends Phaser.Scene {
     gameState.rcdTrips = lv.rcdTrips || 0;
     gameState.procErrors = (lv.procErrors || []).slice();
     gameState.stats = { ...freshStats(), ...lv.stats };
+    gameState.giroFails = (lv.giroFails || [0, 0, 0]).slice();
+    if (typeof lv.giro === 'number') gameState.giro = lv.giro;
+    else {
+      // partita salvata prima dei giri: si riparte dal primo giro non ancora a posto
+      gameState.giro = 0;
+      while (gameState.giro < GIRO_COLLAUDO && giroPasses(gameState.giro)) gameState.giro++;
+    }
+    updateGiroUI();
     this.history = [];
     this.historyIndex = -1;
     this.pushHistory();
@@ -6280,3 +6464,4 @@ updatePowerMeter();
 updateConnectionCounter();
 updateCableHand();
 setCircuitStatus('untested');
+updateGiroUI();
