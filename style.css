@@ -666,6 +666,27 @@
   #run-btn:active{ transform:translateY(2px); box-shadow:0 1px 0 var(--amber-dim); }
   #run-btn:hover{ filter:brightness(1.08); }
 
+  /* pulsante "Segui il segnale" nell'intestazione del pannello */
+  .trace-btn{
+    margin-left:auto; margin-right:8px; background:none; border:1px solid var(--green); color:var(--green);
+    border-radius:6px; padding:5px 10px; font-size:12.5px; font-weight:600; cursor:pointer; white-space:nowrap;
+  }
+  .trace-btn:hover{ background:var(--green); color:#141519; }
+  .trace-btn[hidden]{ display:none; }
+
+  /* pressione lunga sui pezzi: niente menù del telefono né selezione del testo */
+  .piece{ -webkit-touch-callout:none; -webkit-user-select:none; user-select:none; }
+  /* scheda "cos'è" di un pezzo della barra (pressione lunga) */
+  #piece-info{
+    position:fixed; z-index:160; display:none; width:min(300px, calc(100vw - 16px));
+    background:var(--bg-panel-raised); border:1px solid var(--amber); border-radius:10px;
+    padding:10px 12px; box-shadow:0 10px 30px rgba(0,0,0,.55); font-size:12.5px; line-height:1.4;
+  }
+  #piece-info.show{ display:block; }
+  #piece-info b{ font-family:var(--font-display); font-size:16px; letter-spacing:.03em; color:var(--amber); }
+  #piece-info p{ margin:4px 0; color:var(--text-main); }
+  #piece-info small{ color:var(--text-muted); }
+
   /* ---------- MENÙ DI GIOCO ---------- */
   #menu-modal{ z-index:120; }
   .modal-box.menu-box{ width:min(380px, 92vw); padding:18px 18px 16px; }

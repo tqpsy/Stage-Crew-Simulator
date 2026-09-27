@@ -1525,7 +1525,7 @@ const SERVICE_NAME_MAX = 28;   // caratteri del nome (inventato) di un service
 const USED_SERVICES_KEEP = 400; // nomi di service già proposti, da non riproporre
 
 function defaultProfile () {
-  return { v: SAVE_VERSION, player: '', service: '', serviceInfo: null, usedServices: [], settings: { volume: 0.8, reducedFx: false, skipShow: false, testMusic: true, bossTips: true }, tutorSeen: {}, logo: null, level: null, records: {}, reputation: { total: 0, earned: {}, log: [] } };
+  return { v: SAVE_VERSION, player: '', service: '', serviceInfo: null, usedServices: [], settings: { volume: 0.8, reducedFx: false, skipShow: false, testMusic: true, bossTips: true, tapeMarks: true, traceSignal: true }, tutorSeen: {}, logo: null, level: null, records: {}, reputation: { total: 0, earned: {}, log: [] } };
 }
 const Profile = (() => {
   let data = defaultProfile();
@@ -2192,6 +2192,8 @@ function showMenuPage (page, keep) {
     el('#set-skipshow').checked = !!settings().skipShow;
     el('#set-testmusic').checked = settings().testMusic !== false;
     el('#set-bosstips').checked = settings().bossTips !== false;
+    el('#set-tapemarks').checked = settings().tapeMarks !== false;
+    el('#set-trace').checked = settings().traceSignal !== false;
     el('#set-player').value = Profile.data.player;
   }
 }
@@ -2345,6 +2347,8 @@ el('#set-volume').addEventListener('change', () => SFX.button());
 el('#set-reduced').addEventListener('change', ev => { settings().reducedFx = ev.target.checked; Profile.save(); });
 el('#set-skipshow').addEventListener('change', ev => { settings().skipShow = ev.target.checked; Profile.save(); });
 el('#set-bosstips').addEventListener('change', ev => { settings().bossTips = ev.target.checked; Profile.save(); });
+el('#set-tapemarks').addEventListener('change', ev => { settings().tapeMarks = ev.target.checked; Profile.save(); if (window.__scene) window.__scene.drawTapeMarks(); });
+el('#set-trace').addEventListener('change', ev => { settings().traceSignal = ev.target.checked; Profile.save(); });
 el('#set-testmusic').addEventListener('change', ev => { settings().testMusic = ev.target.checked; Profile.save(); if (window.__scene) window.__scene.updateSignalFlow(); });
 el('#set-player').addEventListener('change', ev => {
   const name = cleanName(ev.target.value);
@@ -3073,6 +3077,7 @@ function renderRearPanel () {
     const devs = mountedAll(comp).sort((a, b) => TAVOLO_PANEL_ORDER.indexOf(a.type) - TAVOLO_PANEL_ORDER.indexOf(b.type));
     if (!devs.length) { closeRearPanel(); return; }
     el('#rear-title').textContent = compLabel(id) + '  —  la regia da dietro';
+    el('#rear-trace').hidden = true;
     box.classList.add('table-view');
     box.innerHTML = devs.map(d => '<div class="rear-block" data-id="' + d.id + '"><div class="rear-block-head">'
       + escapeHtml(compLabel(d.id)) + (d.type === 'ampli' ? ' · nel rack sotto il piano' : '') + '</div>'
@@ -3082,6 +3087,7 @@ function renderRearPanel () {
     return;
   }
   box.classList.remove('table-view');
+  el('#rear-trace').hidden = settings().traceSignal === false;
   el('#rear-title').textContent = COMPONENT_TYPES[comp.type].label + '  ·  ' + id.replace(/_/g, ' ') + '  —  pannello posteriore';
   box.innerHTML = rearPanelSvg(id);
   bindRearSvg(box, id);
@@ -3294,6 +3300,21 @@ function showCableChoice (compId, portId) {
   }));
 }
 
+/* SEGNI DI NASTRO — la pianta del capo per il livello 1, in metri: croci
+   (centro) o angoli di un ingombro (gx, gy, w, h). Dal livello 2 niente. */
+const TAPE_LEVELS = new Set([1]);
+const TAPE_MARKS = [
+  { text: 'QUADRO', gx: 4.75, gy: 2.75, color: '#ff9b21' },
+  { text: 'SUB', gx: 1.5, gy: 8.5, color: '#eaff2b' },
+  { text: 'SUB', gx: 7.5, gy: 8.5, color: '#eaff2b' },
+  { text: 'FRONT.', gx: 2.5, gy: 9.5, color: '#4dff73' },
+  { text: 'FRONT.', gx: 6.5, gy: 9.5, color: '#4dff73' },
+  { text: 'TAGLIO', gx: 1.25, gy: 5.75, color: '#4dff73' },
+  { text: 'TAGLIO', gx: 6.25, gy: 7.25, color: '#4dff73' },
+  { text: 'ASTA', gx: 4.25, gy: 6.75, color: '#ff4fb4' },
+  { text: 'REGIA', gx: 7, gy: 4.5, w: 1, h: 3, color: '#ff9b21' }
+];
+
 /* MUSICA DI PROVA — fin dove arriva il segnale del PC: dal PC acceso alla
    scheda (USB-C), dalla scheda al mixer (jack), dal mixer al finale (XLR),
    dal finale ai sub e dai sub alle teste (Speakon). Ogni apparecchio attivo
@@ -3316,6 +3337,77 @@ function musicReach () {
     });
   }
   return reach;
+}
+
+/* SEGUI IL SEGNALE — la catena di un dispositivo, anello per anello, fino
+   al primo che non va: la musica per l'audio (PC → scheda → mixer → finale
+   → sub → testa), il DMX per le luci (consolle → PAR), la corrente per
+   Quadro e ciabatte (allaccio → Quadro → ciabatta). Ogni anello: { ids, label,
+   ok, why }; la catena si ferma al primo rotto. */
+const TRACE_AUDIO = ['pc', 'scheda', 'mixer', 'ampli', 'sub', 'top'];
+const TRACE_LIGHTS = ['controller', 'par'];
+function whyDown (c) {
+  const def = COMPONENT_TYPES[c.type];
+  if (def.busPowered) return 'senza USB dal PC';
+  if (!powerInPort(def)) return null;
+  if (!isPowered(c.id)) return feedingPowerEdge(c.id) ? 'senza corrente' : 'non collegato alla corrente';
+  if (SWITCHABLE.has(c.type) && !c.on) return 'spento';
+  return null;
+}
+function traceChain (compId) {
+  const comp = gameState.placed[compId];
+  if (!comp) return null;
+  const steps = [];
+  const typeLabel = t => COMPONENT_TYPES[t].label;
+  const add = (ids, label, ok, why) => { steps.push({ ids, label, ok, why }); return ok; };
+  if (TRACE_AUDIO.includes(comp.type)) {
+    const reach = musicReach();
+    TRACE_AUDIO.every((t, i) => {
+      const cs = placedOfType(t);
+      if (!cs.length) return add([], typeLabel(t), false, 'da posare');
+      const bad = cs.find(c => !reach.has(c.id));
+      if (!bad) return add(cs.map(c => c.id), cs.length > 1 ? typeLabel(t) + ' ×' + cs.length : compLabel(cs[0].id), true);
+      return add([bad.id], compLabel(bad.id), false, whyDown(bad) || (i ? 'non gli arriva la musica da ' + typeLabel(TRACE_AUDIO[i - 1]) : 'spento'));
+    });
+    return { title: 'Musica', steps };
+  }
+  if (TRACE_LIGHTS.includes(comp.type)) {
+    const ct = placedOfType('controller')[0];
+    if (!ct) add([], typeLabel('controller'), false, 'da posare');
+    else if (add([ct.id], compLabel(ct.id), isRunning(ct.id), whyDown(ct))) {
+      const pars = placedOfType('par');
+      if (!pars.length) add([], typeLabel('par'), false, 'da posare');
+      else {
+        const bad = pars.find(p => !isRunning(p.id) || dmxUniverse(p.id) == null);
+        if (!bad) add(pars.map(p => p.id), 'PAR ×' + pars.length, true);
+        else add([bad.id], compLabel(bad.id), false, whyDown(bad) || 'non sente la consolle (DMX)');
+      }
+    }
+    return { title: 'DMX', steps };
+  }
+  // corrente: dal dispositivo si risale fino all'allaccio
+  const up = [];
+  for (let c = comp, n = 0; c && n < 10; n++) {
+    up.unshift(c);
+    const e = c.type === 'quadro' ? edgeInto(c.id, 'in', 'cee_tri') : feedingPowerEdge(c.id);
+    c = e ? gameState.placed[e.a] : null;
+    if (!e) break;
+  }
+  if (up[0].type !== 'allaccio') add([], 'ALLACCIO', false, 'manca il cavo verso ' + compLabel(up[0].id));
+  up.forEach(c => {
+    if (steps.length && !steps[steps.length - 1].ok) return;
+    if (c.type === 'allaccio') return add([c.id], 'ALLACCIO', true);
+    if (c.type === 'quadro') {
+      const prot = quadroProt(c);
+      const next = up[up.indexOf(c) + 1], e = next && feedingPowerEdge(next.id);
+      const ph = e && e.a === c.id ? (COMPONENT_TYPES.quadro.ports.find(p => p.id === e.aPort) || {}).phase : null;
+      const why = !prot.main ? 'generale abbassato' : !prot.rcd ? 'salvavita abbassato' : ph && !prot[ph] ? 'fase ' + ph + ' abbassata' : null;
+      return add([c.id], compLabel(c.id), !why, why);
+    }
+    const why = whyDown(c);
+    return add([c.id], compLabel(c.id), !why, why);
+  });
+  return { title: 'Corrente', steps };
 }
 
 // seleziona un cavo come farebbe il suo pulsante nella scheda Cavi
@@ -3443,6 +3535,12 @@ function closeRearPanel () {
   setTimeout(() => { if (!rearPanelId && !openCaseName) setSceneInput(true); }, 0);
 }
 el('#rear-close').addEventListener('click', closeRearPanel);
+el('#rear-trace').addEventListener('click', () => {
+  const id = rearPanelId;
+  SFX.button();
+  closeRearPanel();
+  if (window.__scene && id) window.__scene.showTrace(id);
+});
 el('#rear-modal').addEventListener('click', ev => { if (ev.target.id === 'rear-modal') closeRearPanel(); });
 
 // barra "cavo in mano" sopra la scena, finché il secondo capo non è collegato
@@ -3706,6 +3804,39 @@ function stagePointFromClient (clientX, clientY) {
   };
 }
 
+/* SCHEDA "COS'È" — tenendo premuto un pezzo nella barra: cos'è e dove va */
+const PIECE_INFO = {
+  quadro: ['Quadro elettrico di distribuzione: prende i 400 V trifase dall\'allaccio e li divide in tre prese da 230 V (fasi L1, L2, L3), ognuna col suo magnetotermico, più generale e salvavita.', 'Va in Backstage.'],
+  ciabatta: ['Ciabatta civile con interruttore: spina Schuko e 3 prese Schuko. Porta la corrente dove serve, per esempio al PC.', 'Sul palco, in Off Stage o in FOH.'],
+  ciabatta_cee: ['Ciabatta con interruttore, spina CEE blu 230 V (entra nelle prese del Quadro) e 4 prese Schuko.', 'Sul palco, in Off Stage, in FOH o in Backstage.'],
+  tavolo: ['Tavolo regia pieghevole: la postazione del tecnico. Sopra mixer, consolle luci, PC e scheda audio; sotto il finale nel suo rack.', 'Va in Off Stage.'],
+  stativo: ['Stativo luci: treppiede con asta e barra a T su cui si monta un PAR.', '2 davanti al palco nel Pit (frontali), 2 ai lati del palco (tagli).'],
+  sub: ['Subwoofer: la cassa dei bassi. Riceve il segnale dal finale (Speakon), ha la sua alimentazione e lo passa alla testa dall\'uscita LINK.', 'Va nel Pit, uno per lato.'],
+  top: ['Testa: la cassa dei medi e degli alti, sul palo del sub. Prende il segnale dal sub (Speakon LINK).', 'Si monta sopra un sub.'],
+  mixer: ['Mixer: raccoglie microfoni (CH 1-4, XLR) e musica del PC (CH 5-6, jack), li regola e li manda al finale dalle uscite MAIN L/R.', 'Va sul tavolo regia.'],
+  asta: ['Asta microfonica con giraffa: regge il microfono all\'altezza di chi parla.', 'Va sul palco.'],
+  mic: ['Microfono dinamico da voce: col cavo XLR va a un ingresso MIC del mixer (CH 1-4).', 'Si monta sull\'asta.'],
+  ampli: ['Finale (amplificatore) in rack 2U: rende il segnale del mixer abbastanza forte da muovere le casse. Si accende per ultimo e si spegne per primo.', 'Sotto il tavolo regia.'],
+  pc: ['Computer portatile: suona la musica della serata. L\'audio esce dalla USB-C verso la scheda audio.', 'Va sul tavolo regia.'],
+  scheda: ['Scheda audio USB: trasforma l\'audio del PC in due uscite jack (L e R) per i CH 5-6 del mixer. Si alimenta dal PC.', 'Va sul tavolo regia, accanto al PC.'],
+  par: ['Faro PAR a LED: prende corrente (PowerCON) e comandi (DMX) e li passa al faro dopo, in catena.', 'Si monta su uno stativo.'],
+  controller: ['Consolle luci DMX: comanda i PAR col cavo DMX, su due universi.', 'Va sul tavolo regia.']
+};
+function showPieceInfo (type, pieceEl) {
+  const info = PIECE_INFO[type];
+  if (!info) return false;
+  const box = el('#piece-info');
+  box.innerHTML = '<b>' + escapeHtml(COMPONENT_TYPES[type].label) + '</b><p>' + escapeHtml(info[0]) + '</p><small>' + escapeHtml(info[1]) + '</small>';
+  box.classList.add('show');
+  const r = pieceEl.getBoundingClientRect(), bw = box.offsetWidth, bh = box.offsetHeight;
+  box.style.left = Math.max(8, Math.min(window.innerWidth - bw - 8, r.left + r.width / 2 - bw / 2)) + 'px';
+  box.style.top = Math.max(8, r.top - bh - 10) + 'px';
+  if (navigator.vibrate) navigator.vibrate(15);
+  return true;
+}
+function hidePieceInfo () { el('#piece-info').classList.remove('show'); }
+document.addEventListener('pointerdown', ev => { if (!ev.target.closest || !ev.target.closest('#piece-info')) hidePieceInfo(); }, true);
+
 function disarmPiece () {
   gameState.selectedPieceType = null;
   document.querySelectorAll('.piece').forEach(p => p.classList.remove('armed'));
@@ -3734,6 +3865,9 @@ document.querySelectorAll('.piece').forEach(piece => {
       startX: ev.clientX, startY: ev.clientY,
       dragging: false, ghost: null, pointerId: ev.pointerId
     };
+    // pressione lunga senza muoversi: la scheda "cos'è" (e niente posa)
+    const pd = pieceDown;
+    pd.infoTimer = setTimeout(() => { if (pieceDown === pd && !pd.dragging) pd.info = showPieceInfo(pd.type, pd.pieceEl); }, LONG_PRESS_MS);
   });
 });
 
@@ -3741,7 +3875,8 @@ document.addEventListener('pointermove', ev => {
   if (!pieceDown || ev.pointerId !== pieceDown.pointerId) return;
   const dist = Math.hypot(ev.clientX - pieceDown.startX, ev.clientY - pieceDown.startY);
 
-  if (!pieceDown.dragging && dist > DRAG_THRESHOLD) {
+  if (!pieceDown.dragging && !pieceDown.info && dist > DRAG_THRESHOLD) {
+    clearTimeout(pieceDown.infoTimer);
     pieceDown.dragging = true;
     window.__draggedType = pieceDown.type;
     const ghost = pieceDown.pieceEl.cloneNode(true);
@@ -3764,8 +3899,10 @@ document.addEventListener('pointermove', ev => {
 
 document.addEventListener('pointerup', ev => {
   if (!pieceDown || ev.pointerId !== pieceDown.pointerId) return;
-  const { type, pieceEl, dragging, ghost } = pieceDown;
+  const { type, pieceEl, dragging, ghost, info, infoTimer } = pieceDown;
   pieceDown = null;
+  clearTimeout(infoTimer);
+  if (info) return;   // era la scheda "cos'è": il pezzo non si arma
 
   if (dragging) {
     ghost.remove();
@@ -4154,6 +4291,7 @@ class StageScene extends Phaser.Scene {
     this.drawZoneOutlines();
     this.drawLoadingDock();
     this.drawStagePlatform();
+    this.drawTapeMarks();
     this.drawAllaccio();
 
     this.cursors = this.input.keyboard.createCursorKeys();
@@ -6457,6 +6595,46 @@ class StageScene extends Phaser.Scene {
     }, () => this.stopFx());
   }
 
+  /* ---------------- segni di nastro sul pavimento (livello 1) ----------------
+     Il capo ha già fatto la pianta: croci di nastro fluo dove vanno i pezzi
+     e gli angoli del tavolo regia. Stanno sotto i pezzi; si tolgono dalle
+     impostazioni. */
+  drawTapeMarks () {
+    (this.tapeObjs || []).forEach(o => o.destroy());
+    this.tapeObjs = [];
+    if (!TAPE_LEVELS.has(LEVEL_ID) || settings().tapeMarks === false) return;
+    const g = this.add.graphics().setDepth(3.5);
+    this.tapeObjs.push(g);
+    // striscia di nastro da (x0, y0) a (x1, y1) in metri, larga w
+    const strip = (x0, y0, x1, y1, w, color) => {
+      const dx = x1 - x0, dy = y1 - y0, l = Math.hypot(dx, dy), nx = -dy / l * w / 2, ny = dx / l * w / 2;
+      g.fillStyle(color, 0.85);
+      g.fillPoints([gridToScreen(x0 + nx, y0 + ny), gridToScreen(x1 + nx, y1 + ny), gridToScreen(x1 - nx, y1 - ny), gridToScreen(x0 - nx, y0 - ny)], true);
+    };
+    const label = (gx, gy, text, color) => {
+      const p = gridToScreen(gx, gy);
+      const t = this.add.text(p.x, p.y, text, { fontFamily: FONT_MARKER, fontSize: '10px', color }).setOrigin(0.5).setDepth(3.6).setAlpha(0.9);
+      this.tapeObjs.push(t);
+    };
+    TAPE_MARKS.forEach(m => {
+      const color = Phaser.Display.Color.HexStringToColor(m.color).color;
+      if (m.w) {
+        // angoli a L di un ingombro (tavolo regia)
+        const x0 = m.gx, y0 = m.gy, x1 = m.gx + m.w, y1 = m.gy + m.h, L = 0.3, W = 0.06;
+        [[x0, y0, 1, 1], [x1, y0, -1, 1], [x1, y1, -1, -1], [x0, y1, 1, -1]].forEach(([x, y, sx, sy]) => {
+          strip(x, y, x + sx * L, y, W, color);
+          strip(x, y, x, y + sy * L, W, color);
+        });
+        label(m.gx + m.w + 0.25, m.gy + m.h / 2, m.text, m.color);
+      } else {
+        const r = 0.16;
+        strip(m.gx - r, m.gy - r, m.gx + r, m.gy + r, 0.06, color);
+        strip(m.gx - r, m.gy + r, m.gx + r, m.gy - r, 0.06, color);
+        label(m.gx + 0.05, m.gy + 0.42, m.text, m.color);
+      }
+    });
+  }
+
   /* ---------------- musica di prova: fin dove arriva il segnale ----------------
      Sugli apparecchi raggiunti sale una nota; le casse pulsano a tempo e,
      appena ne suona una, parte piano la musica di prova (si spegne dalle
@@ -6502,6 +6680,24 @@ class StageScene extends Phaser.Scene {
     });
     const speakers = [...reach].some(id => this.signalFx[id] && this.signalFx[id].speaker);
     SFX.testLoop(gameActive && speakers && settings().testMusic !== false);
+  }
+
+  // segui il segnale: la catena in verde, il primo anello rotto in rosso
+  showTrace (compId) {
+    const tr = traceChain(compId);
+    if (!tr) return;
+    this.clearTrace();
+    const broken = tr.steps.find(x => !x.ok);
+    this.traceIds = tr.steps.flatMap(x => x.ids);
+    tr.steps.forEach(x => x.ids.forEach(id => { const v = this.compVisuals[id]; if (v) this.setGlow(v, true, x.ok ? 0x49b06a : 0xe0503f); }));
+    const text = tr.steps.map(x => x.label + (x.ok ? ' ✓' : ' ✗ ' + x.why)).join('  →  ');
+    showToast(tr.title + ': ' + text + (broken ? '' : '  —  tutto a posto.'), broken ? 'bad' : 'ok');
+    this.traceTimer = this.time.delayedCall(Math.max(4000, text.length * 60), () => this.clearTrace());
+  }
+  clearTrace () {
+    if (this.traceTimer) { this.traceTimer.remove(false); this.traceTimer = null; }
+    (this.traceIds || []).forEach(id => { const v = this.compVisuals[id]; if (v && id !== this.assemblyId) this.setGlow(v, false); });
+    this.traceIds = [];
   }
 
   placeSignalNote (f) {

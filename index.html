@@ -84,6 +84,8 @@
         <label class="menu-check"><input type="checkbox" id="set-skipshow"> Salta lo show dopo il collaudo</label>
         <label class="menu-check"><input type="checkbox" id="set-testmusic"> Musica di prova durante il montaggio</label>
         <label class="menu-check"><input type="checkbox" id="set-bosstips"> Consigli del capo prima degli errori (livello 1)</label>
+        <label class="menu-check"><input type="checkbox" id="set-tapemarks"> Segni di nastro sul pavimento (livello 1)</label>
+        <label class="menu-check"><input type="checkbox" id="set-trace"> Pulsante «Segui il segnale» nei pannelli</label>
         <button class="menu-btn" id="settings-back" type="button">Indietro</button>
       </div>
 
@@ -133,6 +135,7 @@
     <div class="modal-box rear-box">
       <div class="modal-header">
         <h2 id="rear-title">Pannello posteriore</h2>
+        <button class="trace-btn" id="rear-trace" title="Illumina la catena di questo dispositivo e il primo anello che non va">Segui il segnale</button>
         <button class="modal-close" id="rear-close">✕</button>
       </div>
       <div class="rear-hand" id="rear-hand"></div>
@@ -164,6 +167,7 @@
     <div id="foglio"></div>
     <div id="toast"></div>
   </div>
+  <div id="piece-info"></div>
 
   <div id="toolbar">
     <div class="tabs">
@@ -190,7 +194,7 @@
           <span class="count" id="count-ciabatta_cee">×1</span>
         </div>
       </div>
-      <span class="panel-hint">Tocca un dispositivo per aprire il suo pannello; tienilo premuto per spostarlo o toglierlo. Il Quadro va in Backstage e si collega all'Allaccio con un cavo CEE 400V; le sue tre prese (L1, L2, L3) sono CEE blu. Ciabatta civile (spina Schuko, 3 prese) e ciabatta CEE (spina CEE blu, 4 prese Schuko) hanno il loro cavo: la spina si prende dal loro pannello. Si posano sul palco, in Off Stage o in FOH; la CEE anche in Backstage.</span>
+      <span class="panel-hint">Tieni premuto un pezzo qui sotto per sapere cos'è. Tocca un dispositivo per aprire il suo pannello; tienilo premuto per spostarlo o toglierlo. Il Quadro va in Backstage e si collega all'Allaccio con un cavo CEE 400V; le sue tre prese (L1, L2, L3) sono CEE blu. Ciabatta civile (spina Schuko, 3 prese) e ciabatta CEE (spina CEE blu, 4 prese Schuko) hanno il loro cavo: la spina si prende dal loro pannello. Si posano sul palco, in Off Stage o in FOH; la CEE anche in Backstage.</span>
     </div>
 
     <div class="tab-panel" data-panel="strutture">

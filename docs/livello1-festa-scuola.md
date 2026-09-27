@@ -118,8 +118,24 @@ corti) e in FOH va solo il mixer.
   che rifacendo l'azione quel guaio arrivi, che seguendo il consiglio vada
   tutto bene e che con una procedura corretta il capo non parli mai.
 
-**Da fare:** punto 5 (in parte già nelle prove dei giri), 8-11 della lista
-sopra.
+- **segui il segnale** (punto 8): nel pannello di ogni dispositivo c'è il
+  pulsante «Segui il segnale». Illumina la catena del dispositivo (musica
+  PC → … → testa per l'audio, consolle → PAR per le luci, allaccio → Quadro
+  → ciabatta per la corrente): in verde gli anelli buoni, in rosso il primo
+  che non va, con il motivo (da posare, non collegato alla corrente, senza
+  corrente, spento, fase abbassata, non gli arriva la musica, non sente la
+  consolle). Si toglie dalle impostazioni (`traceChain`, `showTrace`);
+- **segni di nastro** (punto 9): croci di nastro fluo per quadro, sub,
+  frontali, tagli e asta, angoli per il tavolo regia. Solo livello 1, si
+  tolgono dalle impostazioni (`TAPE_MARKS`);
+- **scheda "cos'è"** (punto 11): tenendo premuto un pezzo nella barra, due
+  righe su cos'è e dove va (`PIECE_INFO`). Il tocco breve lo arma come prima.
+- La lampada di servizio (punto 10) non si fa.
+
+Test: `tests/aiuti.js`.
+
+**Da fare:** punto 5 (indizi a scalare anche nel Test impianto finale: oggi
+sono nelle prove dei giri).
 
 ## Scheda obiettivi
 
