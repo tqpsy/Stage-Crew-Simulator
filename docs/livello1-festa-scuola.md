@@ -111,7 +111,12 @@ corti) e in FOH va solo il mixer.
   mixer, due pesanti insieme sulla stessa fase (picco) o fase troppo carica
   (magnetotermico). Una volta sola per tipo e per tecnico: se lo rifai, lo
   fai davvero. Solo livello 1, si spegne dalle impostazioni («Consigli del
-  capo prima degli errori»). Test: `tests/capo.js`.
+  capo prima degli errori»). Ogni frase è vera in ogni caso in cui compare
+  (anche i PAR senza interruttore: lì il capo dice di abbassare la fase sul
+  Quadro; e il picco acceso da una ciabatta con due sub). `tests/capo.js`
+  controlla che il consiglio sia quello del guaio che arriverebbe davvero,
+  che rifacendo l'azione quel guaio arrivi, che seguendo il consiglio vada
+  tutto bene e che con una procedura corretta il capo non parli mai.
 
 **Da fare:** punto 5 (in parte già nelle prove dei giri), 8-11 della lista
 sopra.

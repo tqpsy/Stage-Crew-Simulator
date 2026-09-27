@@ -1184,20 +1184,29 @@ function saveHistory () { if (window.__scene) window.__scene.pushHistory(); }
    volta sola per tipo di errore e per tecnico: se il giocatore la rifà, la
    fa davvero, con le sue conseguenze. Si spegne dalle impostazioni. */
 const TUTOR_LEVELS = new Set([1]);
+/* Ogni frase deve essere vera in OGNI caso in cui compare (vedi le
+   condizioni in predictToggle e wouldArc, le stesse di applyPowerAction,
+   checkOverloads e checkLiveCableChange): tests/capo.js le controlla. */
 const TUTOR_TIPS = {
-  live: 'Fermo! Da una parte c\'è tensione e dall\'altra un apparecchio acceso: attaccare o staccare così fa l\'arco e salta il salvavita. Spegni prima.',
-  pop: 'Aspetta! Il finale è acceso: se accendi o spegni il mixer adesso, il colpo finisce dritto nelle casse. Prima spegni il finale.',
-  ampliFirst: 'Il finale per ultimo! Prima mixer e PC, poi finale e sub: così le casse non prendono colpi.',
-  inrush: 'Piano! Su questa fase è appena partito un apparecchio pesante: se accendi anche questo insieme, il picco fa saltare il magnetotermico. Uno alla volta.',
-  overload: 'Questa fase è già carica: se accendi anche questo, salta il magnetotermico. Spostalo su un\'altra fase del Quadro.'
+  // presa a monte in tensione e, a valle, qualcosa che assorbe corrente
+  live: 'Fermo! Da una parte c\'è tensione e dall\'altra c\'è qualcosa che assorbe corrente: attaccare o staccare così fa l\'arco e salta il salvavita. Prima togli tensione: spegni l\'apparecchio o, se non ha interruttore come i PAR, abbassa la sua fase sul Quadro.',
+  // un finale acceso resta acceso mentre il mixer cambia stato
+  pop: 'Aspetta! Il finale è acceso: se adesso il mixer si accende o si spegne, il colpo finisce dritto nelle casse. Spegni prima il finale e riaccendilo per ultimo.',
+  // si accende il finale mentre il mixer non va (spento o senza corrente)
+  ampliFirst: 'Il finale per ultimo! Il mixer non è ancora in funzione (spento o senza corrente): quando partirà col finale già acceso, il colpo finirà nelle casse. Prima il mixer, poi finale e sub.',
+  // picco oltre PHASE_PEAK_W: nel livello 1 un solo avvio non basta, servono due pesanti insieme
+  inrush: 'Piano! Così su questa fase partono insieme più apparecchi pesanti (finale, sub) e il picco di accensione fa saltare il magnetotermico. Accendili uno alla volta, con un attimo tra l\'uno e l\'altro.',
+  // carico a regime oltre PHASE_BUDGET_W
+  overload: 'Questa fase è già carica: con anche questo supera i ' + fmtKW(PHASE_BUDGET_W, 0) + ' kW e salta il magnetotermico. Spostalo su un\'altra fase del Quadro.'
 };
+const tutorOn = () => gameActive && TUTOR_LEVELS.has(LEVEL_ID) && settings().bossTips !== false;
 function bossName () {
   const b = Profile.data.serviceInfo && Profile.data.serviceInfo.boss;
   return b ? b.split(' ')[0] : 'Il capo';
 }
 // true se il capo ha fermato l'azione (la prima volta)
 function tutorWarn (key) {
-  if (!gameActive || !TUTOR_LEVELS.has(LEVEL_ID) || settings().bossTips === false) return false;
+  if (!tutorOn()) return false;
   const seen = Profile.data.tutorSeen = Profile.data.tutorSeen || {};
   if (seen[key]) return false;
   seen[key] = true;
@@ -1210,6 +1219,7 @@ function tutorWarn (key) {
    l'azione, si guarda e si rimette tutto com'era */
 function predictToggle (c) {
   const before = runningSet();
+  const was = c.on;   // si rimette esattamente com'era (anche "mai toccato")
   c.on = !c.on;
   const after = runningSet();
   const steady = livePhaseLoads(false), peak = livePhaseLoads(true);
@@ -1218,7 +1228,7 @@ function predictToggle (c) {
     const k = INRUSH_FACTOR[gameState.placed[id].type], ph = phaseOf(id);
     if (k && ph) peak[ph] += COMPONENT_TYPES[gameState.placed[id].type].powerW * (k - 1);
   });
-  c.on = !c.on;
+  if (was === undefined) delete c.on; else c.on = was;
   const q = findQuadro(), prot = q ? quadroProt(q) : {};
   const types = set => [...set].map(id => gameState.placed[id].type);
   const ampsOn = [...after].some(id => gameState.placed[id].type === 'ampli' && before.has(id));
@@ -1243,8 +1253,11 @@ function wouldArc (edge, adding) {
 function toggleDevicePower (compId) {
   const c = gameState.placed[compId];
   if (!c) return;
-  const risk = predictToggle(c);
-  if (['pop', 'overload', 'inrush', 'ampliFirst'].some(k => risk[k] && tutorWarn(k))) return;
+  if (tutorOn()) {
+    const risk = predictToggle(c);
+    // il guaio più grave per primo: il capo ne dice uno solo alla volta
+    if (['overload', 'inrush', 'pop', 'ampliFirst'].some(k => risk[k] && tutorWarn(k))) return;
+  }
   applyPowerAction(() => { c.on = !c.on; });
   if (c.on) SFX.powerOn(c.type); else SFX.powerOff();
   saveHistory();
@@ -5662,7 +5675,7 @@ class StageScene extends Phaser.Scene {
       signal: gameState.selectedCable
     };
     // il capo ferma il primo collegamento sotto carico (il cavo resta in mano)
-    if (wouldArc(edge, true) && tutorWarn('live')) return;
+    if (tutorOn() && wouldArc(edge, true) && tutorWarn('live')) return;
     gameState.edgeSeq++;
     // collegare sotto tensione fa scattare il salvavita; altrimenti il
     // dispositivo appena alimentato (se già acceso) parte davvero
@@ -5811,7 +5824,7 @@ class StageScene extends Phaser.Scene {
     if (idx >= 0) {
       // scollegare sotto tensione fa l'arco: salvavita
       const edge = gameState.edges[idx];
-      if (wouldArc(edge, false) && tutorWarn('live')) return;
+      if (tutorOn() && wouldArc(edge, false) && tutorWarn('live')) return;
       applyPowerAction(() => { arced = checkLiveCableChange(edge); gameState.edges.splice(gameState.edges.indexOf(edge), 1); });
       if (!arced) SFX.cableOut(CABLE_TYPES[edge.signal].endpoints[0]);
     }
@@ -6171,7 +6184,7 @@ class StageScene extends Phaser.Scene {
     }
     gameState.stats.failedTests++;
     const n = ++gameState.giroFails[giro];
-    const boss = (Profile.data.serviceInfo && Profile.data.serviceInfo.boss || 'Il capo').split(' ')[0];
+    const boss = bossName();
     let hint;
     if (result.overPhase) hint = 'una fase del Quadro è troppo carica.';
     else if (result.overBudget) hint = 'chiedi troppa potenza.';
