@@ -421,6 +421,10 @@ non toccano la scena di Phaser.
   stativo. Il Test impianto chiede i PAR arrivati (`parsRequired()`: uno
   per stativo, fino a 4). Anche "Reset livello" usa la dotazione ridotta.
   Il messaggio d'inizio montaggio dice che ore sono e cosa manca.
+  Anche il giro luci si adatta (`lightingCheck`, `lightsPlan`): con 4 PAR
+  due frontali e due tagli, con 3 due frontali e un taglio, con 2 i due
+  frontali, con 1 un frontale. Prima i frontali: il preside non deve
+  restare al buio.
 - **Reputazione**: +3 scarico senza danni, −2 per ogni pezzo rotto, −1
   per ogni bambino urtato (`REP.scarico*`), una volta sola per partita
   (`L1:scarico`).

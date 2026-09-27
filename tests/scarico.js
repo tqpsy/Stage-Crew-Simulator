@@ -77,6 +77,18 @@ const path = require('path');
   const sched = await ev(() => { renderSchedule(); return { now: el('#schedule-list .sched-row.now').textContent, first: el('#schedule-list .sched-row').textContent }; });
   check(/Montaggio/.test(sched.now), 'la scaletta non passa al montaggio');
   check(/2 PAR rotti/.test(sched.first) && /🍺/.test(sched.first), 'la scaletta non racconta lo scarico: ' + sched.first);
+  // luci con 3 PAR: bastano due frontali e un taglio (il giro luci si può finire)
+  const luci = await ev(() => {
+    const S = window.__scene, P = (ty, gx, gy) => { const w = gridToScreen(gx + .5, gy + .5); S.placeComponentAt(ty, w.x, w.y); };
+    const mount = st => { const v = S.compVisuals[st.id].container; S.placeComponentAt('par', v.x, v.y); };
+    P('stativo', 2, 9); P('stativo', 6, 9);
+    placedOfType('stativo').forEach(mount);
+    const soloFrontali = lightingCheck() && lightingCheck().msg;
+    P('stativo', 0, 6); mount(placedOfType('stativo').find(x => !x.hasPar));
+    return { soloFrontali, ok: lightingCheck(), plan: lightsPlan(), pars: placedOfType('par').length, left: gameState.stock.par };
+  });
+  check(luci.soloFrontali === 'manca il taglio a un lato del palco.' && luci.ok === null && luci.plan === 'Due frontali nel Pit e un taglio a lato' && luci.pars === 3 && luci.left === 0,
+    'luci con 3 PAR sbagliate: ' + JSON.stringify(luci));
   // un "Reset livello" non restituisce i pezzi rotti
   await ev(() => window.__scene.resetLevel(true));
   check(await ev(() => gameState.stock.par) === 3, 'il reset del livello ridà il PAR rotto');

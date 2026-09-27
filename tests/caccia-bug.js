@@ -91,12 +91,12 @@ const SEED0 = parseInt(process.argv[4] || '1', 10);
           const base = P[c[m.back]];
           if (base && base[m.link] !== c.id) bug('montaggio a senso unico', at + ': ' + c.id + ' su ' + base.id + ' che regge ' + base[m.link]);
         }
-        const t = MOUNT_ON[c.type];
-        if (t && c[MOUNTS[t].link]) {
+        (MOUNT_ON[c.type] || []).forEach(t => {
+          if (!c[MOUNTS[t].link]) return;
           const top = P[c[MOUNTS[t].link]];
           if (!top) bug('base che regge un pezzo sparito', at + ': ' + c.id + ' -> ' + c[MOUNTS[t].link]);
           else if (top[MOUNTS[t].back] !== c.id) bug('montaggio a senso unico', at + ': ' + c.id + ' regge ' + top.id + ' che sta su ' + top[MOUNTS[t].back]);
-        }
+        });
       });
       Object.entries(S.occupied).forEach(([k, id]) => {
         if (!P[id]) bug('cella occupata da un pezzo che non c\'è', at + ': ' + k + ' -> ' + id);
@@ -132,11 +132,12 @@ const SEED0 = parseInt(process.argv[4] || '1', 10);
           for (let i = 0; i < 12 && gameState.stock[ty] === n0; i++) { const w = cell(); S.placeComponentAt(ty, w.x, w.y); }
         },
         mount: () => {
-          // top su un sub libero, PAR su uno stativo libero (e simili)
-          const bases = Object.values(gameState.placed).filter(c => MOUNT_ON[c.type] && !c[MOUNTS[MOUNT_ON[c.type]].link] && gameState.stock[MOUNT_ON[c.type]] > 0);
-          if (!bases.length) return;
-          const base = pick(bases), v = S.compVisuals[base.id].container;
-          S.placeComponentAt(MOUNT_ON[base.type], v.x, v.y);
+          // top su un sub libero, PAR su uno stativo libero, regia sul tavolo (e simili)
+          const free = Object.values(gameState.placed).flatMap(c => (MOUNT_ON[c.type] || [])
+            .filter(t => !c[MOUNTS[t].link] && gameState.stock[t] > 0).map(t => [c, t]));
+          if (!free.length) return;
+          const [base, t] = pick(free), v = S.compVisuals[base.id].container;
+          S.placeComponentAt(t, v.x, v.y);
         },
         remove: () => { const ids = placedIds(); if (ids.length) S.deleteComponent(pick(ids)); },
         move: () => {
@@ -160,11 +161,25 @@ const SEED0 = parseInt(process.argv[4] || '1', 10);
           if (rearPanelId) closeRearPanel();
           S.cancelPending();
         },
+        // cavi dalla vista della regia: due prese a caso degli apparecchi del tavolo
+        regia: () => {
+          const t = placedOfType('tavolo')[0];
+          const devs = t ? mountedAll(t) : [];
+          if (!devs.length) return;
+          const ports = devs.flatMap(c => COMPONENT_TYPES[c.type].ports.map(pt => ({ c: c.id, pt })));
+          const A = pick(ports), cables = Object.keys(CABLE_TYPES).filter(k => cableOK(k, A.pt.signal));
+          if (cables.length && !A.pt.lead) selectCable(pick(cables));
+          openRearPanel(t.id);
+          for (const x of [A, pick(ports)]) if (rearPanelId) onRearPortClick(x.c, x.pt.id);
+          if (rearPanelId) closeRearPanel();
+          S.cancelPending();
+        },
         unwire: () => { if (!gameState.edges.length) return; S.selectedEdgeId = pick(gameState.edges).id; S.deleteSelectedEdge(); },
         power: () => { const sw = Object.values(gameState.placed).filter(c => SWITCHABLE.has(c.type)); if (sw.length) toggleDevicePower(pick(sw).id); },
         quadro: () => { if (findQuadro()) toggleProtection(pick(['main', 'rcd', 'L1', 'L2', 'L3'])); },
         dmx: () => { const pars = placedOfType('par'); if (pars.length) { pick(pars).dmx = { addr: 1 + Math.floor(rng() * 512), mode: Math.floor(rng() * 3) }; S.pushHistory(); } },
         test: () => { S.runSystemTest(); },
+        prova: () => { if (gameState.giro < GIRO_COLLAUDO) S.runGiroTest(); },
         undoRedo: () => {
           // annulla e ripeti devono tornare allo stesso identico stato
           const before = snap();
@@ -184,7 +199,7 @@ const SEED0 = parseInt(process.argv[4] || '1', 10);
         },
         reset: () => { if (rng() < 0.2) S.resetLevel(true); }
       };
-      const weights = { place: 14, mount: 6, remove: 4, move: 6, wire: 30, unwire: 6, power: 8, quadro: 6, dmx: 3, test: 3, undoRedo: 5, undo: 3, saveLoad: 3, reset: 1 };
+      const weights = { place: 14, mount: 6, remove: 4, move: 6, wire: 30, unwire: 6, power: 8, quadro: 6, dmx: 3, test: 3, prova: 3, regia: 6, undoRedo: 5, undo: 3, saveLoad: 3, reset: 1 };
       const bag = Object.entries(weights).flatMap(([k, w]) => Array(w).fill(k));
       for (let s = 0; s < STEPS; s++) {
         const act = pick(bag);

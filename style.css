@@ -272,6 +272,9 @@
   #toast.bad{ --toast-accent:var(--red); border-color:rgba(224,80,63,.55); }
   #toast.bad::before{ content:'!'; }
   #toast.show.hold{ opacity:0; visibility:hidden; }
+  /* il capo squadra che ferma un errore prima che succeda */
+  #toast.boss{ --toast-accent:var(--amber); border-color:rgba(242,165,65,.6); }
+  #toast.boss::before{ content:'!'; }
 
   /* ---------- "Quale?": tocco a metà tra più dispositivi ---------- */
   #pick-menu{ display:none; position:fixed; inset:0; z-index:140; }
@@ -338,9 +341,25 @@
   .rear-svg.round.compact{ max-height:60vh; }
   .rear-svg .rp-btn:hover rect{ fill:#55585f; }
   .rear-svg .rp-port:hover > g:first-of-type{ filter:brightness(1.15); }
+  /* vista della regia (tavolo): i pannelli uno sotto l'altro, scorrendo */
+  .rear-svg-wrap.table-view{ max-height:66vh; overflow-y:auto; display:flex; flex-direction:column; gap:14px; }
+  .rear-svg-wrap.table-view .rear-svg{ max-height:30vh; }
+  .rear-block-head{
+    font-family:var(--font-display); font-size:15px; letter-spacing:.04em; color:var(--amber);
+    margin:0 0 6px 2px;
+  }
   .rear-detail:empty{ display:none; }
   .rear-detail{ margin:4px 16px 0; padding:10px 12px; border:1px solid var(--hairline); border-radius:8px; background:var(--bg-panel-raised); font-size:13px; }
   .rear-detail-head{ font-weight:700; margin-bottom:6px; }
+  /* cavi dei bauli che entrano nella presa toccata */
+  .rear-picks{ display:flex; flex-wrap:wrap; gap:8px; }
+  .rear-pick{
+    display:flex; flex-direction:column; align-items:flex-start; gap:4px; min-height:44px;
+    background:var(--bg-panel); border:1px solid var(--hairline); border-radius:8px;
+    color:var(--text-main); padding:6px 10px; cursor:pointer; text-align:left;
+  }
+  .rear-pick:hover{ border-color:var(--amber); }
+  .rear-pick small{ color:var(--text-muted); font-size:11px; }
   .rear-detail-row{ display:flex; align-items:center; justify-content:space-between; gap:10px; padding:4px 0; }
   .rear-unplug{
     background:none; border:1px solid var(--red); color:var(--red); border-radius:5px;
@@ -461,6 +480,34 @@
     border-bottom-color:var(--amber);
     background:var(--bg-panel-raised);
   }
+
+  /* scheda di un giro del montaggio non ancora aperto */
+  .tab-btn.locked{ opacity:.45; }
+  .tab-btn.locked::after{ content:' \1F512'; font-size:10px; }
+
+  /* ---------- FOGLIO DI MONTAGGIO: il giro in corso, voce per voce ---------- */
+  #foglio{
+    position:absolute; left:10px; top:10px; z-index:15;
+    max-width:min(330px, calc(100% - 20px));
+    background:rgba(28,29,34,.92); border:1px solid var(--hairline); border-radius:8px;
+    box-shadow:0 4px 16px rgba(0,0,0,.35); font-size:12px;
+  }
+  #foglio .fg-head{
+    display:flex; align-items:center; gap:8px; width:100%;
+    background:none; border:none; color:var(--text-main); cursor:pointer;
+    font-family:var(--font-display); font-size:14px; letter-spacing:.02em;
+    padding:6px 10px; text-align:left;
+  }
+  #foglio .fg-caret{ margin-left:auto; color:var(--text-muted); }
+  #foglio .fg-body{ padding:0 10px 8px; max-height:40vh; overflow-y:auto; }
+  #foglio .fg-steps{ display:flex; align-items:center; gap:5px; margin-bottom:6px; font-size:11px; color:var(--text-muted); }
+  #foglio .fg-step.now{ color:var(--amber); font-weight:700; }
+  #foglio .fg-step.done{ color:var(--green); }
+  #foglio .fg-list{ list-style:none; margin:0; padding:0; display:flex; flex-direction:column; gap:3px; color:var(--text-muted); }
+  #foglio .fg-list li.ok{ color:var(--green); }
+  #foglio .fg-note{ margin:0; color:var(--text-muted); line-height:1.4; }
+  /* sul telefono i livelli dei cavi occupano la riga in alto: il foglio va sotto */
+  @media (max-width:699px){ #foglio{ top:62px; } }
 
   /* Il pannello scorre INTERNAMENTE se il contenuto non ci sta (max-height +
      overflow-y): lo spazio del gioco sopra non si riduce mai per far posto ai
@@ -618,6 +665,27 @@
   }
   #run-btn:active{ transform:translateY(2px); box-shadow:0 1px 0 var(--amber-dim); }
   #run-btn:hover{ filter:brightness(1.08); }
+
+  /* pulsante "Segui il segnale" nell'intestazione del pannello */
+  .trace-btn{
+    margin-left:auto; margin-right:8px; background:none; border:1px solid var(--green); color:var(--green);
+    border-radius:6px; padding:5px 10px; font-size:12.5px; font-weight:600; cursor:pointer; white-space:nowrap;
+  }
+  .trace-btn:hover{ background:var(--green); color:#141519; }
+  .trace-btn[hidden]{ display:none; }
+
+  /* pressione lunga sui pezzi: niente menù del telefono né selezione del testo */
+  .piece{ -webkit-touch-callout:none; -webkit-user-select:none; user-select:none; }
+  /* scheda "cos'è" di un pezzo della barra (pressione lunga) */
+  #piece-info{
+    position:fixed; z-index:160; display:none; width:min(300px, calc(100vw - 16px));
+    background:var(--bg-panel-raised); border:1px solid var(--amber); border-radius:10px;
+    padding:10px 12px; box-shadow:0 10px 30px rgba(0,0,0,.55); font-size:12.5px; line-height:1.4;
+  }
+  #piece-info.show{ display:block; }
+  #piece-info b{ font-family:var(--font-display); font-size:16px; letter-spacing:.03em; color:var(--amber); }
+  #piece-info p{ margin:4px 0; color:var(--text-main); }
+  #piece-info small{ color:var(--text-muted); }
 
   /* ---------- MENÙ DI GIOCO ---------- */
   #menu-modal{ z-index:120; }

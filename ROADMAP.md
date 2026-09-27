@@ -28,6 +28,22 @@ Idee e richieste già decise, da sviluppare nei prossimi livelli.
   scheda audio negli ingressi XLR del mixer (CH 1–4): dal vero funziona.
 - La DI resta per il cablaggio futuro degli strumenti sul palco.
 
+## Regia e rack
+
+- Livello 1: tavolo regia in Off Stage, finale in rack 2U sotto il piano.
+- Livelli 2-3: rack a terra accanto al tavolo (finali, radiomicrofoni),
+  impilabili, con un limite di unità (U).
+- Più avanti: regia in FOH col multicore; i rack finali restano a lato palco,
+  **già cablati dentro** (si collega solo il multipolare).
+- Guasto possibile: rack del finale chiuso o col retro contro il muro → il
+  finale scalda e va in protezione.
+
+## Attrezzi da sbloccare con la reputazione
+
+Invece di livelli più facili, strumenti veri che semplificano il lavoro:
+tester per cavi, sequencer di accensione, cavi già etichettati, multicore,
+ciabatte con interruttore generale, rack precablati.
+
 ## Guasti nei livelli successivi (proposta)
 
 Il guasto del microfono del preside (vedi `docs/livello1-festa-scuola.md`) è il
@@ -68,6 +84,9 @@ cambiano da una fase all'altra.
   crearne uno per il livello) e `tests/partita-telefono.js`, così ogni
   soluzione reale viene promossa e ogni errore bocciato col messaggio
   giusto.
+- Il capo squadra tutor vale solo per il livello 1 (`TUTOR_LEVELS`):
+  `tests/capo.js` controlla che fermi ogni errore una volta sola. I test che
+  provocano errori apposta spengono i consigli (`settings().bossTips`).
 - `tests/scarico.js`: lo scarico dentro il gioco e le sue conseguenze sul
   montaggio. Senza rete servono `PHASER_PATH` e `MATTER_PATH`.
 
