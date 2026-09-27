@@ -173,8 +173,9 @@ Giro del livello: **Montaggio → Test impianto → [cambio palco → spettacolo
 
 ## Grafica e interazione in spettacolo (proposta)
 
-- **Header**: barra del tempo con faccia del personaggio e orologio, misuratore
-  del gradimento, 🍺, stanchezza, reputazione.
+- **Header**: barra del tempo con faccia del personaggio e orologio; il
+  gradimento del pubblico è la barra più grande, con la percentuale; la
+  stanchezza sta nel tasto della 🍺 (la birra la fa scendere); reputazione.
 - **Palco isometrico**: resta la vista di gioco. Sopra compaiono i personaggi
   (preside al microfono, DJ alla consolle, Dante sullo sgabello) e il pubblico
   in platea: teste che si muovono a tempo, colore e fumetti che ne mostrano l'umore.
@@ -277,6 +278,10 @@ Il guasto si risolve ricordando il cablaggio, non premendo un pulsante.
   è estratto a caso a ogni partita e scritto solo nella scheda iniziale). Se
   lo rimetti altrove nessun avviso: la voce arriva su un canale col fader giù,
   bisogna accorgersene dai meter; a fine discorso −2 reputazione.
+- **Musica di riempimento**: durante il guasto si può alzare il PC; il
+  pubblico si spazientisce più piano (il calo è meno della metà). Appena il
+  preside torna a sentirsi la musica va riabbassata, altrimenti copre il
+  discorso e il pubblico cala.
 - **Gli errori costano tempo**, non punti: cavo sbagliato, capo sbagliato,
   presa sbagliata o spina storta fanno perdere qualche secondo di silenzio.
 - Il prototipo ha nella scheda iniziale la scelta del guasto da provare
