@@ -406,8 +406,12 @@ rigiocabilità. Nel livello 1 al massimo uno alla volta.
   contrario, con il "tetris" del mezzo da riempire. Può essere il motivo
   per cui le **cinghie** contano.
 
-## Prossimo passo
+## Prototipo
 
-Un prototipo in `prototipi/scarico.html` con Matter.js: il furgone, la
-rampa, tre case (baule CORRENTE, case PAR, rack regia) e Tonino, per
-tarare peso, attrito e soglie di danno prima di toccare `main.js`.
+`prototipi/scarico.html` (si apre da solo nel browser, anche su telefono):
+scenario 1 completo, con i 12 case del livello 1, Tonino, rampa, gradino
+con OH-ISSA, ribaltamento del rack, dolly, pausa caffè, cavo incastrato,
+passanti, bidello col carrello, Tonino al telefono e bolla di scarico
+finale. La vista è dall'alto (la fisica è la stessa che servirà in
+isometrico). I numeri da tarare sono in cima al file (`WHEEL`, `FRAG`,
+`CASES`, `GAME_SECONDS`).
