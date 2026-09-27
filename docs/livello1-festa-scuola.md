@@ -96,7 +96,15 @@ corti) e in FOH va solo il mixer.
   verde le celle libere della sua zona; per i pezzi che si montano sopra un
   altro (testa, PAR, microfono, regia sul tavolo) si cerchiano le basi libere.
 
-**Da fare:** punti 4, 5 (in parte già nelle prove dei giri), 7-11 della lista
+- **segnale visibile** (punto 7): con il PC acceso la musica segue i cavi
+  (PC → scheda → mixer → finale → sub → testa, ogni apparecchio attivo
+  acceso). Sugli apparecchi raggiunti sale una nota verde, le casse
+  pulsano a tempo e, appena ne suona una, parte piano la musica di prova in
+  loop (si spegne dalle impostazioni: «Musica di prova durante il
+  montaggio»). Durante lo show e gli effetti del test tace (`musicReach`,
+  `updateSignalFlow`).
+
+**Da fare:** punti 4, 5 (in parte già nelle prove dei giri), 8-11 della lista
 sopra.
 
 ## Scheda obiettivi

@@ -854,8 +854,8 @@ const SFX = (() => {
   /* beat da concerto per il collaudo riuscito: cassa dritta, rullante sul 2
      e sul 4, charleston in levare e un basso che gira su quattro note, a
      tutto volume su un'uscita propria (così si può zittire di colpo) */
-  function beat (bpm, beats) {
-    const out = ctx.createGain(); out.gain.value = 1.6 * volume;
+  function beat (bpm, beats, level) {
+    const out = ctx.createGain(); out.gain.value = (level || 1.6) * volume;
     const comp = ctx.createDynamicsCompressor();
     comp.threshold.value = -10; comp.ratio.value = 6;
     out.connect(comp); comp.connect(ctx.destination);
@@ -896,8 +896,26 @@ const SFX = (() => {
     };
   }
 
+  // musica di prova del montaggio: lo stesso beat, piano, a blocchi di 16
+  // battiti rimessi in coda finché non la si ferma
+  let loop = null;
+  function testLoop (on) {
+    if (!on || !volume) {
+      if (loop) { clearTimeout(loop.timer); if (loop.stop) loop.stop(); loop = null; }
+      return;
+    }
+    if (loop) return;
+    play(() => {
+      const bpm = 124, beats = 16, ms = 60 / bpm * beats * 1000;
+      loop = {};
+      const tick = () => { if (!loop) return; loop.stop = beat(bpm, beats, 0.3); loop.timer = setTimeout(tick, ms); };
+      tick();
+    });
+  }
+
   return {
     get muted () { return !volume; },
+    testLoop,
     // restituisce la funzione che lo zittisce (anche se non è mai partito)
     beat: (bpm, beats) => { let stop = () => {}; play(() => { stop = beat(bpm, beats); }); return stop; },
     // impianto che gracchia: scariche, ronzio di massa e fischio che va e viene
@@ -912,6 +930,7 @@ const SFX = (() => {
     get volume () { return volume; },
     setVolume (v) {
       volume = Math.max(0, Math.min(1, v));
+      if (!volume) testLoop(false);
       if (master) master.gain.value = 0.55 * volume;
     },
     cableIn: sig => play(plugIn[family(sig)]),
@@ -1322,6 +1341,7 @@ function updateConnectionCounter () {
   const fill = el('#conn-fill');
   if (fill) fill.style.width = Math.min(100, (result.madeCount / result.totalCount) * 100) + '%';
   if (typeof updateFoglio === 'function') updateFoglio();
+  if (window.__scene) window.__scene.updateSignalFlow();
 }
 
 function setCircuitStatus (state) {
@@ -1429,7 +1449,7 @@ const SERVICE_NAME_MAX = 28;   // caratteri del nome (inventato) di un service
 const USED_SERVICES_KEEP = 400; // nomi di service già proposti, da non riproporre
 
 function defaultProfile () {
-  return { v: SAVE_VERSION, player: '', service: '', serviceInfo: null, usedServices: [], settings: { volume: 0.8, reducedFx: false, skipShow: false }, logo: null, level: null, records: {}, reputation: { total: 0, earned: {}, log: [] } };
+  return { v: SAVE_VERSION, player: '', service: '', serviceInfo: null, usedServices: [], settings: { volume: 0.8, reducedFx: false, skipShow: false, testMusic: true }, logo: null, level: null, records: {}, reputation: { total: 0, earned: {}, log: [] } };
 }
 const Profile = (() => {
   let data = defaultProfile();
@@ -2094,6 +2114,7 @@ function showMenuPage (page, keep) {
     el('#set-volume').value = Math.round(settings().volume * 100);
     el('#set-reduced').checked = !!settings().reducedFx;
     el('#set-skipshow').checked = !!settings().skipShow;
+    el('#set-testmusic').checked = settings().testMusic !== false;
     el('#set-player').value = Profile.data.player;
   }
 }
@@ -2245,6 +2266,7 @@ el('#set-volume').addEventListener('input', ev => { settings().volume = ev.targe
 el('#set-volume').addEventListener('change', () => SFX.button());
 el('#set-reduced').addEventListener('change', ev => { settings().reducedFx = ev.target.checked; Profile.save(); });
 el('#set-skipshow').addEventListener('change', ev => { settings().skipShow = ev.target.checked; Profile.save(); });
+el('#set-testmusic').addEventListener('change', ev => { settings().testMusic = ev.target.checked; Profile.save(); if (window.__scene) window.__scene.updateSignalFlow(); });
 el('#set-player').addEventListener('change', ev => {
   const name = cleanName(ev.target.value);
   if (name) Profile.data.player = name;
@@ -3193,6 +3215,30 @@ function showCableChoice (compId, portId) {
   }));
 }
 
+/* MUSICA DI PROVA — fin dove arriva il segnale del PC: dal PC acceso alla
+   scheda (USB-C), dalla scheda al mixer (jack), dal mixer al finale (XLR),
+   dal finale ai sub e dai sub alle teste (Speakon). Ogni apparecchio attivo
+   deve essere acceso; la testa è passiva e suona se le arriva il segnale. */
+const MUSIC_CABLES = new Set(['usbc', 'jack', 'xlr', 'speakon']);
+function musicReach () {
+  const reach = new Set();
+  const pc = placedOfType('pc').find(c => isRunning(c.id));
+  if (!pc) return reach;
+  reach.add(pc.id);
+  const queue = [pc.id];
+  while (queue.length) {
+    const id = queue.shift();
+    gameState.edges.forEach(e => {
+      if (e.a !== id || !MUSIC_CABLES.has(e.signal) || reach.has(e.b)) return;
+      const b = gameState.placed[e.b];
+      if (!b || !(b.type === 'top' || isRunning(b.id))) return;
+      reach.add(b.id);
+      queue.push(b.id);
+    });
+  }
+  return reach;
+}
+
 // seleziona un cavo come farebbe il suo pulsante nella scheda Cavi
 function selectCable (cableId) {
   gameState.selectedCable = cableId;
@@ -4124,6 +4170,8 @@ class StageScene extends Phaser.Scene {
     const pend = gameState.pendingPort;
     const pendKey = pend ? pend.componentId + '/' + pend.portId + '/' + gameState.selectedCable : '';
     if (pendKey !== this.pendingKey) { this.pendingKey = pendKey; updateCableBanner(); this.highlightTargets(); }
+    // le note della musica di prova seguono il loro dispositivo
+    if (this.signalFx) Object.values(this.signalFx).forEach(f => { if (f.note) this.placeSignalNote(f); });
     let dx = 0, dy = 0;
     if (this.cursors.left.isDown || this.wasd.left.isDown) dx -= speed;
     if (this.cursors.right.isDown || this.wasd.right.isDown) dx += speed;
@@ -6047,7 +6095,6 @@ class StageScene extends Phaser.Scene {
       const opens = names.length > 1 ? 'si aprono le schede ' + names.slice(0, -1).join(', ') + ' e ' + names[names.length - 1] : 'si apre la scheda ' + names[0];
       showToast(msg + (next ? ' Adesso il giro ' + next.title + ': ' + opens + '.'
         : ' Il montaggio è finito: fai il Test impianto, il collaudo di tutto insieme.'), 'ok');
-      if (g.id === 'audio') { const stop = SFX.beat(124, 8); this.time.delayedCall(4000, stop); }
       saveLevel();
       updateGiroUI();
       return;
@@ -6159,6 +6206,7 @@ class StageScene extends Phaser.Scene {
   fxStart () {
     this.stopFx();
     this.fx = { objs: [], timers: [], tweens: [], stops: [], restore: [] };
+    this.updateSignalFlow();   // durante lo show o i guasti la musica di prova tace
     if (this.liveBeams) this.liveBeams.clear();
     return this.fx;
   }
@@ -6191,6 +6239,7 @@ class StageScene extends Phaser.Scene {
     fx.objs.forEach(o => { this.tweens.killTweensOf(o); o.destroy(); });
     fx.restore.forEach(fn => fn());
     fx.stops.forEach(fn => fn());
+    this.updateSignalFlow();
     this.drawLiveBeams();
   }
   visualsOf (...types) {
@@ -6325,6 +6374,58 @@ class StageScene extends Phaser.Scene {
     }, () => this.stopFx());
   }
 
+  /* ---------------- musica di prova: fin dove arriva il segnale ----------------
+     Sugli apparecchi raggiunti sale una nota; le casse pulsano a tempo e,
+     appena ne suona una, parte piano la musica di prova (si spegne dalle
+     impostazioni). Durante gli effetti del Test impianto tace. */
+  updateSignalFlow () {
+    const reach = this.fx ? new Set() : musicReach();
+    this.signalFx = this.signalFx || {};
+    const still = reducedFx();
+    Object.keys(this.signalFx).forEach(id => {
+      const f = this.signalFx[id], v = this.compVisuals[id];
+      if (reach.has(id) && v && v.container === f.container) return;
+      if (f.tween) f.tween.stop();
+      if (f.pump) f.pump.stop();
+      if (f.note && f.note.scene) f.note.destroy();
+      if (f.container.scene && f.speaker) f.container.setScale(1);
+      delete this.signalFx[id];
+    });
+    reach.forEach(id => {
+      const v = this.compVisuals[id];
+      if (!v || this.signalFx[id]) return;
+      const type = gameState.placed[id].type;
+      const f = { container: v.container, speaker: type === 'sub' || type === 'top' };
+      if (f.speaker) {
+        if (!still) f.pump = this.tweens.add({ targets: v.container, scaleX: 1.035, scaleY: 1.035, duration: 60000 / 124 / 2, yoyo: true, repeat: -1, ease: 'Sine.easeOut' });
+      }
+      {
+        // una croma disegnata (testa, gambo e bandierina: nessun font da cui
+        // dipendere), sopra tutta la scena così non la copre il vicino; la
+        // posizione segue il dispositivo a ogni fotogramma (vedi update)
+        f.dx = v.def.body.w / 2 - 6;
+        f.dy = (v.def.body.oy || 0) - v.def.body.h / 2 - 4;
+        if (type === 'ampli') f.dy -= 30;   // il rack sta sotto il tavolo: la nota esce dal piano
+        f.note = this.add.graphics().setDepth(50).setScale(1.5);
+        f.note.fillStyle(0x0c0d10, 0.65); f.note.fillCircle(0, 1, 9);
+        f.note.fillStyle(0x7fe0a0, 1);
+        f.note.fillEllipse(-1.5, 4, 7, 5); f.note.fillRect(1.2, -7, 1.8, 11);
+        f.note.fillTriangle(3, -7, 7.5, -3, 3, -2.5);
+        f.anim = { t: 0 };
+        if (!still) f.tween = this.tweens.add({ targets: f.anim, t: 1, duration: 60000 / 124 * 2, repeat: -1 });
+        this.placeSignalNote(f);
+      }
+      this.signalFx[id] = f;
+    });
+    const speakers = [...reach].some(id => this.signalFx[id] && this.signalFx[id].speaker);
+    SFX.testLoop(gameActive && speakers && settings().testMusic !== false);
+  }
+
+  placeSignalNote (f) {
+    const c = f.container;
+    f.note.setPosition(c.x + f.dx, c.y + f.dy - 16 * f.anim.t).setAlpha(1 - 0.85 * f.anim.t).setVisible(c.visible);
+  }
+
   /* ---------------- corrente dal vivo: LED, fasi, pannello aperto ---------------- */
   refreshLive () {
     Object.keys(gameState.placed).forEach(id => {
@@ -6337,6 +6438,7 @@ class StageScene extends Phaser.Scene {
     this.drawLiveBeams();
     if (rearPanelId) renderRearPanel();
     updateFoglio();
+    this.updateSignalFlow();
   }
 
   // scintille sulle prese delle fasi scattate (o al centro del Quadro)
@@ -6638,6 +6740,7 @@ class StageScene extends Phaser.Scene {
     setCircuitStatus('untested');
     gameState.tested = false;
     this.updateHistoryButtons();
+    this.updateSignalFlow();
     saveLevel();
   }
 
