@@ -56,6 +56,8 @@ cambiano da una fase all'altra.
 - Il bilico va rifinito come trattore + semirimorchio separati; con il
   bilico i case vanno spostati più avanti sulla banchina.
 - Più case (e più bauli) man mano che crescono impianto e livello.
+- **Minigioco dello scarico** (16:00 in scaletta): fisica dall'alto, collega
+  CPU, i danni si pagano al montaggio. Design in `docs/minigioco-scarico.md`.
 
 ## Test automatici
 
