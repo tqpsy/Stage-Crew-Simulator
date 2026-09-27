@@ -76,7 +76,7 @@ const SEED0 = parseInt(process.argv[4] || '1', 10);
         if (Object.keys(adj).some(n => !state[n] && dfs(n))) bug('anello di cavi', at + ': famiglia ' + f);
       });
       // --- magazzino
-      Object.entries(AVAILABLE_STOCK).forEach(([ty, n]) => {
+      Object.entries(levelStock()).forEach(([ty, n]) => {
         const posati = Object.values(P).filter(c => c.type === ty).length;
         if (gameState.stock[ty] + posati !== n) bug('magazzino sballato', at + ': ' + ty + ' stock=' + gameState.stock[ty] + ' posati=' + posati + ' dotazione=' + n);
         if (gameState.stock[ty] < 0) bug('magazzino negativo', at + ': ' + ty);

@@ -19,7 +19,7 @@ const path = require('path');
   await p.waitForFunction(() => window.__scene, null, { timeout: 20000 });
   await p.evaluate(() => startNewGame('Capo', serviceOffers([])[0]));
   await p.waitForFunction(() => !menuOpen);
-  await p.evaluate(() => closeSchedule());
+  await p.evaluate(() => { closeSchedule(); finishScarico({ skipped: true }); });   // lo scarico ha il suo test
   const res = await p.evaluate(async () => {
     const sleep = ms => new Promise(r => setTimeout(r, ms));
     const S = window.__scene, out = [];

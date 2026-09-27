@@ -27,6 +27,10 @@ const OUT = process.env.SHOTS || null;
   taps++; await p.locator('#new-start').tap(); await p.waitForTimeout(150);
   // la scaletta della serata, poi al lavoro
   taps++; await p.locator('#schedule-go').tap(); await p.waitForTimeout(150);
+  // lo scarico (minigioco a parte, tests/scarico.js): qui si salta
+  await p.waitForSelector('#scarico-frame');
+  taps++; await p.frameLocator('#scarico-frame').locator('#btn-skip').tap();
+  await p.waitForFunction(() => !document.querySelector('#scarico-frame'));
   const toast = () => p.evaluate(() => el('#toast').textContent);
   const shot = n => OUT ? p.screenshot({ path: path.join(OUT, 'telefono-' + n + '.png') }) : null;
   // mondo -> pagina

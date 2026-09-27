@@ -518,7 +518,13 @@ function parAim (parId) {
   return null;
 }
 /* luci del livello 1: due frontali (uno per lato) e due tagli (uno per
-   lato). Restituisce null se va bene, altrimenti messaggio e pezzi in rosso */
+   lato). Se allo scarico si è rotto qualche PAR se ne chiedono meno, prima
+   i frontali (il preside non deve restare al buio): 3 PAR = due frontali e
+   un taglio, 2 = i due frontali, 1 = un frontale.
+   Restituisce null se va bene, altrimenti messaggio e pezzi in rosso */
+function lightsPlan () {
+  return ['Niente PAR da montare', 'Un frontale nel Pit', 'Due frontali nel Pit', 'Due frontali nel Pit e un taglio a lato', 'Due frontali nel Pit e due tagli ai lati'][parsRequired()];
+}
 function lightingCheck () {
   const mid = STAGE_ORIGIN_X + STAGE_W / 2;
   const onStand = placedOfType('par').map(p => ({ p, s: mountBase(p) })).filter(x => x.s);
@@ -527,8 +533,11 @@ function lightingCheck () {
   const tl = onStand.filter(x => standRole(x.s) === 'left').length;
   const tr = onStand.filter(x => standRole(x.s) === 'right').length;
   const ids = onStand.map(x => x.s.id);
-  if (!fl || !fr) return { msg: front.length ? 'i frontali vanno uno a sinistra e uno a destra del palco.' : 'manca il frontale davanti al palco: il preside resterebbe al buio.', ids };
-  if (!tl || !tr) return { msg: 'mancano i tagli, uno per lato del palco.', ids };
+  const n = parsRequired(), needFront = Math.min(2, n), needSide = Math.max(0, n - 2);
+  if (needFront && !front.length) return { msg: 'manca il frontale davanti al palco: il preside resterebbe al buio.', ids };
+  if (needFront === 2 && (!fl || !fr)) return { msg: 'i frontali vanno uno a sinistra e uno a destra del palco.', ids };
+  if (needSide === 2 && (!tl || !tr)) return { msg: 'mancano i tagli, uno per lato del palco.', ids };
+  if (needSide === 1 && !tl && !tr) return { msg: 'manca il taglio a un lato del palco.', ids };
   return null;
 }
 
@@ -561,6 +570,17 @@ const PHASE_PEAK_W = 4600;
    I dispositivi si cercano per tipo e non per id, così un pezzo tolto e
    rimesso (che prende un id nuovo) conta come prima. */
 const REQUIRED_POWER = { mixer: 1, controller: 1, ampli: 1, sub: 2, par: 4, pc: 1 };
+
+/* Dotazione che arriva davvero al montaggio: quello che si è rotto allo
+   scarico manca (il case ricambi, se è arrivato sano, ha già rimpiazzato un
+   PAR e uno stativo). Senza scarico giocato è la dotazione piena. Il Test
+   impianto chiede i PAR arrivati sani, uno per stativo, fino a 4. */
+function levelStock () {
+  const s = { ...AVAILABLE_STOCK }, lost = (Profile.data.scarico && Profile.data.scarico.lost) || {};
+  Object.entries(lost).forEach(([t, n]) => { if (t in s) s[t] = Math.max(0, s[t] - n); });
+  return s;
+}
+function parsRequired () { const s = levelStock(); return Math.min(4, s.par, s.stativo); }
 
 /* Microfono pronto per il discorso del preside: montato sull'asta e collegato
    con un XLR a un ingresso MIC del mixer. Restituisce il numero del canale
@@ -627,7 +647,7 @@ function buildExpectedConnections () {
   const allaccio = one('allaccio'), quadro = one('quadro');
   list.push(slot(allaccio && quadro && portEdgeExists(allaccio.id, 'out', quadro.id, 'in', 'cee_tri'),
     quadro ? 'Allaccio → ' + L(quadro) + ' (CEE 400V)' : missing('quadro'), quadro));
-  Object.entries(REQUIRED_POWER).forEach(([t, n]) => {
+  Object.entries({ ...REQUIRED_POWER, par: parsRequired() }).forEach(([t, n]) => {
     giro = t === 'controller' || t === 'par' ? 'luci' : 'audio';
     const cs = placedOfType(t);
     for (let i = 0; i < n; i++) list.push(slot(cs[i] && wiredToQuadro(cs[i].id), cs[i] ? 'corrente a ' + L(cs[i]) : missing(t), cs[i]));
@@ -653,7 +673,7 @@ function buildExpectedConnections () {
   // DMX: ogni PAR in catena dalla consolle
   cat = 'lights'; giro = 'luci';
   const pars = placedOfType('par');
-  for (let i = 0; i < 4; i++) list.push(slot(pars[i] && dmxUniverse(pars[i].id) != null, pars[i] ? 'DMX dalla consolle a ' + L(pars[i]) : missing('par'), pars[i]));
+  for (let i = 0; i < parsRequired(); i++) list.push(slot(pars[i] && dmxUniverse(pars[i].id) != null, pars[i] ? 'DMX dalla consolle a ' + L(pars[i]) : missing('par'), pars[i]));
 
   // finale -> ogni Sub, ogni Sub -> la testa agganciata sopra
   cat = 'audio'; giro = 'audio';
@@ -1517,7 +1537,7 @@ document.querySelectorAll('.tab-btn').forEach(btn => {
    casse).
    --------------------------------------------------------------------- */
 const SAVE_KEY = 'scs-save';
-const SAVE_VERSION = 3;
+const SAVE_VERSION = 4;
 const LEVEL_ID = 1;
 const RECORDS_KEEP = 20;       // record tenuti per livello
 const NAME_MAX = 24;           // caratteri del nome del tecnico
@@ -1525,7 +1545,7 @@ const SERVICE_NAME_MAX = 28;   // caratteri del nome (inventato) di un service
 const USED_SERVICES_KEEP = 400; // nomi di service già proposti, da non riproporre
 
 function defaultProfile () {
-  return { v: SAVE_VERSION, player: '', service: '', serviceInfo: null, usedServices: [], settings: { volume: 0.8, reducedFx: false, skipShow: false, testMusic: true, bossTips: true, tapeMarks: true, traceSignal: true }, tutorSeen: {}, logo: null, level: null, records: {}, reputation: { total: 0, earned: {}, log: [] } };
+  return { v: SAVE_VERSION, player: '', service: '', serviceInfo: null, usedServices: [], settings: { volume: 0.8, reducedFx: false, skipShow: false, skipScarico: false, testMusic: true, bossTips: true, tapeMarks: true, traceSignal: true }, tutorSeen: {}, logo: null, level: null, scarico: null, records: {}, reputation: { total: 0, earned: {}, log: [] } };
 }
 const Profile = (() => {
   let data = defaultProfile();
@@ -1547,6 +1567,12 @@ const Profile = (() => {
       d.serviceInfo = null;
       d.usedServices = d.service ? [d.service] : [];
       d.v = 3;
+    }
+    // versione 3: lo scarico non esisteva. Una partita già avviata lo conta
+    // come saltato (tutto arrivato sano); senza partita si gioca alla prossima.
+    if (d && d.v === 3) {
+      d.scarico = d.level ? { skipped: true, lost: {}, delay: 0, beers: 0 } : null;
+      d.v = 4;
     }
     if (d && d.v === SAVE_VERSION) data = { ...defaultProfile(), ...d, settings: { ...defaultProfile().settings, ...d.settings }, reputation: { ...defaultProfile().reputation, ...d.reputation } };
     else if (!raw && localStorage.getItem('scs-muted') === '1') data.settings.volume = 0;   // vecchio tasto muto
@@ -2100,7 +2126,10 @@ const REP = {
   feedback: -5,        // larsen
   wrongInput: -2,      // microfono lasciato su un altro ingresso
   slowChange: -5,      // pazienza del pubblico finita per un cambio palco lento
-  deviceBroken: 0      // apparecchio rotto: non è colpa del giocatore
+  deviceBroken: 0,     // apparecchio rotto: non è colpa del giocatore
+  scaricoClean: 3,     // scarico senza nessun danno
+  scaricoBroken: -2,   // ogni pezzo rotto allo scarico (lì è colpa della crew)
+  scaricoKid: -1       // ogni bambino urtato con un case
 };
 const REP_LOG_KEEP = 50;
 const reputation = () => Profile.data.reputation.total;
@@ -2190,6 +2219,7 @@ function showMenuPage (page, keep) {
     el('#set-volume').value = Math.round(settings().volume * 100);
     el('#set-reduced').checked = !!settings().reducedFx;
     el('#set-skipshow').checked = !!settings().skipShow;
+    el('#set-skipscarico').checked = !!settings().skipScarico;
     el('#set-testmusic').checked = settings().testMusic !== false;
     el('#set-bosstips').checked = settings().bossTips !== false;
     el('#set-tapemarks').checked = settings().tapeMarks !== false;
@@ -2230,8 +2260,8 @@ function openMenu (page) {
 function closeMenu () {
   menuOpen = false;
   el('#menu-modal').classList.remove('show');
-  setSceneInput(!scheduleOpen);
-  sceneKeyboard(true);
+  setSceneInput(!scheduleOpen && !scaricoOpen);
+  sceneKeyboard(!scaricoOpen);
 }
 const cleanName = s => String(s || '').replace(/\s+/g, ' ').trim().slice(0, NAME_MAX);
 
@@ -2244,6 +2274,7 @@ function startNewGame (player, offer, offers) {
   Profile.data.serviceInfo = { kind: offer.kind, boss: offer.boss };
   Profile.data.usedServices = (offers || [offer]).map(o => o.name).concat(Profile.data.usedServices || []).slice(0, USED_SERVICES_KEEP);
   Profile.data.reputation = defaultProfile().reputation;
+  Profile.data.scarico = null;
   Profile.data.tutorSeen = {};   // il nuovo tecnico non ha ancora sentito i consigli del capo
   whenScene(scene => {
     gameActive = true;
@@ -2260,6 +2291,7 @@ function continueGame () {
     if (Profile.data.level && Profile.data.level.id === LEVEL_ID) scene.loadLevel(Profile.data.level);
     applySettings();
     closeMenu();
+    if (!scaricoDone()) openSchedule(true);   // la partita si era fermata allo scarico
   });
 }
 
@@ -2270,8 +2302,8 @@ function continueGame () {
    Le fasi senza "phase" non sono ancora nel gioco: si vedono come
    "in arrivo", così il giocatore sa dove va a finire la serata. */
 const SCHEDULE = [
-  { time: '16:00', title: 'Arrivo e scarico', text: 'Il furgone accosta alla banchina della palestra e i case scendono.', phase: 'scarico' },
-  { time: '16:30', title: 'Montaggio impianto', text: 'Corrente dal Quadro, PC → scheda → mixer → finale → casse, 4 PAR in DMX dalla consolle.', phase: 'montaggio' },
+  { time: '16:00', title: 'Arrivo e scarico', text: 'Il furgone accosta al cortile: tu e Tonino portate i case nella palestra prima delle 16:30.', phase: 'scarico' },
+  { time: '16:30', title: 'Montaggio impianto', text: 'Corrente dal Quadro, PC → scheda → mixer → finale → casse, i PAR in DMX dalla consolle.', phase: 'montaggio' },
   { time: '19:30', title: 'Test impianto', text: 'Il collaudo: tutto acceso senza scatti né colpi nelle casse, audio e luci a posto.', phase: 'collaudo', rep: REP.phaseDone },
   { time: '20:30', title: 'Apertura porte', text: 'Entrano famiglie e studenti; musica di sottofondo dal PC.' },
   { time: '21:00', title: 'Discorso del Preside Tramp', text: 'Microfono su asta sul palco, sul CH 1 del mixer. Vuole essere sentito fino al parcheggio.' },
@@ -2282,8 +2314,8 @@ const SCHEDULE = [
 const collaudoDone = () => ('L' + LEVEL_ID + ':collaudo') in Profile.data.reputation.earned;
 function schedulePhaseState (phase) {
   if (!phase) return 'soon';
-  if (phase === 'scarico') return 'done';
-  if (phase === 'montaggio') return collaudoDone() ? 'done' : 'now';
+  if (phase === 'scarico') return scaricoDone() ? 'done' : 'now';
+  if (phase === 'montaggio') return collaudoDone() ? 'done' : scaricoDone() ? 'now' : 'next';
   return collaudoDone() ? 'done' : 'next';
 }
 const SCHEDULE_STATE_LABEL = { done: 'Fatto', now: 'Adesso', next: 'Da fare', soon: 'In arrivo' };
@@ -2300,10 +2332,11 @@ function renderSchedule () {
   el('#schedule-list').innerHTML = SCHEDULE.map(s => {
     const st = schedulePhaseState(s.phase);
     return '<li class="sched-row ' + st + '">'
-      + '<span class="sched-time">' + s.time + '</span>'
+      + '<span class="sched-time">' + (s.phase === 'montaggio' && scaricoDone() ? montaggioTime() : s.time) + '</span>'
       + '<span class="sched-body"><b>' + escapeHtml(s.title) + '</b>'
       + (s.rep ? ' <span class="sched-rep">+' + s.rep + ' reputazione</span>' : '')
-      + '<small>' + escapeHtml(s.text) + '</small></span>'
+      + '<small>' + escapeHtml(s.phase === 'scarico' && scaricoDone() ? scaricoSummary()
+        : s.phase === 'montaggio' ? s.text.replace('i PAR', parsRequired() + ' PAR') : s.text) + '</small></span>'
       + '<span class="sched-state">' + SCHEDULE_STATE_LABEL[st] + '</span></li>';
   }).join('');
 }
@@ -2321,9 +2354,90 @@ function closeSchedule () {
   if (!scheduleOpen) return;
   scheduleOpen = false;
   el('#schedule-modal').classList.remove('show');
-  setTimeout(() => { if (!scheduleOpen && !rearPanelId && !openCaseName && !menuOpen) setSceneInput(true); }, 0);
-  if (scheduleFirst) showToast('Ciao ' + playerName() + ', ' + serviceName() + ' ti manda alla festa della scuola: sono le 16:30, monta l\'impianto. Il collaudo è alle 19:30.', 'ok');
+  if (scheduleFirst) { if (scaricoDone()) showToast(montaggioMessage(), 'ok'); else openScarico(); }
+  setTimeout(() => { if (!scheduleOpen && !scaricoOpen && !rearPanelId && !openCaseName && !menuOpen) setSceneInput(true); }, 0);
   scheduleFirst = false;
+}
+
+/* ---------------- lo scarico (16:00) ----------------
+   Minigioco a sé (scarico.html, con la fisica di Matter.js), aperto a
+   tutto schermo in un iframe sopra il gioco appena si chiude la prima
+   scaletta. Quando finisce manda il risultato con postMessage: quello che
+   si è rotto manca al montaggio (levelStock), il ritardo sposta l'inizio
+   del montaggio, birre e reputazione restano nel salvataggio. Si può
+   saltare (dalle impostazioni o dalla sua schermata iniziale): tutto arriva
+   sano, ma niente birre. */
+let scaricoOpen = false;
+const scaricoDone = () => !!Profile.data.scarico;
+function openScarico () {
+  if (scaricoOpen) return;
+  if (settings().skipScarico) { finishScarico({ skipped: true }); return; }
+  scaricoOpen = true;
+  setSceneInput(false);
+  sceneKeyboard(false);
+  const f = document.createElement('iframe');
+  f.id = 'scarico-frame';
+  f.title = 'Lo scarico';
+  f.src = 'scarico.html?embed=1&service=' + encodeURIComponent(serviceName());
+  f.addEventListener('load', () => { try { f.contentWindow.focus(); } catch (e) { /* niente fuoco: si clicca */ } });
+  document.body.appendChild(f);
+}
+window.addEventListener('message', ev => {
+  const d = ev.data;
+  if (scaricoOpen && d && d.type === 'scarico-fine') finishScarico(d.result || { skipped: true });
+});
+function finishScarico (r) {
+  const f = el('#scarico-frame');
+  if (f) f.remove();
+  scaricoOpen = false;
+  const parsBroken = r.parsBroken || 0, staBroken = r.staBroken ? 1 : 0, ricOk = r.ricOk !== false;
+  // il case ricambi sano rimpiazza un PAR e uno stativo
+  const lost = { par: Math.max(0, parsBroken - (ricOk && parsBroken ? 1 : 0)), stativo: Math.max(0, staBroken - (ricOk && staBroken ? 1 : 0)) };
+  Profile.data.scarico = {
+    skipped: !!r.skipped, lost, parsBroken, staBroken: !!staBroken, ricOk,
+    delay: r.skipped ? 0 : (r.minutes || 0), beers: r.skipped ? 0 : (r.beers || 0),
+    endClock: r.endClock || '16:30', faulty: r.faulty || [], wrong: r.wrong || [], kidHits: r.kidHits || 0
+  };
+  if (!r.skipped) {
+    const rotti = parsBroken + staBroken + (ricOk ? 0 : 1);
+    const rep = (r.clean ? REP.scaricoClean : 0) + rotti * REP.scaricoBroken + (r.kidHits || 0) * REP.scaricoKid;
+    if (rep) addReputation(rep, 'Scarico della festa della scuola', 'L' + LEVEL_ID + ':scarico');
+  }
+  Profile.save();
+  whenScene(scene => {
+    scene.resetLevel(true);          // la dotazione senza i pezzi rotti
+    sceneKeyboard(true);
+    if (!scheduleOpen && !menuOpen && !rearPanelId && !openCaseName) setSceneInput(true);
+    applySettings();
+    showToast(montaggioMessage(), 'ok');
+  });
+}
+// ora d'inizio del montaggio: 16:30 più il ritardo dello scarico
+function montaggioTime () {
+  const m = 30 + ((Profile.data.scarico && Profile.data.scarico.delay) || 0);
+  return (16 + Math.floor(m / 60)) + ':' + String(m % 60).padStart(2, '0');
+}
+function montaggioMessage () {
+  const s = Profile.data.scarico;
+  let msg = 'Ciao ' + playerName() + ', ' + serviceName() + ' ti manda alla festa della scuola: sono le ' + montaggioTime() + ', monta l\'impianto. Il collaudo è alle 19:30.';
+  const miss = [];
+  if (s && s.lost && s.lost.par) miss.push(s.lost.par === 1 ? 'un PAR' : s.lost.par + ' PAR');
+  if (s && s.lost && s.lost.stativo) miss.push(s.lost.stativo === 1 ? 'uno stativo' : s.lost.stativo + ' stativi');
+  const many = miss.length > 1 || (s && s.lost && (s.lost.par > 1 || s.lost.stativo > 1));
+  if (miss.length) msg += ' Allo scarico si è rotto qualcosa: ' + (many ? 'mancano ' : 'manca ') + miss.join(' e ') + '.';
+  return msg;
+}
+function scaricoSummary () {
+  const s = Profile.data.scarico;
+  if (s.skipped) return 'Saltato: tutto arrivato sano.';
+  const bits = ['Finito alle ' + s.endClock];
+  if (s.parsBroken) bits.push(s.parsBroken + ' PAR rott' + (s.parsBroken > 1 ? 'i' : 'o'));
+  if (s.staBroken) bits.push('uno stativo piegato');
+  if (!s.ricOk) bits.push('case ricambi perso');
+  if (s.faulty.length) bits.push('da sistemare: ' + s.faulty.join(', '));
+  if (s.delay) bits.push('montaggio alle ' + montaggioTime());
+  bits.push(s.beers ? '🍺'.repeat(s.beers) : 'nessuna birra');
+  return bits.join(' · ') + '.';
 }
 el('#schedule-btn').addEventListener('click', () => { SFX.button(); openSchedule(false); });
 el('#schedule-go').addEventListener('click', () => { SFX.button(); closeSchedule(); });
@@ -2346,6 +2460,7 @@ el('#set-volume').addEventListener('input', ev => { settings().volume = ev.targe
 el('#set-volume').addEventListener('change', () => SFX.button());
 el('#set-reduced').addEventListener('change', ev => { settings().reducedFx = ev.target.checked; Profile.save(); });
 el('#set-skipshow').addEventListener('change', ev => { settings().skipShow = ev.target.checked; Profile.save(); });
+el('#set-skipscarico').addEventListener('change', ev => { settings().skipScarico = ev.target.checked; Profile.save(); });
 el('#set-bosstips').addEventListener('change', ev => { settings().bossTips = ev.target.checked; Profile.save(); });
 el('#set-tapemarks').addEventListener('change', ev => { settings().tapeMarks = ev.target.checked; Profile.save(); if (window.__scene) window.__scene.drawTapeMarks(); });
 el('#set-trace').addEventListener('change', ev => { settings().traceSignal = ev.target.checked; Profile.save(); });
@@ -3976,9 +4091,9 @@ function giroChecks (giro) {
     list.push({ ok: wired && !swapped, what: 'Cassa sinistra a sinistra, destra a destra', ids: swapped || [], kind: 'stereo' });
   } else if (g.id === 'luci') {
     const r = running(['controller', 'par']);
-    list.push({ ok: r.ok && placedOfType('par').length === AVAILABLE_STOCK.par, what: 'Accesi: consolle luci e PAR', ids: r.ids, kind: 'on' });
+    list.push({ ok: r.ok && placedOfType('par').length >= parsRequired(), what: 'Accesi: consolle luci e PAR', ids: r.ids, kind: 'on' });
     const lights = lightingCheck();
-    list.push({ ok: !lights && placedOfType('par').length === AVAILABLE_STOCK.par, what: 'Due frontali nel Pit e due tagli ai lati', ids: lights ? lights.ids : [], kind: 'lights' });
+    list.push({ ok: !lights && placedOfType('par').length >= parsRequired(), what: lightsPlan(), ids: lights ? lights.ids : [], kind: 'lights' });
     const ov = dmxOverlaps();
     list.push({ ok: !ov.length, what: 'Indirizzi DMX senza sovrapposizioni', ids: [], kind: 'dmx' });
   }
@@ -6923,7 +7038,7 @@ class StageScene extends Phaser.Scene {
     this.edgeGraphics.clear();
 
     gameState.placed = {};
-    gameState.stock = { ...AVAILABLE_STOCK };
+    gameState.stock = levelStock();   // senza i pezzi rotti allo scarico
     // un contatore per ogni pezzo della dotazione (anche quelli aggiunti poi: asta, mic…)
     gameState.nextIndex = Object.fromEntries(Object.keys(AVAILABLE_STOCK).map(t => [t, 1]));
     gameState.edges = [];

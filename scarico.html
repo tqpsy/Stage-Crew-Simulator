@@ -2,7 +2,9 @@
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@600;700&family=Permanent+Marker&family=Inter:wght@400;500;600;700&display=swap">
 <style>
-  /* Prototipo del minigioco dello scarico (docs/minigioco-scarico.md).
+  /* Il minigioco dello scarico (docs/minigioco-scarico.md). Si apre da solo
+     nel browser oppure dentro il gioco (index.html lo carica in un iframe
+     con ?embed=1 e riceve il risultato con postMessage).
      Stessi colori e caratteri del gioco: solo tema scuro, come il gioco. */
   :root{
     color-scheme: dark;
@@ -177,6 +179,7 @@
       </ul>
       <div class="legend" id="start-legend"></div>
       <button class="primary" id="btn-start">Apri i portelloni</button>
+      <button class="secondary" id="btn-skip" hidden>Salta lo scarico: tutto arriva sano, ma niente birre</button>
     </div>
   </div>
 
@@ -191,10 +194,25 @@
   <div class="overlay" id="end" hidden></div>
 </div>
 
+<script>
+// dentro il gioco (index.html) lo scarico gira in un iframe con ?embed=1:
+// il risultato torna al gioco con postMessage. Questo pezzo sta prima di
+// Matter.js, così "Salta" funziona anche se la fisica non si carica.
+const QS = new URLSearchParams(location.search);
+const EMBED = QS.has('embed');
+const SERVICE = (QS.get('service') || '').slice(0, 28);
+function sendResult (result) { try { parent.postMessage({ type: 'scarico-fine', result }, '*'); } catch (e) { /* niente genitore */ } }
+if (EMBED) {
+  const skip = document.getElementById('btn-skip');
+  skip.hidden = false;
+  skip.addEventListener('click', () => sendResult({ skipped: true }));
+}
+</script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/matter-js/0.19.0/matter.min.js"></script>
 <script>
 'use strict';
-const { Engine, Bodies, Body, Composite, Constraint, Events, Query } = Matter;
+// senza rete Matter.js non arriva: si può solo saltare (vedi in fondo)
+const { Engine, Bodies, Body, Composite, Constraint, Events, Query } = window.Matter || {};
 
 /* ---------------------------------------------------------------------
    COSTANTI — valori di partenza da tarare giocando (vedi il documento).
@@ -1098,7 +1116,7 @@ function drawStatics () {
   ctx.fillStyle = '#d6d8dc'; rr(-150, 384, 150, 232, 14); ctx.fill();
   ctx.fillStyle = '#34414f'; rr(-146, 398, 34, 204, 8); ctx.fill();
   ctx.fillStyle = '#e9ebee'; ctx.fillRect(-160, 392, 10, 22); ctx.fillRect(-160, 586, 10, 22);
-  ctx.save(); ctx.translate(-60, 500); ctx.rotate(-Math.PI / 2); ctx.fillStyle = '#8b8e98'; ctx.font = '700 22px "Barlow Condensed", sans-serif'; ctx.textAlign = 'center'; ctx.fillText('SERVICE AUDIO LUCI', 0, 8); ctx.restore();
+  ctx.save(); ctx.translate(-60, 500); ctx.rotate(-Math.PI / 2); ctx.fillStyle = '#8b8e98'; ctx.font = '700 22px "Barlow Condensed", sans-serif'; ctx.textAlign = 'center'; ctx.fillText((SERVICE || 'Service audio luci').toUpperCase(), 0, 8, 210); ctx.restore();
   // portelloni che si aprono
   const a = (1 - G.doorsOpen) * Math.PI / 2;
   ctx.fillStyle = '#dfe1e5'; ctx.strokeStyle = '#9aa0a8'; ctx.lineWidth = 2;
@@ -1371,6 +1389,10 @@ function updateHud () {
   $('#b-grab').classList.toggle('on', !!G.player.grab);
 }
 
+// ora a m minuti dalle 16:00
+function clockAt (m) { return (16 + Math.floor(m / 60)) + ':' + String(m % 60).padStart(2, '0'); }
+function montaggioStart (minutes) { return clockAt(30 + minutes); }
+
 /* ---------------------------------------------------------------------
    FINE: LA BOLLA DI SCARICO
    --------------------------------------------------------------------- */
@@ -1384,12 +1406,12 @@ function endGame (reason) {
     }
   }
   G.mode = 'end';
-  const endClock = reason === 'tempo' ? '16:' + String(30 + rushed.length * 3).padStart(2, '0') : fmtClock(G.t);
+  const endClock = reason === 'tempo' ? clockAt(30 + rushed.length * 3) : fmtClock(G.t);
   const ric = G.cases.find(c => c.def.id === 'ricambio'), par = G.cases.find(c => c.def.id === 'par'), sta = G.cases.find(c => c.def.id === 'stativi');
   const ricOk = stateOf(ric.integrity) !== 'rotto';
   const parsBroken = 4 - par.pars;
   const staBroken = stateOf(sta.integrity) === 'rotto';
-  let minutes = 0, rotti = parsBroken + (staBroken ? 1 : 0) + (ricOk ? 0 : 1);
+  let minutes = rushed.length * 3, rotti = parsBroken + (staBroken ? 1 : 0) + (ricOk ? 0 : 1);
   const rows = G.cases.map(ce => {
     const st = stateOf(ce.integrity), z = ZONES[ce.def.zone];
     let zoneTxt, eff = [];
@@ -1436,11 +1458,20 @@ function endGame (reason) {
         <tbody>${rows}</tbody>
       </table></div>
       <p class="note">🍺 senza rotture: ${rotti === 0 ? 'sì' : 'no'} · 🍺 tutto al suo posto entro le 16:30: ${reason === 'ok' ? 'sì' : 'no'} · Reputazione: +3 se nessun danno, −2 per ogni pezzo rotto${G.kidHits ? ', −1 per ogni bambino urtato (' + G.kidHits + ')' : ''}.</p>
-      <p class="note">Prototipo: il risultato non passa ancora al gioco.</p>
-      <div class="row"><button class="primary" id="btn-again">Rigioca lo scarico</button></div>
+      ${EMBED ? '<p class="note">Il montaggio parte alle ' + montaggioStart(minutes) + '.</p>' : '<p class="note">Aperto da solo: il risultato non passa al gioco.</p>'}
+      <div class="row"><button class="primary" id="btn-again">${EMBED ? 'Al montaggio' : 'Rigioca lo scarico'}</button></div>
     </div>`;
   $('#end').hidden = false; $('#pad').hidden = true; $('#qte').hidden = true;
-  $('#btn-again').addEventListener('click', () => { $('#end').hidden = true; startGame(); });
+  G.result = {
+    reason, endClock, minutes, beers: birre, clean: allIntegro, kidHits: G.kidHits,
+    parsBroken, staBroken, ricOk,
+    faulty: G.cases.filter(c => stateOf(c.integrity) === 'difettoso').map(c => c.def.name),
+    wrong: G.cases.filter(c => !c.rushed && c.zone !== c.def.zone).map(c => c.def.name)
+  };
+  $('#btn-again').addEventListener('click', () => {
+    if (EMBED) { sendResult(G.result); return; }
+    $('#end').hidden = true; startGame();
+  });
   AU.ding();
 }
 
@@ -1539,10 +1570,16 @@ function loop (now) {
 $('#start-legend').innerHTML = touchUI
   ? '<span>Joystick a sinistra per muoverti (poco inclinato = passo attento). A destra: PRENDI, AIUTO (Tonino), OH-ISSA, FERMO!</span>'
   : '<span><kbd>WASD</kbd> muovi</span><span><kbd>Spazio</kbd> prendi / lascia</span><span><kbd>E</kbd> aiuto Tonino</span><span><kbd>Q</kbd> oh-issa</span><span><kbd>Shift</kbd> passo attento</span><span><kbd>F</kbd> fermo!</span>';
-$('#btn-start').addEventListener('click', startGame);
-
-// scena ferma dietro la schermata iniziale
 resize();
-newGame(); G.mode = 'end'; G.doorsOpen = 0;
-(function idle () { if (running) return; render(); requestAnimationFrame(idle); })();
+if (window.Matter) {
+  $('#btn-start').addEventListener('click', startGame);
+  // scena ferma dietro la schermata iniziale
+  newGame(); G.mode = 'end'; G.doorsOpen = 0;
+  (function idle () { if (running) return; render(); requestAnimationFrame(idle); })();
+} else {
+  $('#btn-start').hidden = true;
+  const note = document.createElement('p');
+  note.textContent = 'La fisica dello scarico non si è caricata (serve la connessione). ' + (EMBED ? 'Salta lo scarico per andare al montaggio.' : 'Riprova più tardi.');
+  $('#btn-start').before(note);
+}
 </script>

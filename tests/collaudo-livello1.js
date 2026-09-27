@@ -22,7 +22,7 @@ const N = parseInt(process.argv[2] || '40', 10), SEED0 = parseInt(process.argv[3
   // partita vera, così ogni azione passa anche dal salvataggio automatico
   await p.evaluate(() => startNewGame('Collaudo', serviceOffers([])[0]));
   await p.waitForFunction(() => !menuOpen);
-  await p.evaluate(() => closeSchedule());
+  await p.evaluate(() => { closeSchedule(); finishScarico({ skipped: true }); });   // lo scarico ha il suo test
   // qui si provocano errori apposta: il capo non deve fermarli (ha il suo test, capo.js)
   await p.evaluate(() => { settings().bossTips = false; });
   const res = await p.evaluate(async ({ N, SEED0 }) => {

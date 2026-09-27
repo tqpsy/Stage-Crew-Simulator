@@ -1,6 +1,6 @@
 # Minigioco — Lo scarico (bozza di design)
 
-Stato: **in definizione**. Deciso: si gioca **da soli con un collega CPU**;
+Stato: **nel gioco** (livello 1, vedi *Integrazione nel gioco*). Deciso: si gioca **da soli con un collega CPU**;
 i **danni dello scarico si pagano al montaggio**. Le voci *Da decidere*
 restano aperte.
 
@@ -401,24 +401,50 @@ rigiocabilità. Nel livello 1 al massimo uno alla volta.
 
 ## Integrazione nel gioco
 
-- **Quando**: dopo la scaletta della serata, prima del montaggio. La
-  voce "16:00 scarico" della scaletta diventa "fatto" alla fine del
-  minigioco.
-- **Saltare**: nelle impostazioni, accanto a "salta lo show", c'è
-  "**salta lo scarico**": scarico automatico **senza danni ma senza
-  birre**.
-- **Rigiocare**: lo scarico si gioca una volta per partita; dal menù si
-  potrà rifare "per allenamento", senza effetti sul montaggio.
-- **Montaggio**: i case consegnati compaiono nella banchina di carico e
-  nelle zone; i pezzi Rotti mancano da `AVAILABLE_STOCK`; i Difettosi
-  hanno un segno sul pezzo e vanno sistemati con il tocco lungo prima del
-  Test impianto.
-- **Salvataggio**: lo stato dello scarico (fatto sì/no, danni per pezzo)
-  va nel salvataggio. Se il formato `scs-save` cambia, si aggiunge una
-  conversione (senza scarico = scarico saltato senza danni).
-- **Test**: un `tests/scarico.js` che controlla almeno che un pezzo Rotto
-  manchi al montaggio, che gli apparecchi unici non scendano sotto
-  Difettoso e che il Test impianto chieda i PAR arrivati.
+**Fatto** (livello 1). Il minigioco è `scarico.html`: si apre da solo nel
+browser oppure dentro il gioco, dove `index.html` lo carica a tutto
+schermo in un iframe (`?embed=1&service=…`) e riceve il risultato con
+`postMessage` (`scarico-fine`). Così fisica, tasti e stili dello scarico
+non toccano la scena di Phaser.
+
+- **Quando**: nuova partita → scaletta della serata → "Al lavoro!" apre
+  lo scarico → bolla di scarico → "Al montaggio". Nella scaletta la voce
+  delle 16:00 diventa "Fatto" con il riassunto (ora di fine, pezzi rotti,
+  da sistemare, birre) e il montaggio mostra l'ora vera d'inizio
+  (16:30 più il ritardo).
+- **Saltare**: dalla schermata iniziale dello scarico ("Salta lo
+  scarico") o dalle impostazioni ("Salta lo scarico a inizio partita"):
+  tutto arriva sano, niente birre. Senza rete Matter.js non si carica e lo
+  scarico si può solo saltare.
+- **Montaggio**: i pezzi rotti mancano dalla dotazione (`levelStock()` in
+  `main.js`); il case ricambi, se arriva sano, rimpiazza un PAR e uno
+  stativo. Il Test impianto chiede i PAR arrivati (`parsRequired()`: uno
+  per stativo, fino a 4). Anche "Reset livello" usa la dotazione ridotta.
+  Il messaggio d'inizio montaggio dice che ore sono e cosa manca.
+  Anche il giro luci si adatta (`lightingCheck`, `lightsPlan`): con 4 PAR
+  due frontali e due tagli, con 3 due frontali e un taglio, con 2 i due
+  frontali, con 1 un frontale. Prima i frontali: il preside non deve
+  restare al buio.
+- **Reputazione**: +3 scarico senza danni, −2 per ogni pezzo rotto, −1
+  per ogni bambino urtato (`REP.scarico*`), una volta sola per partita
+  (`L1:scarico`).
+- **Salvataggio**: versione 4 di `scs-save`, con `scarico` (null finché
+  non è fatto) e l'impostazione `skipScarico`. Dalla versione 3: una
+  partita già avviata conta lo scarico come saltato. Una partita chiusa a
+  metà scarico riparte dalla scaletta.
+- **Test**: `tests/scarico.js` gioca uno scarico vero dentro il gioco (PAR
+  e stativi rotti) e controlla dotazione, Test impianto, reputazione,
+  scaletta, ricarica, partita interrotta e impostazione "salta". Gli altri
+  test saltano lo scarico dal suo tasto.
+- **Da fare**:
+  - i pezzi **difettosi** oggi sono solo raccontati (scaletta e ritardo):
+    manca il segno sul pezzo e il tocco lungo per sistemarlo prima del
+    Test impianto;
+  - le **birre** sono salvate (`Profile.data.scarico.beers`) ma il gioco
+    non ha ancora il contatore;
+  - la grafica **isometrica** dello scarico (oggi vista dall'alto);
+  - i case consegnati nella zona sbagliata costano solo tempo: più avanti
+    potranno comparire lì nel montaggio.
 - **Nota di stile**: nello spettacolo resta la regola "nessun omino da
   muovere". Lo scarico è l'unico momento con un personaggio da guidare,
   ed è voluto: è la parte fisica del mestiere.
@@ -433,17 +459,17 @@ rigiocabilità. Nel livello 1 al massimo uno alla volta.
   contrario, con il "tetris" del mezzo da riempire. Può essere il motivo
   per cui le **cinghie** contano.
 
-## Prototipo
+## Il minigioco
 
-`prototipi/scarico.html` (si apre da solo nel browser, anche su telefono):
-scenario 1 completo, con i 12 case del livello 1, Tonino, rampa, gradino
-con OH-ISSA, ribaltamento del rack, dolly, pausa caffè, cavo incastrato,
-passanti, bidello col carrello, Tonino al telefono e bolla di scarico
-finale. La vista è dall'alto (la fisica è la stessa che servirà in
-isometrico). I numeri da tarare sono in cima al file (`WHEEL`, `FRAG`,
-`CASES`, `GAME_SECONDS`).
+`scarico.html` (nato come prototipo in `prototipi/`): scenario 1 completo,
+con i 12 case del livello 1, Tonino, rampa, gradino con OH-ISSA,
+ribaltamento del rack, dolly, pausa caffè, cavo incastrato, passanti,
+bidello col carrello, Tonino al telefono e bolla di scarico finale. La
+vista è dall'alto (la fisica è la stessa che servirà in isometrico). I
+numeri da tarare sono in cima al file (`WHEEL`, `FRAG`, `CASES`,
+`GAME_SECONDS`).
 
-### Taratura dei danni (prototipo)
+### Taratura dei danni
 
 | Fragilità | Velocità di sicurezza | Danno per urto a piena velocità |
 |---|---|---|
