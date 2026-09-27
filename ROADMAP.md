@@ -44,6 +44,27 @@ Invece di livelli più facili, strumenti veri che semplificano il lavoro:
 tester per cavi, sequencer di accensione, cavi già etichettati, multicore,
 ciabatte con interruttore generale, rack precablati.
 
+## Guasti nei livelli successivi (proposta)
+
+Il guasto del microfono del preside (vedi `docs/livello1-festa-scuola.md`) è il
+modello: una catena di pezzi da controllare, cause diverse e decisioni di
+cablaggio per riparare. Ogni guasto nuovo nasce dal materiale nuovo.
+
+| Fase / livello | Catena | Guasti possibili |
+|---|---|---|
+| DJ (liv. 1) | consolle → DI → XLR → mixer (L/R) | DI col GROUND sbagliato (ronzio), suona un solo canale (manca L o R), ciabatta del DJ sovraccarica che fa scattare il magnetotermico |
+| Cantante (liv. 1) | chitarra → jack → DI → XLR → mixer, più la voce | corda rotta (musica dal PC), jack della chitarra difettoso, ingressi finiti: va staccato il DJ |
+| Monitor | AUX → Jack/XLR → finale monitor → spia | mandata AUX a zero, Jack/XLR montato al contrario, larsen in spia |
+| Luci DMX | consolle → DMX → PAR in catena | indirizzo sbagliato, un PAR che interrompe la catena e spegne quelli dopo, terminatore mancante |
+| Stress impianto | — | tweeter bruciato, finale in protezione: si cambia col ricambio nel furgone |
+
+I guasti già visti tornano più difficili: indizi più deboli o assenti (si
+trovano per esclusione), catene più lunghe, due guasti insieme o un guasto
+sopra un altro imprevisto, bauli più pieni con più tranelli (il Jack/XLR, per
+esempio). La domanda «in che ingresso era?» resta il cuore: la risposta è
+sempre il cablaggio fatto dal giocatore, e con DJ e cantante gli ingressi
+cambiano da una fase all'altra.
+
 ## Mezzi e carico/scarico
 
 - Il mezzo del service cresce coi livelli: `LEVEL_VEHICLE` in `main.js`
@@ -51,6 +72,8 @@ ciabatte con interruttore generale, rack precablati.
 - Il bilico va rifinito come trattore + semirimorchio separati; con il
   bilico i case vanno spostati più avanti sulla banchina.
 - Più case (e più bauli) man mano che crescono impianto e livello.
+- **Minigioco dello scarico** (16:00 in scaletta): fisica dall'alto, collega
+  CPU, i danni si pagano al montaggio. Design in `docs/minigioco-scarico.md`.
 
 ## Test automatici
 

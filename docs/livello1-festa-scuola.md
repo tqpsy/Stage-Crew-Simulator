@@ -234,7 +234,8 @@ professionalità, non la sfortuna.
 - **Sale** con: fase completata (+5), guasto gestito bene (+3), birra rifiutata
   in una richiesta extra (+5).
 - **Scende** se un guasto è gestito male: trovato dal bidello al posto tuo (−5),
-  larsen (−5), microfono lasciato su un ingresso diverso dal CH1 (−2),
+  larsen (−5), microfono ricollegato a un ingresso diverso da quello cablato al
+  montaggio (−2),
   pazienza del pubblico finita per un cambio palco lento (−5).
 - **Apparecchio rotto: 0**, non è colpa del giocatore.
 - Ogni fase e ogni richiesta extra contano una volta sola per service: rifarle
@@ -291,8 +292,9 @@ Giro del livello: **Montaggio → Test impianto → [cambio palco → spettacolo
 
 ## Grafica e interazione in spettacolo (proposta)
 
-- **Header**: barra del tempo con faccia del personaggio e orologio, misuratore
-  del gradimento, 🍺, stanchezza, reputazione.
+- **Header**: barra del tempo con faccia del personaggio e orologio; il
+  gradimento del pubblico è la barra più grande, con la percentuale; la
+  stanchezza sta nel tasto della 🍺 (la birra la fa scendere); reputazione.
 - **Palco isometrico**: resta la vista di gioco. Sopra compaiono i personaggi
   (preside al microfono, DJ alla consolle, Dante sullo sgabello) e il pubblico
   in platea: teste che si muovono a tempo, colore e fumetti che ne mostrano l'umore.
@@ -304,7 +306,8 @@ Giro del livello: **Montaggio → Test impianto → [cambio palco → spettacolo
   schede, MIXER e LUCI (sul telefono occupa metà schermo sotto il palco; su
   computer sta di lato).
   - MIXER: una striscia per canale con fader verticale, meter con zona verde,
-    MUTE e nome del canale (con la faccina di chi ci è collegato).
+    MUTE e nome del canale. Niente faccina di chi ci è collegato: il canale
+    di ogni personaggio va ricordato (serve nei guasti).
   - LUCI: un cerchio col colore reale di ogni PAR, fader dimmer, tavolozza
     colori, tasti memoria 1-6 (tocco = richiama, tenere premuto = salva).
 - **Cambio palco**: si torna alla vista montaggio; la carta del prossimo
@@ -331,12 +334,8 @@ per provare il ritmo prima di portarla nel gioco.
 - **Grafica**: quella del prototipo non è definitiva. Nel gioco vero lo
   spettacolo si svolge sul palco isometrico che c'è già; del prototipo restano
   l'impianto dell'interfaccia (header, fumetti, banco regia).
-- **Guasti veri, non "tocca e risolvi"**: il cavo del microfono ora va
-  diagnosticato. Si segue la catena microfono → cavo → ingresso del mixer; ogni
-  controllo e ogni riparazione costa tempo, si fa una cosa alla volta. Tre cause
-  possibili: connettore sfilato, cavo schiacciato (serve un XLR dal baule e poi
-  va ricollegato), cavo uscito dal mixer. Se lo ricolleghi all'ingresso
-  sbagliato la voce arriva su un altro canale col fader giù.
+- **Guasti veri, non "tocca e risolvi"**: il microfono muto va diagnosticato
+  e riparato con decisioni di cablaggio (vedi *Il guasto del microfono* sotto).
 - **Lingua dei personaggi**: ognuno parla una lingua fatta solo del suo nome
   (il preside dice solo "Tramp"). La lingua si sente solo nella voce (sintesi vocale col
   volume che esce davvero dal mixer); i sottotitoli e i fumetti sono in italiano chiaro.
@@ -350,18 +349,80 @@ per provare il ritmo prima di portarla nel gioco.
 
 ### Guasti e reputazione (rivisti)
 
-- **Indizi sul palco**: ogni causa si vede (connettore che penzola dall'asta,
-  sedia sopra il cavo, cavo per terra dalla parte del mixer). Chi osserva va
-  dritto al punto giusto; chi controlla a caso perde tempo.
+- **Indizi**: il connettore che penzola dall'asta e il cavo per terra dalla
+  parte del mixer si vedono sul palco; il MUTE acceso o il fader giù si vedono
+  sul mixer; il filo staccato dentro la spina non si vede e si trova per
+  esclusione. Chi osserva va dritto al punto giusto; chi controlla a caso perde
+  tempo.
 - **Pubblico paziente all'inizio**: nei primi 5 s di silenzio il gradimento cala
   appena; poi il preside se ne accorge («Tramp? TRAMP?») e cala di più; solo un
   silenzio lungo fa crollare il pubblico.
+- **Entrata al buio**: lo spettacolo parte con le luci spente. Il preside sale
+  sul palco camminando da sinistra fino al leggio (circa 7 s); i **frontali**
+  (PAR 2 e 3; PAR 1 e 4 sono i tagli) vanno accesi in bianco entro quando si
+  posiziona, altrimenti comincia al buio. Finché i frontali sono spenti il
+  preside resta in ombra e il pubblico scontenta.
 - **Al massimo un guasto per spettacolo**, tra i primi imprevisti e senza altri
   imprevisti addosso.
 - **La reputazione misura la professionalità, non la sfortuna**:
   - il guasto capita: 0;
-  - risolto entro 8 s: +3 e applausi del pubblico (+6 gradimento);
+  - risolto in fretta: +3 e applausi del pubblico (+6 gradimento). «In fretta»
+    dipende dal guasto (vedi *Tempi del guasto* sotto);
   - risolto lentamente: 0;
   - risolto dal bidello al posto tuo: −5;
-  - microfono lasciato su un ingresso diverso dal CH1: −2;
+  - microfono ricollegato a un ingresso diverso da quello cablato al montaggio: −2;
   - larsen: −5 (colpa del volume).
+
+### Il guasto del microfono (seconda prova)
+
+Il guasto si risolve ricordando il cablaggio, non premendo un pulsante.
+
+- **Catena da controllare**: Microfono → Cavo → Ingresso (retro del mixer) →
+  Mixer (banco). Ogni controllo costa tempo (il mixer meno, è davanti a te) e
+  sul palco un cerchio mostra dove stai guardando; quando trovi il guasto il
+  cerchio diventa rosso. Sopra la catena la domanda: «Dove si è interrotto il
+  segnale?». Durante il guasto il pubblico si scurisce e il banco si allarga.
+- **Quattro cause**, una a caso:
+  - *Connettore sfilato dal microfono*: si gira la spina XLR finché la chiave
+    è allineata, poi si infila. Storta non entra.
+  - *Filo staccato dentro la spina del cavo*: non si vede dal palco. Si prende
+    un cavo dal baule (XLR, DMX, Jack, Speakon: il DMX sembra un XLR ma ha 5
+    poli), si sceglie il capo da attaccare al microfono (femmina: il microfono
+    ha l'uscita maschio), poi lo si collega sul retro del mixer.
+  - *Cavo uscito dal suo ingresso*: si sceglie la presa sul retro del mixer tra
+    MIC 1–4 (XLR in), LINE 5–6 (jack in) e MAIN L/R (XLR out, un'uscita).
+  - *Qualcuno ha toccato il mixer*: il canale del preside è in MUTE o col fader
+    tutto giù. Si sistema dal banco.
+- **La domanda della memoria**: «in che ingresso era?». La risposta è
+  l'ingresso cablato al montaggio (la scaletta chiede il CH 1; nel prototipo
+  è estratto a caso a ogni partita e scritto solo nella scheda iniziale). Se
+  lo rimetti altrove nessun avviso: la voce arriva su un canale col fader giù,
+  bisogna accorgersene dai meter; a fine discorso −2 reputazione.
+- **Musica di riempimento**: durante il guasto si può alzare il PC; il
+  pubblico si spazientisce più piano (il calo è meno della metà). Appena il
+  preside torna a sentirsi la musica va riabbassata, altrimenti copre il
+  discorso e il pubblico cala.
+- **Gli errori costano tempo**, non punti: cavo sbagliato, capo sbagliato,
+  presa sbagliata o spina storta fanno perdere qualche secondo di silenzio.
+- Il prototipo ha nella scheda iniziale la scelta del guasto da provare
+  (a caso, microfono, cavo, ingresso, mixer).
+
+### Tempi del guasto
+
+Misurati giocando senza errori (mezzo secondo di reazione tra un tocco e
+l'altro): mixer 3 s, ingresso 6 s, microfono 7 s, cavo 11,5 s (15,6 s se prima
+si controllano microfono e ingresso, perché il filo staccato non si vede). Con
+una soglia unica di 8 s il cavo non poteva mai dare gli applausi, e con un
+paio di errori arrivava quasi sempre il bidello. Ora limite e applausi
+dipendono dalla causa, con circa 5 s di margine per gli applausi e 15 s per il
+limite:
+
+| Guasto | Applausi entro | Tempo limite (poi il bidello) |
+|---|---|---|
+| Mixer | 8 s | 20 s |
+| Ingresso | 11 s | 22 s |
+| Microfono | 12 s | 24 s |
+| Cavo | 17 s | 32 s |
+
+Il tempo limite si accorcia con la stanchezza, come le altre finestre di
+reazione. Il prossimo imprevisto arriva solo dopo il tempo limite del guasto.
