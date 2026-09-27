@@ -276,11 +276,42 @@ sticker e le varianti dello stencil.
   bidello; −5 larsen (una volta sola per discorso, anche se fischia più volte);
   −2 microfono lasciato su un ingresso diverso dal CH1. Il dilemma "più volume!"
   cambia solo il gradimento.
-- **Birre**: un service nuovo parte da 0. Un discorso ne dà una se non ci sono
-  stati larsen né colpi nelle casse, una se il pubblico è almeno al 70%.
-- **Guasto del cavo**: si tocca direttamente sul palco dove si vede il
-  problema (microfono, cavo, presa verso il mixer); ogni controllo e ogni
-  riparazione richiede tempo, una cosa alla volta. Cause: connettore sfilato
-  (si riattacca), sedia sopra il cavo (XLR nuovo dal baule, poi si ricollega),
-  cavo uscito dal mixer (si ricollega). Ricollegato a un ingresso sbagliato, la
-  voce arriva su un altro canale col fader giù. Dopo 24 s lo trova il bidello.
+- **Birre**: si accumulano durante la partita; una partita nuova riparte da 0
+  (non si portano birre da una partita all'altra). Un discorso ne dà una se non
+  ci sono stati larsen né colpi nelle casse, una se il pubblico è almeno al 70%.
+- **Guasti**: si toccano direttamente sul palco dove si vede il problema; ogni
+  controllo e ogni riparazione richiede tempo, una cosa alla volta. Il catalogo
+  è qui sotto.
+
+## Catalogo dei guasti (deciso)
+
+Tutti i guasti possono capitare in **tutte le fasi di spettacolo**, pescati a
+caso (al massimo uno per spettacolo). Sono sfortuna: capitano e non tolgono
+reputazione; conta come li gestisci (+3 entro 8 s, −5 se arriva il bidello a
+24 s). Codice: `GUASTI` in `spettacolo.js`. Nelle prove (`?prova`) il guasto
+c'è sempre; con `?guasto=tipo` nell'indirizzo è di quel tipo.
+
+| Guasto | Causa | Indizio sul palco | Riparazione |
+|---|---|---|---|
+| **Voce sparita** (`voce`) | connettore sfilato | spina che penzola dall'asta | Riattacca |
+| | sedia sopra il cavo | sedia sul cavo | XLR nuovo dal baule, poi un ingresso del mixer |
+| | cavo uscito dal mixer | connettore per terra vicino al mixer | ricollega a un ingresso |
+| **Voce che gracchia** (`gracchio`) | connettore allentato | connettore storto che fa scintille | Stringi il connettore |
+| | falso contatto nel cavo | piega stretta sotto il gaffer, scintille | XLR nuovo dal baule, poi un ingresso |
+| **Ronzio** (`ronzio`) | cavo audio sopra una prolunga | prolunga arancione sul cavo del microfono | Separa i cavi |
+| | PC su una presa del muro | cavo arancione dal PC verso il muro | Sposta la spina |
+| **Cassa muta** (`cassa`) | speakon staccato | speakon per terra davanti al sub | Riattacca lo speakon |
+| | finale in protezione | giacca sul finale, LED rosso | Togli la giacca, poi si raffredda (3 s) |
+| **PAR spento** (`luce`) | DMX sfilato | cavo che penzola dal PAR | Riattacca il DMX |
+| | spina tirata via | spina per terra accanto allo stativo | Rimetti la spina |
+| **Corrente saltata** (`corrente`) | bollitore sulla ciabatta delle luci | bollitore fumante, leva giù nel quadro | Stacca il bollitore, poi Riarma (se riarmi prima, scatta di nuovo) |
+| **Sigla che non parte** (`pc`) | aggiornamento del PC | schermo blu "34%" | Metti la sigla dal telefono |
+| | PC in standby | schermo nero | Muovi il mouse |
+
+Dopo la riparazione a volte serve ancora il banco: un cavo nuovo va su un
+ingresso (e il suo fader va alzato), la sigla va alzata sul canale del PC.
+Il pubblico all'inizio aspetta, poi si spazientisce, di più per i guasti gravi
+(voce e sigla) e meno per quelli piccoli (un PAR spento).
+
+**Guasti da stress** (tweeter bruciato, finale in protezione dopo 3 scatti o
+colpi nelle casse): non nel livello 1, arrivano più avanti.

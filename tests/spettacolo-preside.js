@@ -69,7 +69,7 @@ const path = require('path');
   check(await p.evaluate(() => !Show.active && !document.body.classList.contains('in-show') && window.__scene.scale.height === GAME_H), 'il ritorno al palco non ripristina la vista');
   check(await p.evaluate(() => el('#circuit-text').textContent === 'IMPIANTO OK'), 'lo spettacolo ha cambiato lo stato dell\'impianto');
 
-  // ---- guasto del cavo e reputazione, in una partita vera che parte da reputazione 0.
+  // ---- guasto del microfono e reputazione, in una partita vera che parte da reputazione 0.
   // Si tengono solo apertura e finale, così il test non dipende dal caso.
   await p.evaluate(() => {
     gameActive = true; Profile.data.reputation = { total: 0, earned: {}, log: [] }; Profile.data.fasi = {};
@@ -86,7 +86,7 @@ const path = require('path');
   });
   // A · connettore sfilato, trovato e riattaccato in fretta: +5 +3
   const A = await p.evaluate(() => __discorso((S, step) => {
-    Show.guasto('mic'); step(0.3);
+    Show.guasto('voce', 'mic'); step(0.3);
     Show.tocca('cavo'); step(0.2); Show.tocca('mic');            // uno alla volta: il secondo tocco non parte
     const unoAllaVolta = S.task && S.task.spot === 'cavo';
     step(1.2); const cavoOk = S.fault.stato.cavo === 'ok';
@@ -99,7 +99,7 @@ const path = require('path');
   check(A.rep === 8 && A.tot === 8, 'reputazione del discorso A sbagliata: ' + JSON.stringify({ rep: A.rep, tot: A.tot }));
   // B · cavo schiacciato, cavo nuovo collegato al CH3 e trovato tardi: +5 −2 (e sostituisce A)
   const B = await p.evaluate(() => __discorso((S, step) => {
-    Show.guasto('cavo'); step(0.3);
+    Show.guasto('voce', 'cavo'); step(0.3);
     Show.tocca('cavo'); step(1.2); Show.ripara(); step(3.5); Show.collega(3); step(6);
     window.__B = { ancoraMuto: !!S.fault, ch: S.micCh };
     S.fad[3] = 0.55; step(2);
@@ -109,14 +109,14 @@ const path = require('path');
   check(B.rep === 3 && B.tot === 3 && B.fase.rep === 3, 'il discorso B non prende il posto di A: ' + JSON.stringify({ rep: B.rep, tot: B.tot }));
   check(B.note.some(n => /Prende il posto del discorso precedente \(\+8/.test(n)), 'il verbale non dice che B sostituisce A');
   // C · cavo uscito dal mixer, nessuno lo trova: arriva il bidello, +5 −5
-  const C = await p.evaluate(() => __discorso((S, step) => { Show.guasto('ing'); step(26); }));
+  const C = await p.evaluate(() => __discorso((S, step) => { Show.guasto('voce', 'ing'); step(26); }));
   check(C.rep === 0 && C.tot === 0, 'bidello: reputazione sbagliata: ' + JSON.stringify({ rep: C.rep, tot: C.tot }));
   check(C.note.some(n => /bidello/.test(n)), 'il verbale non parla del bidello');
   // D · tocco vero sul palco: durante il guasto il dito sul microfono avvia il controllo
   const D = await p.evaluate(() => {
     Show.start(); Show.manualTime(true); const S = Show.state;
     S.events = S.events.filter(e => e.id === 'apertura'); for (let i = 0; i < 60; i++) Show.step(0.1);
-    Show.guasto('mic'); Show.step(0.1);
+    Show.guasto('voce', 'mic'); Show.step(0.1);
     const r = el('#stage-wrap').getBoundingClientRect(), [x, y] = View.punto('mic');
     return { x: r.left + x, y: r.top + y };
   });
@@ -124,6 +124,50 @@ const path = require('path');
   check(await p.evaluate(() => Show.state.task && Show.state.task.spot === 'mic'), 'il tocco sul microfono non avvia il controllo');
   check(await p.evaluate(() => !el('#show-fix').hidden), 'durante il controllo non compare il riquadro del lavoro');
   await p.evaluate(() => Show.exit());
+
+  // E · tutto il catalogo: per ogni guasto e ogni causa c'è un sintomo, gli
+  // indizi si trovano toccando i punti giusti e la riparazione lo risolve
+  const E = await p.evaluate(async () => {
+    const out = [], cat = Show.GUASTI();
+    for (const tipo of Object.keys(cat)) for (const causa of cat[tipo]) {
+      Show.start(); Show.manualTime(true); const S = Show.state;
+      const step = sec => { for (let i = 0; i < Math.round(sec * 10); i++) Show.step(0.1); };
+      S.events = S.events.filter(e => e.id === 'apertura');
+      S.pars = ['bianco', 'bianco', 'bianco', 'bianco']; S.dimmer = 1; S.fad[S.micCh] = 0.55; S.fad.pc = 0;
+      step(6); Show.guasto(tipo, causa, 'r'); step(0.2);
+      const f = S.fault, ev = S.events.find(e => e.id === 'guasto');
+      const sintomo = !f.def.risolto();
+      await new Promise(r => requestAnimationFrame(() => requestAnimationFrame(r)));   // un disegno con l'indizio
+      for (const spot of Object.keys(f.def.cause[causa])) {
+        Show.tocca(spot); step(1.2);
+        if (f.stato[spot] === 'guasto' && f.def.cause[causa][spot].azione) { Show.tocca(spot); step(f.def.cause[causa][spot].tempo + 0.3); if (S.task) step(S.task.left + 0.3); }
+      }
+      if (S.fault && S.fault.collega) Show.collega(1);
+      S.fad.pc = 0.7; S.fad[S.micCh] = 0.55; step(1.5);
+      out.push({ tipo, causa, sintomo, risolto: !!ev.solved, rapido: S.guastoRapido });
+    }
+    // il quadro riarmato col bollitore ancora attaccato scatta di nuovo
+    Show.start(); Show.manualTime(true); const S = Show.state;
+    const step = sec => { for (let i = 0; i < Math.round(sec * 10); i++) Show.step(0.1); };
+    S.events = S.events.filter(e => e.id === 'apertura'); step(6);
+    Show.guasto('corrente'); step(0.2);
+    Show.tocca('quadro'); step(1.2); Show.tocca('quadro'); step(1.5);
+    const trappola = S.buio && S.fault.stato.quadro === 'guasto';
+    Show.exit();
+    return { out, trappola };
+  });
+  check(E.out.length >= 13, 'catalogo dei guasti incompleto: ' + E.out.length);
+  E.out.forEach(r => check(r.sintomo && r.risolto && r.rapido, 'guasto non gestito: ' + JSON.stringify(r)));
+  check(E.trappola, 'riarmare col bollitore attaccato doveva far scattare di nuovo il quadro');
+
+  // F · una partita nuova riparte da zero birre e senza discorsi
+  const F = await p.evaluate(async () => {
+    const prima = birreDelService();
+    startNewGame('Service Nuovo');
+    await new Promise(r => setTimeout(r, 300));
+    return { prima, dopo: birreDelService(), fasi: Object.keys(Profile.data.fasi).length, rep: reputation() };
+  });
+  check(F.dopo === 0 && F.fasi === 0 && F.rep === 0, 'la partita nuova si porta dietro birre o discorsi: ' + JSON.stringify(F));
 
   console.log('PROBLEMI:', problems);
   console.log('ERRORI JS:', errs);

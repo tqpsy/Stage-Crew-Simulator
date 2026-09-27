@@ -5,9 +5,10 @@
    la sua voce dal banco regia (MIXER e LUCI) e reagisce agli imprevisti
    annunciati dai fumetti. Logica e ritmo vengono dal prototipo
    prototipi/spettacolo-preside.html.
-   Questa è una PRIMA PROVA: niente guasti, niente reputazione e niente
-   salvataggio dello spettacolo; il resto della fase arriva dopo.
-   Con ?prova nell'indirizzo si parte da un impianto già montato e collaudato.
+   Può capitare un guasto (uno dei sette del catalogo): si vede sul palco e
+   si tocca. Il risultato (reputazione e birre) conta sempre l'ultimo discorso.
+   Con ?prova nell'indirizzo si parte da un impianto già montato e collaudato;
+   nelle prove il guasto c'è sempre; con ?guasto=tipo è di quel tipo.
    ===================================================================== */
 const Show = (() => {
   const $ = s => document.querySelector(s);
@@ -52,7 +53,8 @@ const Show = (() => {
       dimmer: 0.3, pars: ['viola', 'blu', 'blu', 'viola'], mem: 2,
       voiceK: 1, drift: 1, driftTo: 1, walk: 0, walkTo: 0, side: null, ring: 0, ringCool: 0,
       jingle: false, larsens: 0, pops: 0, notes: [], events: [],
-      fault: null, faultAt: 0, task: null, guastoSecs: null, guastoRapido: false, bidello: false,
+      fault: null, faultAt: 0, task: null, guastoSecs: null, guastoNome: '', guastoRapido: false, bidello: false,
+      pcOk: true, gracchia: false, ronzio: false, spkOff: null, parOff: null, buio: false, jingleFino: 0,
       mems: {
         1: { name: 'Bianco', pars: ['bianco', 'bianco', 'bianco', 'bianco'], dimmer: 1 },
         2: { name: 'Festa', pars: ['viola', 'blu', 'blu', 'viola'], dimmer: 0.3 },
@@ -67,16 +69,18 @@ const Show = (() => {
   function micSignal () {
     if (!speaking() || !S.micOk) return 0;
     const syll = 0.88 + 0.12 * Math.sin(S.t * 9.1) * Math.sin(S.t * 3.3);
-    return 0.62 * S.voiceK * S.drift * syll;
+    return 0.62 * S.voiceK * S.drift * syll * (S.gracchia && falsoContatto() ? 0.05 : 1);
   }
+  // col falso contatto la voce va e viene a scatti
+  const falsoContatto = () => Math.sin(S.t * 23) + Math.sin(S.t * 7.3) < -0.2;
   function chOut (ch) {
     if (S.mute[ch]) return 0;
-    const sig = ch === PC ? 0.55 : (ch === S.micCh ? micSignal() : 0);
+    const sig = ch === PC ? (S.pcOk ? 0.55 : 0) : (ch === S.micCh ? micSignal() : 0);
     return sig * S.fad[ch] * 1.9;
   }
   const voiceOut = () => chOut(S.micCh);
   const inZone = o => o >= ZONE[0] && o <= ZONE[1];
-  const lightsWhite = () => S.pars.every(p => p === 'bianco') && S.dimmer >= 0.6;
+  const lightsWhite = () => S.pars.every(p => p === 'bianco') && S.dimmer >= 0.6 && S.parOff == null && !S.buio;
   function hit (d, msg) { S.grad = clamp(S.grad + d); showToast(msg); sfx.boo(); mostra('arrabbiato', 3); }
   // espressione del preside: una reazione dura qualche secondo, poi torna lo stato del momento
   function mostra (espr, secondi) { S.espr = espr; S.esprFino = S.t + secondi; }
@@ -85,7 +89,7 @@ const Show = (() => {
     if (S.esprFino > S.t) return S.espr;
     if (!S.running && S.t >= DURATION) return S.grad >= 40 ? 'contento' : 'arrabbiato';
     if (S.events.some(e => e.live && e.id === 'volume')) return 'arrabbiato';
-    if (speaking() && voiceOut() < 0.05) return 'sorpreso';
+    if ((speaking() && voiceOut() < 0.05) || S.buio) return 'sorpreso';
     return 'normale';
   }
 
@@ -112,18 +116,8 @@ const Show = (() => {
     sigla: () => ({ win: 5, dur: 8, target: 'preside', icon: '🎺', text: 'Vuole la sua sigla musicale', hint: 'la musica è sul PC', tab: 'mixer',
       start () { S.jingle = true; }, end () { S.jingle = false; }, hold: 0.5,
       ok: () => chOut(PC) >= 0.55, fail: () => hit(-6, 'Niente sigla: il preside è offeso.') }),
-    // il guasto del cavo: la causa si vede sul palco e si tocca per controllarla
-    cavo: () => ({ win: 24, dur: 40, target: 'preside', icon: '🔇', text: 'Non si sente più niente!', hint: 'guarda bene il palco e tocca dove vedi il problema', tab: 'guasto',
-      start () { startFault(pick(['mic', 'cavo', 'ing'])); },
-      ok: () => S.micOk && voiceOut() > 0.3,
-      onSolved () {
-        const secs = Math.round(S.t - this.at); S.guastoSecs = secs; endFault();
-        if (secs <= 8) { S.guastoRapido = true; S.grad = clamp(S.grad + 6); sfx.applause(85); showToast('Applausi per il tecnico!', 'ok'); }
-      },
-      fail () {
-        endFault(); S.micCh = 1; S.micOk = true; S.fad[1] = Math.max(S.fad[1], 0.55); S.mute[1] = false; S.bidello = true;
-        rietichetta(); hit(-10, 'Il bidello ha trovato il guasto prima di te. Figuraccia.');
-      } }),
+    // un guasto (tipo e causa a caso): si vede sul palco e si tocca dove si vede il problema
+    guasto: () => guastoEvento(),
     volume: () => ({ win: 99, dur: 7, target: 'preside', icon: '😠', text: 'Ti fa segno: vuole più volume', hint: 'accontentarlo o no? scegli tu', tab: 'mixer',
       ok: () => false, fail () {},
       done () {
@@ -133,16 +127,20 @@ const Show = (() => {
   };
   function script () {
     // 5 imprevisti pescati da 7; il guasto, se esce, sta tra i primi due e ha la scena tutta per sé
-    const ids = Object.keys(POOL).sort(() => Math.random() - 0.5).slice(0, 5);
-    const ci = ids.indexOf('cavo');
-    if (ci > 1) { ids.splice(ci, 1); ids.splice(Math.floor(Math.random() * 2), 0, 'cavo'); }
+    // (con ?guasto=tipo nell'indirizzo il guasto c'è sempre, di quel tipo; nelle prove c'è sempre)
+    let ids = Object.keys(POOL).sort(() => Math.random() - 0.5).slice(0, 5);
+    if ((FORZATO || SEMPRE) && !ids.includes('guasto')) ids[0] = 'guasto';
+    const ci = ids.indexOf('guasto');
+    if (ci > 1) { ids.splice(ci, 1); ids.splice(Math.floor(Math.random() * 2), 0, 'guasto'); }
+    const g = ids.includes('guasto') ? guastoEvento() : null;
+    if (g && g.tipo === 'pc') ids = ids.filter(id => id !== 'sigla');   // la sigla c'è già: è quella che non parte
     const evs = [{ id: 'apertura', at: 1, win: 9, target: 'preside', icon: '🎤', text: 'Sale sul palco', hint: 'vuole luce e voce, senza musica sotto', tab: 'luci',
       ok: () => lightsWhite() && S.fad[S.micCh] >= 0.3 && !S.mute[S.micCh] && chOut(PC) < 0.3, hold: 0.3,
       fail: () => hit(-10, 'Il preside ha cominciato al buio e sopra la musica.') }];
     let at = rnd(13, 16);
     ids.forEach((id, i) => {
-      evs.push(Object.assign({ id, at }, POOL[id]()));
-      at += id === 'cavo' ? 27 : i >= 2 ? rnd(6, 10) : rnd(11, 14);    // verso la fine si accavallano
+      evs.push(Object.assign({ id, at }, id === 'guasto' ? g : POOL[id]()));
+      at += id === 'guasto' ? 27 : i >= 2 ? rnd(6, 10) : rnd(11, 14);    // verso la fine si accavallano
       at = Math.min(at, 72);
     });
     evs.push({ id: 'finale', at: 82, win: 7, target: 'preside', icon: '🎉', text: 'Ha finito il discorso', hint: 'è ora di festa', tab: 'luci',
@@ -151,47 +149,154 @@ const Show = (() => {
     return evs;
   }
 
-  /* ---------- il guasto: si tocca dove si vede il problema (microfono, cavo,
-     presa del mixer). Ogni controllo e ogni riparazione richiede tempo, e si
-     fa una cosa alla volta. ---------- */
-  const CAUSE = {
-    mic: { trovato: 'Il connettore si è sfilato dal microfono.', azione: 'Riattacca', tempo: 1.6, dove: 'il microfono' },
-    cavo: { trovato: 'Una sedia è finita sopra il cavo: è schiacciato.', azione: 'Prendi un XLR dal baule', tempo: 3.2, dove: 'il cavo' },
-    ing: { trovato: 'Il cavo è uscito dalla presa del mixer.', azione: null, tempo: 0, dove: 'la presa del mixer' }
+  /* ---------- i guasti (sfortuna: capitano, non sono colpa tua). Il guasto
+     si vede sul palco e si tocca dove si vede il problema; ogni controllo e
+     ogni riparazione richiede tempo, e si fa una cosa alla volta. Al massimo
+     uno per discorso; se non lo trovi, dopo 24 s lo trova il bidello.
+     Ogni guasto ha le sue cause: ogni causa dice quali punti del palco
+     mostrano il problema e cosa si fa lì. ---------- */
+  const LATO = { l: 'sinistra', r: 'destra' };
+  const DOVE = { mic: 'il microfono', cavo: 'il cavo', ing: 'la presa del mixer', 'spk-l': 'la cassa sinistra', 'spk-r': 'la cassa destra',
+    finale: 'il finale', 'par-l': 'il PAR di sinistra', 'par-r': 'il PAR di destra', 'spina-l': 'la spina del PAR', 'spina-r': 'la spina del PAR',
+    bollitore: 'la ciabatta', quadro: 'il quadro elettrico', pc: 'il PC' };
+  const xlrNuovo = trovato => ({ trovato, azione: 'Prendi un XLR dal baule', tempo: 3.2,
+    fatto (f) { f.collega = 'Collega il cavo nuovo al mixer:'; showToast('Cavo nuovo steso: ora va collegato al mixer.', 'ok'); } });
+  // il bidello rimette il microfono come l'aveva visto montare: CH1, fader su
+  function micDelBidello () {
+    S.micCh = 1; S.micOk = true; S.gracchia = false; S.fad[1] = Math.max(S.fad[1], 0.55); S.mute[1] = false;
+    rietichetta();
+  }
+  const GUASTI = {
+    voce: () => ({ nome: 'microfono muto', titolo: 'Non si sente più niente!', icona: '🔇', target: 'preside', peso: 1,
+      punti: ['mic', 'cavo', 'ing'],
+      cause: {
+        mic: { mic: { trovato: 'Il connettore si è sfilato dal microfono.', azione: 'Riattacca', tempo: 1.6, fatto () { S.micOk = true; showToast('Riattaccato. Si sente di nuovo?', 'ok'); } } },
+        cavo: { cavo: xlrNuovo('Una sedia è finita sopra il cavo: è schiacciato.') },
+        ing: { ing: { trovato: 'Il cavo è uscito dalla presa del mixer.', collega: 'Il cavo è uscito dalla presa del mixer. Ricollegalo:' } }
+      },
+      inizio () { S.micOk = false; }, risolto: () => S.micOk && voiceOut() > 0.3, ripristina: micDelBidello }),
+    gracchio: () => ({ nome: 'voce che gracchia', titolo: 'La voce gracchia e va e viene!', icona: '📻', target: 'preside', peso: 0.7,
+      punti: ['mic', 'cavo', 'ing'],
+      cause: {
+        mic: { mic: { trovato: 'Il connettore è mezzo fuori e balla: fa falso contatto.', azione: 'Stringi il connettore', tempo: 1, fatto () { S.gracchia = false; showToast('Stretto. Ora com\'è la voce?', 'ok'); } } },
+        cavo: { cavo: xlrNuovo('Il cavo ha una piega stretta sotto il gaffer: dentro si è rotto.') }
+      },
+      inizio () { S.gracchia = true; }, risolto: () => !S.gracchia && voiceOut() > 0.3, ripristina: micDelBidello }),
+    ronzio: () => ({ nome: 'ronzio', titolo: 'Un ronzio forte nelle casse!', icona: '〰️', target: 'preside', peso: 0.7,
+      punti: ['cavo', 'pc', 'ing'],
+      cause: {
+        prolunga: { cavo: { trovato: 'Il cavo del microfono corre sopra una prolunga della corrente.', azione: 'Separa i cavi', tempo: 1.5, fatto () { S.ronzio = false; } } },
+        presa: { pc: { trovato: 'Il PC è attaccato a una presa del muro, non alla ciabatta dell\'impianto.', azione: 'Sposta la spina', tempo: 2, fatto () { S.ronzio = false; } } }
+      },
+      inizio () { S.ronzio = true; }, risolto: () => !S.ronzio, ripristina () { S.ronzio = false; } }),
+    cassa: ({ lato }) => ({ nome: 'cassa muta', titolo: `La cassa ${LATO[lato]} è muta!`, icona: '🔈', target: 'spk-' + lato, peso: 0.5,
+      punti: ['spk-l', 'spk-r', 'finale'],
+      cause: {
+        speakon: { ['spk-' + lato]: { trovato: 'Qualcuno è inciampato nel cavo: lo speakon della cassa è per terra.', azione: 'Riattacca lo speakon', tempo: 1.4, fatto () { S.spkOff = null; } } },
+        finale: { finale: { trovato: 'Il finale è in protezione: qualcuno ci ha appoggiato sopra la giacca.', azione: 'Togli la giacca', tempo: 1,
+          fatto () { return { testo: 'Il finale si raffredda', tempo: 3, poi () { S.spkOff = null; showToast('Il finale è ripartito.', 'ok'); } }; } } }
+      },
+      inizio () { S.spkOff = lato; }, risolto: () => !S.spkOff, ripristina () { S.spkOff = null; } }),
+    luce: ({ lato }) => ({ nome: 'PAR spento', titolo: `Il PAR di ${LATO[lato]} si è spento!`, icona: '💡', target: 'par-' + lato, peso: 0.3,
+      punti: ['par-' + lato, 'spina-' + lato],
+      cause: {
+        dmx: { ['par-' + lato]: { trovato: 'Il cavo DMX si è sfilato dal PAR.', azione: 'Riattacca il DMX', tempo: 1.4, fatto () { S.parOff = null; } } },
+        spina: { ['spina-' + lato]: { trovato: 'Qualcuno è inciampato: la spina del PAR è per terra.', azione: 'Rimetti la spina', tempo: 1.2, fatto () { S.parOff = null; } } }
+      },
+      inizio () { S.parOff = lato === 'l' ? 0 : 3; }, risolto: () => S.parOff == null, ripristina () { S.parOff = null; } }),
+    corrente: () => ({ nome: 'corrente saltata', titolo: 'Buio! È saltata la corrente delle luci', icona: '⚡', target: 'preside', peso: 0.8,
+      punti: ['bollitore', 'quadro'],
+      cause: {
+        bollitore: {
+          bollitore: { trovato: 'La bidella ha attaccato il bollitore alla ciabatta delle luci.', azione: 'Staccalo', tempo: 1,
+            fatto (f) { f.staccato = true; showToast('Bollitore staccato. Le luci però sono ancora spente.', 'ok'); } },
+          quadro: { trovato: 'Nel quadro è scattato l\'interruttore delle luci.', azione: 'Riarma', tempo: 1.2,
+            fatto (f) {
+              if (!f.staccato) { sfx.pop(); showToast('Riarmato… e scatta di nuovo: qualcosa tira troppa corrente.'); return false; }
+              S.buio = false;
+            } }
+        }
+      },
+      inizio () { S.buio = true; }, risolto: () => !S.buio, ripristina () { S.buio = false; } }),
+    pc: () => ({ nome: 'sigla che non parte', titolo: 'Vuole la sigla, ma non parte!', icona: '💻', target: 'preside', peso: 1, sigla: true,
+      punti: ['pc', 'ing'],
+      cause: {
+        aggiornamento: { pc: { trovato: 'Il PC ha deciso di aggiornarsi proprio adesso: 34%…', azione: 'Metti la sigla dal telefono', tempo: 2.5, fatto () { S.pcOk = true; showToast('La sigla ora arriva dal telefono, sul canale del PC. Si sente?', 'ok'); } } },
+        standby: { pc: { trovato: 'Il PC è andato in standby.', azione: 'Muovi il mouse', tempo: 0.8, fatto () { S.pcOk = true; showToast('Il PC si è svegliato. Si sente?', 'ok'); } } }
+      },
+      inizio () { S.pcOk = false; S.jingle = true; }, risolto: () => S.pcOk && chOut(PC) >= 0.55,
+      ripristina () { S.pcOk = true; S.fad.pc = Math.max(S.fad.pc, 0.7); S.mute.pc = false; } })
   };
-  function startFault (cause) {
-    S.fault = { cause, stato: { mic: '?', cavo: '?', ing: '?' }, collega: false };
-    S.micOk = false; S.faultAt = S.t; S.task = null;
+  const TIPI = Object.keys(GUASTI);
+  // nelle prove (?prova, o la prova pubblicata) il guasto c'è sempre, così si vede
+  const SEMPRE = (() => { try { return !!window.SCS_PROVA || /[?&]prova/.test(location.search); } catch (e) { return false; } })();
+  const FORZATO = (() => { try { const g = new URLSearchParams(location.search).get('guasto'); return GUASTI[g] ? g : null; } catch (e) { return null; } })();
+
+  // l'imprevisto del guasto: tipo, causa e lato si scelgono a caso se non sono dati
+  function guastoEvento (tipo, causa, lato) {
+    tipo = tipo || FORZATO || pick(TIPI);
+    const def = GUASTI[tipo]({ lato: lato || pick(['l', 'r']) });
+    causa = causa || pick(Object.keys(def.cause));
+    return { tipo, win: 24, dur: 40, target: def.target, icon: def.icona, text: def.titolo, hint: 'guarda bene il palco e tocca dove vedi il problema', tab: 'guasto',
+      start () { startFault(tipo, def, causa); },
+      ok: () => !!S.fault && def.risolto(),
+      onSolved () {
+        const secs = Math.round(S.t - this.at); S.guastoSecs = secs; endFault();
+        if (def.sigla) S.jingleFino = S.t + 4;
+        if (secs <= 8) { S.guastoRapido = true; S.grad = clamp(S.grad + 6); sfx.applause(85); showToast('Applausi per il tecnico!', 'ok'); }
+      },
+      fail () {
+        def.ripristina(); endFault(); S.bidello = true;
+        if (def.sigla) S.jingleFino = S.t + 4;
+        hit(-10, 'Il bidello ha trovato il guasto prima di te. Figuraccia.');
+      } };
+  }
+  function startFault (tipo, def, causa) {
+    const stato = {}; def.punti.forEach(k => { stato[k] = '?'; });
+    S.fault = { tipo, def, causa, stato, collega: null, ultimo: null };
+    S.guastoNome = def.nome; S.faultAt = S.t; S.task = null;
+    def.inizio();
     paintFix();
   }
   function endFault () { S.fault = null; S.task = null; paintFix(); }
+  const voce = (f, spot) => f.def.cause[f.causa][spot];
   function tocca (spot) {
-    if (!S || !S.running || S.paused || !S.fault) return;   // senza guasto il palco non si tocca
+    const f = S && S.fault;
+    if (!f || !S.running || S.paused || !(spot in f.stato)) return;   // senza guasto il palco non si tocca
     if (S.task) { showToast('Sei da solo: finisci prima quello che stai facendo.'); return; }
-    const st = S.fault.stato[spot];
-    if (st === '?') startTask(spot, 'controllo', 1);
+    const st = f.stato[spot];
+    if (st === '?') startTask(spot, 'Controllo ' + DOVE[spot], 1, () => controllato(spot));
     else if (st === 'ok') showToast('Lì hai già controllato: è tutto a posto.');
-    else if (st === 'guasto') ripara();
+    else if (st === 'guasto') ripara(spot);
   }
-  function startTask (spot, kind, secs) { S.task = { spot, kind, left: secs, total: secs }; paintFix(); }
+  function controllato (spot) {
+    const f = S.fault, v = voce(f, spot);
+    if (!v) { f.stato[spot] = 'ok'; showToast('Tutto a posto qui.'); return; }
+    f.stato[spot] = 'guasto'; f.ultimo = spot; sfx.ding();
+    if (v.collega) f.collega = v.collega;
+  }
+  function startTask (spot, testo, secs, poi) { S.task = { spot, testo, left: secs, total: secs, poi }; paintFix(); }
   function finishTask () {
-    const { spot, kind } = S.task, f = S.fault; S.task = null;
-    if (!f) return;
-    if (kind === 'controllo') {
-      if (spot === f.cause) { f.stato[spot] = 'guasto'; if (spot === 'ing') f.collega = true; sfx.ding(); }
-      else { f.stato[spot] = 'ok'; showToast('Tutto a posto qui.'); }
-    } else if (spot === 'mic') { f.stato.mic = 'fatto'; S.micOk = true; showToast('Riattaccato. Si sente di nuovo?', 'ok'); }
-    else if (spot === 'cavo') { f.stato.cavo = 'fatto'; f.collega = true; showToast('Cavo nuovo steso: ora va collegato al mixer.', 'ok'); }
+    const t = S.task; S.task = null;
+    if (S.fault) t.poi();
     paintFix();
   }
-  function ripara () {
+  function ripara (spot) {
     const f = S && S.fault; if (!f || S.task) return;
-    const spot = Object.keys(f.stato).find(k => f.stato[k] === 'guasto');
-    if (spot && CAUSE[spot].azione) startTask(spot, 'riparazione', CAUSE[spot].tempo);
+    spot = spot || (f.stato[f.ultimo] === 'guasto' ? f.ultimo : Object.keys(f.stato).find(k => f.stato[k] === 'guasto'));
+    const v = spot && voce(f, spot);
+    if (!v || !v.azione) return;
+    startTask(spot, v.azione, v.tempo, () => {
+      const dopo = v.fatto(f);
+      if (dopo === false) return;                 // non è andata: il punto resta da sistemare
+      f.stato[spot] = 'fatto';
+      if (dopo) startTask(spot, dopo.testo, dopo.tempo, dopo.poi);   // c'è ancora da aspettare
+    });
   }
   function collega (n) {
     const f = S && S.fault; if (!f || !f.collega || S.task) return;
-    S.micCh = n; S.micOk = true; f.collega = false; f.stato[f.cause] = 'fatto';
+    S.micCh = n; S.micOk = true; S.gracchia = false; f.collega = null;
+    Object.keys(f.stato).forEach(k => { if (f.stato[k] === 'guasto' || (voce(f, k) && f.stato[k] !== 'ok')) f.stato[k] = 'fatto'; });
     rietichetta();
     showToast('Collegato all\'ingresso ' + n + '.', 'ok'); paintFix();
   }
@@ -200,21 +305,21 @@ const Show = (() => {
     fixPainted();
     requestAnimationFrame(fixPainted);
     const box = $('#show-fix'), f = S && S.fault;
-    if (!f || (!S.task && !f.collega && !Object.values(f.stato).includes('guasto'))) { box.hidden = true; box.textContent = ''; return; }
+    const spot = f && (f.stato[f.ultimo] === 'guasto' ? f.ultimo : Object.keys(f.stato).find(k => f.stato[k] === 'guasto'));
+    if (!f || (!S.task && !f.collega && !spot)) { box.hidden = true; box.textContent = ''; return; }
     box.hidden = false;
     if (S.task) {
-      const c = CAUSE[S.task.spot];
-      box.innerHTML = `<span>${S.task.kind === 'controllo' ? 'Controllo ' + c.dove + '…' : c.azione + '…'}</span><i class="fx-bar"><b id="fx-prog"></b></i>`;
+      box.innerHTML = `<span>${S.task.testo}…</span><i class="fx-bar"><b id="fx-prog"></b></i>`;
       return;
     }
     if (f.collega) {
-      box.innerHTML = `<span>${f.stato.cavo === 'fatto' ? 'Collega il cavo nuovo al mixer:' : CAUSE.ing.trovato + ' Ricollegalo:'}</span><span class="fx-ins">${[1, 2, 3, 4].map(n => `<button data-in="${n}">IN ${n}</button>`).join('')}</span>`;
+      box.innerHTML = `<span>${f.collega}</span><span class="fx-ins">${[1, 2, 3, 4].map(n => `<button data-in="${n}">IN ${n}</button>`).join('')}</span>`;
       box.querySelectorAll('button[data-in]').forEach(b => b.addEventListener('click', () => collega(+b.dataset.in)));
       return;
     }
-    const spot = Object.keys(f.stato).find(k => f.stato[k] === 'guasto');
-    box.innerHTML = `<span>${CAUSE[spot].trovato}</span><button id="fx-azione">${CAUSE[spot].azione}</button>`;
-    $('#fx-azione').addEventListener('click', ripara);
+    const v = voce(f, spot);
+    box.innerHTML = `<span>${v.trovato}</span><button id="fx-azione">${v.azione}</button>`;
+    $('#fx-azione').addEventListener('click', () => ripara(spot));
   }
   // i messaggi brevi salgono sopra il riquadro del guasto, se è aperto
   function fixPainted () {
@@ -330,7 +435,7 @@ const Show = (() => {
   /* ---------- avvisi della regia: schede in alto sul bordo del palco (non
      sono parole del preside); sul palco resta solo un segnale su chi ha il
      problema ---------- */
-  const WHO = { preside: 'Preside', 'spk-l': 'Cassa sinistra', 'spk-r': 'Cassa destra' };
+  const WHO = { preside: 'Preside', 'spk-l': 'Cassa sinistra', 'spk-r': 'Cassa destra', 'par-l': 'PAR sinistro', 'par-r': 'PAR destro' };
   const bubbleEls = new Map();
   const layer = $('#show-alerts');
   function renderBubbles () {
@@ -378,7 +483,7 @@ const Show = (() => {
     S.paused = p;
     $('#show-pause').hidden = !p;
     $('#sh-pause').textContent = p ? '▶' : '⏸';
-    if (p) { voice.silence(); sfx.music(0); sfx.ring(0); }
+    if (p) { voice.silence(); sfx.music(0); sfx.ring(0); sfx.buzz(0); }
   }
   $('#sh-pause').addEventListener('click', () => { SFX.button(); setPaused(!S.paused); });
   $('#sh-exit').addEventListener('click', () => { SFX.button(); exit(); });
@@ -423,7 +528,7 @@ const Show = (() => {
           e.held = (e.held || 0) + dt;
           if (e.held > (e.hold || 0.15)) { e.live = false; e.solved = true; S.grad = clamp(S.grad + 4); showToast('Fatto! ' + (e.after || ''), 'ok'); sfx.ok(); mostra('contento', 2.2); if (e.onSolved) e.onSolved.call(e); }
         } else e.held = 0;
-        if (e.live && e.win < 90 && S.t > e.deadline && !(e.id === 'cavo' && S.task)) { e.live = false; e.failed = true; e.fail(); }
+        if (e.live && e.win < 90 && S.t > e.deadline && !(e.id === 'guasto' && S.task)) { e.live = false; e.failed = true; e.fail(); }
       }
       if (e.started && !e.ended && S.t >= e.at + (e.dur || e.win)) {
         e.ended = true; if (e.end) e.end();
@@ -439,13 +544,22 @@ const Show = (() => {
       if (S.task.left <= 0) finishTask();
     }
 
+    // la sigla dopo il guasto del PC suona ancora un po', poi il preside riprende
+    if (S.jingleFino && S.t >= S.jingleFino) { S.jingle = false; S.jingleFino = 0; }
+    // rumori del guasto: ronzio fisso, scariche col falso contatto
+    sfx.buzz(S.ronzio ? 1 : 0);
+    if (S.gracchia && speaking() && Math.random() < dt * 8) sfx.crackle();
+
     // gradimento continuo
     const o = voiceOut();
     let d = 0;
-    if (speaking()) {
+    if (S.fault) {
+      // col guasto il pubblico all'inizio aspetta, poi si spazientisce (di più se il guasto è grave)
       const quiet = S.t - S.faultAt;
-      // col guasto il pubblico all'inizio aspetta, poi si spazientisce
-      if (!S.micOk) d -= quiet < 5 ? 0.3 : quiet < 15 ? 1.5 : 3;
+      d -= (quiet < 5 ? 0.3 : quiet < 15 ? 1.5 : 3) * S.fault.def.peso;
+    }
+    if (speaking()) {
+      if (!S.micOk) { /* già contato col guasto */ }
       else if (S.mute[S.micCh]) d -= 3; else if (o < 0.3) d -= 2.5; else if (o > 0.9) d -= 2.5; else if (inZone(o)) d += 1.2; else d += 0.2;
       if (chOut(PC) > 0.3) d -= 1.5;               // musica sopra il discorso
       if (S.t > 10 && !lightsWhite()) d -= 0.8;
@@ -455,11 +569,12 @@ const Show = (() => {
     // sottotitoli: più piccoli se si sente poco, più grandi se è troppo forte
     const li = Math.min(LINES.length - 1, Math.floor(S.t / (SPEECH[1] / LINES.length)));
     const cap = $('#show-caption');
-    if (S.jingle) cap.innerHTML = '<b>♪ La sigla del preside ♪</b>';
+    const nota = S.gracchia ? 'gracchia e va e viene' : S.ronzio ? 'un ronzio copre la voce' : S.buio ? 'parla al buio' : S.spkOff ? 'da un lato della palestra non si sente' : '';
+    if (S.jingle) cap.innerHTML = S.pcOk ? '<b>♪ La sigla del preside ♪</b>' : '<b>(il preside aspetta la sua sigla… silenzio)</b>';
     else if (!speaking()) cap.innerHTML = '';
     else if (!S.micOk && S.t - S.faultAt > 5) cap.innerHTML = '<b>«Tramp? TRAMP?» Il preside batte sul microfono.</b>';
     else if (o < 0.05) cap.innerHTML = '<b>(il preside parla ma non si sente niente)</b>';
-    else cap.innerHTML = `<b style="font-size:${o > 0.9 ? 16 : o < 0.3 ? 11 : 13}px">«${LINES[li]}»</b>${o > 0.9 ? '<small>(troppo forte: distorce)</small>' : o < 0.3 ? '<small>(si sente appena)</small>' : ''}`;
+    else cap.innerHTML = `<b style="font-size:${o > 0.9 ? 16 : o < 0.3 ? 11 : 13}px">«${LINES[li]}»</b>${nota ? '<small>(' + nota + ')</small>' : o > 0.9 ? '<small>(troppo forte: distorce)</small>' : o < 0.3 ? '<small>(si sente appena)</small>' : ''}`;
 
     CHANNELS.forEach(n => {
       const v = chOut(n), m = chF[n].meter;
@@ -467,14 +582,14 @@ const Show = (() => {
       m.style.background = v > 0.9 ? 'var(--red)' : inZone(v) ? 'var(--green)' : '#f2c53d';
       chF[n].paint();
     });
-    voice.say(speaking() && S.micOk ? o : 0);
+    voice.say(speaking() && S.micOk ? o * (S.spkOff ? 0.6 : 1) : 0);
     sfx.music(S.jingle ? chOut(PC) : chOut(PC) * 0.5);
     renderBubbles(); paintHeader();
     if (S.t >= DURATION) finish();
   }
 
   function finish () {
-    S.running = false; voice.silence(); sfx.music(0); sfx.ring(0); sfx.applause(S.grad);
+    S.running = false; voice.silence(); sfx.music(0); sfx.ring(0); sfx.buzz(0); sfx.applause(S.grad);
     clearBubbles(); $('#show-caption').innerHTML = '';
     View.applause(S);
     // birre del discorso
@@ -484,9 +599,10 @@ const Show = (() => {
     if (S.grad >= 70) { beers++; notes.push('🍺 Pubblico contento (almeno 70%).'); }
     // reputazione del discorso, con le regole di REP (conta sempre l'ultimo discorso)
     const voci = [['Discorso portato a termine', REP.phaseDone]];
-    if (S.guastoRapido) voci.push(['Guasto risolto in ' + S.guastoSecs + ' s: applausi per il tecnico', REP.faultFixedFast]);
-    else if (S.bidello) voci.push(['Il guasto l\'ha trovato il bidello al posto tuo', REP.faultByJanitor]);
-    else if (S.guastoSecs != null) voci.push(['Guasto risolto in ' + S.guastoSecs + ' s', 0]);
+    const gn = 'Guasto (' + S.guastoNome + ')';
+    if (S.guastoRapido) voci.push([gn + ' risolto in ' + S.guastoSecs + ' s: applausi per il tecnico', REP.faultFixedFast]);
+    else if (S.bidello) voci.push([gn + ': l\'ha trovato il bidello al posto tuo', REP.faultByJanitor]);
+    else if (S.guastoSecs != null) voci.push([gn + ' risolto in ' + S.guastoSecs + ' s', 0]);
     if (S.larsens) voci.push(['Larsen', REP.feedback]);
     if (S.micCh !== 1) voci.push(['Microfono lasciato sul CH' + S.micCh + ' invece del CH1', REP.wrongInput]);
     const rep = voci.reduce((n, v) => n + v[1], 0);
@@ -551,7 +667,7 @@ const Show = (() => {
   }
   function exit () {
     if (S) { S.running = false; }
-    voice.silence(); sfx.music(0); sfx.ring(0);
+    voice.silence(); sfx.music(0); sfx.ring(0); sfx.buzz(0);
     clearBubbles(); $('#show-caption').innerHTML = '';
     $('#show-intro').classList.remove('show'); $('#show-outro').classList.remove('show');
     if (!active) return;
@@ -606,7 +722,7 @@ const Show = (() => {
 
   /* ---------- suoni dello spettacolo (sintetizzati, col volume delle impostazioni) ---------- */
   const sfx = (() => {
-    let ac, master, hum, humG, ringO, ringG, musO, musG, noiseBuf, humOn = false;
+    let ac, master, hum, humG, ringO, ringG, musO, musG, buzzO, buzzG, noiseBuf, humOn = false;
     const on = () => ac && settings().volume > 0;
     const env = (g, a, peak, rel, t0) => { g.gain.setValueAtTime(0.0001, t0); g.gain.exponentialRampToValueAtTime(peak, t0 + a); g.gain.exponentialRampToValueAtTime(0.0001, t0 + a + rel); };
     const tone = (f, dur, type, vol) => { if (!on()) return; const o = ac.createOscillator(), g = ac.createGain(); o.type = type || 'sine'; o.frequency.value = f; o.connect(g).connect(master); env(g, 0.01, vol || 0.15, dur, ac.currentTime); o.start(); o.stop(ac.currentTime + dur + 0.05); };
@@ -624,6 +740,8 @@ const Show = (() => {
         [ringO, ringG] = osc('sine', 2750);
         const lp = ac.createBiquadFilter(); lp.type = 'lowpass'; lp.frequency.value = 500; lp.connect(master);
         [musO, musG] = osc('square', 110, lp);
+        const lp2 = ac.createBiquadFilter(); lp2.type = 'lowpass'; lp2.frequency.value = 400; lp2.connect(master);
+        [buzzO, buzzG] = osc('sawtooth', 50, lp2);
       },
       tickVolume () { if (master) master.gain.value = settings().volume; },
       hum (v) { humOn = v; },
@@ -631,6 +749,12 @@ const Show = (() => {
       ring (r) { if (!ac) return; this.tickVolume(); ringG.gain.setTargetAtTime(r * r * 0.12, ac.currentTime, 0.05); ringO.frequency.setTargetAtTime(2600 + r * 400, ac.currentTime, 0.1); },
       music (level) { if (!ac) return; const t = ac.currentTime; musO.frequency.setValueAtTime([110, 138.6, 164.8, 220][Math.floor(t * 4) % 4], t); musG.gain.setTargetAtTime(level * 0.05, t, 0.05); },
       larsen () { if (!on()) return; const [o, g] = osc('sine', 2750); g.gain.setValueAtTime(0.001, ac.currentTime); g.gain.exponentialRampToValueAtTime(0.2, ac.currentTime + 0.4); g.gain.exponentialRampToValueAtTime(0.001, ac.currentTime + 2.2); o.stop(ac.currentTime + 2.3); },
+      buzz (v) { if (!ac) return; buzzG.gain.setTargetAtTime(v * 0.07, ac.currentTime, 0.1); },
+      crackle () {
+        if (!on()) return;
+        const s = ac.createBufferSource(); s.buffer = noiseBuf; const g = ac.createGain(); g.gain.value = 0.18;
+        s.connect(g).connect(master); s.start(0, Math.random()); s.stop(ac.currentTime + 0.03 + Math.random() * 0.05);
+      },
       pop () { tone(55, 0.25, 'sine', 0.5); setTimeout(() => tone(55, 0.25, 'sine', 0.5), 280); },
       ding () { tone(880, 0.15, 'triangle', 0.08); },
       ok () { tone(660, 0.1, 'triangle', 0.08); setTimeout(() => tone(990, 0.15, 'triangle', 0.08), 90); },
@@ -656,8 +780,9 @@ const Show = (() => {
     get active () { return active; },
     get state () { return S; },
     espressione, tocca, ripara, collega,
-    // per i test: un guasto con la causa scelta, adesso
-    guasto (cause) { const e = Object.assign({ id: 'cavo', at: S.t }, POOL.cavo()); e.start = function () { startFault(cause); }; S.events.push(e); },
+    // per i test: un guasto adesso, col tipo, la causa e il lato scelti
+    guasto (tipo, causa, lato) { S.events.push(Object.assign({ id: 'guasto', at: S.t }, guastoEvento(tipo, causa, lato))); },
+    GUASTI: () => Object.fromEntries(TIPI.map(t => [t, Object.keys(GUASTI[t]({ lato: 'l' }).cause)])),
     result: null,
     refreshButton, offer, start, exit, prova, setPaused,
     // per i test: il tempo avanza solo quando lo dicono loro
@@ -694,16 +819,19 @@ const View = (() => {
   const LINE = 'rgba(14,10,20,0.85)';
 
   const cv = document.getElementById('show-canvas');
-  // dove si tocca il palco durante il guasto: microfono, cavo, presa verso il mixer
-  const HOT = { mic: [486, 330], cavo: [600, 432], ing: [732, 464] };
+  // dove si tocca il palco durante un guasto (si toccano solo i punti di quel guasto)
+  const HOT = { mic: [486, 330], cavo: [600, 432], ing: [732, 464], 'spk-l': [182, 520], 'spk-r': [818, 520], finale: [262, 514],
+    'par-l': [214, 300], 'par-r': [786, 300], 'spina-l': [242, 466], 'spina-r': [758, 466], bollitore: [272, 446], quadro: [822, 372], pc: [762, 510] };
   function puntoToccato (clientX, clientY) {
+    const f = Show.state && Show.state.fault;
+    if (!f) return null;
     const r = cv.getBoundingClientRect(), x = (clientX - r.left - ox) / s, y = (clientY - r.top - oy) / s;
     let best = null, bd = Math.max(34, 24 / s);   // almeno ~24 pixel veri, per il dito
-    Object.entries(HOT).forEach(([k, [hx, hy]]) => { const d = Math.hypot(x - hx, y - hy); if (d < bd) { bd = d; best = k; } });
+    Object.keys(f.stato).forEach(k => { const [hx, hy] = HOT[k], d = Math.hypot(x - hx, y - hy); if (d < bd) { bd = d; best = k; } });
     return best;
   }
   cv.addEventListener('pointerdown', ev => { const k = puntoToccato(ev.clientX, ev.clientY); if (k) Show.tocca(k); });
-  cv.addEventListener('pointermove', ev => { cv.style.cursor = Show.state && Show.state.fault && puntoToccato(ev.clientX, ev.clientY) ? 'pointer' : ''; });
+  cv.addEventListener('pointermove', ev => { cv.style.cursor = puntoToccato(ev.clientX, ev.clientY) ? 'pointer' : ''; });
   const ctx = cv.getContext('2d');
   let cw = 0, ch = 0, dpr = 1, s = 1, ox = 0, oy = 0;
   let bg = null, crowd = [], cheerAt = null, haze = null, beamLayer = null, chr = null, dmxAddr = [];
@@ -911,7 +1039,8 @@ const View = (() => {
   const toStage = (x, y) => [ox + x * s, oy + y * s];
   // dove segnalare chi ha il problema; le casse, se sono fuori quadro, sul bordo
   const edge = x => Math.max(-ox / s + 24, Math.min((cw - ox) / s - 24, x));
-  const anchorW = (target, S) => target === 'spk-l' ? [edge(SPK.l), 282] : target === 'spk-r' ? [edge(SPK.r), 282] : [presX(S), FEET - 226];
+  const anchorW = (target, S) => target === 'spk-l' ? [edge(SPK.l), 282] : target === 'spk-r' ? [edge(SPK.r), 282]
+    : target === 'par-l' ? [214, 262] : target === 'par-r' ? [786, 262] : [presX(S), FEET - 226];
 
   /* il preside, disegnato con la chiave "Stencil · Manifesto" di personaggi.js:
      si tinge con la luce dei frontali che lo prendono e i tagli gli accendono
@@ -952,7 +1081,7 @@ const View = (() => {
     g.lineCap = 'round'; g.lineJoin = 'round';
     const t = S.t, px = presX(S), d = S.dimmer;
     const cols = S.pars.map(c => rgb(COLORS[c]));
-    const light = PARS.map((p, i) => ({ p, c: cols[i], a: d, hex: COLORS[S.pars[i]] }));
+    const light = PARS.map((p, i) => ({ p, c: cols[i], a: S.buio || S.parOff === i ? 0 : d, hex: COLORS[S.pars[i]] }));
     const fall = (x, w) => Math.exp(-(((px - x) / w) ** 2));
 
     // pozze di luce: cerchi netti sul sipario, ellissi sul pavimento lucido
@@ -1044,17 +1173,30 @@ const View = (() => {
     g.strokeStyle = 'rgba(0,0,0,0.35)'; g.lineWidth = 0.6;
     for (let i = -5; i <= 5; i += 2.5) { g.beginPath(); g.moveTo(i, -10); g.lineTo(i, 2); g.stroke(); }
     g.restore();
-    const guasto = S.fault && S.fault.stato[S.fault.cause] !== 'fatto' ? S.fault.cause : null;
+    // indizio visibile: il guasto è di quel tipo e con quella causa, e lì non è ancora sistemato
+    const F = S.fault, vede = (tipo, causa, spot) => !!F && F.tipo === tipo && F.causa === causa && !!F.def.cause[causa][spot] && F.stato[spot] !== 'fatto';
+    const scintilla = (x, y) => {
+      if (Math.sin(now * 31) + Math.sin(now * 13) < 0.3) return;
+      g.strokeStyle = '#ffe28a'; g.lineWidth = 1.2; g.beginPath();
+      for (let k = 0; k < 4; k++) { const an = k * 1.6 + now * 7; g.moveTo(x, y); g.lineTo(x + Math.cos(an) * 7, y + Math.sin(an) * 7); }
+      g.stroke();
+    };
     g.strokeStyle = '#0a0a0c'; g.lineWidth = 1.6; g.beginPath();
-    if (guasto === 'mic') {
-      // indizio: il connettore si è sfilato e penzola sotto il microfono
+    if (vede('voce', 'mic', 'mic')) {
+      // il connettore si è sfilato e penzola sotto il microfono
       g.moveTo(509, 460); g.lineTo(509, 392); g.quadraticCurveTo(510, 376, 504, 368); g.quadraticCurveTo(494, 352, 492, 364); g.stroke();
       g.save(); g.translate(492, 368); g.rotate(0.15);
       g.fillStyle = '#9a9da5'; g.fillRect(-3.2, 0, 6.4, 10); g.fillStyle = '#1a1b1f'; g.fillRect(-3.8, -3, 7.6, 4);
       g.restore();
     } else { g.moveTo(485, 320); g.lineTo(505, 371); g.quadraticCurveTo(510, 376, 509, 390); g.lineTo(509, 460); g.stroke(); }
-    if (guasto === 'cavo') {
-      // indizio: una sedia della palestra finita sopra il cavo
+    if (vede('gracchio', 'mic', 'mic')) {
+      // connettore mezzo fuori, storto, che fa scintille
+      g.save(); g.translate(488, 326); g.rotate(0.9);
+      g.fillStyle = '#9a9da5'; g.fillRect(-3, -2, 6, 9); g.fillStyle = '#1a1b1f'; g.fillRect(-3.6, 6, 7.2, 4);
+      g.restore(); scintilla(486, 322);
+    }
+    if (vede('voce', 'cavo', 'cavo')) {
+      // una sedia della palestra finita sopra il cavo
       // (a misura vera: seduta a 45 cm, schienale a 90, accanto a un preside di 1,90 m)
       g.save(); g.translate(600, 463); g.scale(1.6, 1.6); g.translate(-600, -463);
       g.fillStyle = '#6a6d75'; g.fillRect(586, 438, 3, 26); g.fillRect(611, 438, 3, 26); g.fillRect(608, 408, 3, 32);
@@ -1062,13 +1204,85 @@ const View = (() => {
       g.fillStyle = 'rgba(0,0,0,0.35)'; g.fillRect(583, 439, 32, 1.5);
       g.restore();
     }
-    if (guasto === 'ing') {
-      // indizio: il cavo è uscito dal mixer ed è per terra, col connettore in vista
+    if (vede('gracchio', 'cavo', 'cavo')) {
+      // piega stretta del cavo sotto un pezzo di gaffer, con le scintille
+      g.strokeStyle = '#0a0a0c'; g.lineWidth = 2.6; g.beginPath(); g.moveTo(588, 466); g.lineTo(598, 448); g.lineTo(606, 466); g.stroke();
+      g.fillStyle = '#8a8c92'; g.save(); g.translate(597, 452); g.rotate(-0.2); g.fillRect(-9, -3, 18, 6); g.restore();
+      scintilla(598, 446);
+    }
+    if (vede('voce', 'ing', 'ing')) {
+      // il cavo è uscito dal mixer ed è per terra, col connettore in vista
       g.strokeStyle = '#0a0a0c'; g.lineWidth = 2; g.beginPath(); g.moveTo(716, 468); g.quadraticCurveTo(734, 474, 742, 462); g.stroke();
       g.save(); g.translate(744, 460); g.rotate(-0.7);
       g.fillStyle = '#9a9da5'; g.fillRect(0, -3, 11, 6); g.fillStyle = '#1a1b1f'; g.fillRect(-4, -3.6, 5, 7.2);
       g.restore();
     }
+    if (vede('ronzio', 'prolunga', 'cavo')) {
+      // una prolunga arancione stesa proprio sopra il cavo del microfono
+      g.strokeStyle = '#e07a1f'; g.lineWidth = 3; g.beginPath(); g.moveTo(470, 476); g.quadraticCurveTo(560, 452, 612, 461); g.quadraticCurveTo(680, 472, 780, 448); g.stroke();
+      g.fillStyle = '#c96a18'; g.fillRect(596, 452, 12, 9);
+    }
+
+    // in regia, sotto il palco: il finale a sinistra, il PC a destra
+    const protect = S.spkOff && F && F.tipo === 'cassa' && F.causa === 'finale';
+    g.fillStyle = '#1a1b1f'; g.fillRect(236, 506, 52, 18); g.fillStyle = '#2c2e34'; g.fillRect(236, 506, 52, 3);
+    g.fillStyle = '#0c0c0f'; for (let k = 0; k < 6; k++) g.fillRect(262 + k * 4, 512, 2, 8);
+    ell(g, 244, 515, 2, 2, protect && Math.sin(now * 8) > 0 ? '#ff3b2e' : protect ? '#5a1410' : '#3fd07a');
+    ell(g, 252, 515, 2, 2, protect ? '#5a1410' : '#3fd07a');
+    if (vede('cassa', 'finale', 'finale')) {
+      // la giacca appoggiata sul finale: copre le prese d'aria
+      g.fillStyle = '#3d4a2c'; g.beginPath(); g.moveTo(252, 500); g.quadraticCurveTo(272, 494, 292, 504); g.lineTo(294, 528); g.lineTo(276, 522); g.lineTo(258, 526); g.closePath(); g.fill();
+      g.fillStyle = '#2c3620'; g.fillRect(270, 498, 3, 26);
+    }
+    const pcAgg = F && F.tipo === 'pc' && !S.pcOk && F.causa === 'aggiornamento', pcNero = F && F.tipo === 'pc' && !S.pcOk && F.causa === 'standby';
+    g.fillStyle = '#26282d'; g.fillRect(740, 520, 44, 4);
+    g.fillStyle = '#15161a'; g.beginPath(); g.moveTo(744, 520); g.lineTo(748, 500); g.lineTo(780, 500); g.lineTo(778, 520); g.closePath(); g.fill();
+    g.fillStyle = pcAgg ? '#1f5fbf' : pcNero ? '#050506' : '#10251a';
+    g.beginPath(); g.moveTo(747, 518); g.lineTo(750, 502); g.lineTo(778, 502); g.lineTo(776, 518); g.closePath(); g.fill();
+    if (pcAgg) { g.fillStyle = '#fff'; g.font = '700 7px "Inter", sans-serif'; g.textAlign = 'center'; g.textBaseline = 'middle'; g.fillText('34%', 763, 511); }
+    else if (!pcNero) { g.fillStyle = '#49b06a'; for (let k = 0; k < 6; k++) { const hh = S.jingle ? 2 + Math.abs(Math.sin(now * 6 + k)) * 8 : 2; g.fillRect(753 + k * 4, 515 - hh, 2, hh); } }
+    if (vede('ronzio', 'presa', 'pc')) {
+      // la spina del PC va a una presa lontana, sul muro
+      g.strokeStyle = '#e07a1f'; g.lineWidth = 2.2; g.beginPath(); g.moveTo(782, 522); g.quadraticCurveTo(830, 530, 860, 470); g.lineTo(880, 420); g.stroke();
+    }
+    // la cassa staccata: lo speakon per terra davanti al sub
+    ['l', 'r'].forEach(l => {
+      if (!vede('cassa', 'speakon', 'spk-' + l)) return;
+      const dir = l === 'l' ? 1 : -1, x0 = SPK[l] + dir * 44, [hx, hy] = HOT['spk-' + l];
+      g.strokeStyle = '#0a0a0c'; g.lineWidth = 2.4; g.beginPath(); g.moveTo(x0, 500); g.quadraticCurveTo(x0 + dir * 30, 530, hx, hy + 4); g.stroke();
+      g.save(); g.translate(hx, hy); g.rotate(dir * 0.5); g.scale(1.5, 1.5); g.fillStyle = '#1f4f9a'; g.fillRect(-6, -4, 12, 8); g.fillStyle = '#9a9da5'; g.fillRect(dir * 6 - 2, -2.5, 4, 5); g.restore();
+    });
+    // ciabatta sul palco (a sinistra) e quadro elettrico sul muro (a destra)
+    g.fillStyle = '#111215'; g.fillRect(252, 456, 36, 6); g.fillStyle = '#e0503f'; g.fillRect(286, 457, 2, 4);
+    g.strokeStyle = '#0a0a0c'; g.lineWidth = 1.6; g.beginPath(); g.moveTo(252, 459); g.quadraticCurveTo(236, 462, 226, 456); g.stroke();
+    if (vede('corrente', 'bollitore', 'bollitore')) {
+      g.fillStyle = '#e8e6e0'; g.beginPath(); g.moveTo(262, 454); g.lineTo(264, 434); g.quadraticCurveTo(272, 428, 280, 434); g.lineTo(282, 454); g.closePath(); g.fill();
+      g.fillStyle = '#bdbab2'; g.fillRect(262, 451, 20, 3); g.fillStyle = '#e8e6e0'; g.fillRect(281, 438, 6, 3);
+      g.strokeStyle = '#8a8880'; g.lineWidth = 2; g.beginPath(); g.arc(266, 442, 6, Math.PI * 0.5, Math.PI * 1.5); g.stroke();
+      for (let k = 0; k < 3; k++) { const ph = (now * 0.8 + k / 3) % 1; ell(g, 272 + Math.sin(ph * 6 + k) * 4, 428 - ph * 26, 3 + ph * 5, 3 + ph * 5, `rgba(230,230,235,${0.35 * (1 - ph)})`); }
+    }
+    g.fillStyle = '#8f939b'; g.fillRect(808, 350, 28, 42); g.fillStyle = '#6a6e76'; g.fillRect(808, 350, 28, 3);
+    g.fillStyle = '#2a2c31'; g.fillRect(812, 358, 20, 22);
+    g.fillStyle = '#6a6e76'; g.fillRect(820, 300, 4, 50);   // canalina che sale
+    [0, 1, 2].forEach(k => {
+      const giu = k === 1 && S.buio;
+      g.fillStyle = '#e8e6e0'; g.fillRect(814 + k * 6, 362, 4, 14);
+      g.fillStyle = giu ? '#e0503f' : '#1f5f3a'; g.fillRect(814 + k * 6, giu ? 370 : 362, 4, 6);
+    });
+    if (S.buio) { g.fillStyle = '#e0503f'; g.font = '700 7px "Inter", sans-serif'; g.textAlign = 'center'; g.textBaseline = 'middle'; g.fillText('OFF', 822, 386); }
+    // il PAR staccato: cavo DMX che penzola, o spina per terra accanto allo stativo
+    ['l', 'r'].forEach(l => {
+      const dir = l === 'l' ? 1 : -1, x = l === 'l' ? 214 : 786;
+      if (vede('luce', 'dmx', 'par-' + l)) {
+        g.strokeStyle = '#0a0a0c'; g.lineWidth = 1.6; g.beginPath(); g.moveTo(x - dir * 18, 306); g.quadraticCurveTo(x - dir * 26, 330, x - dir * 20, 352); g.stroke();
+        g.fillStyle = '#9a9da5'; g.fillRect(x - dir * 20 - 3, 352, 6, 9); g.fillStyle = '#1a1b1f'; g.fillRect(x - dir * 20 - 3.5, 350, 7, 3);
+      }
+      if (vede('luce', 'spina', 'spina-' + l)) {
+        const [hx, hy] = HOT['spina-' + l];
+        g.strokeStyle = '#0a0a0c'; g.lineWidth = 1.8; g.beginPath(); g.moveTo(x - dir * 4, 452); g.quadraticCurveTo(x + dir * 10, 470, hx - dir * 5, hy); g.stroke();
+        g.fillStyle = '#1f4f9a'; g.fillRect(hx - 6, hy - 3.5, 12, 7); g.fillStyle = '#9a9da5'; g.fillRect(hx + dir * 5, hy - 2, 3, 4);
+      }
+    });
 
     // frontali nel pit, visti da dietro: alette, display con l'indirizzo DMX, cavi
     light.forEach(({ p, c, a }, i) => {
@@ -1129,8 +1343,8 @@ const View = (() => {
     g.globalCompositeOperation = 'source-over';
     // guasto: i punti già controllati, quello guasto e il lavoro in corso
     if (S.fault) {
-      Object.entries(HOT).forEach(([k, [x, y]]) => {
-        const st = S.fault.stato[k], busy = S.task && S.task.spot === k;
+      Object.keys(S.fault.stato).forEach(k => {
+        const [x, y] = HOT[k], st = S.fault.stato[k], busy = S.task && S.task.spot === k;
         if (busy) {
           g.strokeStyle = 'rgba(255,255,255,0.18)'; g.lineWidth = 4; g.beginPath(); g.arc(x, y, 16, 0, Math.PI * 2); g.stroke();
           g.strokeStyle = '#f2a541'; g.beginPath(); g.arc(x, y, 16, -Math.PI / 2, -Math.PI / 2 + Math.PI * 2 * (1 - S.task.left / S.task.total)); g.stroke();

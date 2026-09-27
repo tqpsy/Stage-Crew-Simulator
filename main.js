@@ -1983,6 +1983,7 @@ function startNewGame (name, logo) {
   Profile.data.service = cleanName(name);
   Profile.data.logo = { ...(logo || logoFromName(Profile.data.service)) };
   Profile.data.reputation = defaultProfile().reputation;   // nuovo service, reputazione da costruire
+  Profile.data.fasi = {};                                  // e niente birre: si accumulano solo nella partita
   whenScene(scene => {
     gameActive = true;
     scene.resetLevel(true);      // azzera livello e statistiche e salva
