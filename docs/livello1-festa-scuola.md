@@ -18,6 +18,60 @@ Ogni fase si chiude con un proprio test: se passa parte un'**animazione di 10 se
 che mostra cosa succede (il preside parla e il pubblico applaude, la gente balla
 col DJ, accendini e telefoni per il cantante).
 
+## Montaggio più leggibile (deciso)
+
+Il montaggio del livello 1 chiedeva tutto insieme e diceva cosa mancava solo
+al Test impianto. La procedura resta quella vera (connettori, ordine di
+accensione, salvavita, fasi, stereo, frontali e tagli): cambiano le dosi e le
+informazioni.
+
+1. **Tre giri, come una squadra vera**: Corrente → Audio → Luci. Ogni giro ha
+   la sua prova (quadro armato e tutto alimentato; musica dal PC fino alle
+   casse; PAR che rispondono alla consolle). Le schede del giro dopo si
+   aprono quando il giro prima è passato. Il Test impianto finale resta il
+   collaudo completo con lo show.
+2. **Foglio di montaggio visibile**: la lista dei collegamenti
+   (`buildExpectedConnections`) si spunta da sola mentre si lavora. Nei
+   livelli successivi mostrerà solo i conteggi per gruppo.
+3. **Il cavo giusto a portata di mano**: toccando una presa senza cavo il
+   gioco propone i cavi del baule che ci entrano; con un cavo in mano si
+   illuminano i dispositivi con una presa compatibile libera.
+4. **Capo squadra tutor (solo livello 1)**: il capo del service avvisa
+   *prima* del primo errore di procedura, una volta sola. La conseguenza
+   resta. Si può spegnere dalle impostazioni.
+5. **Indizi a scalare nel Test impianto**: 1° fallimento indizio vago, 2° il
+   pezzo colpevole in rosso, 3° il capo dice cosa manca (e niente birra
+   "procedura perfetta").
+6. **Posa guidata**: armando un pezzo si evidenzia la zona dove può andare.
+7. **Segnale visibile**: con la scheda collegata il PC suona in loop; meter
+   del mixer, LED del finale e casse mostrano fin dove arriva il segnale.
+8. **Segui il segnale**: tenendo premuto un dispositivo si illumina la catena
+   e lampeggia il primo anello mancante.
+9. **Segni di nastro sul pavimento**: nel livello 1 il capo ha già fatto la
+   pianta (croci di nastro fluo dove vanno sub, stativi, asta, tavolo).
+   Dal livello 2 spariscono.
+10. **Primo minuto = vittoria facile**: quadro posato, collegato all'allaccio
+    e armato → si accende una lampada di servizio.
+11. **Scheda "cos'è"** per ogni pezzo (due righe), tenendolo premuto nella barra.
+
+## Scheda Strutture e tavolo regia (deciso)
+
+Una scheda **Strutture** raccoglie ciò che regge gli apparecchi:
+- **stativi** per i PAR (spostati dalla scheda Luci);
+- **tavolo regia** (la plancia): si posa in Off Stage. Sopra ci vanno
+  mixer, consolle luci, PC e scheda audio; sotto il piano c'è il **rack 2U
+  del finale**;
+- più avanti: rack a terra, americane, altro.
+
+Il finale non è più un apparecchio nudo: sta **dentro un flight case rack
+2U** con lo stesso ingombro di prima. Coperchi tolti e appoggiati al tavolo,
+frontale del finale tra le guide rack, connettori sul retro del rack.
+Toccando il tavolo si apre la vista posteriore di tutta la regia.
+
+Nel livello 1 la regia sta solo in Off Stage: la FOH con il multicore arriva
+in un livello successivo. Allora i finali restano a lato palco (Speakon
+corti) e in FOH va solo il mixer.
+
 ## Scheda obiettivi
 
 **Fatto: scaletta della serata.** A ogni nuova partita, prima del montaggio, si
