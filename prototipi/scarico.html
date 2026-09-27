@@ -154,7 +154,8 @@
     <span><kbd>Spazio</kbd> prendi / lascia</span>
     <span><kbd>E</kbd> aiuto Tonino</span>
     <span><kbd>Q</kbd> oh-issa</span>
-    <span><kbd>Shift</kbd> fermo!</span>
+    <span><kbd>Shift</kbd> passo attento</span>
+    <span><kbd>F</kbd> fermo!</span>
   </div>
 
   <div class="overlay" id="start">
@@ -170,7 +171,8 @@
       <ul>
         <li>Fino a 25 kg il case si porta in mano. Quelli più pesanti si spingono: partono piano e si fermano piano.</li>
         <li>I bauli con le ruote sulla rampa scappano. Se li lasci andare, vanno da soli.</li>
-        <li>Tonino, se non lo chiami, porta da solo i case leggeri. Rack regia e baule CORRENTE si spingono in due: premi <b>AIUTO</b> e arriva. Ti segue con un attimo di ritardo, quindi curva largo.</li>
+        <li>Sopra ogni case c'è la barra del suo stato. Se il case si accende di rosso stai andando troppo forte per quanto è fragile: un urto adesso lo danneggia. Rallenta (Shift, o joystick poco inclinato).</li>
+        <li>Tonino, se non lo chiami, porta da solo i case leggeri, ma non la valigetta del PC e i PAR: quelli sono tuoi. Rack regia e baule CORRENTE si spingono in due: premi <b>AIUTO</b> e arriva. Ti segue con un attimo di ritardo, quindi curva largo.</li>
         <li>Quando spingi un case contro il gradino della palestra, Tonino conta «uno, due, ISSA!»: premi <b>OH-ISSA</b> sull'ISSA e il case passa.</li>
       </ul>
       <div class="legend" id="start-legend"></div>
@@ -215,9 +217,9 @@ const ZONES = {
 };
 const FRAG = {
   bassa:     { thr: 3.6, mult: 0.6 },
-  media:     { thr: 2.6, mult: 1.0 },
+  media:     { thr: 2.3, mult: 1.0 },
   alta:      { thr: 1.9, mult: 1.4 },
-  altissima: { thr: 1.3, mult: 2.0 }
+  altissima: { thr: 1.3, mult: 1.5 }
 };
 // smorzamento al secondo: f = in avanti, s = di lato, a = rotazione
 const WHEEL = {
@@ -255,6 +257,7 @@ const CASES = [
     dif: 'scorte in disordine: +10 min' }
 ];
 
+const STATE_COLOR = { integro: '#49b06a', ammaccato: '#f2c53d', difettoso: '#f2843d', rotto: '#e0503f' };
 const STATE_LABEL = { integro: 'integro', ammaccato: 'ammaccato', difettoso: 'difettoso', rotto: 'rotto' };
 function stateOf (i) { return i >= 70 ? 'integro' : i >= 40 ? 'ammaccato' : i >= 15 ? 'difettoso' : 'rotto'; }
 
@@ -314,7 +317,7 @@ const AU = {
    STATO DI GIOCO
    --------------------------------------------------------------------- */
 let G = null;
-const inp = { keys: new Set(), stick: { x: 0, y: 0 }, stop: false, grabHeld: false };
+const inp = { keys: new Set(), stick: { x: 0, y: 0 }, stop: false, slow: false, grabHeld: false };
 const touchUI = window.matchMedia('(pointer: coarse)').matches || 'ontouchstart' in window;
 
 function newGame () {
@@ -438,6 +441,8 @@ function surface (ce, p) {
   return { local: { x: cx, y: cy }, dist: inside ? -d : d, world: add(ce.body.position, rot({ x: cx, y: cy }, ce.body.angle)) };
 }
 function carriable (ce) { return ce.def.wheel === 'hand'; }
+// l'elettronica delicata la porti tu: Tonino non la tocca
+function delicate (ce) { return ce.def.id === 'valigetta' || ce.def.id === 'par'; }
 function isCarried (ce) { return !!ce.carrier; }
 function speedOf (b) { return len(b.velocity); }
 
@@ -510,12 +515,12 @@ function damage (ce, amt, cause) {
   const before = stateOf(ce.integrity);
   ce.integrity = Math.max(ce.def.unique ? 15 : 0, ce.integrity - amt);
   ce.flash = 0.5;
-  if (ce.def.id === 'par' && ce.pars > 0 && amt >= 9 && Math.random() < 0.65) {
-    ce.pars--; AU.crack(); bubble(ce, 'Crack! Un PAR rotto (' + ce.pars + '/4)', 2);
+  if (ce.def.id === 'par') { // un PAR si rompe ogni 25 punti di danno accumulati
+    const left = Math.max(0, 4 - Math.floor((100 - ce.integrity) / 25));
+    if (left < ce.pars) { ce.pars = left; AU.crack(); bubble(ce, 'Crack! Un PAR rotto (' + ce.pars + '/4)', 2); }
   }
   const after = stateOf(ce.integrity);
   if (after !== before) {
-    if (after === 'rotto' && ce.def.id === 'par') ce.pars = Math.max(0, ce.pars - 2);
     const bad = after === 'difettoso' || after === 'rotto';
     toast(ce.def.name + ': ' + STATE_LABEL[after] + (cause ? ' (' + cause + ')' : ''), bad ? 'bad' : 'warn');
     if (bad) AU.crack();
@@ -590,6 +595,9 @@ function pressHelp () {
   }
   const near = nearestCase(p, 60);
   if (near && near.tipped) { tonino('goto', { to: () => near.body.position, stop: 55 }); bubble(T, 'Arrivo a tirarlo su!', 1.4); return; }
+  if (near && carriable(near) && !near.carrier && delicate(near)) {
+    bubble(T, near.def.id === 'par' ? 'I PAR? No no, quelli li porti tu, capo.' : 'La valigetta del PC? No no, quella la porti tu, capo.', 2); return;
+  }
   if (near && carriable(near) && !near.carrier) {
     tonino('carry', { ce: near }); bubble(T, 'Lo porto io: ' + ZONES[near.def.zone].name + '!', 1.6); AU.hey(); return;
   }
@@ -731,7 +739,7 @@ function helpPoint (ce, pw) {
 function pickJob (T) {
   let best = null, bd = Infinity;
   for (const ce of G.cases) {
-    if (!carriable(ce) || ce.carrier || ce.grabbers.length || ce.zone === ce.def.zone || ce.stuck) continue;
+    if (!carriable(ce) || delicate(ce) || ce.carrier || ce.grabbers.length || ce.zone === ce.def.zone || ce.stuck) continue;
     if (ce.skipUntil > G.t || G.player.grab === ce) continue;
     if (ce.body.position.x > GYM_X && ce.zone === null && speedOf(ce.body) > 0.3) continue;
     if (!helpPoint(ce, null)) continue;
@@ -834,6 +842,8 @@ function updatePlayer (dt) {
   let vmax = P.vmax * (G.coffee.until > G.t ? 1.25 : 1);
   if (P.mode === 'push') vmax = Math.min(vmax, pushVmax(P.grab) * (G.coffee.until > G.t ? 1.15 : 1));
   if (P.mode === 'carry') vmax *= clamp(1 - P.grab.def.kg / 90, 0.6, 1);
+  if (P.mode === 'carry' && P.grab.def.frag === 'altissima') vmax = Math.min(vmax, 2.0);
+  if (inp.slow) vmax *= 0.5;
   drive(P, dir, vmax);
   if (len(dir) > 0.1 && P.mode !== 'push') turnTo(P, Math.atan2(dir.y, dir.x), P.mode === 'carry' ? 0.075 : 0.35);
   if (P.mode === 'push' && P.con) { const a = add(P.grab.body.position, P.con.pointB); P.facing = Math.atan2(a.y - P.body.position.y, a.x - P.body.position.x); }
@@ -1182,6 +1192,10 @@ function drawCase (ce) {
     const r = seeded(ce.seed); ctx.strokeStyle = 'rgba(210,214,222,.45)'; ctx.lineWidth = 1.2;
     for (let i = 0; i < n; i++) { const x = (r() - 0.5) * (w - 8), y = (r() - 0.5) * (h - 8), l = 6 + r() * 12, a = r() * Math.PI; ctx.beginPath(); ctx.moveTo(x, y); ctx.lineTo(x + Math.cos(a) * l, y + Math.sin(a) * l); ctx.stroke(); }
   }
+  if (!ce.tipped && speedOf(b) > FRAG[d.frag].thr * 0.92 && speedOf(b) > 0.8) {
+    ctx.strokeStyle = 'rgba(224,80,63,' + (0.65 + 0.35 * Math.sin(performance.now() / 70)) + ')'; ctx.lineWidth = 4;
+    rr(-w / 2 - 4, -h / 2 - 4, w + 8, h + 8, 6); ctx.stroke();
+  }
   if (ce.flash > 0) { ctx.fillStyle = 'rgba(224,80,63,' + (ce.flash * 0.9) + ')'; rr(-w / 2, -h / 2, w, h, 4); ctx.fill(); }
   if (ce.tipped) { ctx.strokeStyle = '#e0503f'; ctx.lineWidth = 3; ctx.setLineDash([6, 5]); rr(-w / 2 - 3, -h / 2 - 3, w + 6, h + 6, 5); ctx.stroke(); ctx.setLineDash([]); }
   ctx.restore();
@@ -1272,6 +1286,20 @@ function drawScreenUI () {
   if (G.freeing) {
     const s = worldToScreen(G.freeing.ce.body.position);
     ctx.strokeStyle = '#f2a541'; ctx.lineWidth = 5; ctx.beginPath(); ctx.arc(s.x, s.y, 26, -Math.PI / 2, -Math.PI / 2 + Math.PI * 2 * G.freeing.t / 1.3); ctx.stroke();
+  }
+  // barra di stato sopra ogni case (e i PAR rimasti)
+  for (const ce of G.cases) {
+    const bb = ce.body.bounds;
+    const s = worldToScreen({ x: ce.body.position.x, y: bb.min.y });
+    if (s.x < -40 || s.x > W + 40 || s.y < 50 || s.y > H + 40) continue;
+    const st = stateOf(ce.integrity), col = STATE_COLOR[st];
+    const bw = 38, bh = 6, x = Math.round(s.x - bw / 2), y = Math.round(s.y - 11 - (ce.carrier ? 5 : 0));
+    ctx.fillStyle = 'rgba(12,13,16,.85)'; rr(x - 2, y - 2, bw + 4, bh + 4, 3); ctx.fill();
+    ctx.fillStyle = col; ctx.fillRect(x, y, bw * ce.integrity / 100, bh);
+    ctx.fillStyle = 'rgba(12,13,16,.9)'; [70, 40, 15].forEach(v => ctx.fillRect(x + bw * v / 100, y, 1, bh));
+    if (ce.def.id === 'par') for (let i = 0; i < 4; i++) {
+      ctx.fillStyle = i < ce.pars ? '#eaff2b' : '#5a2a24'; ctx.fillRect(x + bw + 5 + i * 7, y - 1, 5, bh + 2);
+    }
   }
   // nuvolette
   ctx.font = '600 13px Inter, system-ui, sans-serif';
@@ -1427,15 +1455,17 @@ window.addEventListener('keydown', e => {
   if (e.code === 'Space') { inp.grabHeld = true; pressGrab(); }
   if (e.code === 'KeyE') pressHelp();
   if (e.code === 'KeyQ') pressLift();
-  if (e.code === 'ShiftLeft' || e.code === 'ShiftRight') inp.stop = true;
+  if (e.code === 'ShiftLeft' || e.code === 'ShiftRight') inp.slow = true;
+  if (e.code === 'KeyF') inp.stop = true;
   if (e.code === 'Escape' || e.code === 'KeyP') togglePause();
 });
 window.addEventListener('keyup', e => {
   inp.keys.delete(e.code);
   if (e.code === 'Space') inp.grabHeld = false;
-  if (e.code === 'ShiftLeft' || e.code === 'ShiftRight') inp.stop = false;
+  if (e.code === 'ShiftLeft' || e.code === 'ShiftRight') inp.slow = false;
+  if (e.code === 'KeyF') inp.stop = false;
 });
-window.addEventListener('blur', () => { inp.keys.clear(); inp.stop = false; inp.grabHeld = false; });
+window.addEventListener('blur', () => { inp.keys.clear(); inp.stop = false; inp.slow = false; inp.grabHeld = false; });
 
 function bindBtn (id, down, up) {
   const el = $(id);
@@ -1507,8 +1537,8 @@ function loop (now) {
 }
 
 $('#start-legend').innerHTML = touchUI
-  ? '<span>Joystick a sinistra per muoverti. A destra: PRENDI, AIUTO (Tonino), OH-ISSA, FERMO!</span>'
-  : '<span><kbd>WASD</kbd> muovi</span><span><kbd>Spazio</kbd> prendi / lascia</span><span><kbd>E</kbd> aiuto Tonino</span><span><kbd>Q</kbd> oh-issa</span><span><kbd>Shift</kbd> fermo!</span>';
+  ? '<span>Joystick a sinistra per muoverti (poco inclinato = passo attento). A destra: PRENDI, AIUTO (Tonino), OH-ISSA, FERMO!</span>'
+  : '<span><kbd>WASD</kbd> muovi</span><span><kbd>Spazio</kbd> prendi / lascia</span><span><kbd>E</kbd> aiuto Tonino</span><span><kbd>Q</kbd> oh-issa</span><span><kbd>Shift</kbd> passo attento</span><span><kbd>F</kbd> fermo!</span>';
 $('#btn-start').addEventListener('click', startGame);
 
 // scena ferma dietro la schermata iniziale

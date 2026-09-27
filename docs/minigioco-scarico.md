@@ -82,7 +82,8 @@ il disegno usa la stessa prospettiva isometrica del gioco (`isoFrame`,
 | Prendi / lascia | tasto grande a destra | Spazio |
 | Chiama Tonino | tasto AIUTO (tocco = aiutami, tenuto = "porta tu") | E |
 | Oh-issa (sollevare insieme) | tasto OH-ISSA a tempo | Q |
-| Frena / FERMO! | rilasciare il joystick; doppio tocco = FERMO! | Shift |
+| Passo attento | joystick poco inclinato | Shift |
+| Frena / FERMO! | rilasciare il joystick; tasto FERMO! | F |
 
 Niente mira fine: il personaggio si aggancia al lato del case più vicino.
 
@@ -155,7 +156,9 @@ Niente mira fine: il personaggio si aggancia al lato del case più vicino.
 Quando non gli dai ordini **non sta fermo**: prende da solo il case
 leggero più vicino ancora da consegnare e lo porta nella sua zona. I case
 che porta lui si fanno poco male (un quinto circa dei danni). Così tu
-puoi pensare ai pesanti.
+puoi pensare ai pesanti. **L'elettronica delicata però no**: la valigetta
+del PC e il case PAR li porti tu («La valigetta del PC? No no, quella la
+porti tu, capo»), così la fragilità resta una responsabilità del giocatore.
 
 Due ordini:
 - **Aiutami** (tocco su AIUTO): viene a spingere con te il case che hai in
@@ -178,6 +181,19 @@ sbuffa. Il caffè lo rimette in sesto. Non si arrabbia mai: commenta
   lanciato contro un altro.
 - Il case mostra il danno mentre giochi: graffi sul guscio, un angolare
   piegato, e un suono di vetro o di plastica per i fragili.
+- **Barra di stato** sopra ogni case, sempre visibile: verde (integro),
+  gialla (ammaccato), arancione (difettoso), rossa (rotto), con le tacche
+  a 70, 40 e 15. Accanto al case PAR, 4 tacche con i PAR ancora sani.
+- **Velocità di sicurezza**: ogni case ha una velocità oltre la quale un
+  urto fa danno (la soglia della sua fragilità). Quando la supera, il case
+  **si accende di rosso**: se sbatti adesso, si rovina. Così il danno non
+  arriva mai a sorpresa.
+- **Passo attento**: tenendo premuto Shift (o inclinando poco il
+  joystick) vai a metà velocità, sotto la soglia di quasi tutto. Con la
+  valigetta del PC in mano il passo si limita da solo.
+- Regola di fondo: si rompe qualcosa solo per un errore riconoscibile
+  (curva stretta, corsa col PC in mano, case lasciato andare sulla rampa,
+  caduta dal pianale), mai per sfortuna.
 
 | Integrità | Stato | Cosa succede al montaggio |
 |---|---|---|
@@ -305,7 +321,7 @@ trascina a fatica, 5 = scappa da sola. Ingombro in celle da 0,5 m.
 | Baule CORRENTE (cavi pesanti, CEE) | 70 kg | 4 piroettanti | 4 | bassa | 2×1 | 1 lento, meglio 2 | mai oltre Difettoso |
 | Sub (×2) | 40 kg | 2 fisse + 2 piroettanti | 3 | media | 2×2 | 1 | Difettoso: vibra |
 | Top (×2) | 20 kg | in mano | — | media (cono) | 1×1 | 1 | Difettoso: gracchia |
-| Case PAR (4 PAR) | 25 kg | in mano | — | **alta** (lenti) | 1×1 | 1 | ogni colpo forte può rompere **un** PAR |
+| Case PAR (4 PAR) | 25 kg | in mano | — | **alta** (lenti) | 1×1 | 1 | un PAR si rompe ogni 25 punti di danno accumulati (niente dadi) |
 | Rack regia (mixer + finale) | 55 kg | 2 fisse + 2 piroettanti | 3 | alta | 1×1, **alto** (si ribalta) | 2 | Difettoso: mixer o finale |
 | Borsa stativi (4 stativi + asta) | 22 kg | in mano | — | bassa | **6×1** (lunga) | 1, porte in 2 | uno stativo piegato = Rotto |
 | Case distro (quadro + ciabatte) | 35 kg | senza ruote | 1 | bassa | 1×1 | 1 (trascinato) o dolly | Difettoso: quadro che scatta |
@@ -426,3 +442,12 @@ passanti, bidello col carrello, Tonino al telefono e bolla di scarico
 finale. La vista è dall'alto (la fisica è la stessa che servirà in
 isometrico). I numeri da tarare sono in cima al file (`WHEEL`, `FRAG`,
 `CASES`, `GAME_SECONDS`).
+
+### Taratura dei danni (prototipo)
+
+| Fragilità | Velocità di sicurezza | Danno per urto a piena velocità |
+|---|---|---|
+| bassa (bauli, distro, stativi) | 3,6 | 0 (solo cadute: −18) |
+| media (top, sub, ricambi) | 2,3 | circa −8 |
+| alta (rack, case PAR) | 1,9 | circa −15 (un PAR ogni 25) |
+| altissima (valigetta PC) | 1,3 | circa −13 (passo limitato); 0 col passo attento |
