@@ -79,6 +79,7 @@
   .lights{flex-direction:column}
   .pars{display:flex;gap:10px;justify-content:space-around}
   .par{display:grid;justify-items:center;gap:4px;background:none;border:0;padding:0;font-size:11px;color:var(--muted)}
+  .par small{font-size:9px;text-transform:uppercase;letter-spacing:.04em;opacity:.8}
   .par span.dot{width:42px;height:42px;border-radius:50%;border:3px solid #2c2d33;box-shadow:0 0 16px currentColor}
   .lights-bottom{display:flex;gap:10px;flex:1;min-height:0}
   .mems{flex:1;display:grid;grid-template-columns:repeat(2,1fr);gap:6px}
@@ -232,7 +233,7 @@
     </div>
     <p>Parla un quarto d'ora e vuole essere sentito fino al parcheggio. Nessuno capisce una parola di quello che dice, ma guai se non si sente.</p>
     <ul>
-      <li>Quando sale sul palco: <b>luce bianca</b>, <b>microfono aperto</b>, <b>musica giù</b>.</li>
+      <li>Si parte <b>al buio</b>. Mentre sale sul palco accendi i <b>frontali</b> (PAR 2 e 3) in bianco: devono essere accesi <b>prima che arrivi al leggio</b>. Poi <b>microfono aperto</b> e <b>musica giù</b>.</li>
       <li>Tieni la sua voce nella <b>zona verde</b>. Ogni sera è diversa: lui non parla mai uguale.</li>
       <li>Se va verso le casse il <b>larsen</b> cresce: abbassa quanto basta, senza zittirlo.</li>
       <li>Se qualcosa si guasta, <b>guarda bene il palco</b>: il problema si vede. Risolverlo in fretta ti fa guadagnare reputazione.</li>
@@ -272,6 +273,10 @@
   const ZONE = [0.5, 0.8];        // zona verde sui meter
   const PC = 5;                   // canale del PC (la musica di sala)
   const SPK_X = { l: 60, r: 290 }, LECTERN_X = 172;
+  // entrata: il preside parte fuori scena a sinistra e cammina fino al leggio,
+  // dove arriva a ARRIVE secondi; i frontali devono essere accesi entro allora
+  const ENTRY_X = -70, ARRIVE = 7;
+  const FRONT = [1, 2];           // PAR 2 e 3 fanno i frontali, PAR 1 e 4 i tagli
   const COLORS = { bianco: '#f4f1ea', rosso: '#e0503f', blu: '#3f7fe0', verde: '#49b06a', ambra: '#f2a541', viola: '#b36bff' };
   // cosa dice (la voce dice solo "Tramp", i sottotitoli lo traducono)
   const LINES = [
@@ -291,8 +296,8 @@
       t: 0, running: false, paused: false, grad: 60, fatigue: 30, beers: 1, drunk: 0,
       fad: { 1: 0, 2: 0, 3: 0, 4: 0, 5: 0.7 }, mute: { 1: false, 2: false, 3: false, 4: false, 5: false },
       micCh: 1, micOk: true, fault: null, task: null,
-      dimmer: 0.3, pars: ['viola', 'blu', 'viola', 'blu'], mem: 2,
-      voiceK: 1, drift: 1, driftTo: 1, px: LECTERN_X, walkTo: null, ring: 0, ringCool: 0,
+      dimmer: 0, pars: ['bianco', 'bianco', 'bianco', 'bianco'], mem: 4,    // si parte al buio
+      voiceK: 1, drift: 1, driftTo: 1, px: ENTRY_X, walkTo: null, ring: 0, ringCool: 0,
       jingle: false, larsens: 0, pops: 0, repDelta: 0, notes: [], events: [],
       mems: {
         1: { name: 'Bianco pieno', pars: ['bianco', 'bianco', 'bianco', 'bianco'], dimmer: 1 },
@@ -304,7 +309,7 @@
   }
 
   /* ---------- segnali ---------- */
-  const speaking = () => S.t > 4 && S.t < 82 && !S.jingle;
+  const speaking = () => S.t > ARRIVE + 0.5 && S.t < 82 && !S.jingle;
   function micSignal () {
     if (!speaking() || !S.micOk) return 0;
     const syll = 0.88 + 0.12 * Math.sin(S.t * 9.1) * Math.sin(S.t * 3.3);
@@ -318,7 +323,7 @@
   }
   const voiceOut = () => chOut(S.micCh);
   const inZone = o => o >= ZONE[0] && o <= ZONE[1];
-  const lightsWhite = () => S.pars.every(p => p === 'bianco') && S.dimmer >= 0.6;
+  const frontLit = () => FRONT.every(i => S.pars[i] === 'bianco') && S.dimmer >= 0.6;
   function hit (d, msg) { S.grad = clamp(S.grad + d); toast(msg, 'bad'); sfx.boo(); }
 
   /* ---------- copione: apertura e finale fissi, in mezzo 5 imprevisti pescati da 7, a tempi variabili ---------- */
@@ -358,9 +363,10 @@
     // il guasto, se esce, va tra i primi due e ha la scena tutta per sé
     const ci = ids.indexOf('cavo');
     if (ci > 1) { ids.splice(ci, 1); ids.splice(Math.floor(Math.random() * 2), 0, 'cavo'); }
-    const evs = [{ id: 'apertura', at: 1, win: 9, target: 'preside', icon: '🎤', text: 'Sale sul palco', hint: 'luce bianca, CH1 su, musica PC giù', tab: 'luci',
-      ok: () => lightsWhite() && S.fad[1] >= 0.3 && !S.mute[1] && chOut(PC) < 0.3, hold: 0.3,
-      fail: () => hit(-10, 'Il preside ha cominciato al buio e sopra la musica.') }];
+    // l'entrata ha una scadenza fissa: quando il preside arriva al leggio
+    const evs = [{ id: 'apertura', at: 0.5, until: ARRIVE, win: ARRIVE - 0.5, target: 'preside', icon: '🎤', text: 'Sale sul palco', hint: 'frontali accesi in bianco prima che arrivi, CH1 su, musica PC giù', tab: 'luci',
+      ok: () => frontLit() && S.fad[1] >= 0.3 && !S.mute[1] && chOut(PC) < 0.3, hold: 0.3,
+      fail: () => hit(-10, frontLit() ? 'Il preside ha cominciato sopra la musica.' : 'Il preside è arrivato al leggio al buio.') }];
     let at = rnd(12, 15);
     ids.forEach((id, i) => {
       evs.push(Object.assign({ id, at }, POOL[id]()));
@@ -461,7 +467,11 @@
       beamEls[i].setAttribute('fill', COLORS[c]);
       beamEls[i].setAttribute('opacity', (0.28 * S.dimmer).toFixed(3));
     });
-    $('#preside').setAttribute('transform', `translate(${S.px.toFixed(1)} ${72 + Math.sin(S.t * 4) * 1.2})`);
+    const pr = $('#preside');
+    pr.setAttribute('transform', `translate(${S.px.toFixed(1)} ${72 + Math.sin(S.t * (S.t < ARRIVE ? 9 : 4)) * 1.2})`);
+    // senza frontali il preside resta in ombra
+    const lit = FRONT.filter(i => S.pars[i] === 'bianco').length / FRONT.length * S.dimmer;
+    pr.style.filter = `brightness(${(0.3 + 0.7 * Math.min(1, lit / 0.6)).toFixed(2)})`;
     const cause = S.fault && S.fault.nodes[S.fault.cause] !== 'fixed' ? S.fault.cause : null;
     $('#cable').setAttribute('d', cause === 'ing' ? 'M200 150 Q250 162 284 159' : 'M200 150 Q230 158 250 162');
     ['mic', 'cavo', 'ing'].forEach(c => $('#clue-' + c).setAttribute('display', cause === c ? 'inline' : 'none'));
@@ -570,7 +580,7 @@
     const pb = $('#par-btns'); pb.textContent = '';
     S.pars.forEach((_, i) => {
       const b = document.createElement('button'); b.className = 'par'; b.id = 'par-' + i;
-      b.innerHTML = `<span class="dot"></span>PAR ${i + 1}`;
+      b.innerHTML = `<span class="dot"></span>PAR ${i + 1}<small>${FRONT.includes(i) ? 'frontale' : 'taglio'}</small>`;
       b.onclick = () => { const keys = Object.keys(COLORS); S.pars[i] = keys[(keys.indexOf(S.pars[i]) + 1) % keys.length]; S.mem = null; paintLights(); };
       pb.appendChild(b);
     });
@@ -634,9 +644,13 @@
     if (Math.abs(S.drift - S.driftTo) < 0.02) S.driftTo = rnd(0.8, 1.2);
     S.drift += (S.driftTo - S.drift) * dt * 0.4;
 
-    // camminata verso le casse e larsen che cresce con volume × vicinanza
-    const tx = S.walkTo == null ? LECTERN_X : S.walkTo;
-    S.px += (tx - S.px) * Math.min(1, dt * 1.6);
+    // entrata a passo costante fino al leggio, poi camminata verso le casse;
+    // il larsen cresce con volume × vicinanza
+    if (S.t < ARRIVE) S.px = ENTRY_X + (LECTERN_X - ENTRY_X) * S.t / ARRIVE;
+    else {
+      const tx = S.walkTo == null ? LECTERN_X : S.walkTo;
+      S.px += (tx - S.px) * Math.min(1, dt * 1.6);
+    }
     const near = Math.max(0, 1 - Math.min(Math.abs(S.px - SPK_X.l), Math.abs(S.px - SPK_X.r)) / 120);
     const loop = voiceOut() * near * 1.2;
     S.ringCool = Math.max(0, S.ringCool - dt);
@@ -651,7 +665,7 @@
 
     // eventi: partono, si risolvono, scadono
     S.events.forEach(e => {
-      if (!e.started && S.t >= e.at) { e.started = true; e.live = true; e.deadline = S.t + e.win * k; e.start && e.start(); sfx.ding(); }
+      if (!e.started && S.t >= e.at) { e.started = true; e.live = true; e.deadline = e.until != null ? e.until : S.t + e.win * k; e.start && e.start(); sfx.ding(); }
       if (e.live) {
         if (e.ok()) { e.held = (e.held || 0) + dt; if (e.held > (e.hold || 0.15)) { e.live = false; e.solved = true; S.grad = clamp(S.grad + 4); toast('Fatto! ' + (e.after || ''), 'ok'); sfx.ok(); if (e.onSolved) e.onSolved(); if (e.id === 'cavo') endFault(); } }
         else e.held = 0;
@@ -678,7 +692,7 @@
       if (!S.micOk) d -= quiet < 5 ? 0.3 : quiet < 15 ? 1.5 : 3;     // all'inizio il pubblico aspetta
       else if (S.mute[S.micCh]) d -= 3; else if (o < 0.3) d -= 2.5; else if (o > 0.9) d -= 2.5; else if (inZone(o)) d += 1.2; else d += 0.2;
       if (chOut(PC) > 0.3) d -= 1.5;               // musica sopra il discorso
-      if (S.t > 10 && !lightsWhite()) d -= 0.8;
+      if (!frontLit()) d -= 0.8;                    // parla al buio
     }
     S.grad = clamp(S.grad + d * dt);
 
