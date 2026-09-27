@@ -14,7 +14,7 @@ rampa, gli oggetti fragili si rompono se sbattono. Al tuo fianco c'è
 **Tonino**, il collega CPU: forte, un po' lento, da chiamare quando un
 case è troppo grosso per una persona sola.
 
-Quello che rompi **ti manca al montaggio**. Si gioca in 2–3 minuti e si
+Quello che rompi **ti manca al montaggio**. Si gioca in circa 5 minuti e si
 può saltare.
 
 ## Core loop
@@ -27,7 +27,7 @@ può saltare.
 - Si vede l'interno del mezzo dall'alto: i case sono incastrati. Se ne
   prende uno alla volta, e **esce prima quello caricato per ultimo**:
   il baule pesante in fondo arriva solo quando hai liberato il davanti.
-- Orologio in alto: 16:00 → 16:30 (1 minuto reale = 10 minuti di gioco).
+- Orologio in alto: 16:00 → 16:30 (1 minuto reale = 6 minuti di gioco).
 
 ### 2. Il giro di consegna (si ripete per ogni case)
 
@@ -146,6 +146,11 @@ Niente mira fine: il personaggio si aggancia al lato del case più vicino.
 | Velocità a vuoto | 0,85 × la tua |
 | Ritardo di reazione | 0,4 s (0,2 s dopo il caffè) |
 | Tempo di arrivo | cammina davvero fino al case, niente teletrasporto |
+
+Quando non gli dai ordini **non sta fermo**: prende da solo il case
+leggero più vicino ancora da consegnare e lo porta nella sua zona. I case
+che porta lui si fanno poco male (un quinto circa dei danni). Così tu
+puoi pensare ai pesanti.
 
 Due ordini:
 - **Aiutami** (tocco su AIUTO): viene a spingere con te il case che hai in
@@ -401,7 +406,8 @@ rigiocabilità. Nel livello 1 al massimo uno alla volta.
 
 - Il −2 di reputazione per ogni pezzo rotto allo scarico, o solo birre.
 - Il nome e il carattere del collega (proposta: Tonino).
-- La durata: 30 minuti di gioco in 3 minuti reali, oppure più corta.
+- La durata: nel prototipo 30 minuti di gioco in 5 minuti reali (con 3
+  minuti era troppo difficile finire in tempo).
 - Il carico all'uscita (a fine serata, smontaggio): stesso minigioco al
   contrario, con il "tetris" del mezzo da riempire. Può essere il motivo
   per cui le **cinghie** contano.

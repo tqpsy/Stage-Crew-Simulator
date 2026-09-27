@@ -169,7 +169,7 @@
       <ul>
         <li>Fino a 25 kg il case si porta in mano. Quelli più pesanti si spingono: partono piano e si fermano piano.</li>
         <li>I bauli con le ruote sulla rampa scappano. Se li lasci andare, vanno da soli.</li>
-        <li>Rack regia e baule CORRENTE si spingono in due: premi <b>AIUTO</b> e arriva Tonino. Ti segue con un attimo di ritardo, quindi curva largo.</li>
+        <li>Tonino, se non lo chiami, porta da solo i case leggeri. Rack regia e baule CORRENTE si spingono in due: premi <b>AIUTO</b> e arriva. Ti segue con un attimo di ritardo, quindi curva largo.</li>
         <li>Al gradino della palestra serve un <b>OH-ISSA</b> a tempo.</li>
       </ul>
       <div class="legend" id="start-legend"></div>
@@ -198,7 +198,7 @@ const { Engine, Bodies, Body, Composite, Constraint, Events, Query } = Matter;
    Unità: 1 px del mondo ≈ 1 cm; velocità in px per passo (60 al secondo).
    --------------------------------------------------------------------- */
 const STEP = 1000 / 60;
-const GAME_SECONDS = 180;              // 16:00 → 16:30 in 3 minuti reali
+const GAME_SECONDS = 300;              // 16:00 → 16:30 in 5 minuti reali
 const CAT = { WALL: 1, CASE: 2, WORKER: 4, STEP: 8, NPC: 16, DOLLY: 32 };
 const DOOR_X = 400;                    // portellone del furgone
 const RAMP = { x: 400, y: 445, w: 120, h: 110 };
@@ -220,9 +220,9 @@ const FRAG = {
 };
 // smorzamento al secondo: f = in avanti, s = di lato, a = rotazione
 const WHEEL = {
-  swivel: { f: 0.35, s: 0.35, a: 2.0, ramp: 1.0, push: 2.6, label: '4 ruote piroettanti' },
-  fixed:  { f: 1.2, s: 7.0, a: 3.0, ramp: 0.8, push: 2.4, label: '2 fisse + 2 piroettanti' },
-  none:   { f: 6.5, s: 6.5, a: 6.0, ramp: 0.15, push: 1.1, label: 'senza ruote' },
+  swivel: { f: 0.35, s: 0.35, a: 2.0, ramp: 1.0, push: 3.0, label: '4 ruote piroettanti' },
+  fixed:  { f: 1.2, s: 7.0, a: 3.0, ramp: 0.8, push: 2.8, label: '2 fisse + 2 piroettanti' },
+  none:   { f: 6.5, s: 6.5, a: 6.0, ramp: 0.15, push: 1.4, label: 'senza ruote' },
   hand:   { f: 7.0, s: 7.0, a: 7.0, ramp: 0.1, push: 1.0, label: 'a mano' }
 };
 
@@ -377,8 +377,8 @@ function newGame () {
   Composite.add(world, db);
 
   // --- tu e Tonino
-  G.player = makeWorker('Tu', 600, 470, 15, { tee: '#101114', trim: '#f2a541', skin: '#e0b48f', fmax: 0.045, vmax: 3.3 });
-  G.tonino = makeWorker('Tonino', 610, 560, 18, { tee: '#6d737d', trim: '#c9ccd1', skin: '#c99670', fmax: 0.056, vmax: 2.8 });
+  G.player = makeWorker('Tu', 600, 470, 15, { tee: '#101114', trim: '#f2a541', skin: '#e0b48f', fmax: 0.05, vmax: 3.8 });
+  G.tonino = makeWorker('Tonino', 610, 560, 18, { tee: '#6d737d', trim: '#c9ccd1', skin: '#c99670', fmax: 0.06, vmax: 3.3 });
   G.tonino.ai = { state: 'idle', t: 0, stuckT: 0, side: 0, sideT: 0 };
 
   // --- bambini in cortile
@@ -494,7 +494,7 @@ function release (w, why) {
   ce.grabbers = ce.grabbers.filter(x => x !== w);
   if (ce.carrier === w) {
     ce.carrier = null;
-    if (why === 'slip') { damage(ce, 10 * FRAG[ce.def.frag].mult, 'caduta'); AU.thud(3); }
+    if (why === 'slip') { if (w === G.player) damage(ce, 10 * FRAG[ce.def.frag].mult, 'caduta'); AU.thud(3); }
     else Body.setVelocity(ce.body, mul(ce.body.velocity, 0.3));
   }
   w.grab = null; w.mode = null; w.carry = null;
@@ -540,6 +540,8 @@ function hitCase (ce, other, rel, otherBody) {
   ce.lastHit = G.t;
   let dmg = (rel - f.thr) * 12 * f.mult;
   if (other && other.kind === 'case') dmg *= clamp(other.def.kg / ce.def.kg, 0.5, 1.6);
+  // Tonino è lento ma sicuro: quello che porta lui si fa poco male
+  if (ce.carrier === G.tonino || (other && other.carrier === G.tonino)) dmg *= 0.15;
   const what = otherBody === G.stepBody ? 'contro il gradino' : other && other.kind === 'case' ? 'contro ' + other.def.name : other && other.kind === 'cart' ? 'contro il carrello' : 'urto';
   damage(ce, dmg, what);
   if (ce.def.tall && rel > 3.2 && !ce.tipped) tip(ce);
@@ -672,6 +674,19 @@ function helpPoint (ce, pw) {
   }
   return best;
 }
+// il case leggero più vicino ancora da portare, se ci si arriva
+function pickJob (T) {
+  let best = null, bd = Infinity;
+  for (const ce of G.cases) {
+    if (!carriable(ce) || ce.carrier || ce.grabbers.length || ce.zone === ce.def.zone || ce.stuck) continue;
+    if (ce.skipUntil > G.t || G.player.grab === ce) continue;
+    if (ce.body.position.x > GYM_X && ce.zone === null && speedOf(ce.body) > 0.3) continue;
+    if (!helpPoint(ce, null)) continue;
+    const d = len(sub(ce.body.position, T.body.position));
+    if (d < bd) { bd = d; best = ce; }
+  }
+  return best;
+}
 function updateTonino (dt) {
   const T = G.tonino, ai = G.tonino.ai, P = G.player;
   ai.t += dt;
@@ -706,23 +721,25 @@ function updateTonino (dt) {
         dir = steer(T, ce.body.position, 0);
         const s = surface(ce, T.body.position);
         if (s.dist - T.r < 12) { if (!grab(T, ce)) tonino('idle'); else { const z = ZONES[ce.def.zone]; ai.dest = { x: z.x + rand(40, z.w - 40), y: z.y + rand(35, z.h - 35) }; } }
-        if (ai.t > 10) { bubble(T, 'Non ci arrivo, liberamelo!', 1.6); tonino('idle'); }
+        if (ai.t > 10) { ce.skipUntil = G.t + 8; if (!ai.auto) bubble(T, 'Non ci arrivo, liberamelo!', 1.6); tonino('idle'); }
       }
     } else {
       dir = steer(T, ai.dest, 0);
-      vmax = T.vmax * clamp(1 - ce.def.kg / 70, 0.5, 1);
+      vmax = T.vmax * clamp(1 - ce.def.kg / 90, 0.6, 1);
       if (len(sub(ai.dest, T.body.position)) < 22 + T.carry.dist) { release(T); bubble(T, 'Fatto!', 1); tonino('idle'); }
     }
   } else if (ai.state === 'goto') {
     const to = ai.to();
     dir = steer(T, to, ai.stop || 50);
     if (len(sub(to, T.body.position)) < (ai.stop || 50) || ai.t > 8) tonino('idle');
-  } else { // idle: resta vicino, ma non tra i piedi
+  } else { // idle: se non lo chiami, porta da solo un case leggero
+    const job = ai.t > 1.2 && G.mode === 'play' && pickJob(T);
+    if (job) { tonino('carry', { ce: job, auto: true }); bubble(T, 'Porto io ' + job.def.name + '!', 1.4); drive(T, dir, vmax); return; }
     const d = len(sub(P.body.position, T.body.position));
     if (d > 190) dir = steer(T, P.body.position, 120);
     if (ai.t > 9 && !ai.said) { ai.said = true; bubble(T, ['Che faccio, capo?', 'Questo pesa come mia suocera…', 'Dimmi tu, io spingo.'][Math.floor(Math.random() * 3)], 1.8); }
   }
-  if (T.mode === 'carry') vmax = Math.min(vmax, T.vmax * clamp(1 - T.grab.def.kg / 70, 0.5, 1));
+  if (T.mode === 'carry') vmax = Math.min(vmax, T.vmax * clamp(1 - T.grab.def.kg / 90, 0.6, 1));
   drive(T, dir, vmax);
   if (len(dir) > 0.1 && T.mode !== 'push') turnTo(T, Math.atan2(dir.y, dir.x), T.mode === 'carry' ? 0.07 : 0.3);
 }
@@ -742,7 +759,7 @@ function drive (w, dir, vmax) {
 function turnTo (w, a, rate) { const d = angDiff(a, w.facing); w.facing += clamp(d, -rate, rate); }
 function pushVmax (ce) {
   const base = WHEEL[ce.wheel].push * clamp(1.15 - ce.def.kg / 200, 0.6, 1.1);
-  if (ce.def.heavy2 && ce.grabbers.length < 2) return 0.6;
+  if (ce.def.heavy2 && ce.grabbers.length < 2) return 0.8;
   return base * (ce.grabbers.length >= 2 ? 1.15 : 1);
 }
 function readInput () {
@@ -762,7 +779,7 @@ function updatePlayer (dt) {
   G.history.push(dir); if (G.history.length > 60) G.history.shift();
   let vmax = P.vmax * (G.coffee.until > G.t ? 1.25 : 1);
   if (P.mode === 'push') vmax = Math.min(vmax, pushVmax(P.grab) * (G.coffee.until > G.t ? 1.15 : 1));
-  if (P.mode === 'carry') vmax *= clamp(1 - P.grab.def.kg / 60, 0.45, 1);
+  if (P.mode === 'carry') vmax *= clamp(1 - P.grab.def.kg / 90, 0.6, 1);
   drive(P, dir, vmax);
   if (len(dir) > 0.1 && P.mode !== 'push') turnTo(P, Math.atan2(dir.y, dir.x), P.mode === 'carry' ? 0.075 : 0.35);
   if (P.mode === 'push' && P.con) { const a = add(P.grab.body.position, P.con.pointB); P.facing = Math.atan2(a.y - P.body.position.y, a.x - P.body.position.x); }
@@ -863,7 +880,7 @@ function scriptEvents () {
   const E = G.events, t = G.t;
   const once = (k, at, fn) => { if (!E[k] && t >= at) { E[k] = true; fn(); } };
   once('passante1', 28, () => passante(G.kids[0]));
-  once('bidello', 62, () => {
+  once('bidello', 95, () => {
     const b = Bodies.rectangle(1010, 110, 56, 80, { frictionAir: 0, collisionFilter: { category: CAT.NPC, mask: CAT.WALL | CAT.CASE | CAT.WORKER | CAT.NPC | CAT.DOLLY } });
     Body.setMass(b, 150); Body.setInertia(b, Infinity);
     G.cart = { kind: 'cart', body: b, pv: { x: 0, y: 1.1 } }; b.plugin.ent = G.cart;
@@ -871,11 +888,11 @@ function scriptEvents () {
     Composite.add(G.world, b);
     bubble(G.cart, 'Buonasera ragazzi! Passo col carrello!', 3);
   });
-  once('telefono', 98, () => {
+  once('telefono', 150, () => {
     const T = G.tonino; tonino('phone'); bubble(T, 'È mia moglie, un attimo…', 3);
     toast('Tonino è al telefono per qualche secondo.', 'warn');
   });
-  once('passante2', 122, () => passante(G.kids[1]));
+  once('passante2', 210, () => passante(G.kids[1]));
   // cavo incastrato: la prima volta che il baule SEGNALE va in cortile a spinta
   const seg = G.cases.find(c => c.def.id === 'segnale');
   if (!E.cavo && seg.grabbers.length && seg.body.position.x > 600 && seg.body.position.x < GYM_X - 80) {
@@ -930,7 +947,7 @@ function stepSim () {
       bubble(ce, 'Giù dal furgone!', 1.6);
     }
     const held = ce.carrier || ce.grabbers.length;
-    if (!held && speedOf(ce.body) < 0.5) {
+    if (!held && speedOf(ce.body) < 1.2) {
       const z = zoneAt(p);
       if (z !== ce.zone) { ce.zone = z; if (z === ce.def.zone && G.mode === 'play') { AU.ding(); bubble(ce, '✓ ' + ZONES[z].name, 1.2); } }
     } else if (held) ce.zone = null;
