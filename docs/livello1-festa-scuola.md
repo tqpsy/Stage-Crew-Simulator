@@ -80,10 +80,15 @@ corti) e in FOH va solo il mixer.
 - scheda Strutture con tavolo regia (3 m × 0,8 m, in Off Stage) e stativi;
   sul piano consolle luci, mixer, PC e scheda audio affiancati; sotto il
   rack 2U del finale (`TAVOLO_SLOTS`). I pezzi della regia si posano
-  toccando il tavolo.
+  toccando il tavolo;
+- toccando il tavolo si apre **la regia da dietro**: i pannelli posteriori
+  di tutti gli apparecchi del tavolo uno sotto l'altro. Preso o collegato un
+  cavo, la finestra resta aperta: PC → scheda → mixer → finale si cablano
+  senza uscire.
 
-**Da fare:** vista posteriore di tutta la regia toccando il tavolo; coperchi
-del rack appoggiati al tavolo; punti 3-11 della lista sopra.
+- i due coperchi del rack stanno in piedi contro il fianco del case.
+
+**Da fare:** punti 3-11 della lista sopra.
 
 ## Scheda obiettivi
 

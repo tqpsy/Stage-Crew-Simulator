@@ -161,6 +161,19 @@ const SEED0 = parseInt(process.argv[4] || '1', 10);
           if (rearPanelId) closeRearPanel();
           S.cancelPending();
         },
+        // cavi dalla vista della regia: due prese a caso degli apparecchi del tavolo
+        regia: () => {
+          const t = placedOfType('tavolo')[0];
+          const devs = t ? mountedAll(t) : [];
+          if (!devs.length) return;
+          const ports = devs.flatMap(c => COMPONENT_TYPES[c.type].ports.map(pt => ({ c: c.id, pt })));
+          const A = pick(ports), cables = Object.keys(CABLE_TYPES).filter(k => cableOK(k, A.pt.signal));
+          if (cables.length && !A.pt.lead) selectCable(pick(cables));
+          openRearPanel(t.id);
+          for (const x of [A, pick(ports)]) if (rearPanelId) onRearPortClick(x.c, x.pt.id);
+          if (rearPanelId) closeRearPanel();
+          S.cancelPending();
+        },
         unwire: () => { if (!gameState.edges.length) return; S.selectedEdgeId = pick(gameState.edges).id; S.deleteSelectedEdge(); },
         power: () => { const sw = Object.values(gameState.placed).filter(c => SWITCHABLE.has(c.type)); if (sw.length) toggleDevicePower(pick(sw).id); },
         quadro: () => { if (findQuadro()) toggleProtection(pick(['main', 'rcd', 'L1', 'L2', 'L3'])); },
@@ -186,7 +199,7 @@ const SEED0 = parseInt(process.argv[4] || '1', 10);
         },
         reset: () => { if (rng() < 0.2) S.resetLevel(true); }
       };
-      const weights = { place: 14, mount: 6, remove: 4, move: 6, wire: 30, unwire: 6, power: 8, quadro: 6, dmx: 3, test: 3, prova: 3, undoRedo: 5, undo: 3, saveLoad: 3, reset: 1 };
+      const weights = { place: 14, mount: 6, remove: 4, move: 6, wire: 30, unwire: 6, power: 8, quadro: 6, dmx: 3, test: 3, prova: 3, regia: 6, undoRedo: 5, undo: 3, saveLoad: 3, reset: 1 };
       const bag = Object.entries(weights).flatMap(([k, w]) => Array(w).fill(k));
       for (let s = 0; s < STEPS; s++) {
         const act = pick(bag);

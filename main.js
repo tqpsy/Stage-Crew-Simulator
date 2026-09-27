@@ -2956,10 +2956,40 @@ function renderStripPanel (ctx, comp, def, panel) {
 // sotto questa larghezza (px) del riquadro il pannello si impagina "stretto"
 // (telefono): sezioni a capo entro REAR_COMPACT_W unità e scritte più grandi
 const REAR_COMPACT_BELOW = 640, REAR_COMPACT_W = 700;
+/* ordine dei pannelli nella vista della regia (tavolo): da sinistra a destra
+   sul piano, poi il rack sotto */
+const TAVOLO_PANEL_ORDER = ['controller', 'mixer', 'pc', 'scheda', 'ampli'];
+const rearIsTable = () => (gameState.placed[rearPanelId] || {}).type === 'tavolo';
+
 function renderRearPanel () {
   const id = rearPanelId;
   const comp = gameState.placed[id];
   if (!comp) { closeRearPanel(); return; }
+  const box = el('#rear-svg');
+  if (comp.type === 'tavolo') {
+    // vista della regia: i pannelli posteriori di tutto quello che sta sul
+    // tavolo, uno sotto l'altro, per cablare la regia senza uscire
+    const devs = mountedAll(comp).sort((a, b) => TAVOLO_PANEL_ORDER.indexOf(a.type) - TAVOLO_PANEL_ORDER.indexOf(b.type));
+    if (!devs.length) { closeRearPanel(); return; }
+    el('#rear-title').textContent = compLabel(id) + '  —  la regia da dietro';
+    box.classList.add('table-view');
+    box.innerHTML = devs.map(d => '<div class="rear-block" data-id="' + d.id + '"><div class="rear-block-head">'
+      + escapeHtml(compLabel(d.id)) + (d.type === 'ampli' ? ' · nel rack sotto il piano' : '') + '</div>'
+      + rearPanelSvg(d.id) + '</div>').join('');
+    devs.forEach(d => bindRearSvg(box.querySelector('.rear-block[data-id="' + d.id + '"]'), d.id));
+    renderRearHand();
+    return;
+  }
+  box.classList.remove('table-view');
+  el('#rear-title').textContent = COMPONENT_TYPES[comp.type].label + '  ·  ' + id.replace(/_/g, ' ') + '  —  pannello posteriore';
+  box.innerHTML = rearPanelSvg(id);
+  bindRearSvg(box, id);
+  renderRearHand();
+}
+
+// disegno del pannello posteriore di un dispositivo (stringa SVG)
+function rearPanelSvg (id) {
+  const comp = gameState.placed[id];
   const def = COMPONENT_TYPES[comp.type];
   const panel = REAR_PANELS[comp.type];
   const st = REAR_STYLES[panel.style];
@@ -2969,8 +2999,6 @@ function renderRearPanel () {
   // telefono: pannelli impaginati stretti, scritte più grandi
   const compact = el('#rear-svg').clientWidth < REAR_COMPACT_BELOW;
   const ctx = { id, def, st, pending, loads, planned, compact, fs: compact ? 1.35 : 1 };
-
-  el('#rear-title').textContent = def.label + '  ·  ' + id.replace(/_/g, ' ') + '  —  pannello posteriore';
 
   let svg;
   if (panel.style === 'round') {
@@ -3061,21 +3089,24 @@ function renderRearPanel () {
     if (panel.serial) svg += `<text x="${W / 2}" y="${H - 22}" font-size="12" fill="${st.sub}" text-anchor="middle" letter-spacing="1">${escapeHtml(panel.serial)}</text>`;
     svg += `</svg>`;
   }
+  return svg;
+}
 
-  el('#rear-svg').innerHTML = svg;
-  el('#rear-svg').querySelectorAll('.rp-port').forEach(node => {
+// prese, tasti e interruttori di un pannello disegnato dentro root
+function bindRearSvg (root, id) {
+  const comp = gameState.placed[id];
+  root.querySelectorAll('.rp-port').forEach(node => {
     node.addEventListener('click', () => onRearPortClick(id, node.dataset.port));
   });
-  el('#rear-svg').querySelectorAll('.rp-btn').forEach(node => {
+  root.querySelectorAll('.rp-btn').forEach(node => {
     node.addEventListener('click', () => onParButton(comp, node.dataset.act));
   });
-  el('#rear-svg').querySelectorAll('.rp-switch').forEach(node => {
+  root.querySelectorAll('.rp-switch').forEach(node => {
     node.addEventListener('click', () => toggleDevicePower(id));
   });
-  el('#rear-svg').querySelectorAll('.rp-brk').forEach(node => {
+  root.querySelectorAll('.rp-brk').forEach(node => {
     node.addEventListener('click', () => node.dataset.brk === 'rcd_test' ? testRcd() : toggleProtection(node.dataset.brk));
   });
-  renderRearHand();
 }
 
 // tasti del display del PAR: MENU passa da indirizzo a modalità, ▲▼ regolano
@@ -3200,6 +3231,13 @@ function onRearPortClick (compId, portId) {
   const arced = (gameState.rcdTrips || 0) > rcdBefore;   // il salvavita ha già il suo messaggio
   const connected = gameState.edges.length > edgesBefore;
   const picked = !pending && gameState.pendingPort;
+  if ((connected || picked) && rearIsTable()) {
+    // vista della regia: si resta qui, l'altro capo può essere sul tavolo
+    if (picked) showToast('Cavo in mano da ' + compLabel(compId) + ': scegli qui l\'altra presa, o chiudi e tocca il dispositivo da collegare.', 'ok');
+    else if (!arced) showToast('Collegato: ' + compLabel(compId) + ' · ' + portLabel(compId, portId) + '.', 'ok');
+    renderRearPanel();
+    return;
+  }
   if (connected || picked) {
     // cavo collegato, o primo capo scelto: si torna alla scena
     closeRearPanel();
@@ -3226,10 +3264,8 @@ function openRearPanel (compId) {
       : compLabel(compId) + ': monta un PAR sulla barra a T (scheda Luci, poi tocca lo stativo).');
     return;
   }
-  if (t === 'tavolo') {
-    const on = mountedAll(gameState.placed[compId]);
-    showToast(on.length ? compLabel(compId) + ': ci sono ' + on.map(c => compLabel(c.id)).join(', ') + '. Tocca un apparecchio per il suo pannello.'
-      : compLabel(compId) + ': sopra vanno mixer, consolle luci, PC e scheda audio, sotto il rack del finale (schede Audio, Regia e Luci, poi tocca il tavolo).');
+  if (t === 'tavolo' && !mountedAll(gameState.placed[compId]).length) {
+    showToast(compLabel(compId) + ': sopra vanno mixer, consolle luci, PC e scheda audio, sotto il rack del finale (schede Audio, Regia e Luci, poi tocca il tavolo).');
     return;
   }
   if (t === 'asta') {
@@ -3238,7 +3274,7 @@ function openRearPanel (compId) {
       : compLabel(compId) + ': monta il microfono sulla giraffa (scheda Audio, poi tocca l\'asta).');
     return;
   }
-  if (!REAR_PANELS[t]) return;
+  if (!REAR_PANELS[t] && t !== 'tavolo') return;
   rearPanelId = compId;
   el('#rear-detail').innerHTML = '';
   // prima visibile, poi disegnato: serve la larghezza vera del riquadro
@@ -4722,6 +4758,12 @@ class StageScene extends Phaser.Scene {
         const P = RACK_ISO, k = this.isoKit(g, P);
         const { A, B, Z } = P;
         k.discZ(0, A / 2, B / 2, 44, 0x000000, 0.22);                    // ombra
+        // i due coperchi tolti, in piedi contro il fianco del case (dietro)
+        [[A + 3, A + 7], [A + 8, A + 12]].forEach(([a0, a1], i) => {
+          k.box(a0, a1, 4 + i * 3, B - 4 + i * 3, 0, Z - 2, { top: 0x3a3d45, left: 0x24262b, right: 0x1a1b1f });
+          const e0 = P(a0, 4 + i * 3, Z - 2), e1 = P(a0, B - 4 + i * 3, Z - 2);
+          g.lineStyle(1, 0x9aa0aa, 0.8); g.lineBetween(e0.x, e0.y, e1.x, e1.y);
+        });
         k.box(0, A, 0, B, 0, Z, { top: 0x2c2e34, left: 0x202227, right: 0x16171b });
         k.quadB(B, 4, A - 4, 3, Z - 3, 0x08090b);                        // bocca del rack
         [[4, 9], [A - 9, A - 4]].forEach(([a0, a1]) => k.quadB(B, a0, a1, 3, Z - 3, 0x9aa0aa)); // guide rack
