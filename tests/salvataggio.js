@@ -60,10 +60,19 @@ const path = require('path');
   // prima del montaggio la scaletta della serata: si parte dal montaggio,
   // lo spettacolo è ancora da venire; si riapre dal tasto in testata
   check(await p.isVisible('#schedule-modal'), 'dopo Inizia manca la scaletta della serata');
-  check(await p.textContent('#schedule-list .sched-row.now') !== null && /Montaggio/.test(await p.textContent('#schedule-list .sched-row.now')), 'la scaletta non dice che adesso si monta');
-  check((await p.$$('#schedule-list .sched-row.done')).length === 1, 'la scaletta segna fatte fasi non giocate');
+  check(await p.textContent('#schedule-list .sched-row.now') !== null && /scarico/.test(await p.textContent('#schedule-list .sched-row.now')), 'la scaletta non dice che adesso si scarica');
+  check((await p.$$('#schedule-list .sched-row.done')).length === 0, 'la scaletta segna fatte fasi non giocate');
   await p.click('#schedule-go');
   check(!(await p.isVisible('#schedule-modal')), 'la scaletta resta aperta dopo Al lavoro');
+  check(await p.isVisible('#scarico-frame'), 'dopo la scaletta non parte lo scarico');
+  check(!(await ev(() => window.__scene.input.enabled)), 'durante lo scarico la scena prende i tocchi');
+  // lo scarico si apre sopra il gioco: qui si salta dal suo tasto
+  await p.waitForSelector('#scarico-frame');
+  await p.frameLocator('#scarico-frame').locator('#btn-skip').click();
+  await p.waitForFunction(() => !document.querySelector('#scarico-frame'));
+  const sk = await ev(() => ({ s: Profile.data.scarico, par: gameState.stock.par, req: parsRequired(), rep: reputation() }));
+  check(sk.s && sk.s.skipped && sk.s.beers === 0 && sk.par === 4 && sk.req === 4 && sk.rep === 0, 'scarico saltato sbagliato: ' + JSON.stringify(sk));
+  check(await ev(() => { renderSchedule(); return /Montaggio/.test(el('#schedule-list .sched-row.now').textContent) && document.querySelectorAll('#schedule-list .sched-row.done').length === 1; }), 'dopo lo scarico la scaletta non passa al montaggio');
   check(await ev(() => window.__scene.input.enabled), 'la scena resta bloccata dopo la scaletta');
   await p.click('#schedule-btn');
   check(await p.isVisible('#schedule-modal') && (await p.textContent('#schedule-go')) === 'Torna al palco', 'il tasto in testata non riapre la scaletta');
@@ -151,6 +160,10 @@ const path = require('path');
   await p.click('#service-offers [data-offer="0"]');
   await p.click('#new-start');
   await p.click('#schedule-go');
+  // lo scarico si apre sopra il gioco: qui si salta dal suo tasto
+  await p.waitForSelector('#scarico-frame');
+  await p.frameLocator('#scarico-frame').locator('#btn-skip').click();
+  await p.waitForFunction(() => !document.querySelector('#scarico-frame'));
   const fresh = await ev(() => ({ placed: Object.keys(gameState.placed), edges: gameState.edges.length, tests: gameState.stats.tests, vol: SFX.volume, recs: (Profile.data.records[LEVEL_ID] || []).length, rep: reputation() }));
   check(fresh.placed.length === 1 && fresh.edges === 0 && fresh.tests === 0, 'Nuova partita non azzera il livello: ' + JSON.stringify(fresh));
   check(fresh.vol === 0.3 && fresh.recs === 2, 'Nuova partita perde impostazioni o record: ' + JSON.stringify(fresh));
@@ -163,7 +176,7 @@ const path = require('path');
   await ev(() => { Profile.flush = () => {}; localStorage.setItem('scs-save', JSON.stringify({ v: 1, service: 'Vecchio', settings: { volume: 0.5 }, level: null, records: {}, reputation: { total: 150, byLevel: { 1: 150 } } })); });
   await open();
   const conv = await ev(() => ({ v: Profile.data.v, rep: reputation(), once: Profile.data.reputation.earned['L1:collaudo'], vol: SFX.volume, again: (gameActive = true, addRecord()) }));
-  check(JSON.stringify(conv) === JSON.stringify({ v: 3, rep: 5, once: 5, vol: 0.5, again: 0 }), 'conversione dalla versione 1 sbagliata: ' + JSON.stringify(conv));
+  check(JSON.stringify(conv) === JSON.stringify({ v: 4, rep: 5, once: 5, vol: 0.5, again: 0 }), 'conversione dalla versione 1 sbagliata: ' + JSON.stringify(conv));
 
   // ---- salvataggio della versione 2 (giocatore titolare del service): il
   // service diventa il datore di lavoro, la reputazione resta al tecnico
@@ -171,7 +184,15 @@ const path = require('path');
   await ev(() => { Profile.flush = () => {}; localStorage.setItem('scs-save', JSON.stringify({ v: 2, service: 'Service Rossi', logo: { shape: 'scudo', icon: 'faro', bg: '#e0503f', fg: '#eee9df', style: 'tour' }, settings: { volume: 0.5 }, level: null, records: {}, reputation: { total: 12, earned: {}, log: [] } })); });
   await open();
   const conv2 = await ev(() => ({ v: Profile.data.v, rep: reputation(), service: serviceName(), player: playerName(), used: Profile.data.usedServices, bg: serviceLogo().bg }));
-  check(JSON.stringify(conv2) === JSON.stringify({ v: 3, rep: 12, service: 'Service Rossi', player: 'Tecnico', used: ['Service Rossi'], bg: '#e0503f' }), 'conversione dalla versione 2 sbagliata: ' + JSON.stringify(conv2));
+  check(JSON.stringify(conv2) === JSON.stringify({ v: 4, rep: 12, service: 'Service Rossi', player: 'Tecnico', used: ['Service Rossi'], bg: '#e0503f' }), 'conversione dalla versione 2 sbagliata: ' + JSON.stringify(conv2));
+
+  // ---- salvataggio della versione 3 (prima dello scarico): una partita già
+  // avviata conta lo scarico come saltato, senza partita si gioca
+  await p.waitForTimeout(400);
+  await ev(() => { Profile.flush = () => {}; localStorage.setItem('scs-save', JSON.stringify({ v: 3, player: 'Anna', service: 'Service Rossi', settings: { volume: 0.5 }, level: { id: 1, placed: {}, edges: [] }, records: {}, reputation: { total: 7, earned: {}, log: [] } })); });
+  await open();
+  const conv3 = await ev(() => ({ v: Profile.data.v, sk: Profile.data.scarico && Profile.data.scarico.skipped, skipSet: settings().skipScarico, rep: reputation() }));
+  check(JSON.stringify(conv3) === JSON.stringify({ v: 4, sk: true, skipSet: false, rep: 7 }), 'conversione dalla versione 3 sbagliata: ' + JSON.stringify(conv3));
 
   console.log('PROBLEMI:', JSON.stringify(problems, null, 1));
   console.log('ERRORI JS:', errs);

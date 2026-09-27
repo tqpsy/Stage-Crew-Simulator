@@ -56,8 +56,11 @@ cambiano da una fase all'altra.
 - Il bilico va rifinito come trattore + semirimorchio separati; con il
   bilico i case vanno spostati più avanti sulla banchina.
 - Più case (e più bauli) man mano che crescono impianto e livello.
-- **Minigioco dello scarico** (16:00 in scaletta): fisica dall'alto, collega
-  CPU, i danni si pagano al montaggio. Design in `docs/minigioco-scarico.md`.
+- **Minigioco dello scarico** (16:00 in scaletta): fatto, `scarico.html`
+  aperto dopo la scaletta; i pezzi rotti mancano al montaggio. Da fare:
+  pezzi difettosi da sistemare col tocco lungo, contatore delle birre,
+  grafica isometrica, scenari 2-5 coi mezzi più grandi. Design in
+  `docs/minigioco-scarico.md`.
 
 ## Test automatici
 
@@ -65,6 +68,8 @@ cambiano da una fase all'altra.
   crearne uno per il livello) e `tests/partita-telefono.js`, così ogni
   soluzione reale viene promossa e ogni errore bocciato col messaggio
   giusto.
+- `tests/scarico.js`: lo scarico dentro il gioco e le sue conseguenze sul
+  montaggio. Senza rete servono `PHASER_PATH` e `MATTER_PATH`.
 
 ## Partita, menù e highscore
 
