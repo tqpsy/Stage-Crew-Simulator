@@ -487,6 +487,8 @@
   #foglio .fg-list{ list-style:none; margin:0; padding:0; display:flex; flex-direction:column; gap:3px; color:var(--text-muted); }
   #foglio .fg-list li.ok{ color:var(--green); }
   #foglio .fg-note{ margin:0; color:var(--text-muted); line-height:1.4; }
+  /* sul telefono i livelli dei cavi occupano la riga in alto: il foglio va sotto */
+  @media (max-width:699px){ #foglio{ top:62px; } }
 
   /* Il pannello scorre INTERNAMENTE se il contenuto non ci sta (max-height +
      overflow-y): lo spazio del gioco sopra non si riduce mai per far posto ai

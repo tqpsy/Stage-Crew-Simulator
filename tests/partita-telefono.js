@@ -94,14 +94,23 @@ const OUT = process.env.SHOTS || null;
   await place('audio', 'sub', [[1, 8], [7, 8]]);
   await place('audio', 'top', []); // la testa si tocca sopra il sub
   for (const sid of ['sub_1', 'sub_2']) { const before = await p.evaluate(() => gameState.stock.top); await tapAt(await devPt(sid)); if (await p.evaluate(() => gameState.stock.top) !== before - 1) problems.push('testa su ' + sid + ' non montata: ' + await toast()); }
-  await place('audio', 'mixer', [[7, 5]]);
+  // tavolo regia in Off Stage; mixer, finale (nel rack sotto), PC e scheda
+  // si posano toccando il tavolo
+  await place('strutture', 'tavolo', [[7, 5]]);
+  const onTable = async (tabName, type) => {
+    await tab(tabName); await tapSel('.piece[data-type="' + type + '"]');
+    const before = await p.evaluate(t => gameState.stock[t], type);
+    await tapAt(await devPt('tavolo_1'));
+    if (await p.evaluate(t => gameState.stock[t], type) !== before - 1) problems.push(type + ' sul tavolo non posato: ' + await toast());
+  };
+  await onTable('audio', 'mixer');
   // asta microfonica sul palco, poi il microfono si tocca sopra l'asta
   await place('audio', 'asta', [[3, 6]]);
   await place('audio', 'mic', []);
   { const before = await p.evaluate(() => gameState.stock.mic); await tapAt(await devPt('asta_1')); if (await p.evaluate(() => gameState.stock.mic) !== before - 1) problems.push('microfono su asta_1 non montato: ' + await toast()); }
-  await place('regia', 'ampli', [[6, 4]]);
-  await place('regia', 'pc', [[4, 13]]);
-  await place('regia', 'scheda', [[5, 13]]);
+  await onTable('regia', 'ampli');
+  await onTable('regia', 'pc');
+  await onTable('regia', 'scheda');
   for (const [d, pp] of [['mixer_1', 'power'], ['ampli_1', 'power'], ['sub_1', 'power'], ['sub_2', 'power']]) await wire('cee_powercon', 'quadro_1', 'out_1', d, pp);
   await wire('cee_schuko', 'quadro_1', 'out_1', 'pc_1', 'power');
   await wire(null, 'scheda_1', 'usb', 'pc_1', 'usb');
@@ -120,10 +129,10 @@ const OUT = process.env.SHOTS || null;
   const t1 = taps;
   // stativi: frontali nel Pit (uno per lato), tagli ai lati del palco;
   // poi il PAR si tocca sopra ogni stativo
-  await place('luci', 'stativo', [[2, 9], [6, 9], [1, 5], [6, 6]]);
+  await place('strutture', 'stativo', [[2, 9], [6, 9], [1, 5], [6, 6]]);
   await place('luci', 'par', []);
   for (const sid of ['stativo_1', 'stativo_2', 'stativo_3', 'stativo_4']) { const before = await p.evaluate(() => gameState.stock.par); await tapAt(await devPt(sid)); if (await p.evaluate(() => gameState.stock.par) !== before - 1) problems.push('PAR su ' + sid + ' non montato: ' + await toast()); }
-  await place('luci', 'controller', [[7, 7]]);
+  await onTable('luci', 'controller');
   for (const [d, pp] of [['controller_1', 'power'], ['par_1', 'power_in']]) await wire('cee_powercon', 'quadro_1', 'out_2', d, pp);
   for (const [a, c] of [['par_1', 'par_2'], ['par_2', 'par_3'], ['par_3', 'par_4']]) await wire('powercon', a, 'power_thru', c, 'power_in');
   await wire('dmx', 'controller_1', 'dmx_1', 'par_1', 'dmx_in');

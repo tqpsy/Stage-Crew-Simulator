@@ -141,7 +141,29 @@ const TOP_POLE  = 18;                     // px: palo tra sub e testa
 const PAR_ISO   = isoFrame(38, 34, 42);   // PAR LED su staffa (lente sulla faccia a=0)
 const STAND_ISO = isoFrame(46, 46, 3);    // stativo luci: treppiede a terra
 const STAND_POLE = 64;                    // px: asta dello stativo fino alla barra a T
-const AMP_ISO   = isoFrame(80, 46, 16);   // finale a rack, pannello frontale sulla faccia b=B
+const AMP_ISO   = isoFrame(80, 46, 16);   // finale 2U, pannello frontale sulla faccia b=B
+const RACK_ISO  = isoFrame(96, 60, 30);   // flight case rack 2U del finale, fronte sulla faccia b=B
+/* tavolo regia (la plancia): lungo il fianco del palco (a), il tecnico sta sul
+   lato +b e guarda il palco. Sopra mixer, consolle luci, PC e scheda audio;
+   sotto il piano il rack del finale. Ogni posto: centro (a, b) e quota z. */
+// con Z = 0 i piedi stanno sul punto di posa: il piano è alto, altrimenti
+// le gambe scenderebbero sotto il pavimento del palco
+const TAVOLO_ISO = isoFrame(300, 80, 0);
+const TAVOLO_TOP = 40;
+const TAVOLO_SLOTS = {
+  controller: [34, 40, TAVOLO_TOP],
+  mixer:      [130, 40, TAVOLO_TOP],
+  pc:         [214, 44, TAVOLO_TOP],
+  scheda:     [264, 40, TAVOLO_TOP],  // accanto al PC, non dietro
+  ampli:      [150, 42, 0]            // sotto il piano, a terra
+};
+// altezza del solido di ogni apparecchio del tavolo (il container sta al suo centro)
+const TAVOLO_ITEM_Z = { controller: 10, mixer: 24, pc: 22, scheda: 12, ampli: 30 };
+function tavoloSlotOffset (type) {
+  const [a, b, z] = TAVOLO_SLOTS[type];
+  const q = TAVOLO_ISO(a, b, z);
+  return { x: q.x, y: q.y - TAVOLO_ITEM_Z[type] / 2 };
+}
 const CTRL_ISO  = isoFrame(56, 34, 10);   // consolle luci da tavolo, piano inclinato
 const QUADRO_ISO = isoFrame(112, 34, 46); // armadio di distribuzione, prese sul fronte b=B
 const QUADRO_PHASE_A = [22, 56, 90];      // posizione lungo il fronte di prese/interruttori L1-L3
@@ -245,17 +267,25 @@ const COMPONENT_TYPES = {
   },
   ampli: {
     label: 'FINALE', category: 'regia', powerW: 300, zone: 'offstage', shape: 'ampli',
-    body: { w: 64, h: 60, fill: 0x2a2c32, accent: 0x8a8e98 },
-    ledPos: AMP_ISO(6, 46, 12),
-    // connettori sul coperchio, su due file come sul pannello posteriore:
-    // dietro alimentazione e ingressi XLR, davanti le uscite Speakon
+    body: { w: 78, h: 82, fill: 0x2a2c32, accent: 0x8a8e98 },
+    ledPos: RACK_ISO(14, 60, 20),
+    // il finale sta in un flight case rack 2U sotto il tavolo regia: i
+    // connettori sono sul retro del rack (faccia b=0), da lì partono i cavi
     ports: [
-      { id: 'power', signal: 'powercon', dir: 'in',  ...isoPort(AMP_ISO, 68, 8, 16) },
-      { id: 'in_L',  signal: 'xlr',      dir: 'in',  ...isoPort(AMP_ISO, 14, 8, 16) },
-      { id: 'in_R',  signal: 'xlr',      dir: 'in',  ...isoPort(AMP_ISO, 41, 8, 16) },
-      { id: 'out_L', signal: 'speakon',  dir: 'out', ...isoPort(AMP_ISO, 26, 38, 16) },
-      { id: 'out_R', signal: 'speakon',  dir: 'out', ...isoPort(AMP_ISO, 53, 38, 16) }
+      { id: 'power', signal: 'powercon', dir: 'in',  ...isoPort(RACK_ISO, 84, 0, 15) },
+      { id: 'in_L',  signal: 'xlr',      dir: 'in',  ...isoPort(RACK_ISO, 14, 0, 15) },
+      { id: 'in_R',  signal: 'xlr',      dir: 'in',  ...isoPort(RACK_ISO, 28, 0, 15) },
+      { id: 'out_L', signal: 'speakon',  dir: 'out', ...isoPort(RACK_ISO, 50, 0, 15) },
+      { id: 'out_R', signal: 'speakon',  dir: 'out', ...isoPort(RACK_ISO, 64, 0, 15) }
     ]
+  },
+  // tavolo regia (plancia): si posa in Off Stage, nessuna presa. Sopra ci
+  // vanno mixer, consolle luci, PC e scheda audio, sotto il rack del finale
+  tavolo: {
+    label: 'TAVOLO', category: 'strutture', powerW: 0, zone: 'offstage', shape: 'tavolo',
+    // oy: il disegno sta sopra il punto di posa (vedi TAVOLO_ISO)
+    body: { w: 190, h: 170, oy: -24, fill: 0x1c1d22, accent: 0x55585f },
+    ports: []
   },
   // asta microfonica con giraffa: si posa sul palco, nessuna presa; ci si
   // monta sopra il microfono
@@ -417,7 +447,7 @@ const COMPONENT_TYPES = {
 
 // la DI resta nel catalogo per gli strumenti sul palco dei livelli successivi,
 // ma nel livello 1 non serve: il PC entra nel mixer dalla scheda audio
-const AVAILABLE_STOCK = { sub: 2, top: 2, mixer: 1, asta: 1, mic: 1, stativo: 4, par: 4, controller: 1, ampli: 1, quadro: 1, ciabatta: 1, ciabatta_cee: 1, pc: 1, scheda: 1, di: 0 };
+const AVAILABLE_STOCK = { sub: 2, top: 2, mixer: 1, asta: 1, mic: 1, stativo: 4, par: 4, controller: 1, ampli: 1, quadro: 1, ciabatta: 1, ciabatta_cee: 1, pc: 1, scheda: 1, di: 0, tavolo: 1 };
 
 const POWER_LIMIT_KW = 3.0;
 const TOP_ATTACH_RADIUS = 300; // px: quanto lontano può essere trascinata una Testa da un Sub libero
@@ -436,12 +466,28 @@ const MOUNTS = {
     missing: 'Posa il microfono sopra un\'asta microfonica libera: si monta sulla punta della giraffa.',
     done: baseId => 'Microfono montato su ' + compLabel(baseId) + ': collegalo con un XLR a un ingresso MIC del mixer.' }
 };
-const MOUNT_ON = { sub: 'top', stativo: 'par', asta: 'mic' };   // base -> tipo che ci si monta sopra
-// figlio montato su una base (o null)
-function mountedOn (base) {
-  const t = base && MOUNT_ON[base.type];
-  return t ? (gameState.placed[base[MOUNTS[t].link]] || null) : null;
+// la regia sta sul tavolo: ogni apparecchio ha il suo posto (TAVOLO_SLOTS)
+const TAVOLO_WHERE = { mixer: 'al centro del piano', controller: 'sul piano, verso il pubblico', pc: 'sul piano, verso il fondo',
+  scheda: 'sul piano, accanto al PC', ampli: 'nel rack sotto il piano' };
+Object.keys(TAVOLO_SLOTS).forEach((type, i) => {
+  MOUNTS[type] = {
+    base: 'tavolo', link: 'slot_' + type, back: 'tavoloId',
+    offsetX: () => tavoloSlotOffset(type).x, offsetY: () => tavoloSlotOffset(type).y,
+    // il rack sta sotto il piano (dietro il tavolo), gli altri sopra
+    depth: type === 'ampli' ? -0.0005 : 0.001 + i * 0.0001,
+    missing: 'Posa prima il tavolo regia (scheda Strutture) in Off Stage: ' + COMPONENT_TYPES[type].label + ' va ' + TAVOLO_WHERE[type] + '.',
+    done: baseId => COMPONENT_TYPES[type].label + ' ' + TAVOLO_WHERE[type] + ' di ' + compLabel(baseId) + '.'
+  };
+});
+// base -> tipi che ci si montano sopra
+const MOUNT_ON = { sub: ['top'], stativo: ['par'], asta: ['mic'], tavolo: Object.keys(TAVOLO_SLOTS) };
+// figli montati su una base
+function mountedAll (base) {
+  const ts = (base && MOUNT_ON[base.type]) || [];
+  return ts.map(t => gameState.placed[base[MOUNTS[t].link]]).filter(Boolean);
 }
+// figlio montato su una base (o null): per le basi da un solo pezzo
+function mountedOn (base) { return mountedAll(base)[0] || null; }
 // base che regge un pezzo montato (o null)
 function mountBase (comp) {
   const m = comp && MOUNTS[comp.type];
@@ -654,7 +700,7 @@ function stereoCheck () {
 const gameState = {
   placed: {},
   stock: { ...AVAILABLE_STOCK },
-  nextIndex: { sub: 1, top: 1, mixer: 1, asta: 1, mic: 1, stativo: 1, par: 1, controller: 1, ampli: 1, quadro: 1, ciabatta: 1, ciabatta_cee: 1, pc: 1, scheda: 1, di: 1 },
+  nextIndex: Object.fromEntries(Object.keys(AVAILABLE_STOCK).map(t => [t, 1])),
   edges: [],              // { id, a, aPort, b, bPort, signal }
   edgeSeq: 0,
   selectedCable: null,
@@ -3180,6 +3226,12 @@ function openRearPanel (compId) {
       : compLabel(compId) + ': monta un PAR sulla barra a T (scheda Luci, poi tocca lo stativo).');
     return;
   }
+  if (t === 'tavolo') {
+    const on = mountedAll(gameState.placed[compId]);
+    showToast(on.length ? compLabel(compId) + ': ci sono ' + on.map(c => compLabel(c.id)).join(', ') + '. Tocca un apparecchio per il suo pannello.'
+      : compLabel(compId) + ': sopra vanno mixer, consolle luci, PC e scheda audio, sotto il rack del finale (schede Audio, Regia e Luci, poi tocca il tavolo).');
+    return;
+  }
   if (t === 'asta') {
     const mic = mountedOn(gameState.placed[compId]);
     showToast(mic ? compLabel(compId) + ' regge ' + compLabel(mic.id) + ': tocca il microfono per la sua presa.'
@@ -3557,7 +3609,7 @@ document.addEventListener('pointercancel', ev => {
    --------------------------------------------------------------------- */
 const GIRI = [
   { id: 'corrente', title: 'Corrente', tabs: ['corrente', 'cavi'], button: 'PROVA CORRENTE' },
-  { id: 'audio', title: 'Audio', tabs: ['audio', 'regia'], button: 'PROVA AUDIO' },
+  { id: 'audio', title: 'Audio', tabs: ['strutture', 'audio', 'regia'], button: 'PROVA AUDIO' },
   { id: 'luci', title: 'Luci', tabs: ['luci'], button: 'PROVA LUCI' }
 ];
 const GIRO_COLLAUDO = GIRI.length;   // tutti i giri fatti: si collauda
@@ -3741,7 +3793,7 @@ function screenToCell (px, py) {
    misura reale nel disegno; se il pezzo è girato di un quarto (in FOH) si
    scambia. I pezzi montati (testa, PAR) non occupano celle. */
 const FOOTPRINT = {
-  sub: [1, 1], mixer: [1, 2], ampli: [1, 2], controller: [1, 1], quadro: [1, 2],
+  sub: [1, 1], mixer: [1, 2], ampli: [1, 2], tavolo: [2, 6], controller: [1, 1], quadro: [1, 2],
   ciabatta: [1, 2], ciabatta_cee: [1, 3], pc: [1, 1], scheda: [1, 1], di: [1, 1], stativo: [1, 1], asta: [1, 1]
 };
 function footprint (type, rot) {
@@ -3792,6 +3844,8 @@ const ZONE_PREDICATES = {
   mixer: (cx, cy) => isOffStageCell(cx, cy) || isFohCell(cx, cy),
   controller: (cx, cy) => isOffStageCell(cx, cy) || isFohCell(cx, cy),
   ampli: isOffStageCell,
+  // il tavolo regia sta a lato palco, in Off Stage
+  tavolo: isOffStageCell,
   // stativi luci: davanti al palco (frontale) o ai suoi lati (taglio)
   stativo: (cx, cy) => isPitCell(cx, cy) ||
     (cy >= STAGE_ORIGIN_Y && cy < STAGE_ORIGIN_Y + STAGE_H && (cx < STAGE_ORIGIN_X || isOffStageCell(cx, cy))),
@@ -4662,19 +4716,43 @@ class StageScene extends Phaser.Scene {
         break;
       }
       case 'ampli': {
-        // finale a rack 2U: maniglie, manopole di livello, LED di stato e
-        // griglie di aerazione sul coperchio
-        const P = AMP_ISO, k = this.isoKit(g, P);
+        // flight case rack 2U coi coperchi tolti: guscio nero con angolari e
+        // maniglie, dentro le guide rack il frontale del finale (manopole di
+        // livello, LED di stato, interruttore)
+        const P = RACK_ISO, k = this.isoKit(g, P);
         const { A, B, Z } = P;
-        k.box(0, A, 0, B, 0, Z, ISO_BLACK);
-        for (let a = 6; a < A - 6; a += 5) k.quadZ(Z, a, a + 2, 19, 27, 0x2a2c33);
-        k.quadB(B, 1, A - 1, 1, Z - 1, 0x1a1b20);                      // pannello frontale
-        [[2, 6], [A - 6, A - 2]].forEach(([a0, a1]) => k.box(a0, a1, B, B + 3, 2, Z - 2, ISO_GREY));
-        k.discB(B, 18, Z / 2, 3.6, 0x0c0d10); k.discB(B, 18, Z / 2, 2.8, 0x8a8e98);
-        k.discB(B, 30, Z / 2, 3.6, 0x0c0d10); k.discB(B, 30, Z / 2, 2.8, 0x8a8e98);
-        [0x49b06a, 0x49b06a, 0xf2c53d, 0x2a2c33].forEach((c, i) => k.quadB(B, 42 + i * 4, 45 + i * 4, Z / 2 + 2, Z / 2 + 4.5, c));
-        [0x49b06a, 0x49b06a, 0x2a2c33, 0x2a2c33].forEach((c, i) => k.quadB(B, 42 + i * 4, 45 + i * 4, Z / 2 - 3.5, Z / 2 - 1, c));
-        k.quadB(B, 62, 70, Z / 2 - 2.5, Z / 2 + 2.5, 0xd6392f);         // interruttore
+        k.discZ(0, A / 2, B / 2, 44, 0x000000, 0.22);                    // ombra
+        k.box(0, A, 0, B, 0, Z, { top: 0x2c2e34, left: 0x202227, right: 0x16171b });
+        k.quadB(B, 4, A - 4, 3, Z - 3, 0x08090b);                        // bocca del rack
+        [[4, 9], [A - 9, A - 4]].forEach(([a0, a1]) => k.quadB(B, a0, a1, 3, Z - 3, 0x9aa0aa)); // guide rack
+        [[4, 9], [A - 9, A - 4]].forEach(([a0, a1]) => [7, Z - 7].forEach(z => k.discB(B, (a0 + a1) / 2, z, 1.1, 0x2a2c33)));
+        const f0 = 10, f1 = A - 10, zm = Z / 2;                          // frontale del finale
+        k.quadB(B, f0, f1, 6, Z - 6, 0x1a1b20);
+        k.discB(B, f0 + 10, zm, 3.6, 0x0c0d10); k.discB(B, f0 + 10, zm, 2.8, 0x8a8e98);
+        k.discB(B, f0 + 20, zm, 3.6, 0x0c0d10); k.discB(B, f0 + 20, zm, 2.8, 0x8a8e98);
+        [0x49b06a, 0x49b06a, 0xf2c53d, 0x2a2c33].forEach((c, i) => k.quadB(B, f0 + 30 + i * 4, f0 + 33 + i * 4, zm + 1.5, zm + 4, c));
+        [0x49b06a, 0x49b06a, 0x2a2c33, 0x2a2c33].forEach((c, i) => k.quadB(B, f0 + 30 + i * 4, f0 + 33 + i * 4, zm - 4, zm - 1.5, c));
+        k.quadB(B, f1 - 12, f1 - 4, zm - 2.5, zm + 2.5, 0xd6392f);       // interruttore
+        // angolari a sfera e bordi in alluminio
+        [[0, 0], [A, 0], [A, Z], [0, Z]].forEach(([a, z]) => k.discB(B, Math.min(A - 2.5, Math.max(2.5, a)), Math.min(Z - 2.5, Math.max(2.5, z)), 2.6, 0xc9ccd1));
+        [0, Z].forEach(z => { const e0 = P(0, B, z), e1 = P(A, B, z); g.lineStyle(1.2, 0x9aa0aa, 0.8); g.lineBetween(e0.x, e0.y, e1.x, e1.y); });
+        k.quadA(0, B / 2 - 9, B / 2 + 9, zm - 3, zm + 3, 0x0c0d10);        // maniglia a scomparsa sul fianco
+        k.quadA(0, B / 2 - 7, B / 2 + 7, zm - 1.5, zm + 1.5, 0x9aa0aa);
+        break;
+      }
+      case 'tavolo': {
+        // tavolo regia pieghevole: piano nero su quattro gambe in acciaio,
+        // bordo in alluminio verso il tecnico, un rotolo di nastro sul piano
+        const P = TAVOLO_ISO, k = this.isoKit(g, P);
+        const { A, B } = P, H = TAVOLO_TOP;
+        k.discZ(0, A / 2, B / 2, 60, 0x000000, 0.18);                    // ombra
+        const legs = [[6, 6], [A - 6, 6], [6, B - 6], [A - 6, B - 6]];
+        legs.forEach(([a, b]) => k.box(a - 2, a + 2, b - 2, b + 2, 0, H - 4, ISO_GREY));
+        // traverse tra le gambe sui fianchi corti
+        [6, A - 6].forEach(a => { const e0 = P(a, 6, 10), e1 = P(a, B - 6, 10); g.lineStyle(2, 0x7d828c, 1); g.lineBetween(e0.x, e0.y, e1.x, e1.y); });
+        k.box(0, A, 0, B, H - 4, H, { top: 0x2b2d33, left: 0x1d1e22, right: 0x141518 });
+        const e0 = P(0, B, H), e1 = P(A, B, H); g.lineStyle(1.2, 0x9aa0aa, 0.7); g.lineBetween(e0.x, e0.y, e1.x, e1.y);
+        k.discZ(H, A - 14, B - 12, 6, 0xd9d9d9); k.discZ(H, A - 14, B - 12, 3, 0x2b2d33);   // nastro telato
         break;
       }
       case 'quadro': {
@@ -5018,7 +5096,7 @@ class StageScene extends Phaser.Scene {
 
     // sotto il dispositivo solo il conteggio delle prese collegate (es. "2/4"):
     // il nome si legge nel pannello, in scena sarebbe una scritta in più
-    const idLabel = this.add.text(0, def.body.h / 2 + 12, '', {
+    const idLabel = this.add.text(0, (def.body.oy || 0) + def.body.h / 2 + 12, '', {
       fontFamily: 'Inter, sans-serif', fontSize: '11px', color: '#8b8e98'
     }).setOrigin(0.5);
     c.add(idLabel);
@@ -5035,7 +5113,7 @@ class StageScene extends Phaser.Scene {
     // scattare per sbaglio lo spostamento.
     const pad = 8;
     body.setInteractive({
-      hitArea: new Phaser.Geom.Rectangle(-def.body.w / 2 - pad, -def.body.h / 2 - pad, def.body.w + pad * 2, def.body.h + pad * 2),
+      hitArea: new Phaser.Geom.Rectangle(-def.body.w / 2 - pad, (def.body.oy || 0) - def.body.h / 2 - pad, def.body.w + pad * 2, def.body.h + pad * 2),
       hitAreaCallback: Phaser.Geom.Rectangle.Contains,
       useHandCursor: true
     });
@@ -5092,7 +5170,7 @@ class StageScene extends Phaser.Scene {
       const r = Math.min(v.def.body.w, v.def.body.h - 10) / 2;
       v.glow.strokeCircle(0, -4, r + 6);
     } else {
-      v.glow.strokeRoundedRect(-v.def.body.w / 2 - 4, -v.def.body.h / 2 - 4, v.def.body.w + 8, v.def.body.h + 8, 8);
+      v.glow.strokeRoundedRect(-v.def.body.w / 2 - 4, (v.def.body.oy || 0) - v.def.body.h / 2 - 4, v.def.body.w + 8, v.def.body.h + 8, 8);
     }
   }
 
@@ -5206,7 +5284,8 @@ class StageScene extends Phaser.Scene {
     if (!spot) { showToast('Non c\'è più posto per ' + COMPONENT_TYPES[type].label + ' nella sua zona: libera un po\' di spazio.'); return; }
     const cx = spot.gx, cy = spot.gy;
 
-    const idx = gameState.nextIndex[type]++;
+    const idx = gameState.nextIndex[type] = gameState.nextIndex[type] || 1;
+    gameState.nextIndex[type]++;
     const id = `${type}_${idx}`;
     gameState.stock[type]--;
     updateStockUI();
@@ -5221,7 +5300,7 @@ class StageScene extends Phaser.Scene {
     // la fascia Off Stage, che è alla stessa quota.
     const zone = isStageCell(cx, cy) ? 'stage' : 'ground';
     gameState.placed[id] = { id, type, gx: cx, gy: cy, foot: spot.foot, cells: spot.keys, screen: pos, zone };
-    if (MOUNT_ON[type]) gameState.placed[id][MOUNTS[MOUNT_ON[type]].link] = null;   // base libera
+    (MOUNT_ON[type] || []).forEach(t => { gameState.placed[id][MOUNTS[t].link] = null; });   // base libera
     updatePowerMeter();   // ora il pezzo conta nella potenza impegnata
     this.compVisuals[id] = this.buildComponentVisual(id, def, pos.x, pos.y);
 
@@ -5262,7 +5341,7 @@ class StageScene extends Phaser.Scene {
   mountPos (type, base) {
     const bv = this.compVisuals[base.id];
     const m = MOUNTS[type];
-    return { x: bv.container.x + (m.offsetX ? m.offsetX() : 0), y: bv.container.y + m.offsetY(), depth: isoDepth(bv.container.y) + 0.001 };
+    return { x: bv.container.x + (m.offsetX ? m.offsetX() : 0), y: bv.container.y + m.offsetY(), depth: isoDepth(bv.container.y) + (m.depth != null ? m.depth : 0.001) };
   }
 
   attachToNearestBase (type, world) {
@@ -5270,7 +5349,8 @@ class StageScene extends Phaser.Scene {
     const base = this.nearestFreeBase(type, world);
     if (!base) { showToast(m.missing); return; }
 
-    const idx = gameState.nextIndex[type]++;
+    const idx = gameState.nextIndex[type] = gameState.nextIndex[type] || 1;
+    gameState.nextIndex[type]++;
     const id = type + '_' + idx;
     gameState.stock[type]--;
     updateStockUI();
@@ -5556,11 +5636,15 @@ class StageScene extends Phaser.Scene {
       if (!v || !v.def || !v.def.body) return;
       const c = v.container;
       const hw = (v.def.body.w / 2) * Math.abs(c.scaleX), hh = (v.def.body.h / 2) * Math.abs(c.scaleY);
-      const dx = Math.max(0, Math.abs(wx - c.x) - hw), dy = Math.max(0, Math.abs(wy - c.y) - hh);
+      const cy = c.y + (v.def.body.oy || 0) * Math.abs(c.scaleY);
+      const dx = Math.max(0, Math.abs(wx - c.x) - hw), dy = Math.max(0, Math.abs(wy - cy) - hh);
       const edge = Math.hypot(dx, dy) * k;
-      if (edge <= slopPx) out.push({ id, edge, center: Math.hypot(wx - c.x, wy - c.y) * k });
+      if (edge <= slopPx) out.push({ id, edge, center: Math.hypot(wx - c.x, wy - cy) * k });
     });
-    return out.sort((x, y) => x.edge - y.edge || x.center - y.center);
+    // il tavolo è grande e sta sotto la regia: se il tocco prende anche un
+    // apparecchio, vince l'apparecchio
+    const devs = out.filter(x => gameState.placed[x.id].type !== 'tavolo');
+    return (devs.length ? devs : out).sort((x, y) => x.edge - y.edge || x.center - y.center);
   }
   pickDeviceAt (wx, wy, slopPx) {
     const c = this.devicesNear(wx, wy, slopPx + 8);
@@ -5684,7 +5768,7 @@ class StageScene extends Phaser.Scene {
     const k = this.cameras.main.zoom * (rc.width / GAME_W);
     const hs = Math.max(1, 13 / (12 * k));
     const hx = v.container.x + (-v.def.body.w / 2) * v.container.scaleX - 11 * hs;
-    const hy = v.container.y + (-v.def.body.h / 2) * v.container.scaleY - 11 * hs;
+    const hy = v.container.y + ((v.def.body.oy || 0) - v.def.body.h / 2) * v.container.scaleY - 11 * hs;
     const handle = this.add.container(hx, hy).setDepth(70).setScale(hs);
     const bg = this.add.circle(0, 0, 12, 0xe0503f, 1).setStrokeStyle(2, 0xffffff, 0.9).setInteractive({ useHandCursor: true });
     handle.add(bg);
@@ -5695,7 +5779,7 @@ class StageScene extends Phaser.Scene {
     });
     this.assemblyHandle = handle;
     if (!quiet) showToast(MOUNTS[comp.type]
-      ? 'Montaggio: tocca la ✕ per togliere ' + (comp.type === 'top' ? 'la testa dal palo' : 'il PAR dallo stativo') + '. Tocca il pavimento per finire.'
+      ? 'Montaggio: tocca la ✕ per togliere ' + compLabel(id) + (mountBase(comp) ? ' da ' + compLabel(mountBase(comp).id) : '') + '. Tocca il pavimento per finire.'
       : 'Montaggio: trascina per spostare, tocca la ✕ per togliere. Tocca il pavimento per finire.');
   }
 
@@ -5717,8 +5801,8 @@ class StageScene extends Phaser.Scene {
     if (!comp) return;
     this.exitAssembly();
     const ids = [id];
-    const child = mountedOn(comp), base = mountBase(comp);
-    if (child) ids.push(child.id);                                  // col sub va via la testa, con lo stativo il PAR
+    const base = mountBase(comp);
+    mountedAll(comp).forEach(ch => ids.push(ch.id));                // col sub va via la testa, con lo stativo il PAR, col tavolo la regia
     if (base) base[MOUNTS[comp.type].link] = null;
     const lost = gameState.edges.filter(e => ids.includes(e.a) || ids.includes(e.b)).length;
     const name = COMPONENT_TYPES[comp.type].label;
@@ -5776,8 +5860,7 @@ class StageScene extends Phaser.Scene {
       this.compVisuals[id] = this.buildComponentVisual(id, def, pos.x, pos.y);
     }
 
-    const child = mountedOn(comp);
-    if (child) {
+    mountedAll(comp).forEach(child => {
       // il pezzo montato segue la sua base e sta subito davanti a lei; il
       // PAR si ridisegna perché cambia verso col ruolo dello stativo
       const at = this.mountPos(child.type, comp);
@@ -5788,7 +5871,7 @@ class StageScene extends Phaser.Scene {
         this.compVisuals[child.id] = this.buildComponentVisual(child.id, COMPONENT_TYPES.par, at.x, at.y);
       }
       this.compVisuals[child.id].container.setPosition(at.x, at.y).setDepth(at.depth);
-    }
+    });
 
     this.clearMoveSelection();
     this.redrawEdges();
@@ -5825,7 +5908,9 @@ class StageScene extends Phaser.Scene {
         audio: 'Prova audio superata: la musica del PC esce dalle casse! Per le luci usa una fase libera del Quadro: cabla con quella fase spenta e armala alla fine.',
         luci: 'Prova luci superata: i PAR rispondono alla consolle.'
       }[g.id];
-      showToast(msg + (next ? ' Adesso il giro ' + next.title + ': si apre la scheda ' + next.tabs.map(t => t[0].toUpperCase() + t.slice(1)).join(' e ') + '.'
+      const names = next ? next.tabs.map(t => t[0].toUpperCase() + t.slice(1)) : [];
+      const opens = names.length > 1 ? 'si aprono le schede ' + names.slice(0, -1).join(', ') + ' e ' + names[names.length - 1] : 'si apre la scheda ' + names[0];
+      showToast(msg + (next ? ' Adesso il giro ' + next.title + ': ' + opens + '.'
         : ' Il montaggio è finito: fai il Test impianto, il collaudo di tutto insieme.'), 'ok');
       if (g.id === 'audio') { const stop = SFX.beat(124, 8); this.time.delayedCall(4000, stop); }
       saveLevel();
@@ -6392,6 +6477,11 @@ class StageScene extends Phaser.Scene {
     gameState.placed = JSON.parse(JSON.stringify(snap.placed));
     gameState.edges = JSON.parse(JSON.stringify(snap.edges));
     gameState.stock = { ...snap.stock };
+    // partita salvata prima di un pezzo nuovo (es. il tavolo regia): la sua
+    // scorta è la dotazione meno quelli già posati
+    Object.keys(AVAILABLE_STOCK).forEach(t => {
+      if (gameState.stock[t] == null) gameState.stock[t] = AVAILABLE_STOCK[t] - Object.values(snap.placed).filter(c => c.type === t).length;
+    });
     gameState.nextIndex = { ...snap.nextIndex };
     gameState.edgeSeq = snap.edgeSeq;
 
@@ -6401,7 +6491,7 @@ class StageScene extends Phaser.Scene {
       const visual = this.buildComponentVisual(c.id, def, c.screen.x, c.screen.y);
       // (ripristino da annulla/ripeti) il pezzo montato resta davanti alla sua base
       const base = mountBase(c);
-      if (base) visual.container.setDepth(isoDepth(base.screen.y) + 0.001);
+      if (base) visual.container.setDepth(isoDepth(base.screen.y) + (MOUNTS[c.type].depth != null ? MOUNTS[c.type].depth : 0.001));
       this.compVisuals[c.id] = visual;
       (c.cells || []).forEach(k => { this.occupied[k] = c.id; });
     });

@@ -166,6 +166,7 @@
   <div id="toolbar">
     <div class="tabs">
       <button class="tab-btn active" data-tab="corrente">Corrente</button>
+      <button class="tab-btn" data-tab="strutture">Strutture</button>
       <button class="tab-btn" data-tab="audio">Audio</button>
       <button class="tab-btn" data-tab="regia">Regia</button>
       <button class="tab-btn" data-tab="luci">Luci</button>
@@ -190,6 +191,19 @@
       <span class="panel-hint">Tocca un dispositivo per aprire il suo pannello; tienilo premuto per spostarlo o toglierlo. Il Quadro va in Backstage e si collega all'Allaccio con un cavo CEE 400V; le sue tre prese (L1, L2, L3) sono CEE blu. Ciabatta civile (spina Schuko, 3 prese) e ciabatta CEE (spina CEE blu, 4 prese Schuko) hanno il loro cavo: la spina si prende dal loro pannello. Si posano sul palco, in Off Stage o in FOH; la CEE anche in Backstage.</span>
     </div>
 
+    <div class="tab-panel" data-panel="strutture">
+      <div class="panel-items">
+        <div class="piece" data-type="tavolo">
+          <div class="swatch" style="color:#c9ccd3;"><div class="stripe" style="background:#9aa0aa;"></div>TAVOLO</div>
+          <span class="count" id="count-tavolo">×1</span>
+        </div>
+        <div class="piece" data-type="stativo">
+          <div class="swatch" style="color:#c9ccd3;"><div class="stripe" style="background:#55585f;"></div>STATIVO</div>
+          <span class="count" id="count-stativo">×4</span>
+        </div>
+      </div>
+      <span class="panel-hint">Le strutture reggono gli apparecchi. Il tavolo regia va in Off Stage: sopra ci vanno mixer, consolle luci, PC e scheda audio, sotto il rack del finale. Gli stativi reggono i PAR: 2 davanti al palco nel Pit (frontale, uno per lato) e 2 ai lati del palco, a sinistra e in Off Stage (tagli).</span>
+    </div>
     <div class="tab-panel" data-panel="audio">
       <div class="panel-items">
         <div class="piece" data-type="sub">
@@ -213,7 +227,7 @@
           <span class="count" id="count-mic">×1</span>
         </div>
       </div>
-      <span class="panel-hint">Il mixer va in Off Stage o in FOH: 4 ingressi XLR, 2 ingressi jack (linea), uscite MAIN L/R (XLR) verso il finale e 2 mandate AUX (jack) per i monitor. Sub e teste vanno nel Pit: la testa si monta sul palo di un sub libero. L'asta microfonica va sul palco: il microfono si monta sulla sua giraffa e si collega con un XLR a un ingresso MIC del mixer.</span>
+      <span class="panel-hint">Il mixer va sul tavolo regia (scheda Strutture): 4 ingressi XLR, 2 ingressi jack (linea), uscite MAIN L/R (XLR) verso il finale e 2 mandate AUX (jack) per i monitor. Sub e teste vanno nel Pit: la testa si monta sul palo di un sub libero. L'asta microfonica va sul palco: il microfono si monta sulla sua giraffa e si collega con un XLR a un ingresso MIC del mixer.</span>
     </div>
 
     <div class="tab-panel" data-panel="regia">
@@ -231,15 +245,11 @@
           <span class="count" id="count-scheda">×1</span>
         </div>
       </div>
-      <span class="panel-hint">Il finale va in Off Stage. PC e scheda audio vanno in FOH o in Off Stage. Il PC si alimenta con la sua spina Schuko da una ciabatta (o dal Quadro con l'adattatore CEE / Schuko); la scheda audio si collega al PC con il suo cavo USB-C (che la alimenta) ed entra nei CH 5 e 6 del mixer con due jack (L e R).</span>
+      <span class="panel-hint">Il finale sta in un rack 2U sotto il tavolo regia; PC e scheda audio vanno sul piano del tavolo. Il PC si alimenta con la sua spina Schuko da una ciabatta (o dal Quadro con l'adattatore CEE / Schuko); la scheda audio si collega al PC con il suo cavo USB-C (che la alimenta) ed entra nei CH 5 e 6 del mixer con due jack (L e R).</span>
     </div>
 
     <div class="tab-panel" data-panel="luci">
       <div class="panel-items">
-        <div class="piece" data-type="stativo">
-          <div class="swatch" style="color:#c9ccd3;"><div class="stripe" style="background:#55585f;"></div>STATIVO</div>
-          <span class="count" id="count-stativo">×4</span>
-        </div>
         <div class="piece" data-type="par">
           <div class="swatch" style="color:#f2c53d;"><div class="stripe" style="background:#f2c53d;"></div>PAR</div>
           <span class="count" id="count-par">×4</span>
@@ -249,7 +259,7 @@
           <span class="count" id="count-controller">×1</span>
         </div>
       </div>
-      <span class="panel-hint">Posa i 4 stativi: 2 davanti al palco nel Pit (frontale, uno per lato) e 2 ai lati del palco, a sinistra e in Off Stage (tagli). Poi monta un PAR su ogni stativo: si punta da solo verso il palco. Dal display del PAR si regolano indirizzo e modalità DMX (3, 4 o 8 canali). La consolle luci va in Off Stage o in FOH: si alimenta in PowerCON e ha 2 universi DMX.</span>
+      <span class="panel-hint">Posa i 4 stativi (scheda Strutture): 2 davanti al palco nel Pit (frontale, uno per lato) e 2 ai lati del palco, a sinistra e in Off Stage (tagli). Poi monta un PAR su ogni stativo: si punta da solo verso il palco. Dal display del PAR si regolano indirizzo e modalità DMX (3, 4 o 8 canali). La consolle luci va sul tavolo regia: si alimenta in PowerCON e ha 2 universi DMX.</span>
     </div>
 
     <div class="tab-panel" data-panel="cavi">

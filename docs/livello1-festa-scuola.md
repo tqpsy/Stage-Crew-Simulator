@@ -72,6 +72,19 @@ Nel livello 1 la regia sta solo in Off Stage: la FOH con il multicore arriva
 in un livello successivo. Allora i finali restano a lato palco (Speakon
 corti) e in FOH va solo il mixer.
 
+**Fatto:**
+- tre giri con la loro prova (pulsante in basso: PROVA CORRENTE / AUDIO /
+  LUCI, poi TEST IMPIANTO), schede chiuse col lucchetto finché il giro non
+  si apre, foglio di montaggio in alto a sinistra, indizi a scalare (`GIRI`,
+  `giroChecks`, `runGiroTest` in `main.js`);
+- scheda Strutture con tavolo regia (3 m × 0,8 m, in Off Stage) e stativi;
+  sul piano consolle luci, mixer, PC e scheda audio affiancati; sotto il
+  rack 2U del finale (`TAVOLO_SLOTS`). I pezzi della regia si posano
+  toccando il tavolo.
+
+**Da fare:** vista posteriore di tutta la regia toccando il tavolo; coperchi
+del rack appoggiati al tavolo; punti 3-11 della lista sopra.
+
 ## Scheda obiettivi
 
 **Fatto: scaletta della serata.** A ogni nuova partita, prima del montaggio, si
