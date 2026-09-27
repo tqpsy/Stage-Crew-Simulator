@@ -132,9 +132,14 @@ Niente mira fine: il personaggio si aggancia al lato del case più vicino.
   a un'altra persona che reagisce in ritardo.
 - **FERMO!** Tonino frena subito. Serve in discesa sulla rampa.
 - **OH-ISSA** per sollevare sopra un gradino, un cordolo o il bordo della
-  sponda. Parte una barra con la mano di Tonino che si chiude a ritmo:
-  premi nella finestra giusta e il case passa pulito. Fuori tempo, il case
-  sbatte (piccolo danno) e si riprova.
+  sponda. Parte **da solo** quando spingi un case contro l'ostacolo (se
+  pesa più di 45 kg, Tonino arriva da solo a darti una mano). Tonino conta
+  «uno… due… ISSA!» e si preme una volta sola sull'ISSA (circa ±¼ di
+  secondo). Riuscito: il case viene alzato e passa da solo. Troppo presto
+  o troppo tardi: il case sbatte (piccolo danno) e dopo un attimo Tonino
+  ricomincia a contare. Per un case ribaltato si preme OH-ISSA lì vicino.
+  (Nel prototipo la prima versione, una barra che oscillava e andava
+  premuta due volte, era poco chiara.)
 - I case lunghi (borsa stativi, truss) hanno anche il problema delle
   **porte**: vanno girati per passare, e con due persone si gira meglio.
 

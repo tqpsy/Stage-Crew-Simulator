@@ -44,12 +44,14 @@
   #toast.show{opacity:1}#toast.ok{border-color:var(--green)}#toast.bad{border-color:var(--red)}#toast.warn{border-color:var(--amber)}
 
   /* ---- oh-issa ---- */
-  #qte{position:absolute;left:50%;bottom:200px;transform:translateX(-50%);z-index:3;display:grid;gap:6px;justify-items:center;pointer-events:none}
-  #qte span{font-family:var(--marker);font-size:26px;color:var(--amber);text-shadow:0 2px 6px #000}
-  .qbar{position:relative;width:240px;max-width:70vw;height:18px;border-radius:9px;background:var(--bg-raised);border:2px solid var(--hairline);overflow:hidden}
-  .qbar .win{position:absolute;top:0;bottom:0;background:rgba(73,176,106,.55)}
-  .qbar .mark{position:absolute;top:-2px;bottom:-2px;width:6px;margin-left:-3px;background:var(--text);border-radius:3px;box-shadow:0 0 6px #000}
-  #qte small{font-size:12px;color:var(--text);text-shadow:0 1px 3px #000}
+  #qte{position:absolute;left:50%;bottom:210px;transform:translateX(-50%);z-index:3;display:grid;gap:8px;justify-items:center;pointer-events:none;width:max-content;max-width:calc(100% - 32px)}
+  .beats{display:flex;gap:8px}
+  .beats i{font-style:normal;font-family:var(--display);font-size:24px;letter-spacing:.04em;padding:6px 14px;border-radius:10px;background:rgba(36,37,43,.92);border:2px solid var(--hairline);color:var(--muted);transition:transform .08s}
+  .beats i.on{color:var(--text);border-color:var(--text);transform:scale(1.08)}
+  .beats i.go{border-color:var(--green)}
+  .beats i.go.on{background:var(--green);color:var(--ink);transform:scale(1.2)}
+  #qte small{font-size:13px;font-weight:600;color:var(--text);text-shadow:0 1px 3px #000;text-align:center}
+  #btns #b-lift.on{background:var(--green);color:var(--ink)}
 
   /* ---- comandi touch ---- */
   #pad{position:absolute;left:0;right:0;bottom:0;height:190px;z-index:2;pointer-events:none;padding-bottom:env(safe-area-inset-bottom,0px)}
@@ -133,9 +135,8 @@
   <div id="toast"></div>
 
   <div id="qte" hidden>
-    <span>OH-ISSA!</span>
-    <div class="qbar"><i class="win" id="q-win"></i><i class="mark" id="q-mark"></i></div>
-    <small id="q-hint">Premi di nuovo OH-ISSA quando la barra è nel verde</small>
+    <div class="beats"><i id="q-b0">UNO</i><i id="q-b1">DUE</i><i id="q-b2" class="go">ISSA!</i></div>
+    <small id="q-hint"></small>
   </div>
 
   <div id="pad" hidden>
@@ -170,7 +171,7 @@
         <li>Fino a 25 kg il case si porta in mano. Quelli più pesanti si spingono: partono piano e si fermano piano.</li>
         <li>I bauli con le ruote sulla rampa scappano. Se li lasci andare, vanno da soli.</li>
         <li>Tonino, se non lo chiami, porta da solo i case leggeri. Rack regia e baule CORRENTE si spingono in due: premi <b>AIUTO</b> e arriva. Ti segue con un attimo di ritardo, quindi curva largo.</li>
-        <li>Al gradino della palestra serve un <b>OH-ISSA</b> a tempo.</li>
+        <li>Quando spingi un case contro il gradino della palestra, Tonino conta «uno, due, ISSA!»: premi <b>OH-ISSA</b> sull'ISSA e il case passa.</li>
       </ul>
       <div class="legend" id="start-legend"></div>
       <button class="primary" id="btn-start">Apri i portelloni</button>
@@ -322,7 +323,7 @@ function newGame () {
   const world = engine.world;
   G = {
     engine, world, t: 0, introT: 0, mode: 'intro', cases: [], workers: [], kids: [], statics: [],
-    cart: null, dolly: null, toasts: [], bubbles: [], history: [], qte: null, freeing: null,
+    cart: null, dolly: null, toasts: [], bubbles: [], history: [], qte: null, qteCool: 0, raiseWait: null, freeing: null,
     coffee: { used: false, until: 0, pauseUntil: 0 }, kidHits: 0, events: {}, endDelay: 0,
     cam: { x: 420, y: 500, scale: 1 }, doorsOpen: 0, flashes: []
   };
@@ -362,7 +363,7 @@ function newGame () {
     });
     Body.setMass(b, d.kg);
     const ce = { kind: 'case', def: d, body: b, integrity: 100, pars: d.id === 'par' ? 4 : 0, wheel: d.wheel,
-      grabbers: [], carrier: null, tipped: false, stuck: false, liftUntil: 0, slideUntil: 0, lastHit: -1,
+      grabbers: [], carrier: null, tipped: false, stuck: false, liftUntil: 0, hopUntil: 0, slideUntil: 0, lastHit: -1,
       zone: null, pv: { x: 0, y: 0 }, flash: 0, seed: Math.random() * 1000, rushed: false, onDolly: false, fell: false };
     b.plugin.ent = ce;
     G.cases.push(ce);
@@ -595,39 +596,89 @@ function pressHelp () {
   if (p.grab && p.mode === 'carry') { toast('I case leggeri li porti da solo. AIUTO serve per spingere quelli pesanti.'); return; }
   tonino('goto', { to: () => G.player.body.position, stop: 60 }); bubble(T, 'Eccomi, capo!', 1.2);
 }
+/* OH-ISSA: Tonino conta «uno… due… ISSA!» e si preme una volta sola
+   sull'ISSA. Al gradino parte da solo quando il case lo tocca; per un case
+   ribaltato si preme OH-ISSA lì vicino. */
+const BEATS = [0.35, 0.95, 1.55], WIN = 0.25;
+function nearStep (ce) {
+  const b = ce.body.bounds, y = ce.body.position.y;
+  return b.max.x > GYM_X - 14 && ce.body.position.x < GYM_X && y > STEP_BAND.y1 - 20 && y < STEP_BAND.y2 + 20;
+}
+function startQte (ce, kind) {
+  G.qte = { ce, kind, t: 0, beat: -1 };
+  $('#qte').hidden = false;
+  $('#q-hint').textContent = (kind === 'step' ? 'Contro il gradino! ' : 'Tiriamolo su! ') + (touchUI ? 'Tocca OH-ISSA su «ISSA!»' : 'Premi Q su «ISSA!»');
+}
+function autoLift () {
+  if (G.qte || G.mode !== 'play' || G.t < G.qteCool) return;
+  const P = G.player, T = G.tonino;
+  if (G.raiseWait) { // ribaltato: si aspetta che arrivi Tonino
+    const ce = G.raiseWait;
+    if (!ce.tipped || len(sub(P.body.position, ce.body.position)) > 130) { G.raiseWait = null; return; }
+    if (len(sub(T.body.position, ce.body.position)) < 110) { G.raiseWait = null; startQte(ce, 'raise'); }
+    return;
+  }
+  const ce = P.grab;
+  if (!ce || P.mode !== 'push' || G.t < ce.liftUntil || !nearStep(ce)) return;
+  if (ce.def.kg > 45 && T.grab !== ce) {
+    if (T.ai.state === 'phone') { if (!G.phoneWarned) { G.phoneWarned = true; toast('Da solo non lo alzi: aspetta che Tonino finisca di telefonare.', 'warn'); } }
+    else if (T.ai.state !== 'help') { tonino('help', { ce }); bubble(T, 'Aspetta, lo alziamo in due!', 1.6); AU.hey(); }
+    return;
+  }
+  startQte(ce, 'step');
+}
 function pressLift () {
   if (G.mode !== 'play') return;
   if (G.qte) { resolveQte(); return; }
-  const p = G.player, T = G.tonino;
-  let ce = null, kind = null;
-  if (p.grab && p.mode === 'push') {
-    const b = p.grab.body.bounds;
-    if (b.max.x > GYM_X - 45 && b.min.x < GYM_X + 30 && p.grab.body.position.y > 430 && p.grab.body.position.y < 570) { ce = p.grab; kind = 'step'; }
+  const P = G.player, T = G.tonino;
+  const n = nearestCase(P, 30);
+  if (n && n.tipped) {
+    if (n.def.kg > 45 && len(sub(T.body.position, n.body.position)) > 110) {
+      if (T.ai.state === 'phone') { toast('Da solo non lo alzi: aspetta che Tonino finisca di telefonare.', 'warn'); return; }
+      G.raiseWait = n; tonino('goto', { to: () => n.body.position, stop: 55 }); bubble(T, 'Arrivo a tirarlo su!', 1.4); return;
+    }
+    startQte(n, 'raise'); return;
   }
-  if (!ce) { const n = nearestCase(p, 30); if (n && n.tipped) { ce = n; kind = 'raise'; } }
-  if (!ce) { toast('OH-ISSA serve al gradino della palestra o per tirare su un case ribaltato.'); return; }
-  if (ce.def.kg > 45) {
-    const tonHelps = kind === 'step' ? T.grab === ce : len(sub(T.body.position, ce.body.position)) < 110;
-    if (!tonHelps) { toast('Da solo non lo alzi (' + ce.def.kg + ' kg): chiama Tonino con AIUTO.', 'warn'); return; }
+  if (P.grab && P.mode === 'push' && nearStep(P.grab)) { G.qteCool = 0; autoLift(); return; }
+  toast('OH-ISSA serve al gradino della palestra (parte da solo quando ci spingi contro un case) o per tirare su un case ribaltato.');
+}
+function updateQte (dt) {
+  const q = G.qte; if (!q) return;
+  if (q.kind === 'step' && G.player.grab !== q.ce) { G.qte = null; $('#qte').hidden = true; return; }
+  q.t += dt;
+  let beat = -1; for (let i = 0; i < 3; i++) if (q.t >= BEATS[i]) beat = i;
+  if (beat !== q.beat) {
+    q.beat = beat;
+    bubble(G.tonino, ['Uno…', 'Due…', 'ISSA!'][beat], 0.55);
+    AU.tone(beat === 2 ? 660 : 440, beat === 2 ? 990 : 440, 0.12, 0.12);
   }
-  G.qte = { ce, kind, t: 0, phase: Math.random() * 6 };
-  $('#qte').hidden = false;
-  bubble(T, 'Al tre… uno, due…', 1.2);
+  if (q.t > BEATS[2] + WIN) failQte('Troppo tardi!');
 }
 function resolveQte () {
   const q = G.qte; if (!q) return;
-  const pos = qtePos(q), ok = Math.abs(pos - 0.5) < 0.13;
-  G.qte = null; $('#qte').hidden = true;
-  if (ok) {
-    AU.hey(); bubble(G.tonino, 'ISSA!', 1);
-    if (q.kind === 'step') { q.ce.liftUntil = G.t + 1.6; refreshFilter(q.ce); Body.setVelocity(q.ce.body, { x: 2.2, y: q.ce.body.velocity.y * 0.3 }); toast('Su! Il case passa il gradino.', 'ok'); }
-    else { q.ce.tipped = false; Body.setAngularVelocity(q.ce.body, 0); toast(q.ce.def.name + ' di nuovo in piedi.', 'ok'); }
+  const d = q.t - BEATS[2];
+  if (Math.abs(d) > WIN) { failQte(d < 0 ? 'Troppo presto!' : 'Troppo tardi!'); return; }
+  G.qte = null; $('#qte').hidden = true; AU.hey();
+  if (q.kind === 'step') {
+    q.ce.liftUntil = G.t + 1.2; q.ce.hopUntil = G.t + 0.9; refreshFilter(q.ce);
+    bubble(G.player, 'Su!', 0.8); toast('Perfetto: il case passa il gradino.', 'ok');
   } else {
-    damage(q.ce, 6 * FRAG[q.ce.def.frag].mult, 'OH-ISSA fuori tempo'); AU.thud(3);
-    bubble(G.tonino, 'Fuori tempo! Riproviamo.', 1.4);
+    q.ce.tipped = false; Body.setAngularVelocity(q.ce.body, 0);
+    toast(q.ce.def.name + ' di nuovo in piedi.', 'ok');
   }
 }
-function qtePos (q) { return (1 - Math.cos(q.phase)) / 2; }
+function failQte (why) {
+  const q = G.qte; G.qte = null; $('#qte').hidden = true;
+  damage(q.ce, 3 * FRAG[q.ce.def.frag].mult, 'OH-ISSA fuori tempo'); AU.thud(2);
+  bubble(G.tonino, why + ' Riproviamo.', 1.3);
+  G.qteCool = G.t + 0.9;
+}
+function drawQteUI () {
+  const q = G && G.qte;
+  $('#b-lift').classList.toggle('on', !!q && q.beat === 2);
+  if (!q) return;
+  for (let i = 0; i < 3; i++) $('#q-b' + i).classList.toggle('on', q.beat === i);
+}
 
 /* ---------------------------------------------------------------------
    TONINO, IL COLLEGA CPU
@@ -662,12 +713,14 @@ function helpPoint (ce, pw) {
   // lato opposto a chi spinge; se è contro un muro, il lato libero più lontano
   const pl = pw && pw.con ? rot(pw.con.pointB, -ce.body.angle) : { x: -ce.def.w / 2, y: 0 };
   const hw = ce.def.w / 2, hh = ce.def.h / 2;
-  const cands = [{ x: -pl.x, y: -pl.y }, { x: hw, y: 0 }, { x: -hw, y: 0 }, { x: 0, y: hh }, { x: 0, y: -hh }];
+  const cands = [{ x: -pl.x, y: -pl.y }, { x: hw, y: 0 }, { x: -hw, y: 0 }, { x: 0, y: hh }, { x: 0, y: -hh },
+    { x: -hw, y: hh * 0.6 }, { x: -hw, y: -hh * 0.6 }, { x: hw, y: hh * 0.6 }, { x: hw, y: -hh * 0.6 }];
   let best = null, bestScore = -1;
   for (const l of cands) {
     const out = norm(Math.abs(l.x) / hw > Math.abs(l.y) / hh ? { x: Math.sign(l.x), y: 0 } : { x: 0, y: Math.sign(l.y) });
     const w = add(ce.body.position, rot(add(l, mul(out, 20)), ce.body.angle));
-    const blocked = Query.point(G.statics, w).length > 0 || Query.point(G.cases.filter(c => c !== ce).map(c => c.body), w).length > 0;
+    const blocked = Query.point(G.statics, w).length > 0 || Query.point(G.cases.filter(c => c !== ce).map(c => c.body), w).length > 0 ||
+      (w.x > GYM_X) !== (ce.body.position.x > GYM_X);   // non dall'altra parte del muro della palestra
     if (blocked) continue;
     const score = len(sub(l, pl));
     if (score > bestScore) { bestScore = score; best = { local: l, world: w }; }
@@ -702,7 +755,7 @@ function updateTonino (dt) {
       // spinge nella direzione che davi 0,4 s fa (0,2 s col caffè)
       const lag = G.coffee.until > G.t ? 12 : 24;
       const h = G.history; const past = h.length > lag ? h[h.length - 1 - lag] : { x: 0, y: 0 };
-      dir = inp.stop ? { x: 0, y: 0 } : past;
+      dir = ce.hopUntil > G.t ? { x: 1, y: 0 } : inp.stop ? { x: 0, y: 0 } : past;
       vmax = pushVmax(ce);
     } else {
       const hp = helpPoint(ce, P);
@@ -776,6 +829,7 @@ function updatePlayer (dt) {
   const P = G.player;
   let dir = readInput();
   if (inp.stop || G.coffee.pauseUntil > G.t || G.qte) dir = { x: 0, y: 0 };
+  if (P.grab && P.grab.hopUntil > G.t) dir = { x: 1, y: 0 };
   G.history.push(dir); if (G.history.length > 60) G.history.shift();
   let vmax = P.vmax * (G.coffee.until > G.t ? 1.25 : 1);
   if (P.mode === 'push') vmax = Math.min(vmax, pushVmax(P.grab) * (G.coffee.until > G.t ? 1.15 : 1));
@@ -829,6 +883,8 @@ function updateCase (ce, dt) {
   lv.x *= Math.max(0, 1 - kf * dt); lv.y *= Math.max(0, 1 - ks * dt);
   Body.setVelocity(b, rot(lv, b.angle));
   Body.setAngularVelocity(b, b.angularVelocity * Math.max(0, 1 - ka * dt));
+  // OH-ISSA riuscito: il case viene sollevato oltre il gradino
+  if (ce.hopUntil > G.t) Body.setVelocity(b, { x: 2.6, y: b.velocity.y * 0.5 });
   // la rampa spinge in giù (verso il cortile)
   const p = b.position;
   if (p.x > RAMP.x && p.x < RAMP.x + RAMP.w && p.y > RAMP.y - 5 && p.y < RAMP.y + RAMP.h + 5) {
@@ -924,7 +980,7 @@ function stepSim () {
   } else if (G.mode === 'play') {
     G.t += dt;
     scriptEvents();
-    if (G.qte) { G.qte.t += dt; G.qte.phase += dt * 2 * Math.PI * 0.85; if (G.qte.t > 3.2) { G.qte = null; $('#qte').hidden = true; toast('Troppo tardi: riprova OH-ISSA.'); } }
+    updateQte(dt); autoLift();
   }
   updatePlayer(dt);
   updateTonino(dt);
@@ -1285,11 +1341,6 @@ function updateHud () {
   $('#btn-close').hidden = !(allIn && G.mode === 'play');
   $('#b-grab').textContent = G.player.grab ? 'LASCIA' : 'PRENDI';
   $('#b-grab').classList.toggle('on', !!G.player.grab);
-  if (G.qte) {
-    const q = G.qte;
-    $('#q-win').style.left = '37%'; $('#q-win').style.width = '26%';
-    $('#q-mark').style.left = (qtePos(q) * 100) + '%';
-  }
 }
 
 /* ---------------------------------------------------------------------
@@ -1450,7 +1501,7 @@ function loop (now) {
     while (acc >= STEP && n < 5) { stepSim(); acc -= STEP; n++; }
     if (n === 5) acc = 0;
   }
-  render();
+  render(); drawQteUI();
   hudT += dt; if (hudT > 100) { hudT = 0; updateHud(); }
   requestAnimationFrame(loop);
 }
