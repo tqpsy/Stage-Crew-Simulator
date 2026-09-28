@@ -53,6 +53,8 @@
   .bub::after{content:"";position:absolute;left:var(--tail,50%);bottom:-9px;width:14px;height:14px;background:#f4f1ea;border-right:2px solid #141519;border-bottom:2px solid #141519;transform:translateX(-50%) rotate(45deg)}
   .bub svg{flex:none}
   .bub b{display:block;font-size:15px;line-height:1.25}
+  .bub.gerry{pointer-events:none;cursor:default;padding:8px 12px}
+  .gerry-face{display:inline-block;vertical-align:middle;width:22px;height:22px;border-radius:50%;background:linear-gradient(#2a3a5a,#1a2233);overflow:hidden;margin-right:6px}
   .bub small{display:block;font-size:13px;color:#7a5a1e;font-weight:600;margin-top:2px}
 
   /* ---- banco regia ---- */
@@ -189,6 +191,41 @@
       <path d="M22 44 Q20 16 52 18 Q84 18 80 40 Q70 26 54 30 Q40 24 30 34 Q26 38 22 44 Z" fill="#f4d35e"/>
       <path d="M48 20 Q70 12 84 26 Q78 22 66 24 Z" fill="#e9c23f"/>
     </symbol>
+    <!-- Gerry Scotti, il bidello, caricatura vettoriale: testone pelato a pera, ciuffi grigi ai lati, occhi sornioni, nasone, sorriso storto, camice blu -->
+    <symbol id="gerry" viewBox="0 0 100 140">
+    <!-- camice da bidello blu, spalle larghe -->
+    <path d="M2 140 L6 104 Q12 92 32 88 Q50 84 68 88 Q88 92 94 104 L98 140 Z" fill="#2f5d8a"/>
+    <path d="M34 88 L50 112 L66 88 L58 86 L50 98 L42 86 Z" fill="#23476b"/>
+    <path d="M40 88 L50 106 L60 88 L54 86 L50 94 L46 86 Z" fill="#a9c8e8"/>
+    <path d="M46 88 L50 100 L54 88 Z" fill="#cf8c68"/>
+    <rect x="64" y="108" width="15" height="12" rx="1.5" fill="#23476b"/>
+    <rect x="67" y="104" width="2" height="8" rx="1" fill="#e9c23f"/>
+    <rect x="20" y="110" width="17" height="7" rx="1.5" fill="#f4f1ea"/>
+    <!-- collo largo -->
+    <rect x="34" y="76" width="32" height="14" rx="4" fill="#cf8c68"/>
+    <!-- orecchie -->
+    <ellipse cx="16" cy="56" rx="5" ry="8" fill="#cf8c68"/><ellipse cx="84" cy="56" rx="5" ry="8" fill="#cf8c68"/>
+    <!-- testone a pera: cranio alto e pelato, mascelle larghissime -->
+    <path d="M50 4 Q76 4 78 34 Q86 50 86 64 Q86 86 50 92 Q14 86 14 64 Q14 50 22 34 Q24 4 50 4 Z" fill="#e8a883"/>
+    <ellipse cx="44" cy="17" rx="11" ry="5" fill="#f4c7a4"/>
+    <path d="M34 10 Q44 3 56 5 M40 12 Q50 6 62 8" stroke="#7d7570" stroke-width="1.4" fill="none" stroke-linecap="round"/>
+    <!-- ciuffi grigi solo ai lati, gonfi -->
+    <path d="M14 58 Q8 38 16 26 Q22 20 28 20 Q22 32 22 44 Q20 52 20 58 Z" fill="#7d7570"/>
+    <path d="M86 58 Q92 38 84 26 Q78 20 72 20 Q78 32 78 44 Q80 52 80 58 Z" fill="#7d7570"/>
+    <!-- sopracciglia alte e sornione -->
+    <path d="M28 40 Q36 33 44 38 M56 36 Q64 29 72 36" stroke="#5f5752" stroke-width="3" fill="none" stroke-linecap="round"/>
+    <!-- occhi a fessura -->
+    <path d="M30 48 Q37 43.5 44 47.5 Q37 50 30 48 Z M56 47 Q63 42.5 70 47.5 Q63 49.5 56 47 Z" fill="#f4e8de"/>
+    <circle cx="38" cy="47" r="1.9" fill="#6d8a92"/><circle cx="64" cy="46.4" r="1.9" fill="#6d8a92"/>
+    <path d="M30 48 Q37 43 44 47.5 M56 47.5 Q63 42.5 70 47.5" stroke="#2a1d12" stroke-width="2.2" fill="none" stroke-linecap="round"/>
+    <!-- nasone carnoso -->
+    <path d="M47 46 Q45 56 42 61 Q40 68 50 68 Q60 68 58 61 Q55 56 53 46 Z" fill="#d6926c"/>
+    <!-- solchi del sorriso -->
+    <path d="M38 62 Q28 68 31 79 M62 62 Q73 66 72 74" stroke="#c07e5c" stroke-width="2" fill="none" stroke-linecap="round"/>
+    <!-- sorrisone da una guancia all'altra -->
+    <path d="M30 75 Q48 94 73 68 Q52 77 30 75 Z" fill="#5e2220"/>
+    <path d="M33 75.6 Q52 78.4 70 69.6 L68 73.6 Q52 82 35 79 Z" fill="#fbfaf5"/>
+    </symbol>
   </defs>
 </svg>
 
@@ -223,6 +260,8 @@
       <!-- asta del microfono e cavo XLR verso il mixer -->
       <g id="stand"><line x1="200" y1="150" x2="200" y2="96" stroke="#555" stroke-width="2"/><line x1="200" y1="96" x2="190" y2="90" stroke="#555" stroke-width="2"/><rect x="185" y="86" width="8" height="6" rx="2" fill="#777"/><path d="M200 150 Q230 158 250 162" stroke="#a3acb8" stroke-width="1.5" fill="none" id="cable"/></g>
       <g id="preside" transform="translate(172 72)"><use href="#tramp" width="56" height="78"/></g>
+      <!-- il bidello sale sul palco quando trova il guasto al posto tuo -->
+      <g id="bidello" display="none" transform="translate(252 72)"><use href="#gerry" width="56" height="78"/></g>
       <path d="M170 150 L230 150 L222 112 L178 112 Z" fill="#3a2a1e" stroke="#4d3927"/>
       <text x="200" y="136" text-anchor="middle" font-family="Barlow Condensed" font-size="10" fill="#c8a36a">LICEO</text>
       <!-- indizi del guasto: chi guarda bene il palco capisce dove cercare -->
@@ -390,7 +429,7 @@
         if (secs <= FAULT_TIME[S.faultCause].bonus) { S.grad = clamp(S.grad + 6); S.repDelta += 3; sfx.applause(85); toast('Applausi per il tecnico!', 'ok'); S.notes.push('Guasto risolto in ' + secs + ' s: il pubblico ha applaudito il tecnico (+3 reputazione).'); }
         else S.notes.push('Guasto risolto in ' + secs + ' s.');
       },
-      fail () { endFault(); S.micCh = S.wired; S.micOk = true; S.mute[S.wired] = false; $('#mute-' + S.wired).setAttribute('aria-pressed', 'false'); S.fad[S.wired] = Math.max(S.fad[S.wired], 0.55); S.repDelta -= 5; S.notes.push('Il guasto l\'ha trovato il bidello al posto tuo (−5 reputazione).'); hit(-10, 'Il bidello ha trovato il guasto prima di te. Figuraccia.'); } }),
+      fail () { endFault(); S.micCh = S.wired; S.micOk = true; S.mute[S.wired] = false; $('#mute-' + S.wired).setAttribute('aria-pressed', 'false'); S.fad[S.wired] = Math.max(S.fad[S.wired], 0.55); S.repDelta -= 5; S.notes.push(GERRY_FACE + 'Il guasto l\'ha trovato Gerry, il bidello, al posto tuo (−5 reputazione).'); S.gerryUntil = S.t + 5; hit(-10, 'Gerry, il bidello, ha trovato il guasto prima di te. Figuraccia.'); } }),
     sigla: () => ({ win: 5, dur: 8, target: 'preside', icon: '🎺', text: 'Vuole la sua sigla musicale', hint: 'alza il PC, poi riabbassalo', tab: 'mixer',
       start () { S.jingle = true; }, end () { S.jingle = false; }, hold: 0.5,
       ok: () => chOut(PC) >= 0.55, fail: () => hit(-6, 'Niente sigla: il preside è offeso.') }),
@@ -629,6 +668,26 @@
     });
   }
 
+  /* ---------- Gerry, il bidello: sale sul palco, sistema e se ne va ---------- */
+  const GERRY_FACE = '<span class="gerry-face"><svg viewBox="6 0 88 88" width="22" height="22"><use href="#gerry"/></svg></span>';
+  let gerryBub = null;
+  function renderGerry () {
+    const on = S.t < (S.gerryUntil || 0);
+    $('#bidello').setAttribute('display', on ? 'inline' : 'none');
+    if (on && !gerryBub) {
+      gerryBub = document.createElement('div'); gerryBub.className = 'bub gerry';
+      gerryBub.innerHTML = '<div><b>Tranquilli, ci penso io!</b></div>';
+      layer.appendChild(gerryBub);
+    }
+    if (!on && gerryBub) { gerryBub.remove(); gerryBub = null; }
+    if (!gerryBub) return;
+    const [px, py] = toStage(280, 72);
+    const W = layer.clientWidth, w = gerryBub.offsetWidth, h = gerryBub.offsetHeight;
+    const lx = Math.max(8, Math.min(W - w - 8, px - w / 2));
+    gerryBub.style.left = lx + 'px'; gerryBub.style.top = Math.max(4, py - h - 10) + 'px';
+    gerryBub.style.setProperty('--tail', Math.max(16, Math.min(w - 16, px - lx)) + 'px');
+  }
+
   /* ---------- fumetti ---------- */
   const TARGET_XY = { preside: () => [S.px + 28, 58], 'spk-l': () => [60, 62], 'spk-r': () => [340, 62], stand: () => [215, 150] };
   // fumetti in HTML sopra il palco, così il testo resta leggibile anche sul telefono
@@ -861,12 +920,13 @@
     });
     voice.say(speaking() && S.micOk ? o : 0);
     sfx.music(S.jingle ? chOut(PC) : chOut(PC) * 0.5);
-    drawStage(); renderBubbles(); paintHeader();
+    drawStage(); renderBubbles(); renderGerry(); paintHeader();
     if (S.t >= DURATION) finish();
   }
 
   function finish () {
     S.running = false; voice.silence(); sfx.music(0); sfx.ring(0); sfx.applause(S.grad);
+    S.gerryUntil = 0; renderGerry();
     store.set('tramp-runs', store.get('tramp-runs', 0) + 1);
     let beers = 0; const notes = [];
     if (!S.larsens && !S.pops) { beers++; notes.push('🍺 Nessun larsen e nessun colpo nelle casse.'); }
