@@ -95,7 +95,7 @@
   <header>
     <div class="title" id="h-title">La posa dei cavi<small id="h-sub"></small></div>
     <div class="stats">
-      <div class="stat" id="st-lines">Cavi<b id="v-lines">0/0</b></div>
+      <div class="stat" id="st-lines">Sistemati<b id="v-lines">0/0</b></div>
       <div class="stat" id="st-tape">Nastro<b id="v-tape">0/0 m</b></div>
       <div class="stat">Passacavi<b id="v-ramps">0/0</b></div>
       <button class="icon-btn" id="btn-help" title="Regole">?</button>
@@ -123,8 +123,8 @@
     <h1><small>Prima dell'apertura porte</small>La posa dei cavi</h1>
     <p>Il montaggio è fatto e funziona, ma i cavi sono ancora come li hai tirati: dritti da presa a presa, dove capita. Prima di far entrare il pubblico passa Gerry, il bidello, a controllare. Sta a te decidere quali sistemare.</p>
     <ul>
-      <li>Tocca un cavo (sulla pianta o nella lista), poi <b>trascina il dito</b> da un capo all'altro per rifargli la strada. Torna indietro per cancellare. Il cavo ha la sua lunghezza: se finisce, cerca una strada più corta. <b>Com'era</b> lo rimette come al montaggio.</li>
-      <li><b>Via di fuga</b> (rossa): non ci passa niente, mai.</li>
+      <li><b>Prendi un cavo in un punto e tiralo</b>: si piega lì, come una corda, e compare un pallino. Trascina i pallini per spostare le pieghe; vicino a un muro, al bordo del palco o a un'altra piega il cavo ci si allinea da solo. Il cavo ha la sua lunghezza: quando è tirato non va oltre. <b>Com'era</b> lo rimette come al montaggio.</li>
+      <li><b>Via di fuga</b> (rossa): lì per terra non ci passa niente, mai.</li>
       <li><b>Passaggi</b> (a strisce): si attraversano dritti, dentro un <b>passacavi</b>. Mai lungo il passaggio.</li>
       <li><b>In scena</b> solo il cavo del microfono. Gli altri stanno lungo i bordi del palco.</li>
       <li>Sul palco, nel Pit e in platea i cavi vanno <b>fermati col nastro</b>. Lungo i muri no. Più cavi insieme nello stesso fascio usano un nastro solo.</li>
@@ -254,10 +254,11 @@ const SCENARIOS = {
    --------------------------------------------------------------------- */
 const S = {
   scen: null, key: 'festa',
-  paths: {},          // id cavo -> [[i, j], ...] celle tra i due pezzi
+  pts: {},            // id cavo -> la corda: [capo, maniglie..., capo] in celle
+  paths: {},          // id cavo -> [[i, j], ...] celle toccate (ricavate da pts)
   ramps: new Set(),   // 'idPassaggio:j' — un passacavi copre il passaggio in larghezza su quella riga
   sel: null, rampMode: false,
-  drag: null,         // { line, fromDev, toDev, path, moved }
+  grab: null,         // { id, k (maniglia) o seg (tratto), x, y, moved }
   flagged: {},        // id cavo -> celle segnate da Gerry (fino a quando il cavo non cambia)
   inspections: 0, done: false
 };
@@ -307,7 +308,7 @@ function analyze () {
   const use = new Map();   // cella -> [{ l, dir }]
   laid.forEach(l => {
     const p = S.paths[l.id], dirs = pathDirs(l, p);
-    const along = [], open = [], scene = [];
+    const along = [], open = [], scene = [], exit = [];
     p.forEach(([i, j], k) => {
       const kk = key(i, j);
       if (!use.has(kk)) use.set(kk, []);
@@ -319,7 +320,9 @@ function analyze () {
         else if (!S.ramps.has(ps.id + ':' + j)) open.push({ c: [i, j], ps });
       }
       if (!sceneOk(l) && isInterior(i, j)) scene.push([i, j]);
+      if (isExit(i, j)) exit.push([i, j]);
     });
+    if (exit.length) add('fuga', [l.id], exit, `<b>${l.name}</b> passa sulla via di fuga: lì per terra non ci deve essere niente, neanche col passacavi.`);
     if (open.length) add('passaggio', [l.id], open.map(o => o.c), `<b>${l.name}</b> attraversa il ${open[0].ps.label} senza passacavi: il primo che passa ci inciampa e lo strappa.`);
     if (along.length) add('lungo', [l.id], along.map(o => o.c), `<b>${l.name}</b> corre lungo il ${along[0].ps.label}. Nel passacavi i cavi entrano solo di traverso: attraversalo dritto e poi prosegui fuori.`);
     if (scene.length) add('scena', [l.id], scene, `<b>${l.name}</b> passa in mezzo alla scena: il preside ci inciampa. Sul palco solo il cavo del microfono, gli altri lungo i bordi.`);
@@ -387,55 +390,84 @@ function autoRoute () {
   }
   return out;
 }
-/* COM'È STATO TIRATO — al montaggio il cavo va dritto da presa a presa (e
-   gira intorno alla pedana, come lo disegna il gioco). Qui lo stesso
-   percorso cella per cella: segue la sua linea guida (in metri, dal gioco;
-   senza, dritto da centro a centro) e aggira solo i pezzi. Via di fuga,
-   passaggi e scena non li guarda: è proprio quello che c'è da sistemare. */
-function dropRoute (l) {
-  const a = dev(l.from).r, b = dev(l.to).r;
-  const mid = r => [(r[0] + r[2] / 2) * CELL_M, (r[1] + r[3] / 2) * CELL_M];
-  const guide = l.guide && l.guide.length > 1 ? l.guide.slice() : [mid(a), mid(b)];
-  guide[0] = mid(a); guide[guide.length - 1] = mid(b);
-  const segD = (p, q, r) => {
-    const dx = r[0] - q[0], dy = r[1] - q[1], L = dx * dx + dy * dy;
-    const t = L ? Math.max(0, Math.min(1, ((p[0] - q[0]) * dx + (p[1] - q[1]) * dy) / L)) : 0;
-    return Math.hypot(p[0] - q[0] - t * dx, p[1] - q[1] - t * dy);
-  };
-  const off = (i, j) => { const p = [(i + .5) * CELL_M, (j + .5) * CELL_M]; let d = Infinity; for (let k = 1; k < guide.length; k++) d = Math.min(d, segD(p, guide[k - 1], guide[k])); return d; };
-  const free = (i, j) => i >= 0 && i < COLS && j >= J0 && j < ROWS && !devAt(i, j);
-  const dist = new Map(), prev = new Map(), q = [];
-  for (let i = 0; i < COLS; i++) for (let j = J0; j < ROWS; j++) if (touches(a, i, j) && free(i, j)) { const d = 1 + 4 * off(i, j); dist.set(key(i, j), d); q.push([d, i, j]); }
-  let end = null;
-  while (q.length) {
-    let m = 0;
-    for (let k = 1; k < q.length; k++) if (q[k][0] < q[m][0]) m = k;
-    const [d, i, j] = q.splice(m, 1)[0];
-    if (d > dist.get(key(i, j))) continue;
-    if (touches(b, i, j)) { end = [i, j]; break; }
-    for (const [di, dj] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) {
-      const ni = i + di, nj = j + dj;
-      if (!free(ni, nj)) continue;
-      const nd = d + 1 + 4 * off(ni, nj);
-      if (nd < (dist.get(key(ni, nj)) ?? Infinity)) { dist.set(key(ni, nj), nd); prev.set(key(ni, nj), [i, j]); q.push([nd, ni, nj]); }
-    }
+/* LA CORDA — un cavo è una corda con dei punti fermi: i due capi stanno
+   nelle celle accanto ai loro pezzi, in mezzo ci sono le maniglie. Tra due
+   punti il cavo va dritto. Le celle che tocca (regole di Gerry e nastro)
+   si ricavano dalla corda: S.paths. */
+// celle da a a b (comprese), senza salti in diagonale
+function raster (a, b) {
+  const out = [a.slice()];
+  let i = a[0], j = a[1], ti = 0, tj = 0;
+  const di = Math.sign(b[0] - i), dj = Math.sign(b[1] - j), ni = Math.abs(b[0] - i), nj = Math.abs(b[1] - j);
+  while (ti < ni || tj < nj) {
+    const stepI = tj >= nj || (ti < ni && (ti + .5) / ni < (tj + .5) / nj);
+    if (stepI) { i += di; ti++; } else { j += dj; tj++; }
+    out.push([i, j]);
   }
-  if (!end) return null;
-  const cells = [end];
-  while (prev.has(key(...cells[0]))) cells.unshift(prev.get(key(...cells[0])));
-  return cells;
+  return out;
 }
-// i percorsi del montaggio di uno scenario (una volta sola): il cavo steso
+function cellsOf (pts) {
+  const out = [];
+  for (let k = 1; k < pts.length; k++) raster(pts[k - 1], pts[k]).forEach((c, n) => { if (k === 1 || n > 0) out.push(c); });
+  if (pts.length === 1) out.push(pts[0].slice());
+  return out;
+}
+// lunghezza della corda: i tratti dritti tra i punti, più mezzo metro per salire sui due pezzi
+const ropeLen = pts => pts.slice(1).reduce((t, p, k) => t + Math.hypot(p[0] - pts[k][0], p[1] - pts[k][1]), 0) * CELL_M + CELL_M;
+const lineLen = id => ropeLen(S.pts[id]);
+// cella libera accanto al pezzo, la più vicina a un punto
+function anchorToward (r, p) {
+  let best = null, bd = Infinity;
+  for (let i = r[0] - 1; i <= r[0] + r[2]; i++) for (let j = r[1] - 1; j <= r[1] + r[3]; j++) {
+    if (!touches(r, i, j) || i < 0 || i >= COLS || j < J0 || j >= ROWS || devAt(i, j)) continue;
+    const d = Math.hypot(i - p[0], j - p[1]);
+    if (d < bd) { bd = d; best = [i, j]; }
+  }
+  return best;
+}
+const devMid = id => { const r = dev(id).r; return [r[0] + (r[2] - 1) / 2, r[1] + (r[3] - 1) / 2]; };
+// i capi seguono la maniglia più vicina (o l'altro pezzo, senza maniglie)
+function fixAnchors (l, pts) {
+  const n = pts.length;
+  pts[0] = anchorToward(dev(l.from).r, n > 2 ? pts[1] : devMid(l.to)) || pts[0];
+  pts[n - 1] = anchorToward(dev(l.to).r, n > 2 ? pts[n - 2] : pts[0]) || pts[n - 1];
+  return pts;
+}
+// via le maniglie inutili: sopra un'altra o in riga con le vicine
+function tidy (pts) {
+  for (let k = pts.length - 2; k >= 1; k--) {
+    const a = pts[k - 1], b = pts[k], c = pts[k + 1];
+    const same = (b[0] === a[0] && b[1] === a[1]) || (b[0] === c[0] && b[1] === c[1]);
+    const cross = (b[0] - a[0]) * (c[1] - a[1]) - (b[1] - a[1]) * (c[0] - a[0]);
+    const between = (b[0] - a[0]) * (c[0] - b[0]) + (b[1] - a[1]) * (c[1] - b[1]) >= 0;
+    if (same || (cross === 0 && between)) pts.splice(k, 1);
+  }
+  return pts;
+}
+function setPts (id, pts) { S.pts[id] = pts; S.paths[id] = cellsOf(pts); }
+
+/* COM'È STATO TIRATO — al montaggio il cavo va dritto da presa a presa (e
+   gira intorno alla pedana, come lo disegna il gioco): le sue curve
+   diventano le maniglie. Via di fuga, passaggi e scena non li guarda: è
+   proprio quello che c'è da sistemare. */
+function dropPts (l) {
+  const inner = (l.guide || []).slice(1, -1).map(([x, y]) => [Math.round(x / CELL_M - .5), Math.round(y / CELL_M - .5)])
+    .map(([i, j]) => [Math.min(COLS - 1, Math.max(0, i)), Math.min(ROWS - 1, Math.max(J0, j))])
+    .filter(([i, j]) => !devAt(i, j));
+  const pts = fixAnchors(l, [[0, 0], ...inner, [0, 0]]);
+  return pts[0] && pts[pts.length - 1] ? tidy(pts) : null;
+}
+// le corde del montaggio di uno scenario (una volta sola): il cavo steso
 // è almeno lungo così, quindi la lunghezza sale se serve
 function dropAll (scen) {
   if (scen.drop) return scen.drop;
   const keep = S.scen; S.scen = scen;
   scen.drop = {};
   scen.lines.forEach(l => {
-    const p = dropRoute(l);
+    const p = dropPts(l);
     if (!p) return;
     scen.drop[l.id] = p;
-    if (l.len < pathLen(p)) l.len = Math.ceil(pathLen(p) / 5) * 5;
+    if (l.len < ropeLen(p)) l.len = Math.ceil(ropeLen(p) / 5) * 5;
   });
   S.scen = keep;
   return scen.drop;
@@ -461,7 +493,7 @@ function buildScenario (layout) {
   S.scen = scen;
   setGym();
   const sol = autoRoute();
-  scen.lines = scen.lines.filter(l => sol[l.id] && dropRoute(l));   // pezzi chiusi da altri pezzi: quel cavo resta sospeso
+  scen.lines = scen.lines.filter(l => sol[l.id] && dropPts(l));   // pezzi chiusi da altri pezzi: quel cavo resta sospeso
   scen.lines.forEach(l => {
     const need = pathLen(sol[l.id]) + 1;
     if (l.len < need) l.len = Math.ceil(need / 5) * 5;
@@ -488,65 +520,55 @@ function toast (msg, cls) {
   t.textContent = msg; t.className = 'show ' + (cls || '');
   clearTimeout(toastT); toastT = setTimeout(() => { t.className = ''; }, 2200);
 }
-// prova ad aggiungere la cella n al cavo in posa; torna false (con il motivo) se non si può
-function stepTo (d, n) {
-  const p = d.path, [i, j] = n;
-  const last = p.length ? p[p.length - 1] : null;
-  if (last && last[0] === i && last[1] === j) return true;
-  const back = p.findIndex(c => c[0] === i && c[1] === j);
-  if (back >= 0) { p.length = back + 1; return true; }   // tornando indietro si riavvolge
-  if (i < 0 || i >= COLS || j < J0 || j >= ROWS) return 'fuori';
-  if (isExit(i, j)) return 'Via di fuga: qui non passa niente, neanche col passacavi.';
-  const on = devAt(i, j);
-  if (on) return on === d.toDev || on === d.fromDev ? 'pezzo' : 'C\'è ' + dev(on).label + ': giraci intorno.';
-  const adj = last ? Math.abs(last[0] - i) + Math.abs(last[1] - j) === 1 : touches(dev(d.fromDev).r, i, j);
-  if (!adj) return 'salto';
-  if (pathLen(p) + CELL_M > d.line.len) return `Cavo finito: ${d.line.name} è lungo ${d.line.len} m. Cerca una strada più corta.`;
-  p.push([i, j]);
-  return true;
+/* sposta la maniglia k verso la cella c, un passo alla volta: si ferma
+   contro un pezzo o quando la corda è tesa (cavo finito). Vicino alle
+   maniglie accanto si mette in riga con loro (tratti dritti), vicino a un
+   muro o al bordo del palco ci si appoggia. Torna il motivo se si è fermata. */
+const SNAP_I = [0, 4, 11, 19], SNAP_J = [J0, 8, 15, 19, ROWS - 1];
+function snap (c, a, b) {
+  let [i, j] = c;
+  const near = (v, list) => { let best = null; list.forEach(x => { if (Math.abs(v - x) <= 1 && (best === null || Math.abs(v - x) < Math.abs(v - best))) best = x; }); return best; };
+  const si = near(i, [a[0], b[0]]) ?? near(i, SNAP_I), sj = near(j, [a[1], b[1]]) ?? near(j, SNAP_J);
+  const out = [si ?? i, sj ?? j];
+  return devAt(...out) ? c : out;
 }
-// dal punto in cui è arrivato il cavo verso la cella c, un asse alla volta
-function extendToward (d, c) {
-  for (let guard = 0; guard < 60; guard++) {
-    const last = d.path.length ? d.path[d.path.length - 1] : null;
-    let n;
-    if (!last) {
-      // primo passo: la cella accanto al pezzo di partenza più vicina al dito
-      const r = dev(d.fromDev).r;
-      if (touches(r, c[0], c[1])) n = c;
-      else {
-        const ci = Math.min(Math.max(c[0], r[0]), r[0] + r[2] - 1), cj = Math.min(Math.max(c[1], r[1]), r[1] + r[3] - 1);
-        const di = Math.sign(c[0] - ci), dj = Math.sign(c[1] - cj);
-        if (!di && !dj) return true;
-        n = Math.abs(c[0] - ci) >= Math.abs(c[1] - cj) ? [ci + di, cj] : [ci, cj + dj];
-      }
-    } else {
-      if (last[0] === c[0] && last[1] === c[1]) return true;
-      const di = c[0] - last[0], dj = c[1] - last[1];
-      // se la cella è già nel cavo si torna indietro fin lì
-      if (d.path.some(p => p[0] === c[0] && p[1] === c[1])) return stepTo(d, c);
-      n = Math.abs(di) >= Math.abs(dj) ? [last[0] + Math.sign(di), last[1]] : [last[0], last[1] + Math.sign(dj)];
-    }
-    const r = stepTo(d, n);
-    if (r !== true) return r;
+function moveHandle (id, k, c) {
+  const l = lineById(id);
+  let why = null;
+  const target = [Math.min(COLS - 1, Math.max(0, c[0])), Math.min(ROWS - 1, Math.max(J0, c[1]))];
+  const steps = raster(S.pts[id][k], target).slice(1);
+  for (const st of steps) {
+    if (devAt(...st)) { why = 'C\'è ' + dev(devAt(...st)).label + ': giraci intorno.'; break; }
+    const pts = S.pts[id].map(p => p.slice());
+    pts[k] = st;
+    fixAnchors(l, pts);   // prima i capi seguono il dito, poi la piega si mette in riga con loro
+    pts[k] = snap(st, pts[k - 1], pts[k + 1]);
+    fixAnchors(l, pts);
+    if (ropeLen(pts) > l.len + 1e-9) { why = `Cavo tirato: ${l.name} è lungo ${l.len} m.`; break; }
+    setPts(id, pts);
   }
-  return true;
+  return why;
 }
-const reaches = d => d.path.length > 0 && touches(dev(d.toDev).r, ...d.path[d.path.length - 1]);
-function commit (line, path, fromDev) {
-  const p = fromDev === line.from ? path.slice() : path.slice().reverse();
-  S.paths[line.id] = p;
-  delete S.flagged[line.id];
-  if (S.gerryIssues) S.gerryIssues = S.gerryIssues.filter(x => !x.ids.includes(line.id));
+// il cavo è cambiato: Gerry dovrà ricontrollarlo
+function changed (id) {
+  delete S.flagged[id];
+  if (S.gerryIssues) S.gerryIssues = S.gerryIssues.filter(x => !x.ids.includes(id));
   render();
 }
-// per i test: posa un cavo cella per cella, con le stesse regole del dito
+// per i test (e per il risolutore): stende un cavo lungo queste celle
 function layPath (id, cells) {
-  const line = lineById(id);
-  const d = { line, fromDev: line.from, toDev: line.to, path: [] };
-  for (const c of cells) { const r = stepTo(d, c); if (r !== true) return r; }
-  if (!reaches(d)) return 'non arriva a ' + dev(line.to).label;
-  commit(line, d.path, line.from);
+  const l = lineById(id);
+  if (!cells || !cells.length) return 'nessuna cella';
+  for (let k = 0; k < cells.length; k++) {
+    if (devAt(...cells[k])) return 'passa sopra ' + dev(devAt(...cells[k])).label;
+    if (k && Math.abs(cells[k][0] - cells[k - 1][0]) + Math.abs(cells[k][1] - cells[k - 1][1]) !== 1) return 'salto';
+  }
+  if (!touches(dev(l.from).r, ...cells[0])) return 'non parte da ' + dev(l.from).label;
+  if (!touches(dev(l.to).r, ...cells[cells.length - 1])) return 'non arriva a ' + dev(l.to).label;
+  const pts = tidy(cells.map(c => c.slice()));
+  if (ropeLen(pts) > l.len + 1e-9) return `Cavo finito: ${l.name} è lungo ${l.len} m.`;
+  setPts(id, pts);
+  changed(id);
   return true;
 }
 function toggleRamp (i, j) {
@@ -691,60 +713,55 @@ function drawLabel (id) {
   ctx.fillStyle = '#141519'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle'; ctx.fillText(d.label, lx, ly + 1);
 }
 
-// punti del cavo: dal bordo del pezzo di partenza, per i centri delle celle, al bordo dell'arrivo
-function cablePoints (l, p, fromDev, toDev) {
+// punti della corda sullo schermo: dal bordo del pezzo, per i suoi punti, al bordo dell'altro
+function ropePoints (l, pts) {
   const edge = (r, c) => {
     const [x, y] = center(c[0], c[1]);
     return [Math.min(Math.max(x, cx(r[0]) + 2), cx(r[0] + r[2]) - 2), Math.min(Math.max(y, cy(r[1]) + 2), cy(r[1] + r[3]) - 2)];
   };
-  const pts = p.map(c => center(c[0], c[1]));
-  if (p.length) { pts.unshift(edge(dev(fromDev).r, p[0])); pts.push(edge(dev(toDev).r, p[p.length - 1])); }
-  return pts;
+  return [edge(dev(l.from).r, pts[0]), ...pts.map(c => center(c[0], c[1])), edge(dev(l.to).r, pts[pts.length - 1])];
 }
-function strokeCable (pts, color, w, off) {
+function strokeCable (pts, color, w, off, alpha) {
   if (pts.length < 2) return;
+  ctx.globalAlpha = alpha == null ? 1 : alpha;
   ctx.lineJoin = 'round'; ctx.lineCap = 'round';
   ctx.beginPath(); pts.forEach(([x, y], k) => (k ? ctx.lineTo : ctx.moveTo).call(ctx, x + off, y + off));
   ctx.strokeStyle = '#0c0d10'; ctx.lineWidth = w + 2.5; ctx.stroke();
   ctx.strokeStyle = color; ctx.lineWidth = w; ctx.stroke();
+  ctx.globalAlpha = 1;
 }
+const laneOff = idx => ((idx % 5) - 2) * Math.max(1.2, cs * .07);
 function drawCables () {
-  const w = Math.max(2, cs * .16);
-  const tape = tapeCells();
-  S.scen.lines.forEach((l, idx) => {
-    const p = S.paths[l.id];
-    if (!p || (S.drag && S.drag.line === l)) return;
-    const off = ((idx % 5) - 2) * Math.max(1.2, cs * .07);
-    strokeCable(cablePoints(l, p, l.from, l.to), KINDS[l.kind].color, w * (KINDS[l.kind].width || 1), off);
-    if (l.kind === 'dmx') strokeCable(cablePoints(l, p, l.from, l.to), '#ff8a2a', w * .35, off);   // la PowerCON accanto
+  const w = Math.max(2.5, cs * .18);
+  const sel = S.sel;
+  // con un cavo in mano gli altri si spengono: si vede solo quello
+  const order = S.scen.lines.map((l, idx) => ({ l, idx })).sort((a, b) => (a.l.id === sel) - (b.l.id === sel));
+  order.forEach(({ l, idx }) => {
+    const pts = S.pts[l.id]; if (!pts) return;
+    const on = l.id === sel, a = sel && !on ? .28 : 1;
+    const rp = ropePoints(l, pts);
+    strokeCable(rp, KINDS[l.kind].color, w * (KINDS[l.kind].width || 1) * (on ? 1.35 : 1), on ? 0 : laneOff(idx), a);
+    if (l.kind === 'dmx') strokeCable(rp, '#ff8a2a', w * .35, on ? 0 : laneOff(idx), a);   // la PowerCON accanto
   });
-  // pezzi di nastro gaffer sui fasci
-  ctx.fillStyle = 'rgba(40,41,46,.92)';
-  tape.forEach(kk => {
-    const [i, j] = kk.split(',').map(Number);
-    const vert = Object.keys(S.paths).some(id => { const p = S.paths[id], k = p.findIndex(c => c[0] === i && c[1] === j); return k >= 0 && pathDirs(lineById(id), p)[k] === 'v'; });
-    const [x, y] = center(i, j);
-    vert ? ctx.fillRect(x - cs * .42, y - cs * .09, cs * .84, cs * .18) : ctx.fillRect(x - cs * .09, y - cs * .42, cs * .18, cs * .84);
-  });
-  // cavo in posa
-  if (S.drag && S.drag.path) {
-    const d = S.drag;
-    const ok = reaches(d);
-    const pts = cablePoints(d.line, d.path, d.fromDev, ok ? d.toDev : d.fromDev);
-    if (!ok && d.path.length) pts.pop();
-    strokeCable(pts, KINDS[d.line.kind].color, w * 1.3, 0);
-    // metri rimasti accanto al dito
-    const last = d.path[d.path.length - 1];
-    if (last) {
-      const left = d.line.len - pathLen(d.path);
-      const [x, y] = center(last[0], last[1]);
-      const txt = fmt(Math.max(0, left)) + ' m';
-      ctx.font = `700 14px 'Barlow Condensed', sans-serif`;
-      const tw = ctx.measureText(txt).width + 10;
-      const bx = Math.min(Math.max(x + cs, cx(0)), cx(COLS) - tw), by = Math.max(y - cs * 1.4, cy(J0) + 2);
-      ctx.fillStyle = left < 1 ? '#e0503f' : '#141519'; ctx.fillRect(bx, by, tw, 18);
-      ctx.fillStyle = '#fff'; ctx.textAlign = 'left'; ctx.textBaseline = 'middle'; ctx.fillText(txt, bx + 5, by + 10);
-    }
+  // maniglie del cavo in mano, e i metri che restano
+  if (sel && S.pts[sel]) {
+    const l = lineById(sel), pts = S.pts[sel];
+    const R = Math.max(9, cs * .5);
+    pts.slice(1, -1).forEach(([i, j], n) => {
+      const [x, y] = center(i, j), hot = S.grab && S.grab.id === sel && S.grab.k === n + 1;
+      ctx.beginPath(); ctx.arc(x, y, hot ? R * 1.25 : R, 0, 7);
+      ctx.fillStyle = hot ? '#f2a541' : '#eee9df'; ctx.fill();
+      ctx.lineWidth = 3; ctx.strokeStyle = '#141519'; ctx.stroke();
+    });
+    const left = l.len - lineLen(sel);
+    const at = S.grab && S.grab.id === sel && S.grab.k ? pts[S.grab.k] : pts[Math.floor(pts.length / 2)];
+    const [x, y] = center(at[0], at[1]);
+    const txt = fmt(Math.max(0, left)) + ' m liberi';
+    ctx.font = `700 15px 'Barlow Condensed', sans-serif`;
+    const tw = ctx.measureText(txt).width + 12;
+    const bx = Math.min(Math.max(x - tw / 2, cx(0)), cx(COLS) - tw), by = Math.max(y - R - 26, cy(J0) + 2);
+    ctx.fillStyle = left < 1 ? '#e0503f' : '#141519'; ctx.fillRect(bx, by, tw, 20);
+    ctx.fillStyle = '#fff'; ctx.textAlign = 'left'; ctx.textBaseline = 'middle'; ctx.fillText(txt, bx + 6, by + 11);
   }
 }
 function drawRamps () {
@@ -767,7 +784,7 @@ function frame () {
   ctx.clearRect(0, 0, W, H);
   drawFloor();
   drawRamps();
-  const sel = S.drag ? S.drag.line : S.sel ? lineById(S.sel) : null;
+  const sel = S.sel ? lineById(S.sel) : null;
   Object.keys(S.scen.devices).forEach(id => drawDevice(id, sel && (sel.from === id || sel.to === id)));
   drawCables();
   Object.keys(S.scen.devices).forEach(drawLabel);
@@ -782,89 +799,112 @@ function frame () {
 /* ---------------------------------------------------------------------
    DITO / MOUSE
    --------------------------------------------------------------------- */
-function pointerCell (e) { const b = cv.getBoundingClientRect(); return toCell(e.clientX - b.left, e.clientY - b.top); }
+/* Si prende il cavo in un punto qualsiasi e si tira: lì nasce una maniglia
+   e il cavo si piega. Le maniglie del cavo in mano si trascinano. Un tocco
+   su un cavo lo prende in mano (dove ce n'è più d'uno, il tocco dopo passa
+   al successivo); un tocco sul pavimento lo lascia. */
+function pointerXY (e) { const b = cv.getBoundingClientRect(); return [e.clientX - b.left, e.clientY - b.top]; }
+function segDist (x, y, a, b) {
+  const dx = b[0] - a[0], dy = b[1] - a[1], L = dx * dx + dy * dy;
+  const t = L ? Math.max(0, Math.min(1, ((x - a[0]) * dx + (y - a[1]) * dy) / L)) : 0;
+  return Math.hypot(x - a[0] - t * dx, y - a[1] - t * dy);
+}
+// i cavi vicini al punto, dal più vicino; seg = tratto della corda (0 = dal pezzo al primo punto)
+function cablesAt (x, y) {
+  const reach = Math.max(14, cs * .8), out = [];
+  S.scen.lines.forEach((l, idx) => {
+    const pts = S.pts[l.id]; if (!pts) return;
+    const rp = ropePoints(l, pts).map(([px, py]) => [px + laneOff(idx), py + laneOff(idx)]);
+    let best = Infinity, seg = 0;
+    for (let k = 1; k < rp.length; k++) { const d = segDist(x, y, rp[k - 1], rp[k]); if (d < best) { best = d; seg = k - 1; } }
+    if (best < reach) out.push({ id: l.id, d: best, seg });
+  });
+  return out.sort((a, b) => a.d - b.d);
+}
 cv.addEventListener('pointerdown', e => {
   if (S.done) return;
-  const c = pointerCell(e);
-  S.down = { c, x: e.clientX, y: e.clientY };
+  const [x, y] = pointerXY(e);
+  S.down = { x, y, sel: S.sel };
   if (S.rampMode) return;
-  const on = devAt(c[0], c[1]);
-  if (!on) return;
-  let line = S.sel && lineById(S.sel);
-  if (!line || (line.from !== on && line.to !== on)) {
-    const cand = S.scen.lines.filter(l => l.from === on || l.to === on);
-    const free = cand.filter(l => !S.paths[l.id]);
-    if (cand.length === 1) line = cand[0];
-    else if (free.length === 1) line = free[0];
-    else {
-      if (cand.length) {
-        toast(`Da ${dev(on).label} partono ${cand.length} cavi: scegli quale dalla lista qui sotto.`);
-        document.querySelectorAll('.chip').forEach(ch => { if (cand.some(l => l.id === ch.dataset.id)) { ch.classList.remove('flash'); void ch.offsetWidth; ch.classList.add('flash'); } });
-      }
-      return;
-    }
+  let g = null;
+  if (S.sel) {   // prima le maniglie del cavo in mano
+    const pts = S.pts[S.sel], R = Math.max(18, cs * .8);
+    for (let k = 1; k < pts.length - 1; k++) { const [hx, hy] = center(...pts[k]); if (Math.hypot(x - hx, y - hy) < R) g = { id: S.sel, k }; }
   }
-  S.sel = line.id;
-  S.drag = { line, fromDev: on, toDev: on === line.from ? line.to : line.from, path: [], lastMsg: '' };
+  if (!g) {
+    const hits = cablesAt(x, y);
+    const h = hits.find(v => v.id === S.sel) || hits[0];
+    if (h) g = { id: h.id, seg: h.seg };
+  }
+  if (!g) return;
+  S.grab = Object.assign(g, { x, y, moved: false, hits: cablesAt(x, y).map(v => v.id) });
   cv.setPointerCapture(e.pointerId);
-  render();
 });
 cv.addEventListener('pointermove', e => {
-  const d = S.drag; if (!d) return;
-  const c = pointerCell(e);
-  if (devAt(c[0], c[1]) === d.toDev || devAt(c[0], c[1]) === d.fromDev) return;
-  const r = extendToward(d, c);
-  if (typeof r === 'string' && r.length > 8 && r !== d.lastMsg) { toast(r, 'bad'); d.lastMsg = r; }
-  if (r === true) d.lastMsg = '';
+  const g = S.grab; if (!g) return;
+  const [x, y] = pointerXY(e);
+  if (!g.moved && Math.hypot(x - g.x, y - g.y) < 8) return;
+  if (!g.moved) {
+    g.moved = true;
+    S.sel = g.id;
+    if (!g.k) {   // presa a metà di un tratto: lì nasce una maniglia
+      const pts = S.pts[g.id];
+      if (pts.length >= 8) { toast('Troppe pieghe: sposta quelle che ci sono.', 'bad'); S.grab = null; render(); return; }
+      const c = toCell(g.x, g.y);
+      const at = devAt(...c) ? pts[Math.min(g.seg, pts.length - 1)] : c;
+      pts.splice(g.seg + 1 > pts.length - 1 ? pts.length - 1 : Math.max(1, g.seg + 1), 0, at.slice());
+      g.k = Math.max(1, Math.min(g.seg + 1, pts.length - 2));
+      setPts(g.id, fixAnchors(lineById(g.id), pts));
+    }
+    render();
+  }
+  const why = moveHandle(g.id, g.k, toCell(x, y));
+  if (why && why !== g.lastWhy) toast(why, 'bad');
+  g.lastWhy = why;
 });
 cv.addEventListener('pointerup', e => {
-  const c = pointerCell(e), dn = S.down; S.down = null;
-  const tap = dn && Math.hypot(e.clientX - dn.x, e.clientY - dn.y) < 8;
-  if (S.drag) {
-    const d = S.drag; S.drag = null;
-    if (reaches(d)) { commit(d.line, d.path, d.fromDev); toast(`${d.line.name}: ${fmt(pathLen(d.path))} m stesi, ne avanzano ${fmt(d.line.len - pathLen(d.path))}.`, 'ok'); }
-    else if (d.path.length) toast(`Il cavo deve arrivare fino a ${dev(d.toDev).label}.`, 'bad');
-    render();
+  const g = S.grab, dn = S.down; S.grab = null; S.down = null;
+  if (g && g.moved) {
+    const pts = tidy(S.pts[g.id]);
+    setPts(g.id, fixAnchors(lineById(g.id), pts));
+    changed(g.id);
     return;
   }
-  if (!tap || S.done) return;
-  if (S.rampMode) { toggleRamp(c[0], c[1]); return; }
-  // tocco su un cavo posato: lo seleziona
-  const hit = S.scen.lines.filter(l => (S.paths[l.id] || []).some(p => p[0] === c[0] && p[1] === c[1]));
-  if (hit.length) {
-    const k = hit.findIndex(l => l.id === S.sel);
-    S.sel = hit[(k + 1) % hit.length].id;
-    render();
-  }
+  if (S.done || !dn) return;
+  const [x, y] = pointerXY(e);
+  if (Math.hypot(x - dn.x, y - dn.y) >= 8) return;
+  if (S.rampMode) { toggleRamp(...toCell(x, y)); return; }
+  if (g) {   // tocco su un cavo: lo prende; ritoccando dove ce n'è più d'uno, passa al prossimo
+    const k = g.hits.indexOf(dn.sel);
+    S.sel = dn.sel && k >= 0 ? g.hits[(k + 1) % g.hits.length] : g.id;
+  } else S.sel = null;
+  render();
 });
-cv.addEventListener('pointercancel', () => { S.drag = null; S.down = null; render(); });
+cv.addEventListener('pointercancel', () => { S.grab = null; S.down = null; render(); });
 
 /* ---------------------------------------------------------------------
    BANCO, GERRY E FINE
    --------------------------------------------------------------------- */
 function render () {
   const lines = S.scen.lines;
-  const laid = lines.filter(l => S.paths[l.id]).length;
-  $('#v-lines').textContent = laid + '/' + lines.length;
+  $('#v-lines').textContent = lines.filter(l => isMoved(l.id)).length + '/' + lines.length;
   const t = tapeUsed();
   $('#v-tape').textContent = fmt(t) + '/' + S.scen.tape + ' m';
   $('#st-tape').classList.toggle('over', t > S.scen.tape);
   $('#v-ramps').textContent = S.ramps.size + '/' + S.scen.ramps;
   $('#lines').innerHTML = lines.map(l => {
-    const p = S.paths[l.id];
     const moved = isMoved(l.id);
-    const st = (moved ? '✓ ' : '') + fmt(pathLen(p)) + '/' + l.len + ' m';
+    const st = (moved ? '✓ ' : '') + fmt(lineLen(l.id)) + '/' + l.len + ' m';
     const cls = ['chip', moved ? 'done' : '', S.flagged[l.id] ? 'bad' : ''].join(' ');
     return `<button class="${cls}" data-id="${l.id}" aria-pressed="${S.sel === l.id}"><i style="background:${KINDS[l.kind].color}"></i>${l.name}<small>${st}</small></button>`;
   }).join('');
   const sel = S.sel && lineById(S.sel);
   let info;
   if (S.rampMode) info = `<b>Passacavi in mano.</b> Tocca una riga di un passaggio a strisce per posarlo (o toglierlo). Copre il passaggio da parte a parte e i cavi lo attraversano di traverso.`;
-  else if (!sel) info = 'I cavi sono come li hai tirati al montaggio. Tocca un cavo (sulla pianta o nella lista) per rifargli la strada, oppure chiama Gerry se ti sembrano a posto.';
+  else if (!sel) info = 'I cavi sono come li hai tirati al montaggio. <b>Prendi un cavo e tiralo</b>: si piega dove lo prendi. Oppure chiama Gerry se ti sembrano a posto.';
   else {
-    const p = S.paths[sel.id];
-    info = `<b>${lineLabel(sel)}</b> · ${KINDS[sel.kind].name}, ${sel.len} m, stesi ${fmt(pathLen(p))} (il resto arrotolato a otto accanto al pezzo). ` +
-      (isMoved(sel.id) ? 'Strada sistemata: trascina di nuovo per cambiarla.' : `È come l'hai tirato al montaggio: per cambiargli strada trascina il dito da ${dev(sel.from).label} a ${dev(sel.to).label} (o al contrario).`);
+    info = `<b>${lineLabel(sel)}</b> · ${fmt(lineLen(sel.id))} di ${sel.len} m. ` +
+      (isMoved(sel.id) ? 'Trascina i pallini per spostare le pieghe, o prendi il cavo in un altro punto per piegarlo lì.' : 'È come l\'hai tirato al montaggio: prendilo in un punto e tiralo per piegarlo, magari lungo un muro o il bordo del palco.');
     if (S.flagged[sel.id] && S.gerryIssues) { const is = S.gerryIssues.find(x => x.ids.includes(sel.id)); if (is) info += `<br><span style="color:#ff9b8f">Gerry: ${is.text.replace(/<[^>]+>/g, '')}</span>`; }
   }
   $('#info').innerHTML = info;
@@ -877,8 +917,8 @@ $('#lines').addEventListener('click', e => {
   S.sel = S.sel === b.dataset.id ? null : b.dataset.id; S.rampMode = false; render();
 });
 // «Com'era»: il cavo torna come era stato tirato al montaggio
-$('#t-redo').onclick = () => { const d = S.sel && S.scen.drop[S.sel]; if (d) commit(lineById(S.sel), d.map(c => c.slice()), lineById(S.sel).from); };
-function isMoved (id) { const a = S.paths[id], b = S.scen.drop && S.scen.drop[id]; return !!a && !!b && JSON.stringify(a) !== JSON.stringify(b); }
+$('#t-redo').onclick = () => { const d = S.sel && S.scen.drop[S.sel]; if (d) { setPts(S.sel, d.map(c => c.slice())); changed(S.sel); } };
+function isMoved (id) { const a = S.pts[id], b = S.scen.drop && S.scen.drop[id]; return !!a && !!b && JSON.stringify(a) !== JSON.stringify(b); }
 $('#t-ramp').onclick = () => { S.rampMode = !S.rampMode; render(); };
 $('#t-check').onclick = () => inspect();
 $('#btn-help').onclick = () => { $('#start').hidden = false; };
@@ -912,7 +952,7 @@ function showGerry (title, text, issues) {
 function finish () {
   S.done = true;
   const stars = S.inspections === 1 ? 3 : S.inspections === 2 ? 2 : 1;
-  const metres = Object.values(S.paths).reduce((s, p) => s + pathLen(p), 0);
+  const metres = Object.keys(S.pts).reduce((t, id) => t + lineLen(id), 0);
   const res = { type: 'posa-cavi', scenario: S.key, stars, inspections: S.inspections, cableM: metres, tapeM: tapeUsed(), ramps: S.ramps.size };
   S.result = res;
   const line = { 3: 'Perfetto al primo giro. Neanche io l\'avrei fatto meglio, e io i cavi li scavalco da trent\'anni!', 2: 'Adesso sì. Si può aprire!', 1: 'Finalmente. Apro le porte, ma la prossima volta pensaci prima.' }[stars];
@@ -938,9 +978,9 @@ function start (k) {
   setGym();
   // si parte dai cavi come sono stati tirati al montaggio
   const drop = dropAll(S.scen);
-  S.paths = {};
-  S.scen.lines.forEach(l => { if (drop[l.id]) S.paths[l.id] = drop[l.id].map(c => c.slice()); });
-  S.ramps = new Set(); S.sel = null; S.rampMode = false; S.drag = null;
+  S.pts = {}; S.paths = {};
+  S.scen.lines.forEach(l => { if (drop[l.id]) setPts(l.id, drop[l.id].map(c => c.slice())); });
+  S.ramps = new Set(); S.sel = null; S.rampMode = false; S.grab = null;
   S.flagged = {}; S.gerryIssues = null; S.inspections = 0; S.done = false; S.result = null;
   $('#h-title').firstChild.textContent = 'La posa dei cavi · ' + S.scen.title;
   $('#h-sub').textContent = S.scen.sub;

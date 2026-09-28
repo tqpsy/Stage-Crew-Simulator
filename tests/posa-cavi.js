@@ -3,7 +3,7 @@
    promuove una posa giusta e boccia ogni errore col suo motivo (passaggio
    senza passacavi, cavo lungo il passaggio, cavo in scena, ronzio, nastro
    finito); la via di fuga e la lunghezza del cavo fermano il dito; il
-   trascinamento col mouse cambia davvero strada al cavo. All'inizio i cavi
+   cavo preso a metà col mouse si piega davvero. All'inizio i cavi
    sono già stesi come tirati al montaggio e «Com'era» li rimette così.
 
    Uso:  node tests/posa-cavi.js
@@ -56,19 +56,23 @@ const path = require('path');
   const bad = await p.evaluate(() => {
     const r = {};
     start('festa');
-    // via di fuga e pezzi fermano il dito
-    const d = { line: lineById('c'), fromDev: 'quadro', toDev: 'subsx', path: [] };
-    r.exit = stepTo({ line: lineById('c'), fromDev: 'quadro', toDev: 'subsx', path: [[1, 21]] }, [1, 22]);
-    r.device = stepTo({ line: lineById('c'), fromDev: 'quadro', toDev: 'subsx', path: [[2, 11]] }, [3, 11]) && stepTo({ line: lineById('c'), fromDev: 'quadro', toDev: 'subsx', path: [[3, 11]] }, [3, 12]);
-    r.jump = stepTo(d, [5, 10]);
-    // il cavo finisce: dal Quadro verso il muro e poi giù lungo il muro
-    const long = { line: lineById('c'), fromDev: 'quadro', toDev: 'subsx', path: [] };
-    const walk = [];
-    for (let i = 8; i >= 1; i--) walk.push([i, 6]);
-    for (let j = 7; j < 22; j++) walk.push([1, j]);
-    let last = true;
-    for (const c of walk) { last = stepTo(long, c); if (last !== true) break; }
-    r.len = last; r.lenCells = long.path.length;
+    // la corda: una piega che va contro un pezzo si ferma, la corda tesa
+    // non si allunga, vicino all'altra piega o al capo ci si mette in riga
+    const l = lineById('c');
+    setPts('c', fixAnchors(l, [[0, 0], [5, 6], [0, 0]]));
+    r.device = moveHandle('c', 1, [3, 12]);
+    r.devicePts = S.pts.c.map(p => p.join(',')).join(' ');
+    setPts('c', fixAnchors(l, [[0, 0], [5, 6], [0, 0]]));
+    r.len = moveHandle('c', 1, [19, 31]);
+    r.lenOk = lineLen('c') <= l.len;
+    setPts('c', fixAnchors(l, [[0, 0], [5, 6], [0, 0]]));
+    moveHandle('c', 1, [1, 10]);
+    r.snap = S.pts.c.map(p => p.slice());
+    // la via di fuga non ferma il cavo: la trova Gerry
+    start('sala');
+    setPts('c', fixAnchors(lineById('c'), [[0, 0], [1, 23], [0, 0]]));
+    r.exit = analyze().map(i => i.type + ':' + i.ids.join(','));
+    start('festa');
     // il cavo delle casse in mezzo alla scena
     layPath('e', [[13, 13], [12, 13], [11, 13], [10, 13], [9, 13], [9, 14], [9, 15], [8, 15], [7, 15], [6, 15], [5, 15], [4, 15], [3, 15]]);
     // microfono affiancato per 1 m alla corrente dei PAR (H: regia → taglio DX lungo la riga 12)
@@ -85,10 +89,10 @@ const path = require('path');
     r.issues3 = analyze().map(i => i.type);
     return r;
   });
-  check(/Via di fuga/.test(bad.exit), 'la via di fuga non ferma il cavo: ' + bad.exit);
-  check(/TAGLIO SX/.test(bad.device), 'un pezzo in mezzo non ferma il cavo: ' + bad.device);
-  check(bad.jump === 'salto', 'il primo passo può partire lontano dal pezzo: ' + bad.jump);
-  check(/Cavo finito/.test(bad.len) && bad.lenCells === 19, `il cavo da 10 m non si ferma a 19 celle: ${bad.len} (${bad.lenCells})`);
+  check(bad.exit.includes('fuga:c'), 'cavo sulla via di fuga non bocciato: ' + bad.exit);
+  check(/TAGLIO SX/.test(bad.device) && !/3,12/.test(bad.devicePts), 'una piega entra in un pezzo: ' + bad.device + ' ' + bad.devicePts);
+  check(/Cavo tirato/.test(bad.len) && bad.lenOk, 'la corda tesa si allunga oltre il cavo: ' + bad.len);
+  check(bad.snap[1][0] === bad.snap[2][0], 'la piega non si mette in riga col capo vicino: ' + JSON.stringify(bad.snap));
   check(bad.issues1.includes('scena:e'), 'Speakon in scena non bocciato: ' + bad.issues1);
   check(!bad.issues1.some(i => i.startsWith('scena:g')), 'il microfono in scena è bocciato: ' + bad.issues1);
   check(bad.h === true && bad.g === true, 'posa di prova rifiutata: ' + bad.h + ' / ' + bad.g);
@@ -115,7 +119,7 @@ const path = require('path');
     const out = {};
     for (const k of ['festa', 'sala']) {
       start(k);
-      const bad = S.scen.lines.filter(l => { const pp = S.paths[l.id]; return !pp || !touches(dev(l.from).r, ...pp[0]) || !touches(dev(l.to).r, ...pp[pp.length - 1]) || pathLen(pp) > l.len || isMoved(l.id); }).map(l => l.id);
+      const bad = S.scen.lines.filter(l => { const pp = S.paths[l.id]; return !pp || !touches(dev(l.from).r, ...pp[0]) || !touches(dev(l.to).r, ...pp[pp.length - 1]) || lineLen(l.id) > l.len || isMoved(l.id); }).map(l => l.id);
       out[k] = { bad, issues: analyze().map(i => i.type) };
     }
     start('festa');
@@ -134,20 +138,18 @@ const path = require('path');
   });
   check(drop.back.moved && drop.back.btn && drop.back.same, "«Com'era» non rimette il cavo del montaggio: " + JSON.stringify(drop.back));
 
-  // col mouse: il cavo H (regia → taglio DX) trascinato su un'altra strada
+  // col mouse: si prende il cavo del microfono a metà e si tira su di due
+  // metri: nasce una piega; un tocco sul pavimento lo lascia
   await p.evaluate(() => start('festa'));
-  const px = await p.evaluate(() => { const b = cv.getBoundingClientRect(); const c = (i, j) => [b.left + cx(i) + cs / 2, b.top + cy(j) + cs / 2]; return { a: c(14, 13), m: c(13, 13), z: c(12, 13), t: c(12, 14) }; });
-  await p.click('.chip[data-id="h"]');
+  await p.click('.chip[data-id="g"]');
+  const px = await p.evaluate(() => { const b = cv.getBoundingClientRect(); const c = (i, j) => [b.left + cx(i) + cs / 2, b.top + cy(j) + cs / 2]; const pts = S.pts.g; const m = pts[0]; return { a: c(m[0] + 2, m[1]), z: c(m[0] + 2, m[1] - 3) }; });
   await p.mouse.move(...px.a); await p.mouse.down();
-  await p.mouse.move(...px.m, { steps: 4 }); await p.mouse.move(...px.z, { steps: 4 }); await p.mouse.move(...px.t, { steps: 4 }); await p.mouse.up();
-  const drag = await p.evaluate(() => S.paths.h);
-  check(JSON.stringify(drag) === '[[13,13],[12,13]]', 'il trascinamento non cambia strada al cavo: ' + JSON.stringify(drag));
-  // da un pezzo con più cavi senza sceglierne uno non parte niente
-  await p.evaluate(() => { S.sel = null; render(); window.__before = JSON.stringify(S.paths); });
-  const q = await p.evaluate(() => { const b = cv.getBoundingClientRect(); return [b.left + cx(9) + cs / 2, b.top + cy(5) + cs / 2]; });
-  await p.mouse.move(...q); await p.mouse.down(); await p.mouse.move(q[0] + 30, q[1]); await p.mouse.up();
-  check(await p.evaluate(() => !S.drag && JSON.stringify(S.paths) === window.__before), 'dal Quadro parte un cavo senza averlo scelto');
-  check(/partono 4 cavi/.test(await p.textContent('#toast')), 'nessun avviso sui cavi del Quadro');
+  await p.mouse.move(...px.z, { steps: 8 }); await p.mouse.up();
+  const drag = await p.evaluate(() => ({ pts: S.pts.g, moved: isMoved('g'), sel: S.sel }));
+  check(drag.moved && drag.pts.length === 3 && drag.sel === 'g', 'tirando il cavo non nasce la piega: ' + JSON.stringify(drag));
+  const floor = await p.evaluate(() => { const b = cv.getBoundingClientRect(); return [b.left + cx(17) + cs / 2, b.top + cy(26) + cs / 2]; });
+  await p.mouse.click(...floor);
+  check(await p.evaluate(() => S.sel === null), 'un tocco sul pavimento non lascia il cavo');
 
   check(errs.length === 0, 'errori JS: ' + errs.join(' | '));
   await b.close();

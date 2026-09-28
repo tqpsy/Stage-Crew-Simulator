@@ -27,23 +27,29 @@ esempio **20:00 — Messa in sicurezza dei cavi**.
   (dritto da presa a presa, con il giro intorno alla pedana). Una linea
   dritta sullo schermo isometrico dall'alto è una diagonale: il cavo passa
   dove passa davvero, anche in scena, in un passaggio o sulla via di fuga.
-- Il giocatore **sceglie quali sistemare**: tocca un cavo (sulla pianta o
-  nella lista) e **trascina il dito** da un capo all'altro per rifargli la
-  strada; il cavo segue il dito cella per cella, tornando indietro si
-  riavvolge. **Com'era** lo rimette come al montaggio. Se gli sembra tutto
-  a posto può chiamare Gerry subito.
+- Il giocatore **sceglie quali sistemare** piegando i cavi come corde
+  (deciso dopo la prova sul telefono: disegnare il cavo cella per cella
+  col dito era confuso e difficile). Si prende un cavo in un punto
+  qualsiasi e lo si tira: lì nasce una **piega** (un pallino) e il cavo va
+  dritto da un punto all'altro. I pallini del cavo in mano si trascinano;
+  vicino a un'altra piega o al capo il cavo si mette in riga da solo
+  (tratti dritti), vicino a un muro o al bordo del palco ci si appoggia.
+  Una piega messa in riga con le vicine sparisce. Toccando un cavo lo si
+  prende in mano e gli altri si spengono; un tocco sul pavimento lo lascia.
+  **Com'era** lo rimette come al montaggio. Se sembra tutto a posto si può
+  chiamare Gerry subito.
 - Ogni cavo ha la **sua lunghezza** (quella del baule: XLR 10 m, Speakon
-  15 m, PowerCON 5 m, …). Accanto al dito si vedono i metri che restano;
-  finiti quelli il cavo non va avanti. Quello che avanza si arrotola a otto
-  accanto al pezzo.
+  15 m, PowerCON 5 m, …). Accanto alla piega si vedono i metri liberi;
+  quando la corda è tesa la piega non va oltre. Quello che avanza si
+  arrotola a otto accanto al pezzo.
 - Attrezzi: **passacavi** (pochi, si posano sui passaggi) e **nastro
   gaffer** (un rotolo di tot metri: il contatore in alto).
 - **Gli errori si vedono solo quando passa Gerry** (deciso). Mentre si
   posa non c'è nessun avviso: il capo tutor del montaggio qui non parla.
   Si vedono solo le cose che si toccano con mano: i metri di cavo che
   restano, il nastro rimasto sul rotolo, i passacavi ancora in mano; e il
-  dito si ferma davanti a un muro, a un pezzo o alla via di fuga (lì il
-  cavo non entra fisicamente). Dopo il giro di Gerry i punti sbagliati
+  la piega si ferma contro un pezzo. La via di fuga no: un cavo ci può
+  finire sopra, ed è Gerry a trovarlo. Dopo il giro di Gerry i punti sbagliati
   restano segnati in rosso finché non si rifà quel cavo.
 - Quando vuole si chiama Gerry. Al primo giro senza errori:
   ★★★; al secondo ★★; poi ★.
