@@ -211,6 +211,13 @@ Filo comune: la scuola, con i personaggi delle **materie** che prendono vita.
 Personaggi storici: nessun problema di diritti. Personaggi viventi: caricatura
 disegnata e nome parodia.
 
+**Preside Tramp** (fatto, rifatto sulle foto): simbolo SVG `#tramp` in
+`prototipi/spettacolo-preside.html`. Tratti: ciuffo biondo enorme col riporto
+sulla fronte, abbronzatura arancio con le occhiaie chiare, sopracciglia chiare
+aggrottate, occhi a fessura, bocca a cul di gallina, faccione squadrato con
+le guance cadenti; giacca blu larga e cravatta rossa lunghissima. Nessuna
+bandiera o simbolo nazionale. Ritratto con `viewBox="6 2 88 88"`.
+
 **Gerry, il bidello** (fatto): caricatura vettoriale nello stile del Preside
 Tramp (simbolo SVG `#gerry`, `viewBox 0 0 100 140`, colori piatti senza
 contorni). Tratti esagerati: testone a pera pelato con due fili in cima,
