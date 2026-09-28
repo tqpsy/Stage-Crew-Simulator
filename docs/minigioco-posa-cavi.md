@@ -109,14 +109,22 @@ nastro basti con margine (≤ 85% del rotolo) ma non sia infinito (≥ 45%).
 - Il salvataggio tiene `cavi` (stelle, giri, metri di cavo e di nastro);
   una partita nuova la azzera.
 
-**Da fare (proposta):**
-- Nell'isometrico, dopo la posa, i cavi seguono il percorso steso invece
-  dell'instradamento automatico (`computeRoutePoints`).
-- Un cavo lasciato in un passaggio senza passacavi può diventare un
-  imprevisto dello show (qualcuno inciampa e stacca il cavo: il guasto del
-  microfono ha già la causa "cavo uscito dal suo ingresso").
-- Il ronzio lasciato apposta si sente davvero durante il discorso del
-  preside (un fruscio a 50 Hz sul canale del microfono).
+- **Nell'isometrico** i cavi seguono le pieghe della posa: per ogni cavo
+  del montaggio il salvataggio tiene le pieghe (in metri) e dove stavano le
+  due basi (`cavi.routes`, `caviRoute`). Se una base si sposta, o il cavo
+  si stacca e si rifà, quel cavo torna al percorso automatico.
+- **Conseguenze nello show**: se alle 20:30 restano errori, il salvataggio
+  tiene quali (`cavi.left`) e `caviLeftovers()` li traduce in quello che
+  succederà: *passaggio* (anche lungo il passaggio o sulla via di fuga):
+  qualcuno inciampa nel cavo e lo strappa dal mixer, il guasto del preside
+  è l'ingresso; *ronzio*: 50 Hz nelle casse, più forte col fader del
+  microfono, e il pubblico cala; *scena*: il preside inciampa nel cavo in
+  mezzo al palco. La scaletta lo anticipa. Lo show non è ancora nel gioco:
+  il prototipo del preside ha la scelta «Cavi lasciati dalla posa» per
+  provarlo (`tests/preside-cavi.js`); quando il discorso entrerà nel gioco
+  leggerà `caviLeftovers()`.
+
+**Da fare:**
 - Passaggi e via di fuga anche al montaggio (posa guidata), così non si
   perdono sotto un pezzo.
 

@@ -86,8 +86,9 @@ cambiano da una fase all'altra.
   collaudo con i cavi come tirati al montaggio; si sistemano piegandoli
   come corde, a tempo fino alle 20:30. Gerry il bidello controlla via di
   fuga, passacavi nei passaggi, cavi in scena, nastro e ronzio. Le stelle
-  danno reputazione. Design in `docs/minigioco-posa-cavi.md`. Da fare: i cavi
-  stesi anche nell'isometrico, conseguenze nello show.
+  danno reputazione. Nell'isometrico i cavi seguono le pieghe; gli errori
+  lasciati alle 20:30 passano allo show (`caviLeftovers()`, già provati nel
+  prototipo del preside). Design in `docs/minigioco-posa-cavi.md`.
 
 ## Test automatici
 
@@ -101,7 +102,8 @@ cambiano da una fase all'altra.
 - `tests/scarico.js`: lo scarico dentro il gioco e le sue conseguenze sul
   montaggio. Senza rete servono `PHASER_PATH` e `MATTER_PATH`.
 - `tests/posa-cavi.js` (la pagina da sola) e `tests/posa-cavi-gioco.js` (la
-  posa dentro il gioco, con un montaggio vero).
+  posa dentro il gioco, con un montaggio vero); `tests/preside-cavi.js`: i
+  cavi lasciati dalla posa nel prototipo del preside.
 
 ## Partita, menù e highscore
 

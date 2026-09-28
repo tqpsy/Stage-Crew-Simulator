@@ -1023,7 +1023,11 @@ function finish (late) {
   S.done = true;
   const stars = late ? 0 : S.inspections === 1 ? 3 : S.inspections === 2 ? 2 : 1;
   const metres = Object.keys(S.pts).reduce((t, id) => t + lineLen(id), 0);
-  const res = { type: 'posa-cavi', scenario: S.key, stars, inspections: S.inspections, cableM: metres, tapeM: tapeUsed(), ramps: S.ramps.size, late: !!late, clock: clockText(S.clock) };
+  const res = { type: 'posa-cavi', scenario: S.key, stars, inspections: S.inspections, cableM: metres, tapeM: tapeUsed(), ramps: S.ramps.size, late: !!late, clock: clockText(S.clock),
+    // le corde (capi e pieghe, in celle da 50 cm) da un pezzo all'altro: il gioco le usa nell'isometrico
+    routes: Object.fromEntries(Object.entries(S.pts).map(([id, pts]) => [id, pts.map(c => c.slice())])),
+    // cosa è rimasto da sistemare alle 20:30: lo show se ne accorge
+    left: (late || []).map(i => ({ type: i.type, kinds: i.ids.map(id => lineById(id).kind) })) };
   S.result = res;
   const line = late ? `Sono le 20:30, la gente è fuori che aspetta: apro così. Ma guarda qui: ${late.length === 1 ? 'una cosa non va' : late.length + ' cose non vanno'}.<ol>${late.slice(0, 3).map(i => `<li>${i.text}</li>`).join('')}</ol>`
     : { 3: 'Perfetto al primo giro. Neanche io l\'avrei fatto meglio, e io i cavi li scavalco da trent\'anni!', 2: 'Adesso sì. Si può aprire!', 1: 'Finalmente. Apro le porte, ma la prossima volta pensaci prima.' }[stars];

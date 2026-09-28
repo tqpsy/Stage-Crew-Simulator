@@ -112,6 +112,20 @@ const path = require('path');
   const after = await ev(() => ({ cavi: Profile.data.cavi, rep: Profile.data.reputation.earned['L1:cavi'], open: caviOpen, row: (renderSchedule(), [...document.querySelectorAll('.sched-row')].find(r => /cavi/.test(r.textContent)).textContent) }));
   check(after.cavi && after.cavi.stars === 3 && after.rep === 5, 'risultato della posa non salvato: ' + JSON.stringify(after));
   check(/Fatto/.test(after.row) && /primo giro/.test(after.row), 'scaletta senza il riassunto della posa: ' + after.row);
+  // nell'isometrico i cavi seguono le pieghe della posa (capo, pieghe, capo)
+  const iso = () => ev(() => {
+    const bad = [];
+    let n = 0;
+    caviLines.forEach(l => (l.edges || []).forEach(id => {
+      const e = gameState.edges.find(x => x.id === id), r = Profile.data.cavi.routes[id];
+      if (!e || !r) { bad.push(id + ': senza percorso'); return; }
+      n++;
+      if (!e._pts || e._pts.length !== r.pts.length + 2) bad.push(id + ': ' + (e._pts && e._pts.length) + ' punti invece di ' + (r.pts.length + 2));
+    }));
+    return { n, bad };
+  });
+  const iso1 = await iso();
+  check(iso1.n > 10 && !iso1.bad.length, "nell'isometrico i cavi non seguono la posa: " + JSON.stringify(iso1));
   // una sola volta: un altro show o la scaletta non la riaprono
   await ev(() => { const s = window.__scene; s.caviAfterShow = true; s.afterShow(); openSchedule(false); });
   check(await p.textContent('#schedule-go') === 'Torna al palco', 'la scaletta propone di nuovo la posa');
@@ -122,6 +136,21 @@ const path = require('path');
   await p.reload();
   await p.waitForFunction(() => window.__scene, null, { timeout: 20000 });
   check(await ev(() => caviDone() && Profile.data.reputation.earned['L1:cavi'] === 5), 'la posa si perde ricaricando');
+  // le pieghe restano dopo la ricarica; spostando una base quel cavo torna automatico
+  await ev(() => continueGame());
+  await p.waitForFunction(() => !menuOpen && placedOfType('sub').length === 2);
+  const iso2 = await ev(() => {
+    const withRoute = gameState.edges.filter(e => caviRoute(e)).length;
+    const sub = placedOfType('sub')[0];
+    const cells = sub.cells;
+    sub.cells = cells.map(k => k.replace(/^(\d+)/, m => String(+m + 1)));
+    window.__scene.redrawEdges();
+    const moved = gameState.edges.filter(e => (e.a === sub.id || e.b === sub.id) && caviRoute(e)).length;
+    const others = gameState.edges.filter(e => e.a !== sub.id && e.b !== sub.id && caviRoute(e)).length;
+    sub.cells = cells; window.__scene.redrawEdges();
+    return { withRoute, moved, others };
+  });
+  check(iso2.withRoute > 10 && iso2.moved === 0 && iso2.others > 0, 'pieghe della posa perse o rimaste dopo aver spostato un pezzo: ' + JSON.stringify(iso2));
 
   // partita nuova: collaudo fatto, la posa si apre dalla scaletta e si salta
   await ev(() => startNewGame('Saltatore', serviceOffers([])[0]));
@@ -139,12 +168,14 @@ const path = require('path');
   // posa finita col tempo: niente stelle, niente reputazione, la scaletta lo dice
   const late = await ev(() => {
     Profile.data.cavi = null; caviOpen = true;
-    finishCavi({ type: 'posa-cavi', stars: 0, late: true, inspections: 1, cableM: 40, tapeM: 20 });
+    finishCavi({ type: 'posa-cavi', stars: 0, late: true, inspections: 1, cableM: 40, tapeM: 20,
+      left: [{ type: 'lungo', kinds: ['power'] }, { type: 'ronzio', kinds: ['mic'] }, { type: 'nastro', kinds: [] }] });
     renderSchedule();
-    return { cavi: Profile.data.cavi, rep: 'L1:cavi' in Profile.data.reputation.earned, toast: el('#toast').textContent,
+    return { cavi: Profile.data.cavi, rep: 'L1:cavi' in Profile.data.reputation.earned, toast: el('#toast').textContent, show: caviLeftovers(),
       row: [...document.querySelectorAll('.sched-row')].find(r => /cavi/.test(r.textContent)).textContent };
   });
   check(late.cavi && late.cavi.late && late.cavi.stars === 0 && !late.rep && /20:30/.test(late.toast) && /Finita col tempo/.test(late.row), 'posa finita col tempo gestita male: ' + JSON.stringify(late));
+  check(JSON.stringify(late.show) === '["passaggio","ronzio"]' && /Durante lo show/.test(late.row), 'errori rimasti non passati allo show: ' + JSON.stringify(late.show) + ' ' + late.row);
 
   check(errs.length === 0, 'errori JS: ' + errs.join(' | '));
   await b.close();

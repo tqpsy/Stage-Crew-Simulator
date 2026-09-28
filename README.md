@@ -38,5 +38,6 @@ node tests/partita-telefono.js 360 640
 ```
 
 Senza rete, indica le librerie locali con `PHASER_PATH` e `MATTER_PATH`.
-La posa dei cavi ha due test: `tests/posa-cavi.js` (la pagina da sola) e
-`tests/posa-cavi-gioco.js` (dentro il gioco).
+La posa dei cavi ha tre test: `tests/posa-cavi.js` (la pagina da sola),
+`tests/posa-cavi-gioco.js` (dentro il gioco) e `tests/preside-cavi.js` (le
+conseguenze nel prototipo del discorso del preside).
