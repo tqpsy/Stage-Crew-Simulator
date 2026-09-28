@@ -2557,8 +2557,15 @@ function posaLayout () {
     const add = (kind, es) => {
       if (!es.length) return;
       const names = [...new Set(es.map(e => nameOf(e.signal)))].join(' + ');
+      // la linea con cui il montaggio disegna il cavo (e._pts, sullo
+      // schermo), riportata in metri: la posa parte da lì
+      const pts = es[0]._pts, sgn = baseOf(P[es[0].a]).id === g.from ? 1 : -1;
+      const guide = pts && pts.map(pt => {
+        const rx = (pt.x - ORIGIN_X) / (TILE_W / 2), ry = (pt.y - ORIGIN_Y) / (TILE_H / 2);
+        return [(rx + ry) / 2, (ry - rx) / 2];
+      });
       lines.push({ id: 'l' + lines.length, from: g.from, to: g.to, kind, len: Math.min(...es.map(e => lenOf(e.signal))),
-        name: names + ' · ' + devices[g.to].label });
+        name: names + ' · ' + devices[g.to].label, guide: guide && (sgn > 0 ? guide : guide.reverse()) });
     };
     if (cls.power.length && cls.dmx.length) { add('dmx', cls.power.concat(cls.dmx)); cls.power = []; cls.dmx = []; }
     add('power', cls.power); add('data', cls.dmx); add('speaker', cls.speaker); add(mic ? 'mic' : 'signal', cls.sig);

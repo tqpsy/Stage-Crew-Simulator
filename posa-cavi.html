@@ -111,7 +111,7 @@
     <div id="lines"></div>
     <div id="info"></div>
     <div class="tools">
-      <button class="tool" id="t-redo" disabled>Rifai</button>
+      <button class="tool" id="t-redo" disabled>Com'era</button>
       <button class="tool" id="t-ramp" aria-pressed="false">Passacavi</button>
       <button class="tool go" id="t-check">CHIAMA GERRY</button>
     </div>
@@ -121,9 +121,9 @@
 <div class="overlay" id="start">
   <div class="card">
     <h1><small>Prima dell'apertura porte</small>La posa dei cavi</h1>
-    <p>Il montaggio è fatto e funziona. Adesso i cavi vanno stesi per terra come si deve: Gerry, il bidello, passa a controllare prima di far entrare il pubblico.</p>
+    <p>Il montaggio è fatto e funziona, ma i cavi sono ancora come li hai tirati: dritti da presa a presa, dove capita. Prima di far entrare il pubblico passa Gerry, il bidello, a controllare. Sta a te decidere quali sistemare.</p>
     <ul>
-      <li>Tocca un cavo nella lista, poi <b>trascina il dito</b> da un capo all'altro. Torna indietro per cancellare. Il cavo ha la sua lunghezza: se finisce, cerca una strada più corta.</li>
+      <li>Tocca un cavo (sulla pianta o nella lista), poi <b>trascina il dito</b> da un capo all'altro per rifargli la strada. Torna indietro per cancellare. Il cavo ha la sua lunghezza: se finisce, cerca una strada più corta. <b>Com'era</b> lo rimette come al montaggio.</li>
       <li><b>Via di fuga</b> (rossa): non ci passa niente, mai.</li>
       <li><b>Passaggi</b> (a strisce): si attraversano dritti, dentro un <b>passacavi</b>. Mai lungo il passaggio.</li>
       <li><b>In scena</b> solo il cavo del microfono. Gli altri stanno lungo i bordi del palco.</li>
@@ -132,7 +132,7 @@
     </ul>
     <div class="legend" id="legend"></div>
     <div class="scen" id="scen"></div>
-    <button class="primary" id="btn-start">Stendi i cavi</button>
+    <button class="primary" id="btn-start">Guarda i cavi</button>
   </div>
 </div>
 
@@ -387,6 +387,60 @@ function autoRoute () {
   }
   return out;
 }
+/* COM'È STATO TIRATO — al montaggio il cavo va dritto da presa a presa (e
+   gira intorno alla pedana, come lo disegna il gioco). Qui lo stesso
+   percorso cella per cella: segue la sua linea guida (in metri, dal gioco;
+   senza, dritto da centro a centro) e aggira solo i pezzi. Via di fuga,
+   passaggi e scena non li guarda: è proprio quello che c'è da sistemare. */
+function dropRoute (l) {
+  const a = dev(l.from).r, b = dev(l.to).r;
+  const mid = r => [(r[0] + r[2] / 2) * CELL_M, (r[1] + r[3] / 2) * CELL_M];
+  const guide = l.guide && l.guide.length > 1 ? l.guide.slice() : [mid(a), mid(b)];
+  guide[0] = mid(a); guide[guide.length - 1] = mid(b);
+  const segD = (p, q, r) => {
+    const dx = r[0] - q[0], dy = r[1] - q[1], L = dx * dx + dy * dy;
+    const t = L ? Math.max(0, Math.min(1, ((p[0] - q[0]) * dx + (p[1] - q[1]) * dy) / L)) : 0;
+    return Math.hypot(p[0] - q[0] - t * dx, p[1] - q[1] - t * dy);
+  };
+  const off = (i, j) => { const p = [(i + .5) * CELL_M, (j + .5) * CELL_M]; let d = Infinity; for (let k = 1; k < guide.length; k++) d = Math.min(d, segD(p, guide[k - 1], guide[k])); return d; };
+  const free = (i, j) => i >= 0 && i < COLS && j >= J0 && j < ROWS && !devAt(i, j);
+  const dist = new Map(), prev = new Map(), q = [];
+  for (let i = 0; i < COLS; i++) for (let j = J0; j < ROWS; j++) if (touches(a, i, j) && free(i, j)) { const d = 1 + 4 * off(i, j); dist.set(key(i, j), d); q.push([d, i, j]); }
+  let end = null;
+  while (q.length) {
+    let m = 0;
+    for (let k = 1; k < q.length; k++) if (q[k][0] < q[m][0]) m = k;
+    const [d, i, j] = q.splice(m, 1)[0];
+    if (d > dist.get(key(i, j))) continue;
+    if (touches(b, i, j)) { end = [i, j]; break; }
+    for (const [di, dj] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) {
+      const ni = i + di, nj = j + dj;
+      if (!free(ni, nj)) continue;
+      const nd = d + 1 + 4 * off(ni, nj);
+      if (nd < (dist.get(key(ni, nj)) ?? Infinity)) { dist.set(key(ni, nj), nd); prev.set(key(ni, nj), [i, j]); q.push([nd, ni, nj]); }
+    }
+  }
+  if (!end) return null;
+  const cells = [end];
+  while (prev.has(key(...cells[0]))) cells.unshift(prev.get(key(...cells[0])));
+  return cells;
+}
+// i percorsi del montaggio di uno scenario (una volta sola): il cavo steso
+// è almeno lungo così, quindi la lunghezza sale se serve
+function dropAll (scen) {
+  if (scen.drop) return scen.drop;
+  const keep = S.scen; S.scen = scen;
+  scen.drop = {};
+  scen.lines.forEach(l => {
+    const p = dropRoute(l);
+    if (!p) return;
+    scen.drop[l.id] = p;
+    if (l.len < pathLen(p)) l.len = Math.ceil(pathLen(p) / 5) * 5;
+  });
+  S.scen = keep;
+  return scen.drop;
+}
+
 // righe di passaggio attraversate da una posa (una per passacavi)
 function rampRows (paths) {
   const rows = new Set();
@@ -407,7 +461,7 @@ function buildScenario (layout) {
   S.scen = scen;
   setGym();
   const sol = autoRoute();
-  scen.lines = scen.lines.filter(l => sol[l.id]);   // pezzi chiusi da altri pezzi: quel cavo resta sospeso
+  scen.lines = scen.lines.filter(l => sol[l.id] && dropRoute(l));   // pezzi chiusi da altri pezzi: quel cavo resta sospeso
   scen.lines.forEach(l => {
     const need = pathLen(sol[l.id]) + 1;
     if (l.len < need) l.len = Math.ceil(need / 5) * 5;
@@ -798,23 +852,23 @@ function render () {
   $('#v-ramps').textContent = S.ramps.size + '/' + S.scen.ramps;
   $('#lines').innerHTML = lines.map(l => {
     const p = S.paths[l.id];
-    const st = p ? fmt(pathLen(p)) + '/' + l.len + ' m' : l.len + ' m';
-    const cls = ['chip', p ? 'done' : '', S.flagged[l.id] ? 'bad' : ''].join(' ');
+    const moved = isMoved(l.id);
+    const st = (moved ? '✓ ' : '') + fmt(pathLen(p)) + '/' + l.len + ' m';
+    const cls = ['chip', moved ? 'done' : '', S.flagged[l.id] ? 'bad' : ''].join(' ');
     return `<button class="${cls}" data-id="${l.id}" aria-pressed="${S.sel === l.id}"><i style="background:${KINDS[l.kind].color}"></i>${l.name}<small>${st}</small></button>`;
   }).join('');
   const sel = S.sel && lineById(S.sel);
   let info;
   if (S.rampMode) info = `<b>Passacavi in mano.</b> Tocca una riga di un passaggio a strisce per posarlo (o toglierlo). Copre il passaggio da parte a parte e i cavi lo attraversano di traverso.`;
-  else if (!sel) info = 'Tocca un cavo nella lista (o un pezzo), poi trascina il dito da un capo all\'altro.';
+  else if (!sel) info = 'I cavi sono come li hai tirati al montaggio. Tocca un cavo (sulla pianta o nella lista) per rifargli la strada, oppure chiama Gerry se ti sembrano a posto.';
   else {
     const p = S.paths[sel.id];
-    info = `<b>${lineLabel(sel)}</b> · ${KINDS[sel.kind].name}, ${sel.len} m. ` +
-      (p ? `Steso: ${fmt(pathLen(p))} m, ne avanzano ${fmt(sel.len - pathLen(p))} (arrotolati a otto accanto al pezzo). Trascina di nuovo per rifarlo.`
-         : `Trascina da ${dev(sel.from).label} a ${dev(sel.to).label} (o al contrario).`);
+    info = `<b>${lineLabel(sel)}</b> · ${KINDS[sel.kind].name}, ${sel.len} m, stesi ${fmt(pathLen(p))} (il resto arrotolato a otto accanto al pezzo). ` +
+      (isMoved(sel.id) ? 'Strada sistemata: trascina di nuovo per cambiarla.' : `È come l'hai tirato al montaggio: per cambiargli strada trascina il dito da ${dev(sel.from).label} a ${dev(sel.to).label} (o al contrario).`);
     if (S.flagged[sel.id] && S.gerryIssues) { const is = S.gerryIssues.find(x => x.ids.includes(sel.id)); if (is) info += `<br><span style="color:#ff9b8f">Gerry: ${is.text.replace(/<[^>]+>/g, '')}</span>`; }
   }
   $('#info').innerHTML = info;
-  $('#t-redo').disabled = !(sel && S.paths[sel.id]);
+  $('#t-redo').disabled = !(sel && isMoved(sel.id));
   $('#t-ramp').setAttribute('aria-pressed', S.rampMode);
   $('#t-ramp').textContent = `Passacavi (${S.scen.ramps - S.ramps.size})`;
 }
@@ -822,7 +876,9 @@ $('#lines').addEventListener('click', e => {
   const b = e.target.closest('.chip'); if (!b) return;
   S.sel = S.sel === b.dataset.id ? null : b.dataset.id; S.rampMode = false; render();
 });
-$('#t-redo').onclick = () => { if (S.sel) { delete S.paths[S.sel]; delete S.flagged[S.sel]; render(); } };
+// «Com'era»: il cavo torna come era stato tirato al montaggio
+$('#t-redo').onclick = () => { const d = S.sel && S.scen.drop[S.sel]; if (d) commit(lineById(S.sel), d.map(c => c.slice()), lineById(S.sel).from); };
+function isMoved (id) { const a = S.paths[id], b = S.scen.drop && S.scen.drop[id]; return !!a && !!b && JSON.stringify(a) !== JSON.stringify(b); }
 $('#t-ramp').onclick = () => { S.rampMode = !S.rampMode; render(); };
 $('#t-check').onclick = () => inspect();
 $('#btn-help').onclick = () => { $('#start').hidden = false; };
@@ -836,11 +892,6 @@ const GERRY = `<svg width="64" height="64" viewBox="0 0 64 64" aria-hidden="true
 
 function inspect () {
   if (S.done) return;
-  const missing = S.scen.lines.filter(l => !S.paths[l.id]);
-  if (missing.length) {
-    showGerry('Non hai ancora finito', `Mancano ${missing.length} cavi: ${missing.map(l => l.name).join(', ')}. Io passo quando è tutto steso.`, []);
-    return;
-  }
   S.inspections++;
   const issues = analyze();
   S.gerryIssues = issues;
@@ -885,7 +936,11 @@ function finish () {
 function start (k) {
   S.key = k; S.scen = SCENARIOS[k];
   setGym();
-  S.paths = {}; S.ramps = new Set(); S.sel = null; S.rampMode = false; S.drag = null;
+  // si parte dai cavi come sono stati tirati al montaggio
+  const drop = dropAll(S.scen);
+  S.paths = {};
+  S.scen.lines.forEach(l => { if (drop[l.id]) S.paths[l.id] = drop[l.id].map(c => c.slice()); });
+  S.ramps = new Set(); S.sel = null; S.rampMode = false; S.drag = null;
   S.flagged = {}; S.gerryIssues = null; S.inspections = 0; S.done = false; S.result = null;
   $('#h-title').firstChild.textContent = 'La posa dei cavi · ' + S.scen.title;
   $('#h-sub').textContent = S.scen.sub;

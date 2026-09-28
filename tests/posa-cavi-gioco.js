@@ -88,6 +88,14 @@ const path = require('path');
   await frame.waitForFunction(() => S.key === 'gioco' && !document.querySelector('#btn-start').disabled, null, { timeout: 10000 });
   const inside = await frame.evaluate(() => ({ lines: S.scen.lines.length, tape: S.scen.tape, ramps: S.scen.ramps, lens: S.scen.lines.map(l => l.len) }));
   check(inside.lines === lay.lines.length, `la posa ha ${inside.lines} cavi, il montaggio ${lay.lines.length}`);
+  // si parte dai cavi come li disegna il montaggio: tutti stesi, lungo la loro linea
+  const start = await frame.evaluate(() => S.scen.lines.map(l => {
+    const pp = S.paths[l.id], g = l.guide;
+    const far = pp && g ? Math.max(...pp.map(([i, j]) => { const x = (i + .5) * CELL_M, y = (j + .5) * CELL_M; return Math.min(...g.map(q => Math.hypot(q[0] - x, q[1] - y)), ...g.slice(1).map((q, k) => { const a = g[k], dx = q[0] - a[0], dy = q[1] - a[1], L = dx * dx + dy * dy || 1, t = Math.max(0, Math.min(1, ((x - a[0]) * dx + (y - a[1]) * dy) / L)); return Math.hypot(a[0] + t * dx - x, a[1] + t * dy - y); })); })) : 99;
+    return { id: l.id, name: l.name, laid: !!pp, guide: !!g, far };
+  }));
+  const off = start.filter(x => !x.laid || !x.guide || x.far > 1.6);
+  check(!off.length, 'cavi della posa lontani da come li disegna il montaggio: ' + JSON.stringify(off));
   await frame.click('#btn-start');
   // la stessa posa valida che usa la pagina per tararsi: Gerry promuove al primo giro
   const res = await frame.evaluate(() => {

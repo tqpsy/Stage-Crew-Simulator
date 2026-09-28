@@ -3,7 +3,8 @@
    promuove una posa giusta e boccia ogni errore col suo motivo (passaggio
    senza passacavi, cavo lungo il passaggio, cavo in scena, ronzio, nastro
    finito); la via di fuga e la lunghezza del cavo fermano il dito; il
-   trascinamento col mouse stende davvero il cavo.
+   trascinamento col mouse cambia davvero strada al cavo. All'inizio i cavi
+   sono già stesi come tirati al montaggio e «Com'era» li rimette così.
 
    Uso:  node tests/posa-cavi.js
    Richiede Playwright. */
@@ -107,19 +108,45 @@ const path = require('path');
   check(gerry.first === 1 && gerry.flagged && gerry.open, 'Gerry non segnala gli errori: ' + JSON.stringify(gerry));
   await p.click('#btn-fix');
 
-  // col mouse: il cavo H (regia → taglio DX) trascinato davvero
+  // all'inizio i cavi sono come tirati al montaggio: tutti stesi, da un
+  // pezzo all'altro, lunghi quanto basta; Gerry ha da ridire; «Com'era»
+  // rimette il percorso del montaggio
+  const drop = await p.evaluate(() => {
+    const out = {};
+    for (const k of ['festa', 'sala']) {
+      start(k);
+      const bad = S.scen.lines.filter(l => { const pp = S.paths[l.id]; return !pp || !touches(dev(l.from).r, ...pp[0]) || !touches(dev(l.to).r, ...pp[pp.length - 1]) || pathLen(pp) > l.len || isMoved(l.id); }).map(l => l.id);
+      out[k] = { bad, issues: analyze().map(i => i.type) };
+    }
+    start('festa');
+    const before = JSON.stringify(S.paths.g);
+    layPath('g', [[9, 13], [9, 12], [10, 12], [11, 12], [12, 12], [13, 12]]);
+    const moved = isMoved('g');
+    S.sel = 'g'; render();
+    const btn = !document.querySelector('#t-redo').disabled;
+    document.querySelector('#t-redo').click();
+    out.back = { moved, btn, same: JSON.stringify(S.paths.g) === before && !isMoved('g') };
+    return out;
+  });
+  ['festa', 'sala'].forEach(k => {
+    check(!drop[k].bad.length, `${k}: cavi del montaggio non stesi bene all'inizio: ${drop[k].bad}`);
+    check(drop[k].issues.length > 0, `${k}: i cavi tirati al montaggio passano già il controllo di Gerry`);
+  });
+  check(drop.back.moved && drop.back.btn && drop.back.same, "«Com'era» non rimette il cavo del montaggio: " + JSON.stringify(drop.back));
+
+  // col mouse: il cavo H (regia → taglio DX) trascinato su un'altra strada
   await p.evaluate(() => start('festa'));
-  const px = await p.evaluate(() => { const b = cv.getBoundingClientRect(); const c = (i, j) => [b.left + cx(i) + cs / 2, b.top + cy(j) + cs / 2]; return { a: c(14, 14), m: c(13, 14), z: c(12, 14) }; });
+  const px = await p.evaluate(() => { const b = cv.getBoundingClientRect(); const c = (i, j) => [b.left + cx(i) + cs / 2, b.top + cy(j) + cs / 2]; return { a: c(14, 13), m: c(13, 13), z: c(12, 13), t: c(12, 14) }; });
   await p.click('.chip[data-id="h"]');
   await p.mouse.move(...px.a); await p.mouse.down();
-  await p.mouse.move(...px.m, { steps: 4 }); await p.mouse.move(...px.z, { steps: 4 }); await p.mouse.up();
+  await p.mouse.move(...px.m, { steps: 4 }); await p.mouse.move(...px.z, { steps: 4 }); await p.mouse.move(...px.t, { steps: 4 }); await p.mouse.up();
   const drag = await p.evaluate(() => S.paths.h);
-  check(JSON.stringify(drag) === '[[13,14]]', 'il trascinamento non stende il cavo: ' + JSON.stringify(drag));
+  check(JSON.stringify(drag) === '[[13,13],[12,13]]', 'il trascinamento non cambia strada al cavo: ' + JSON.stringify(drag));
   // da un pezzo con più cavi senza sceglierne uno non parte niente
-  await p.evaluate(() => { S.sel = null; render(); });
+  await p.evaluate(() => { S.sel = null; render(); window.__before = JSON.stringify(S.paths); });
   const q = await p.evaluate(() => { const b = cv.getBoundingClientRect(); return [b.left + cx(9) + cs / 2, b.top + cy(5) + cs / 2]; });
   await p.mouse.move(...q); await p.mouse.down(); await p.mouse.move(q[0] + 30, q[1]); await p.mouse.up();
-  check(await p.evaluate(() => !S.drag && Object.keys(S.paths).length === 1), 'dal Quadro parte un cavo senza averlo scelto');
+  check(await p.evaluate(() => !S.drag && JSON.stringify(S.paths) === window.__before), 'dal Quadro parte un cavo senza averlo scelto');
   check(/partono 4 cavi/.test(await p.textContent('#toast')), 'nessun avviso sui cavi del Quadro');
 
   check(errs.length === 0, 'errori JS: ' + errs.join(' | '));

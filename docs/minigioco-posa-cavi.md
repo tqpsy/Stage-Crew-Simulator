@@ -21,9 +21,17 @@ esempio **20:00 — Messa in sicurezza dei cavi**.
 - La pianta è la stessa palestra del livello 1 (`main.js`: 10 × 16 m, celle
   da 50 cm), vista dall'alto. I pezzi sono già posati dove li ha messi il
   giocatore al montaggio.
-- In basso c'è la lista dei cavi da stendere. Si tocca un cavo (o il pezzo
-  da cui parte) e si **trascina il dito** da un capo all'altro: il cavo
-  segue il dito cella per cella, tornando indietro si riavvolge.
+- **I cavi sono già stesi** (deciso): il cablaggio è fatto al montaggio,
+  quindi la vista dall'alto si apre con ogni cavo dove l'ha lasciato il
+  montaggio, cioè lungo la stessa linea con cui lo disegna l'isometrico
+  (dritto da presa a presa, con il giro intorno alla pedana). Una linea
+  dritta sullo schermo isometrico dall'alto è una diagonale: il cavo passa
+  dove passa davvero, anche in scena, in un passaggio o sulla via di fuga.
+- Il giocatore **sceglie quali sistemare**: tocca un cavo (sulla pianta o
+  nella lista) e **trascina il dito** da un capo all'altro per rifargli la
+  strada; il cavo segue il dito cella per cella, tornando indietro si
+  riavvolge. **Com'era** lo rimette come al montaggio. Se gli sembra tutto
+  a posto può chiamare Gerry subito.
 - Ogni cavo ha la **sua lunghezza** (quella del baule: XLR 10 m, Speakon
   15 m, PowerCON 5 m, …). Accanto al dito si vedono i metri che restano;
   finiti quelli il cavo non va avanti. Quello che avanza si arrotola a otto
@@ -37,7 +45,7 @@ esempio **20:00 — Messa in sicurezza dei cavi**.
   dito si ferma davanti a un muro, a un pezzo o alla via di fuga (lì il
   cavo non entra fisicamente). Dopo il giro di Gerry i punti sbagliati
   restano segnati in rosso finché non si rifà quel cavo.
-- Quando è tutto steso si chiama Gerry. Al primo giro senza errori:
+- Quando vuole si chiama Gerry. Al primo giro senza errori:
   ★★★; al secondo ★★; poi ★.
 
 ## Le regole (quelle vere di un service)
