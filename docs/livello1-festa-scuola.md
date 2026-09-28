@@ -232,7 +232,11 @@ Il cambio palco (staccare ciò che non serve e ripatchare) fa parte del gioco.
 - Codice: `cambioChecks`, `startCambioDj`, `finishCambioDj` e
   `runCambioTest` in `main.js`; stato in `Profile.data.cambioDj`. Test:
   `tests/cambio-dj.js`.
-- **Da fare**: lo spettacolo del DJ (vedi sotto), con i suoi guasti. La
+- **Lo show del DJ** (prototipo): le luci si suonano a tempo col brano come in
+  Guitar Hero, Musa parla quando nel brano c'è la voce, il pubblico salta ai
+  drop. Design in `docs/spettacolo-dj.md`, prototipo
+  `prototipi/spettacolo-dj.html`.
+- **Da fare**: portare lo spettacolo del DJ nel gioco, con i suoi guasti. La
   «ciabattina del DJ» piena di roba che fa scattare una fase appartiene lì
   (tra i guasti proposti); oggi la consolle consuma poco.
 

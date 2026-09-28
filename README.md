@@ -41,3 +41,4 @@ Senza rete, indica le librerie locali con `PHASER_PATH` e `MATTER_PATH`.
 La posa dei cavi ha tre test: `tests/posa-cavi.js` (la pagina da sola),
 `tests/posa-cavi-gioco.js` (dentro il gioco) e `tests/preside-cavi.js` (le
 conseguenze nel prototipo del discorso del preside).
+Lo show del DJ set (`prototipi/spettacolo-dj.html`) ha `tests/spettacolo-dj.js`.

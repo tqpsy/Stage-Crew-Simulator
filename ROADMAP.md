@@ -90,6 +90,14 @@ cambiano da una fase all'altra.
   lasciati alle 20:30 passano allo show (`caviLeftovers()`, già provati nel
   prototipo del preside). Design in `docs/minigioco-posa-cavi.md`.
 
+## Show del DJ set
+
+- **Luci a tempo stile Guitar Hero** (21:15 in scaletta): prototipo in
+  `prototipi/spettacolo-dj.html`, mappa del brano generata da
+  `strumenti/mappa-dj.py` (griglia, voce separata, sezioni). Da fare:
+  collegarlo al gioco dopo il cambio palco e farci arrivare i guasti del DJ.
+  Design in `docs/spettacolo-dj.md`.
+
 ## Test automatici
 
 - Per ogni nuovo livello: aggiornare `tests/collaudo-livello1.js` (o
