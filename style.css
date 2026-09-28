@@ -803,6 +803,28 @@
     font:inherit; font-size:12px; font-weight:700; color:#fff;
     background:linear-gradient(90deg,#e0439a,#7a3fd0); border:0;
   }
+  /* ---------- CAMBIO PALCO: la carta del personaggio che arriva ---------- */
+  #cambio-modal{ z-index:110; }
+  .modal-box.cambio-box{ width:min(520px, 94vw); }
+  .cambio-card{ display:flex; gap:14px; padding:12px 16px; align-items:flex-start; }
+  .cambio-poster{ width:96px; flex:none; border-radius:6px; box-shadow:0 4px 14px rgba(0,0,0,.45); }
+  .cambio-text{ font-size:13.5px; line-height:1.45; }
+  .cambio-text p{ margin:0 0 6px; }
+  .cambio-text .who{ color:#ff7fcb; font-weight:700; }
+  .cambio-list{ list-style:none; margin:0; padding:4px 16px 10px; display:flex; flex-direction:column; gap:5px; font-size:13px; }
+  .cambio-list li::before{ content:'○ '; color:var(--amber); }
+  /* pazienza del pubblico: sul foglio, anche chiuso */
+  .patience{ display:flex; align-items:center; gap:6px; font-size:11px; color:var(--text-muted); font-family:var(--font-ui); letter-spacing:0; }
+  .patience .bar{ flex:1; min-width:60px; height:6px; border-radius:3px; background:var(--hairline); overflow:hidden; }
+  .patience .fill{ height:100%; background:var(--green); transition:width .5s linear; }
+  .patience.mid .fill{ background:var(--amber); }
+  .patience.low .fill, .patience.over .fill{ background:var(--red); }
+  .patience.over{ color:var(--red); font-weight:700; }
+  #foglio .fg-patience{ padding:0 10px 6px; }
+  #foglio .fg-go{
+    display:block; width:100%; margin-top:6px; padding:6px 8px; border-radius:6px; cursor:pointer;
+    font:inherit; font-weight:700; color:#fff; background:linear-gradient(90deg,#e0439a,#7a3fd0); border:0;
+  }
   #poster-modal{ z-index:120; cursor:zoom-out; padding:12px; }
   #poster-modal img{ max-width:100%; max-height:100%; border-radius:10px; box-shadow:0 10px 40px rgba(0,0,0,.6); }
   .schedule-foot{

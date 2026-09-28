@@ -142,7 +142,7 @@ sono nelle prove dei giri).
 **Fatto: scaletta della serata.** A ogni nuova partita, prima del montaggio, si
 apre il foglio di lavoro (cliente, luogo, service, tecnico) con gli orari della
 serata: 16:00 scarico, 16:30 montaggio, 19:30 test impianto, 20:30 porte,
-21:00 preside, 21:15 DJ, 22:00 cantante, 23:00 smontaggio. Ogni voce ha il suo
+21:00 preside, 21:10 cambio palco, 21:15 DJ, 22:00 cantante, 23:00 smontaggio. Ogni voce ha il suo
 stato (fatto / adesso / da fare / in arrivo); si riapre dal tasto 📋 in testata.
 Le fasi di spettacolo, quando arriveranno nel gioco, si agganciano qui
 (`SCHEDULE` in `main.js`).
@@ -196,6 +196,45 @@ starci da sola, non tutte insieme:
 | Cantante | 2 (voce + chitarra via DI): **bisogna staccare il DJ** |
 
 Il cambio palco (staccare ciò che non serve e ripatchare) fa parte del gioco.
+
+## Cambio palco Preside → DJ (deciso, fatto)
+
+- **Dove si fa**: nella vista montaggio, con i pezzi, i cavi, le fasi del
+  Quadro e il magnetotermico di sempre. Niente minigioco a parte: il cambio
+  palco è rimettere mano all'impianto montato dal giocatore.
+- **Chi porta cosa**: la **consolle** (due lettori e mixer DJ su un banco in
+  flight case) la porta DJ Inestimabile; compare in una scheda **DJ** che si
+  apre solo col cambio. La **DI** è del service: è nella dotazione del
+  montaggio (scheda Regia), dove non serve, e va tenuta per il DJ.
+- **Quando**: dopo il discorso del preside (`preside.html`, anche saltato):
+  il cambio delle 21:10 diventa «Adesso». Parte dal foglio (tasto «Inizia il
+  cambio palco») o dalla scaletta. Prima, il foglio propone il discorso («Il
+  preside sale sul palco») e dice cosa manca al microfono.
+- **La carta del DJ** (si apre all'inizio): DJ Inestimabile e Musa
+  Esistenziale arrivano, la locandina, quanto aspetta il pubblico e il
+  canale del microfono. Poi la stessa lista la spunta il foglio:
+  1. consolle sul palco;
+  2. corrente alla consolle, accesa (spina Schuko: da una ciabatta o dal
+     Quadro con l'adattatore CEE / Schuko; consuma 250 W);
+  3. una DI (sul palco accanto alla consolle, in Off Stage o in FOH);
+  4. MASTER L e R della consolle nei due ingressi della DI (jack);
+  5. dalla DI due XLR in due ingressi MIC liberi del mixer;
+  6. il microfono resta collegato: ora è di Musa Esistenziale;
+  7. l'impianto del collaudo è ancora tutto a posto.
+- **Pazienza del pubblico**: 4 minuti di gioco, barra sul foglio (visibile
+  anche chiuso). Non scende con la carta o la scaletta aperte. Se finisce:
+  fischi, −5 reputazione (`REP.slowChange`), e il cambio si finisce lo stesso.
+- **PRONTI: TOCCA AL DJ** (il tasto in basso durante il cambio): come la
+  prova di un giro, indizio vago, al secondo tentativo il pezzo in rosso,
+  dal terzo il capo legge la voce della carta. Promosso: +3 reputazione se
+  la pazienza non è finita (`REP.changeDone`), −2 se il microfono è stato
+  spostato su un altro canale (`REP.wrongInput`), una volta sola.
+- Codice: `cambioChecks`, `startCambioDj`, `finishCambioDj` e
+  `runCambioTest` in `main.js`; stato in `Profile.data.cambioDj`. Test:
+  `tests/cambio-dj.js`.
+- **Da fare**: lo spettacolo del DJ (vedi sotto), con i suoi guasti. La
+  «ciabattina del DJ» piena di roba che fa scattare una fase appartiene lì
+  (tra i guasti proposti); oggi la consolle consuma poco.
 
 ## Personaggi (proposta)
 
@@ -261,7 +300,8 @@ camicia azzurra aperta. Per il ritratto si usa il ritaglio `viewBox="6 0 88 88"`
 
 - Fase 0 (montaggio): tempo libero, niente pressione. È anche il tutorial.
 - Cambi palco (fasi 1-3): barra di **pazienza del pubblico**. Se si svuota non
-  si perde, ma si perde reputazione e il pubblico fischia.
+  si perde, ma si perde reputazione e il pubblico fischia. Fatto per il
+  cambio Preside → DJ (vedi sopra).
 - La **stanchezza** sale con il tempo e con le azioni; la birra la abbassa.
 
 ## Guasti (proposta)
@@ -278,7 +318,7 @@ camicia azzurra aperta. Per il ritratto si usa il ritaglio `viewBox="6 0 88 88"`
 Si parte da **0** e si porta tra i livelli; non va sotto lo 0. Misura la
 professionalità, non la sfortuna.
 - **Sale** con: fase completata (+5), guasto gestito bene (+3), birra rifiutata
-  in una richiesta extra (+5).
+  in una richiesta extra (+5), cambio palco finito prima dei fischi (+3).
 - **Scende** se un guasto è gestito male: trovato dal bidello al posto tuo (−5),
   larsen (−5), microfono ricollegato a un ingresso diverso da quello cablato al
   montaggio (−2),
@@ -286,9 +326,9 @@ professionalità, non la sfortuna.
 - **Apparecchio rotto: 0**, non è colpa del giocatore.
 - Ogni fase e ogni richiesta extra contano una volta sola per service: rifarle
   non aggiunge altro.
-- Nel gioco oggi ci sono il collaudo dell'impianto (+5), la posa dei cavi
-  (stelle) e il discorso del preside (vedi *Il discorso nel gioco*). I numeri
-  sono in `REP` in `main.js`.
+- Nel gioco oggi ci sono il collaudo dell'impianto (+5), lo scarico, la posa
+  dei cavi, il discorso del preside (vedi *Il discorso nel gioco*) e il cambio
+  palco per il DJ. I numeri sono in `REP` in `main.js`.
 
 ## Animazione di errore (proposta)
 

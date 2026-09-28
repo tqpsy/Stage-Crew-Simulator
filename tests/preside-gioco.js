@@ -126,7 +126,8 @@ const path = require('path');
   check(/Fatto/.test(after.row) && /Pubblico al/.test(after.row) && /pubblico al/.test(after.toast), 'scaletta o avviso senza il discorso: ' + JSON.stringify(after));
   // una volta sola
   await ev(() => { openPreside(); openSchedule(false); });
-  check(!(await p.$('#preside-frame')) && await p.textContent('#schedule-go') === 'Torna al palco', 'il discorso si riapre dopo averlo fatto');
+  // dopo il discorso la scaletta porta al cambio palco per il DJ (tests/cambio-dj.js)
+  check(!(await p.$('#preside-frame')) && await p.textContent('#schedule-go') === 'Inizia il cambio palco', 'il discorso si riapre dopo averlo fatto, o non porta al cambio palco');
   await ev(() => closeSchedule());
   // resta dopo la ricarica
   await ev(() => Profile.flush());

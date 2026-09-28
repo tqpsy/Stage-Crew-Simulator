@@ -173,6 +173,9 @@ const CIABCEE_ISO = isoFrame(134, 16, 8); // ciabatta con spina CEE: 4 prese
 const PC_ISO    = isoFrame(26, 34, 22);   // laptop aperto
 const DI_ISO    = isoFrame(30, 26, 14);   // DI passiva doppia, scatolina d'acciaio
 const INTF_ISO  = isoFrame(46, 30, 12);   // scheda audio USB da tavolo
+// consolle del DJ: flight case a banco largo lungo b (fronte a=0 verso il
+// pubblico, il DJ sta dietro, sul lato +a), sopra due lettori e il mixer DJ
+const DJ_ISO    = isoFrame(46, 96, 30);
 
 // la testa sta sul sub: il fondo del suo palo tocca il centro del piano del sub
 function isoDepth (screenY) { return 10 + screenY / 10000; }
@@ -428,6 +431,20 @@ const COMPONENT_TYPES = {
       { id: 'out_2', signal: 'xlr',  dir: 'out', ...isoPort(DI_ISO, 22, 26, 7) }
     ]
   },
+  // consolle del DJ (la porta lui al cambio palco): due lettori e il mixer
+  // DJ su un banco in flight case. Spina Schuko già attaccata (la sua
+  // ciabattina), uscite MASTER L/R in jack verso una DI, che le porta al
+  // mixer di sala in XLR. Consuma poco: lettori, mixer e le lucine del banco.
+  dj: {
+    label: 'CONSOLLE DJ', category: 'dj', powerW: 250, zone: 'stage', shape: 'dj',
+    body: { w: 74, h: 80, fill: 0x17181c, accent: 0xff3fb4 },
+    ledPos: DJ_ISO(0, 88, 24),
+    ports: [
+      { id: 'power', signal: 'schuko', dir: 'in',  lead: true, ...isoPort(DJ_ISO, 36, 96, 8) },
+      { id: 'out_L', signal: 'jack',   dir: 'out', ...isoPort(DJ_ISO, 10, 96, 20) },
+      { id: 'out_R', signal: 'jack',   dir: 'out', ...isoPort(DJ_ISO, 20, 96, 20) }
+    ]
+  },
   // ciabatta con spina CEE 230V blu già attaccata (va in una presa del
   // Quadro) e 4 prese Schuko. Anche qui il cavo fa parte della ciabatta.
   ciabatta_cee: {
@@ -445,9 +462,10 @@ const COMPONENT_TYPES = {
   }
 };
 
-// la DI resta nel catalogo per gli strumenti sul palco dei livelli successivi,
-// ma nel livello 1 non serve: il PC entra nel mixer dalla scheda audio
-const AVAILABLE_STOCK = { sub: 2, top: 2, mixer: 1, asta: 1, mic: 1, stativo: 4, par: 4, controller: 1, ampli: 1, quadro: 1, ciabatta: 1, ciabatta_cee: 1, pc: 1, scheda: 1, di: 0, tavolo: 1 };
+// la DI non serve al montaggio (il PC entra nel mixer dalla scheda audio):
+// la usa il DJ al cambio palco. La consolle DJ non è del service, la porta
+// il DJ: si vede nella scheda DJ solo da quando parte il cambio palco.
+const AVAILABLE_STOCK = { sub: 2, top: 2, mixer: 1, asta: 1, mic: 1, stativo: 4, par: 4, controller: 1, ampli: 1, quadro: 1, ciabatta: 1, ciabatta_cee: 1, pc: 1, scheda: 1, di: 1, tavolo: 1, dj: 1 };
 
 const POWER_LIMIT_KW = 3.0;
 const TOP_ATTACH_RADIUS = 300; // px: quanto lontano può essere trascinata una Testa da un Sub libero
@@ -1044,7 +1062,7 @@ const LONG_PRESS_MS = 450;
 
 // dispositivi con l'interruttore di accensione sul pannello (i PAR si
 // accendono appena arriva corrente, Testa e DI non si alimentano)
-const SWITCHABLE = new Set(['sub', 'mixer', 'ampli', 'controller', 'pc', 'ciabatta', 'ciabatta_cee']);
+const SWITCHABLE = new Set(['sub', 'mixer', 'ampli', 'controller', 'pc', 'ciabatta', 'ciabatta_cee', 'dj']);
 // corrente di spunto: all'accensione finali e sub chiedono per un attimo un
 // multiplo del loro consumo (si caricano i condensatori dell'alimentatore)
 const INRUSH_FACTOR = { ampli: 5, sub: 4 };
@@ -1602,7 +1620,7 @@ const SERVICE_NAME_MAX = 28;   // caratteri del nome (inventato) di un service
 const USED_SERVICES_KEEP = 400; // nomi di service già proposti, da non riproporre
 
 function defaultProfile () {
-  return { v: SAVE_VERSION, player: '', service: '', serviceInfo: null, usedServices: [], settings: { volume: 0.8, reducedFx: false, skipShow: false, skipScarico: false, testMusic: true, bossTips: true, tapeMarks: true, traceSignal: true }, tutorSeen: {}, logo: null, level: null, scarico: null, cavi: null, preside: null, beers: 0, records: {}, reputation: { total: 0, earned: {}, log: [] } };
+  return { v: SAVE_VERSION, player: '', service: '', serviceInfo: null, usedServices: [], settings: { volume: 0.8, reducedFx: false, skipShow: false, skipScarico: false, testMusic: true, bossTips: true, tapeMarks: true, traceSignal: true }, tutorSeen: {}, logo: null, level: null, scarico: null, cavi: null, preside: null, cambioDj: null, beers: 0, records: {}, reputation: { total: 0, earned: {}, log: [] } };
 }
 const Profile = (() => {
   let data = defaultProfile();
@@ -2161,7 +2179,8 @@ function saveLevel () {
     nextIndex: gameState.nextIndex, edgeSeq: gameState.edgeSeq,
     trips: gameState.trips || 0, rcdTrips: gameState.rcdTrips || 0,
     procErrors: gameState.procErrors || [], stats: gameState.stats,
-    giro: gameState.giro, giroFails: gameState.giroFails
+    giro: gameState.giro, giroFails: gameState.giroFails,
+    stockV: 2   // 2: la DI è nella dotazione (prima era a 0)
   };
   Profile.save();
 }
@@ -2184,6 +2203,7 @@ const REP = {
   feedback: -5,        // larsen
   wrongInput: -2,      // microfono lasciato su un altro ingresso
   slowChange: -5,      // pazienza del pubblico finita per un cambio palco lento
+  changeDone: 3,       // cambio palco finito prima che il pubblico perda la pazienza
   deviceBroken: 0,     // apparecchio rotto: non è colpa del giocatore
   scaricoClean: 3,     // scarico senza nessun danno
   scaricoBroken: -2,   // ogni pezzo rotto allo scarico (lì è colpa della crew)
@@ -2228,7 +2248,7 @@ function addRecord () {
 
 // tempo di gioco: conta solo con la pagina in vista e il menù chiuso
 setInterval(() => {
-  if (gameActive && !menuOpen && !document.hidden) gameState.stats.playMs += 1000;
+  if (gameActive && !menuOpen && !document.hidden) { gameState.stats.playMs += 1000; cambioTick(1000); }
 }, 1000);
 
 function applySettings () {
@@ -2336,6 +2356,7 @@ function startNewGame (player, offer, offers) {
   Profile.data.scarico = null;
   Profile.data.cavi = null;
   Profile.data.preside = null;
+  Profile.data.cambioDj = null;
   Profile.data.beers = 0;
   Profile.data.tutorSeen = {};   // il nuovo tecnico non ha ancora sentito i consigli del capo
   whenScene(scene => {
@@ -2370,6 +2391,7 @@ const SCHEDULE = [
   { time: '20:00', title: 'Messa in sicurezza dei cavi', text: 'I cavi stesi per terra come si deve: via di fuga libera, passacavi nei passaggi, nastro dove si cammina. Gerry, il bidello, controlla prima di aprire.', phase: 'cavi' },
   { time: '20:30', title: 'Apertura porte', text: 'Entrano famiglie e studenti; musica di sottofondo dal PC.', phase: 'porte' },
   { time: '21:00', title: 'Discorso del Preside Tramp', text: 'Microfono su asta sul palco, cablato a un ingresso MIC del mixer: ricordati quale. Vuole essere sentito fino al parcheggio.', phase: 'preside' },
+  { time: '21:10', title: 'Cambio palco: arriva il DJ', text: 'DJ Inestimabile porta la sua consolle: corrente, uscite nella DI e dalla DI al mixer. Il microfono resta dov\'è, per Musa Esistenziale. Il pubblico aspetta: non metterci troppo.', phase: 'cambio-dj', rep: REP.changeDone },
   { time: '21:15', title: 'Notte fuori controllo', text: 'DJ Inestimabile in consolle e Musa Esistenziale al microfono: mixer DJ → DI → mixer di sala, il microfono del vocalist, luci colorate al drop. E tanti guasti da inseguire.', poster: 'img/locandina-dj.svg' },
   { time: '22:00', title: 'Dante unplugged', text: 'Voce e chitarra (via DI). Gli ingressi non bastano: cambio palco e via il DJ.' },
   { time: '23:00', title: 'Smontaggio', text: 'Tutto nei case e i case nel furgone. Si torna a casa.' }
@@ -2382,6 +2404,7 @@ function schedulePhaseState (phase) {
   if (phase === 'cavi') return caviDone() ? 'done' : collaudoDone() ? 'now' : 'next';
   if (phase === 'porte') return caviDone() ? 'done' : 'next';
   if (phase === 'preside') return presideDone() ? 'done' : caviDone() ? 'now' : 'next';
+  if (phase === 'cambio-dj') return cambioDjDone() ? 'done' : presideDone() ? 'now' : 'next';
   return collaudoDone() ? 'done' : 'next';
 }
 const SCHEDULE_STATE_LABEL = { done: 'Fatto', now: 'Adesso', next: 'Da fare', soon: 'In arrivo' };
@@ -2404,6 +2427,7 @@ function renderSchedule () {
       + '<small>' + escapeHtml(s.phase === 'scarico' && scaricoDone() ? scaricoSummary()
         : s.phase === 'cavi' && caviDone() ? caviSummary()
         : s.phase === 'preside' && presideDone() ? presideSummary()
+        : s.phase === 'cambio-dj' && cambioDjDone() ? cambioSummary()
         : s.phase === 'montaggio' ? s.text.replace('i PAR', parsRequired() + ' PAR') : s.text) + '</small>'
       + (s.poster ? '<button class="sched-poster" type="button" data-poster="' + s.poster + '">🎟️ Guarda la locandina</button>' : '')
       + '</span>'
@@ -2411,15 +2435,17 @@ function renderSchedule () {
   }).join('');
 }
 // first: aperta dalla nuova partita; chiudendola si parte col montaggio.
-// scheduleNext: la fase che il tasto della scaletta apre (posa o discorso)
+// scheduleNext: la fase che il tasto della scaletta apre (posa, discorso o cambio palco)
 let scheduleOpen = false, scheduleFirst = false, scheduleNext = null;
 function openSchedule (first) {
   scheduleOpen = true;
   scheduleFirst = !!first;
   renderSchedule();
   // dopo il collaudo la scaletta porta alla posa dei cavi, poi al discorso
-  scheduleNext = first ? null : ['cavi', 'preside'].find(k => schedulePhaseState(k) === 'now') || null;
-  el('#schedule-go').textContent = first ? 'Al lavoro!' : scheduleNext === 'cavi' ? 'Stendi i cavi' : scheduleNext === 'preside' ? 'Il preside sale sul palco' : 'Torna al palco';
+  // del preside, poi al cambio palco per il DJ
+  scheduleNext = first ? null : schedulePhaseState('cavi') === 'now' ? 'cavi' : schedulePhaseState('preside') === 'now' ? 'preside'
+    : schedulePhaseState('cambio-dj') === 'now' && !cambioDj() ? 'cambio-dj' : null;
+  el('#schedule-go').textContent = first ? 'Al lavoro!' : { cavi: 'Stendi i cavi', preside: 'Il preside sale sul palco', 'cambio-dj': 'Inizia il cambio palco' }[scheduleNext] || 'Torna al palco';
   el('#schedule-modal').classList.add('show');
   setSceneInput(false);
 }
@@ -2428,7 +2454,7 @@ function closeSchedule () {
   scheduleOpen = false;
   el('#schedule-modal').classList.remove('show');
   if (scheduleFirst) { if (scaricoDone()) showToast(montaggioMessage(), 'ok'); else openScarico(); }
-  setTimeout(() => { if (!scheduleOpen && !minigameOpen() && !rearPanelId && !openCaseName && !menuOpen) setSceneInput(true); }, 0);
+  setTimeout(() => { if (!scheduleOpen && !minigameOpen() && !cambioCardOpen && !rearPanelId && !openCaseName && !menuOpen) setSceneInput(true); }, 0);
   scheduleFirst = false;
 }
 
@@ -2625,6 +2651,7 @@ function finishCavi (r) {
     : late ? 'Sono le 20:30: Gerry apre le porte con i cavi ancora in giro. La reputazione non cambia.'
     : 'Cavi a posto, Gerry apre le porte! ' + '★'.repeat(stars) + (rep ? ' Reputazione +' + rep + '.' : ''))
     + (missing ? ' Alle 21:00 parla il preside: ' + missing : ' Alle 21:00 il preside sale sul palco.'), 'ok');
+  updateFoglio();
   if (!missing) presideSoon();
 }
 /* I cavi piegati alla posa restano così anche nell'isometrico: per ogni
@@ -2761,17 +2788,166 @@ function finishPreside (r) {
   const p = Profile.data.preside;
   showToast(skipped ? 'Discorso saltato: il preside ha parlato lo stesso, ma la reputazione non cambia.'
     : 'Il preside ha finito: pubblico al ' + p.grad + '%.' + (rep ? ' Reputazione ' + (rep > 0 ? '+' : '') + rep + '.' : '')
-      + (beers ? ' 🍺 +' + beers + '.' : '') + ' Prossimo: la Notte fuori controllo, in arrivo.', skipped || p.grad >= 40 ? 'ok' : undefined);
+      + (beers ? ' 🍺 +' + beers + '.' : ''), skipped || p.grad >= 40 ? 'ok' : undefined);
+  // dopo il preside tocca al DJ: il cambio palco parte dal foglio (o dalla
+  // scaletta), appena letto il messaggio del discorso
+  updateFoglio();
+  setTimeout(() => {
+    if (!cambioDj() && presideDone()) showToast('Alle 21:10 il cambio palco per il DJ: parte dal foglio in alto a sinistra o dalla scaletta 📋.', 'ok');
+  }, Math.max(3200, el('#toast').textContent.length * 60) + 300);
 }
 function presideSummary () {
   const p = Profile.data.preside;
   if (p.skipped) return 'Saltato: niente reputazione.';
+  const ch = (cambioDj() && cambioDj().micCh) || micChannel();
   return 'Pubblico al ' + p.grad + '%' + (p.larsens ? ' · larsen: ' + p.larsens : ' · niente larsen')
-    + (p.beers ? ' · 🍺 +' + p.beers : '') + ' · reputazione ' + (p.rep >= 0 ? '+' : '') + p.rep + '.';
+    + (p.beers ? ' · 🍺 +' + p.beers : '') + ' · reputazione ' + (p.rep >= 0 ? '+' : '') + p.rep + '.'
+    + (ch ? ' Il suo microfono resta sul CH ' + ch + ' per il vocalist del DJ.' : '');
 }
 
+/* ---------------- il cambio palco per il DJ (21:10) ----------------
+   Dopo il discorso del preside (anche saltato) tocca a «Notte fuori
+   controllo». Il cambio si fa
+   nella vista montaggio: DJ Inestimabile porta la sua consolle (scheda DJ),
+   il service ci mette la DI (scheda Regia) e i cavi. La carta del DJ dice
+   cosa collegare, il foglio lo spunta mentre si lavora e intanto la
+   pazienza del pubblico scende (conta solo il tempo di gioco). Si chiude
+   col tasto PRONTI: in tempo vale REP.changeDone, a pazienza finita si è già
+   perso REP.slowChange. Il microfono del preside resta sul suo canale:
+   passa a Musa Esistenziale, e spostarlo costa REP.wrongInput. */
+const CAMBIO_DJ_MS = 4 * 60 * 1000;
+const cambioDj = () => Profile.data.cambioDj || null;
+const cambioDjOn = () => !!(cambioDj() && !cambioDj().done);
+const cambioDjDone = () => !!(cambioDj() && cambioDj().done);
+let cambioCardOpen = false;
+
+// dove arriva un'uscita della consolle: la DI in cui entra e il canale MIC
+// del mixer in cui esce quel canale della DI (o null)
+function djRoute (dj, side) {
+  const e1 = dj && gameState.edges.find(x => x.a === dj.id && x.aPort === 'out_' + side && x.signal === 'jack');
+  const di = e1 && gameState.placed[e1.b];
+  if (!di || di.type !== 'di') return { di: null, ch: null };
+  const e2 = gameState.edges.find(x => x.a === di.id && x.aPort === 'out_' + e1.bPort.slice(3) && x.signal === 'xlr');
+  const m = e2 && gameState.placed[e2.b];
+  return { di, ch: m && m.type === 'mixer' && /^in_[1-4]$/.test(e2.bPort) ? parseInt(e2.bPort.slice(3), 10) : null };
+}
+// la carta del DJ voce per voce: { ok, what, ids, kind }
+function cambioChecks () {
+  const dj = placedOfType('dj')[0], dis = placedOfType('di'), mixer = placedOfType('mixer')[0];
+  const ids = cs => cs.filter(Boolean).map(c => c.id);
+  const L = djRoute(dj, 'L'), R = djRoute(dj, 'R');
+  const fed = !!(dj && wiredToQuadro(dj.id));
+  const mic = micChannel();
+  const list = [
+    { ok: !!dj, what: 'Consolle del DJ sul palco', ids: [], kind: 'place' },
+    { ok: fed && isRunning(dj.id), what: 'Corrente alla consolle, accesa', ids: ids([dj]), kind: fed ? 'on' : 'power' },
+    { ok: dis.length > 0, what: 'Una DI accanto alla consolle', ids: [], kind: 'place' },
+    { ok: !!(L.di && R.di), what: 'MASTER L e R della consolle nella DI (jack)', ids: ids([dj, ...dis]), kind: 'wire' },
+    { ok: !!(L.ch && R.ch), what: 'Dalla DI due XLR nel mixer' + (L.ch && R.ch ? ' (CH ' + L.ch + ' e CH ' + R.ch + ')' : ', negli ingressi MIC liberi'), ids: ids([...dis, mixer]), kind: 'wire' },
+    { ok: !!mic, what: 'Microfono per Musa Esistenziale' + (mic ? ' (CH ' + mic + ')' : ' collegato al mixer'), ids: ids(placedOfType('mic')), kind: 'mic' }
+  ];
+  // nel cambio non si deve rompere quello che il collaudo ha promosso
+  const broken = GIRI.findIndex((g, i) => !giroPasses(i));
+  const v = runValidation();
+  const lost = broken >= 0 ? giroChecks(broken).find(x => !x.ok) : null;
+  list.push({ ok: broken < 0 && v.pass, what: 'Impianto del collaudo ancora a posto', ids: lost ? lost.ids : [], kind: 'rig', lost: lost ? lost.what : v.overPhase ? 'una fase del Quadro è troppo carica' : null });
+  return list;
+}
+function mmss (ms) { const s = Math.max(0, Math.ceil(ms / 1000)); return Math.floor(s / 60) + ':' + String(s % 60).padStart(2, '0'); }
+function patienceHtml () {
+  const c = cambioDj();
+  const left = Math.max(0, c.patienceMs - c.ms), f = left / c.patienceMs;
+  const cls = c.slow ? 'over' : f < 0.25 ? 'low' : f < 0.5 ? 'mid' : '';
+  return '<div class="patience ' + cls + '"><span>Pazienza del pubblico</span><span class="bar"><span class="fill" style="width:'
+    + (f * 100).toFixed(1) + '%"></span></span><span>' + (c.slow ? 'fischi!' : mmss(left)) + '</span></div>';
+}
+// il tempo del cambio: solo a montaggio finito, con la carta chiusa e senza
+// scaletta aperta (menù e pagina nascosta li esclude già il chiamante)
+function cambioTick (ms) {
+  const c = cambioDj();
+  if (!cambioDjOn() || cambioCardOpen || scheduleOpen || gameState.giro < GIRO_COLLAUDO) return;
+  c.ms += ms;
+  if (!c.slow && c.ms >= c.patienceMs) {
+    c.slow = true;
+    const d = addReputation(REP.slowChange, 'Cambio palco lento: il pubblico ha perso la pazienza', 'L' + LEVEL_ID + ':cambio-dj:lento');
+    showToast('Il pubblico ha perso la pazienza: fischi e «DJ! DJ!» dalla platea.' + (d ? ' Reputazione ' + d + '.' : '') + ' Finisci il cambio e premi PRONTI.', 'bad');
+    updateFoglio();
+  }
+  Profile.save();
+  const box = el('#foglio .fg-patience');
+  if (box) box.innerHTML = patienceHtml();
+}
+function startCambioDj () {
+  if (!presideDone() || cambioDjDone()) return;
+  if (!cambioDj()) {
+    Profile.data.cambioDj = { ms: 0, patienceMs: CAMBIO_DJ_MS, micCh: micChannel(), slow: false, done: false, fails: 0 };
+    Profile.save();
+  }
+  openCambioCard();
+}
+function openCambioCard () {
+  const c = cambioDj();
+  cambioCardOpen = true;
+  el('#cambio-text').innerHTML = '<p><span class="who">DJ Inestimabile</span> arriva con la consolle sotto il braccio, dietro di lui <span class="who">Musa Esistenziale</span>, già a petto nudo. «Dove la metto? Voglio la corrente e il mio suono nell\'impianto, subito!»</p>'
+    + '<p>Hai ' + Math.round(c.patienceMs / 60000) + ' minuti prima che il pubblico perda la pazienza. '
+    + (c.micCh ? 'Il microfono del preside resta sul CH ' + c.micCh + ': ora è di Musa.' : 'Il microfono va collegato al mixer: serve a Musa.') + '</p>';
+  el('#cambio-list').innerHTML = [
+    'Posa la consolle sul palco (scheda DJ)',
+    'Dalle corrente: ha la sua spina Schuko',
+    'Una DI accanto alla consolle (scheda Regia)',
+    'MASTER L e R nei due ingressi della DI, con due jack',
+    'Dalla DI due XLR in due ingressi MIC liberi del mixer',
+    'Accendi la consolle e premi PRONTI'
+  ].map(t => '<li>' + escapeHtml(t) + '</li>').join('');
+  el('#cambio-modal').classList.add('show');
+  setSceneInput(false);
+}
+function closeCambioCard () {
+  if (!cambioCardOpen) return;
+  cambioCardOpen = false;
+  el('#cambio-modal').classList.remove('show');
+  if (!scheduleOpen && !menuOpen && !rearPanelId && !openCaseName) setSceneInput(true);
+  updateGiroUI();
+  const tab = document.querySelector('.tab-btn[data-tab="dj"]');
+  if (tab && gameState.stock.dj > 0) tab.click();
+  foglioOpen = true;
+  updateFoglio();
+}
+// il cambio è a posto: il DJ attacca
+function finishCambioDj () {
+  const c = cambioDj();
+  c.done = true;
+  const mic = micChannel();
+  c.micMoved = !!(c.micCh && mic !== c.micCh);
+  let rep = 0;
+  if (!c.slow) rep += addReputation(REP.changeDone, 'Cambio palco per il DJ', 'L' + LEVEL_ID + ':cambio-dj');
+  if (c.micMoved) rep += addReputation(REP.wrongInput, 'Microfono spostato di canale nel cambio palco', 'L' + LEVEL_ID + ':cambio-dj:mic');
+  Profile.save();
+  SFX.success();
+  setCircuitStatus('ok');
+  saveLevel();
+  updateGiroUI();
+  showToast('Pronti! DJ Inestimabile alza il volume e Musa Esistenziale urla nel microfono: si parte. '
+    + (c.slow ? 'Il pubblico però ha aspettato troppo. ' : 'Cambio fatto in ' + mmss(c.ms) + '. ')
+    + (c.micMoved ? 'Il microfono non è più sul CH ' + c.micCh + ': Musa dovrà cercarselo. ' : '')
+    + (rep ? 'Reputazione ' + (rep > 0 ? '+' : '') + rep + '. ' : '')
+    + 'Lo spettacolo del DJ arriva presto.', 'ok');
+}
+function cambioSummary () {
+  const c = cambioDj();
+  return (c.slow ? 'Finito a pazienza esaurita: il pubblico ha fischiato.' : 'Finito in ' + mmss(c.ms) + ', prima dei fischi.')
+    + (c.micMoved ? ' Microfono spostato dal CH ' + c.micCh + '.' : '') + ' Il DJ set arriva presto.';
+}
+el('#cambio-go').addEventListener('click', () => { SFX.button(); closeCambioCard(); });
+el('#cambio-close').addEventListener('click', () => { SFX.button(); closeCambioCard(); });
+
 el('#schedule-btn').addEventListener('click', () => { SFX.button(); openSchedule(false); });
-el('#schedule-go').addEventListener('click', () => { SFX.button(); const next = scheduleNext; closeSchedule(); if (next === 'cavi') openCavi(); else if (next === 'preside') openPreside(); });
+el('#schedule-go').addEventListener('click', () => {
+  SFX.button();
+  const next = scheduleNext;
+  closeSchedule();
+  if (next === 'cavi') openCavi(); else if (next === 'preside') openPreside(); else if (next === 'cambio-dj') startCambioDj();
+});
 el('#schedule-close').addEventListener('click', () => { SFX.button(); closeSchedule(); });
 el('#schedule-modal').addEventListener('click', ev => { if (ev.target.id === 'schedule-modal') closeSchedule(); });
 // locandina di una fase della scaletta: si apre sopra la scaletta, un tocco la chiude
@@ -3096,7 +3272,10 @@ const REAR_PANELS = {
   scheda: { style: 'scheda', left: 'kensington', serial: 'USB AUDIO INTERFACE  ·  2 IN / 2 OUT  ·  24 bit / 192 kHz  ·  alimentata via USB',
     sections: [['USB', [['usb', 'CAVO USB-C']]], ['LINE OUTPUTS (bilanciate)', [['out_L', 'OUT L'], ['out_R', 'OUT R']]]] },
   di: { style: 'steel', right: 'lift', serial: 'PASSIVE DI BOX  ·  2 CANALI',
-    sections: [['INPUT', [['in_1', 'CH1 IN'], ['in_2', 'CH2 IN']]], ['OUTPUT', [['out_1', 'CH1 OUT'], ['out_2', 'CH2 OUT']]]] }
+    sections: [['INPUT', [['in_1', 'CH1 IN'], ['in_2', 'CH2 IN']]], ['OUTPUT', [['out_1', 'CH1 OUT'], ['out_2', 'CH2 OUT']]]] },
+  // retro del mixer DJ: uscite master e la spina della ciabattina del DJ
+  dj: { style: 'desk', accent: true, power: true, serial: 'DJ MIXER 2 CANALI + 2 LETTORI  ·  «NOTTE FUORI CONTROLLO»',
+    sections: [['MASTER OUT', [['out_L', 'MASTER L'], ['out_R', 'MASTER R']]], ['ALIMENTAZIONE', [['power', 'SPINA']]]] }
 };
 // tutte le sezioni di un pannello, qualunque sia la disposizione
 function panelSections (panel) { return panel.rows ? panel.rows.flat() : panel.sections; }
@@ -3840,6 +4019,21 @@ function traceChain (compId) {
     }
     return { title: 'DMX', steps };
   }
+  // la musica del DJ: consolle → DI → due ingressi MIC del mixer
+  if (comp.type === 'dj' || comp.type === 'di') {
+    const dj = placedOfType('dj')[0];
+    if (!dj) add([], typeLabel('dj'), false, 'da posare');
+    else if (add([dj.id], compLabel(dj.id), isRunning(dj.id), whyDown(dj))) {
+      const L = djRoute(dj, 'L'), R = djRoute(dj, 'R');
+      const di = L.di || R.di || placedOfType('di')[0];
+      const mx = placedOfType('mixer')[0];
+      if (!di) add([], typeLabel('di'), false, 'da posare');
+      else if (add([di.id], compLabel(di.id), !!(L.di && R.di), 'non le arrivano MASTER L e R della consolle')) {
+        add(mx ? [mx.id] : [], mx ? compLabel(mx.id) : typeLabel('mixer'), !!(L.ch && R.ch), 'la DI non arriva in due ingressi MIC');
+      }
+    }
+    return { title: 'DJ', steps };
+  }
   // corrente: dal dispositivo si risale fino all'allaccio
   const up = [];
   for (let c = comp, n = 0; c && n < 10; n++) {
@@ -4284,7 +4478,9 @@ const PIECE_INFO = {
   pc: ['Computer portatile: suona la musica della serata. L\'audio esce dalla USB-C verso la scheda audio.', 'Va sul tavolo regia.'],
   scheda: ['Scheda audio USB: trasforma l\'audio del PC in due uscite jack (L e R) per i CH 5-6 del mixer. Si alimenta dal PC.', 'Va sul tavolo regia, accanto al PC.'],
   par: ['Faro PAR a LED: prende corrente (PowerCON) e comandi (DMX) e li passa al faro dopo, in catena.', 'Si monta su uno stativo.'],
-  controller: ['Consolle luci DMX: comanda i PAR col cavo DMX, su due universi.', 'Va sul tavolo regia.']
+  controller: ['Consolle luci DMX: comanda i PAR col cavo DMX, su due universi.', 'Va sul tavolo regia.'],
+  di: ['DI box passiva a 2 canali: trasforma due uscite jack (sbilanciate) in due XLR bilanciati per gli ingressi MIC del mixer. Al montaggio non serve: la usa il DJ.', 'Sul palco accanto a chi suona, in Off Stage o in FOH.'],
+  dj: ['La consolle di DJ Inestimabile: due lettori e il mixer DJ. Ha la sua spina Schuko; le uscite MASTER L e R (jack) vanno in una DI, e dalla DI due XLR al mixer di sala.', 'Va sul palco.']
 };
 function showPieceInfo (type, pieceEl) {
   const info = PIECE_INFO[type];
@@ -4461,7 +4657,10 @@ const giroPasses = giro => giroChecks(giro).every(x => x.ok);
 
 function updateGiroUI () {
   const giro = gameState.giro;
-  const open = unlockedTabs(giro);
+  // la scheda DJ c'è da quando il DJ è arrivato col cambio palco
+  const open = unlockedTabs(giro).concat(cambioDj() ? ['dj'] : []);
+  const djTab = document.querySelector('.tab-btn[data-tab="dj"]');
+  if (djTab) djTab.hidden = !cambioDj();
   document.querySelectorAll('.tab-btn').forEach(b => {
     const locked = !open.includes(b.dataset.tab);
     b.classList.toggle('locked', locked);
@@ -4471,7 +4670,7 @@ function updateGiroUI () {
   const active = document.querySelector('.tab-btn.active');
   if (active && active.classList.contains('locked')) document.querySelector('.tab-btn[data-tab="corrente"]').click();
   const btn = el('#run-btn');
-  if (btn) btn.textContent = '▶ ' + (giro < GIRO_COLLAUDO ? GIRI[giro].button : 'TEST IMPIANTO');
+  if (btn) btn.textContent = '▶ ' + (giro < GIRO_COLLAUDO ? GIRI[giro].button : cambioDjOn() ? 'PRONTI: TOCCA AL DJ' : 'TEST IMPIANTO');
   updateFoglio();
 }
 
@@ -4485,19 +4684,48 @@ function updateFoglio () {
   const giro = gameState.giro;
   const steps = GIRI.map((g, i) => '<span class="fg-step ' + (i < giro ? 'done' : i === giro ? 'now' : '') + '">'
     + (i < giro ? '✓ ' : '') + g.title + '</span>').join('<span class="fg-sep">›</span>');
-  let head, body = '';
+  let head, body = '', icon = '📝 ', patience = false;
   if (giro < GIRO_COLLAUDO) {
     const list = giroChecks(giro);
     const done = list.filter(x => x.ok).length;
     head = 'Giro ' + GIRI[giro].title + ' · ' + done + '/' + list.length;
     body = '<ul class="fg-list">' + list.map(x => '<li class="' + (x.ok ? 'ok' : '') + '">' + (x.ok ? '✓' : '○') + ' ' + escapeHtml(x.what) + '</li>').join('') + '</ul>';
+  } else if (cambioDjOn()) {
+    // cambio palco: la carta del DJ, voce per voce, e la pazienza del pubblico
+    const list = cambioChecks();
+    icon = '🎧 ';
+    head = 'Cambio palco · DJ · ' + list.filter(x => x.ok).length + '/' + list.length;
+    body = '<ul class="fg-list">' + list.map(x => '<li class="' + (x.ok ? 'ok' : '') + '">' + (x.ok ? '✓' : '○') + ' ' + escapeHtml(x.what) + '</li>').join('') + '</ul>'
+      + '<p class="fg-note">Quando è tutto a posto premi PRONTI: tocca al DJ.</p>';
+    patience = true;
+  } else if (cambioDjDone()) {
+    icon = '🎧 ';
+    head = 'Cambio palco fatto';
+    body = '<p class="fg-note">DJ Inestimabile e Musa Esistenziale sono pronti a partire. Lo spettacolo del DJ arriva presto.</p>';
+  } else if (caviDone() && !presideDone()) {
+    // il discorso del preside: pronto se il microfono è cablato
+    const missing = presideReady();
+    icon = '🎤 ';
+    head = 'Prossimo: discorso del preside';
+    body = '<p class="fg-note">' + escapeHtml(missing ? 'Alle 21:00 parla il preside: ' + missing : 'Microfono pronto sul CH ' + micChannel() + ': il preside aspetta dietro le quinte.') + '</p>'
+      + (missing ? '' : '<button type="button" class="fg-go" id="foglio-preside">Il preside sale sul palco</button>');
+  } else if (presideDone()) {
+    icon = '🎧 ';
+    head = 'Prossimo: cambio palco per il DJ';
+    body = '<p class="fg-note">Il preside ha finito di parlare: alle 21:10 arriva DJ Inestimabile con la sua consolle. Appena parti, il pubblico comincia ad aspettare.</p>'
+      + '<button type="button" class="fg-go" id="foglio-cambio">Inizia il cambio palco</button>';
   } else {
     head = 'Montaggio finito · Test impianto';
     body = '<p class="fg-note">Tutti i giri sono passati. Il collaudo prova tutto insieme: se hai toccato qualcosa nel frattempo, lo scopre.</p>';
   }
-  box.innerHTML = '<button class="fg-head" id="foglio-toggle">📝 ' + head + '<span class="fg-caret">' + (foglioOpen ? '▾' : '▸') + '</span></button>'
-    + (foglioOpen ? '<div class="fg-body"><div class="fg-steps">' + steps + '</div>' + body + '</div>' : '');
+  box.innerHTML = '<button class="fg-head" id="foglio-toggle">' + icon + head + '<span class="fg-caret">' + (foglioOpen ? '▾' : '▸') + '</span></button>'
+    + (patience ? '<div class="fg-patience">' + patienceHtml() + '</div>' : '')
+    + (foglioOpen ? '<div class="fg-body">' + (giro < GIRO_COLLAUDO || !caviDone() ? '<div class="fg-steps">' + steps + '</div>' : '') + body + '</div>' : '');
   el('#foglio-toggle').addEventListener('click', () => { foglioOpen = !foglioOpen; SFX.button(); updateFoglio(); });
+  const go = el('#foglio-cambio');
+  if (go) go.addEventListener('click', () => { SFX.button(); startCambioDj(); });
+  const pr = el('#foglio-preside');
+  if (pr) pr.addEventListener('click', () => { SFX.button(); openPreside(); });
 }
 
 // cambio di scheda verso una chiusa: si spiega perché
@@ -4514,6 +4742,7 @@ document.querySelectorAll('.tab-btn').forEach(btn => {
 el('#run-btn').addEventListener('click', () => {
   if (!window.__scene) return;
   if (gameState.giro < GIRO_COLLAUDO) window.__scene.runGiroTest();
+  else if (cambioDjOn()) window.__scene.runCambioTest();
   else window.__scene.runSystemTest();
 });
 
@@ -4597,7 +4826,7 @@ function screenToCell (px, py) {
    scambia. I pezzi montati (testa, PAR) non occupano celle. */
 const FOOTPRINT = {
   sub: [1, 1], mixer: [1, 2], ampli: [1, 2], tavolo: [2, 6], controller: [1, 1], quadro: [1, 2],
-  ciabatta: [1, 2], ciabatta_cee: [1, 3], pc: [1, 1], scheda: [1, 1], di: [1, 1], stativo: [1, 1], asta: [1, 1]
+  ciabatta: [1, 2], ciabatta_cee: [1, 3], pc: [1, 1], scheda: [1, 1], di: [1, 1], stativo: [1, 1], asta: [1, 1], dj: [2, 1]
 };
 function footprint (type, rot) {
   const f = FOOTPRINT[type] || [1, 1];
@@ -4664,8 +4893,11 @@ const ZONE_PREDICATES = {
   // il PC può stare sia in Regia di sala (FOH) sia in Regia di palco
   // (Off Stage, accanto al mixer di palco) — due postazioni plausibili.
   pc: (cx, cy) => isFohCell(cx, cy) || isOffStageCell(cx, cy),
-  // la DI segue il PC: accanto a lui in FOH oppure in Off Stage
-  di: (cx, cy) => isFohCell(cx, cy) || isOffStageCell(cx, cy),
+  // la DI sta accanto a chi suona (sul palco, vicino alla consolle del DJ)
+  // o accanto al PC, in FOH oppure in Off Stage
+  di: (cx, cy) => isStageCell(cx, cy) || isFohCell(cx, cy),
+  // la consolle del DJ sta sulla pedana, dove suona
+  dj: isStageCoreCell,
   // la scheda audio sta sul tavolo accanto al PC
   scheda: (cx, cy) => isFohCell(cx, cy) || isOffStageCell(cx, cy)
 };
@@ -5667,6 +5899,38 @@ class StageScene extends Phaser.Scene {
         k.discB(B, 39.5, Z / 2 + 0.5, 3.4, 0x0c0d10);                    // volume monitor
         k.discB(B, 39.5, Z / 2 + 0.5, 2.8, 0xb9bcc1);
         k.discB(B, 44, Z / 2 - 2.5, 1.2, 0x0c0d10);                      // cuffia
+        break;
+      }
+      case 'dj': {
+        // consolle del DJ: banco in flight case con il telo nero e le strisce
+        // al neon verso il pubblico (faccia a=0); sopra i due lettori con i
+        // piatti e in mezzo il mixer DJ coi fader. Connettori sul fianco b=B.
+        const P = DJ_ISO, k = this.isoKit(g, P);
+        const { A, B, Z } = P;
+        k.box(0, A, 0, B, 0, Z, ISO_BLACK);
+        k.quadA(0, 1, B - 1, Z - 2, Z, 0x9aa0aa);                         // profilo in alluminio
+        k.quadA(0, 5, B - 5, 3, Z - 4, 0x1c0f24);                        // telo del banco
+        k.quadA(0, 8, B - 8, Z - 9, Z - 7.5, def.body.accent);           // neon magenta
+        k.quadA(0, 8, B - 8, 6, 7.5, 0x3fd9ff);                          // neon azzurro
+        k.quadB(B, 3, A - 3, 3, Z - 3, 0x22242a);                        // piastra connettori
+        [18, 78].forEach(bc => {
+          // lettore: scocca, piatto, etichetta e perno
+          k.box(6, 38, bc - 12, bc + 12, Z, Z + 3, { top: 0x2a2c32, left: 0x1c1d22, right: 0x141519 });
+          k.discZ(Z + 3, 23, bc, 9.5, 0x0c0d10);
+          k.discZ(Z + 3, 23, bc, 7.5, 0x3a3d45);
+          k.discZ(Z + 3, 23, bc, 2.6, def.body.accent);
+          k.discZ(Z + 3, 23, bc, 0.9, 0xdcdfe4);
+          k.quadZ(Z + 3, 9, 12, bc + 7, bc + 10, 0x6fd08c);              // play
+        });
+        // mixer DJ: due canali coi fader, manopole e il crossfader davanti
+        k.box(6, 40, 36, 60, Z, Z + 4, ISO_BLACK);
+        [43, 53].forEach(bc => {
+          k.quadZ(Z + 4, 12, 24, bc - 0.5, bc + 0.5, 0x0c0d10);
+          k.quadZ(Z + 4, 16, 18.5, bc - 2, bc + 2, 0xdcdfe4);
+          [28, 32, 36].forEach(a => k.discZ(Z + 4, a, bc, 1.4, a === 36 ? def.body.accent : 0x9aa0aa));
+        });
+        k.quadZ(Z + 4, 8, 9, 42, 54, 0x0c0d10);
+        k.quadZ(Z + 4, 7.5, 9.5, 47, 49, 0xdcdfe4);                      // crossfader
         break;
       }
       case 'di': {
@@ -6821,6 +7085,39 @@ class StageScene extends Phaser.Scene {
     else { showToast('Le luci non rispondono: ' + hint + exact, 'bad'); this.fxLightsTilt(); }
   }
 
+  /* ---------------- PRONTI: la prova del cambio palco per il DJ ----------------
+     Come la prova di un giro: dice cosa manca con un indizio, al secondo
+     tentativo accende in rosso il pezzo colpevole, dal terzo il capo legge
+     la voce della carta. */
+  runCambioTest () {
+    this.stopFx();
+    const c = cambioDj();
+    if (!c || c.done) return;
+    Object.values(this.compVisuals).forEach(v => this.setGlow(v, false));
+    this.refreshLive();
+    const miss = cambioChecks().find(x => !x.ok);
+    gameState.stats.tests++;
+    if (!miss) { finishCambioDj(); return; }
+    gameState.stats.failedTests++;
+    const n = c.fails = (c.fails || 0) + 1;
+    Profile.save();
+    const hint = {
+      place: 'manca ancora un pezzo sul palco.',
+      power: 'la consolle non ha corrente.',
+      on: 'la consolle è spenta: accendila dal suo pannello.',
+      wire: 'la sua musica non arriva al mixer: segui i cavi dalla consolle alla DI e dalla DI al mixer.',
+      mic: 'Musa Esistenziale non ha un microfono collegato al mixer.',
+      rig: 'nel cambio si è perso qualcosa dell\'impianto' + (miss.lost ? ': ' + miss.lost + '.' : '.')
+    }[miss.kind];
+    if (n >= 2) miss.ids.forEach(id => { const v = this.compVisuals[id]; if (v) this.setGlow(v, true); });
+    const exact = n >= 3 && miss.kind !== 'rig' ? ' ' + bossName() + ' ti indica il foglio: «' + miss.what + '».' : '';
+    setCircuitStatus('error');
+    saveLevel();
+    showToast('DJ Inestimabile non può attaccare: ' + hint + exact, 'bad');
+    if (miss.kind === 'wire' || miss.kind === 'mic') this.fxCrackle();
+    else if (miss.kind === 'power') this.fxSparks();
+  }
+
   /* ---------------- TEST IMPIANTO: collaudo tecnico (potenza + segnale + PC di
      regia), prima ancora che arrivino i musicisti. Il vero soundcheck con gli
      strumenti è una fase successiva, separata da questa.
@@ -7537,6 +7834,9 @@ class StageScene extends Phaser.Scene {
   /* partita salvata: l'impianto com'era, con scatti, procedura e tempo di
      gioco; la cronologia di annulla/ripeti riparte da qui */
   loadLevel (lv) {
+    // partita salvata quando la DI non era nella dotazione: la sua scorta
+    // si ricalcola da quelle posate
+    if (!lv.stockV && lv.stock) lv = { ...lv, stock: { ...lv.stock, di: AVAILABLE_STOCK.di - Object.values(lv.placed || {}).filter(c => c.type === 'di').length } };
     this.restoreSnapshot(lv);
     gameState.trips = lv.trips || 0;
     gameState.rcdTrips = lv.rcdTrips || 0;

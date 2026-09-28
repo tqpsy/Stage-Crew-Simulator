@@ -110,6 +110,25 @@
     </div>
   </div>
 
+  <div class="modal-overlay" id="cambio-modal">
+    <div class="modal-box cambio-box">
+      <div class="modal-header">
+        <div class="schedule-title">
+          <span class="tag" id="cambio-tag">CAMBIO PALCO · 21:10</span>
+          <h2 id="cambio-title">Arriva il DJ</h2>
+        </div>
+        <button class="modal-close" id="cambio-close">✕</button>
+      </div>
+      <div class="cambio-card">
+        <img class="cambio-poster" src="img/locandina-dj.svg" alt="Locandina di Notte fuori controllo">
+        <div class="cambio-text" id="cambio-text"></div>
+      </div>
+      <ul class="cambio-list" id="cambio-list"></ul>
+      <div class="schedule-foot">
+        <button class="menu-btn primary" id="cambio-go">Al lavoro!</button>
+      </div>
+    </div>
+  </div>
   <div class="modal-overlay" id="poster-modal" title="Tocca per chiudere">
     <img id="poster-img" alt="Locandina della serata">
   </div>
@@ -183,6 +202,7 @@
       <button class="tab-btn" data-tab="audio">Audio</button>
       <button class="tab-btn" data-tab="regia">Regia</button>
       <button class="tab-btn" data-tab="luci">Luci</button>
+      <button class="tab-btn" data-tab="dj" hidden>DJ</button>
       <button class="tab-btn" data-tab="cavi">Cavi</button>
     </div>
 
@@ -257,8 +277,12 @@
           <div class="swatch" style="color:#e6bcb5;"><div class="stripe" style="background:#b23a2e;"></div>SCHEDA</div>
           <span class="count" id="count-scheda">×1</span>
         </div>
+        <div class="piece" data-type="di">
+          <div class="swatch" style="color:#c9d2de;"><div class="stripe" style="background:#5b6676;"></div>DI</div>
+          <span class="count" id="count-di">×1</span>
+        </div>
       </div>
-      <span class="panel-hint">Il finale sta in un rack 2U sotto il tavolo regia; PC e scheda audio vanno sul piano del tavolo. Il PC si alimenta con la sua spina Schuko da una ciabatta (o dal Quadro con l'adattatore CEE / Schuko); la scheda audio si collega al PC con il suo cavo USB-C (che la alimenta) ed entra nei CH 5 e 6 del mixer con due jack (L e R).</span>
+      <span class="panel-hint">Il finale sta in un rack 2U sotto il tavolo regia; PC e scheda audio vanno sul piano del tavolo. Il PC si alimenta con la sua spina Schuko da una ciabatta (o dal Quadro con l'adattatore CEE / Schuko); la scheda audio si collega al PC con il suo cavo USB-C (che la alimenta) ed entra nei CH 5 e 6 del mixer con due jack (L e R). La DI al montaggio non serve: tienila per il DJ.</span>
     </div>
 
     <div class="tab-panel" data-panel="luci">
@@ -273,6 +297,16 @@
         </div>
       </div>
       <span class="panel-hint">Posa i 4 stativi (scheda Strutture): 2 davanti al palco nel Pit (frontale, uno per lato) e 2 ai lati del palco, a sinistra e in Off Stage (tagli). Poi monta un PAR su ogni stativo: si punta da solo verso il palco. Dal display del PAR si regolano indirizzo e modalità DMX (3, 4 o 8 canali). La consolle luci va sul tavolo regia: si alimenta in PowerCON e ha 2 universi DMX.</span>
+    </div>
+
+    <div class="tab-panel" data-panel="dj">
+      <div class="panel-items">
+        <div class="piece" data-type="dj">
+          <div class="swatch" style="color:#ffb3de;"><div class="stripe" style="background:#ff3fb4;"></div>CONSOLLE</div>
+          <span class="count" id="count-dj">×1</span>
+        </div>
+      </div>
+      <span class="panel-hint">La consolle l'ha portata DJ Inestimabile: posala sul palco. Ha la sua spina Schuko (da una ciabatta, o dal Quadro con l'adattatore CEE / Schuko). Le uscite MASTER L e R sono jack: vanno nei due ingressi della DI (scheda Regia), e dalla DI due XLR entrano in due ingressi MIC liberi del mixer. Il microfono resta dov'è: lo usa Musa Esistenziale.</span>
     </div>
 
     <div class="tab-panel" data-panel="cavi">

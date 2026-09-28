@@ -64,7 +64,8 @@ const N = parseInt(process.argv[2] || '40', 10), SEED0 = parseInt(process.argv[3
         // nello stesso punto, non mezza cella più in là
         else { const w = ty === 'stativo' ? gridToScreen(c.gx, c.gy) : gridToScreen(c.gx + .5, c.gy + .5); S.deleteComponent(c.id); S.placeComponentAt(ty, w.x, w.y); if (ty === 'stativo') mountPar(placedOfType('stativo').find(x => !x.hasPar)); }
       }
-      const left = Object.entries(gameState.stock).filter(([k, v]) => v > 0);
+      // DI e consolle del DJ servono al cambio palco, non al montaggio
+      const left = Object.entries(gameState.stock).filter(([k, v]) => v > 0 && k !== 'di' && k !== 'dj');
       if (left.length) { out.wireFail.push(seed + ' stock ' + JSON.stringify(left)); continue; }
       const one = ty => placedOfType(ty)[0].id;
       const Q = one('quadro'), CC = one('ciabatta_cee'), CV = one('ciabatta'), PC = one('pc'), SC = one('scheda'), MX = one('mixer'), AM = one('ampli'), CT = one('controller');
