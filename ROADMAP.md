@@ -79,6 +79,15 @@ cambiano da una fase all'altra.
   mezzi più grandi, eventuale grafica isometrica. Design in
   `docs/minigioco-scarico.md`.
 
+## Posa dei cavi
+
+- **Minigioco della posa dei cavi** (prototipo): pianta dall'alto, i cavi si
+  stendono trascinando il dito; poi Gerry il bidello controlla via di fuga,
+  passacavi nei passaggi, cavi in scena, nastro e ronzio (microfono accanto
+  alla corrente). `prototipi/posa-cavi.html`, design in
+  `docs/minigioco-posa-cavi.md`. Da fare: portarlo nel gioco dopo il Test
+  impianto, con i cavi veri del montaggio.
+
 ## Test automatici
 
 - Per ogni nuovo livello: aggiornare `tests/collaudo-livello1.js` (o

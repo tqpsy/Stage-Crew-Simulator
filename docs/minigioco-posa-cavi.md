@@ -1,0 +1,89 @@
+# Minigioco — La posa dei cavi (bozza di design)
+
+Stato: **prototipo** (`prototipi/posa-cavi.html`, test `tests/posa-cavi.js`).
+Le voci *Da decidere* restano aperte.
+
+## In breve
+
+Il montaggio dice **cosa** è collegato a cosa; la posa dice **da dove passa**
+il cavo. Dopo il Test impianto, prima dell'apertura porte, la palestra si
+vede dall'alto e i cavi vanno stesi per terra come si deve. Poi passa
+**Gerry, il bidello**, e controlla: se trova un cavo in mezzo ai piedi, le
+porte non si aprono.
+
+In scaletta: tra il Test impianto (19:30) e l'Apertura porte (20:30), per
+esempio **20:00 — Messa in sicurezza dei cavi**.
+
+## Come si gioca
+
+- La pianta è la stessa palestra del livello 1 (`main.js`: 10 × 16 m, celle
+  da 50 cm), vista dall'alto. I pezzi sono già posati dove li ha messi il
+  giocatore al montaggio.
+- In basso c'è la lista dei cavi da stendere. Si tocca un cavo (o il pezzo
+  da cui parte) e si **trascina il dito** da un capo all'altro: il cavo
+  segue il dito cella per cella, tornando indietro si riavvolge.
+- Ogni cavo ha la **sua lunghezza** (quella del baule: XLR 10 m, Speakon
+  15 m, PowerCON 5 m, …). Accanto al dito si vedono i metri che restano;
+  finiti quelli il cavo non va avanti. Quello che avanza si arrotola a otto
+  accanto al pezzo.
+- Attrezzi: **passacavi** (pochi, si posano sui passaggi) e **nastro
+  gaffer** (un rotolo di tot metri: il contatore in alto).
+- Quando è tutto steso si chiama Gerry. Al primo giro senza errori:
+  ★★★; al secondo ★★; poi ★.
+
+## Le regole (quelle vere di un service)
+
+| Regola | Cosa succede nel gioco |
+|---|---|
+| **Via di fuga libera** | La zona davanti all'uscita di sicurezza è rossa: il cavo non ci entra proprio (il dito si ferma e lo dice). |
+| **Passaggi con il passacavi** | Passaggio degli artisti e corridoio del pubblico sono a strisce. Si attraversano **di traverso**, dentro un passacavi. Senza passacavi, o correndo lungo il passaggio, Gerry boccia. |
+| **Niente cavi in scena** | In mezzo alla pedana passa solo il cavo del microfono (va all'asta). Gli altri stanno lungo il bordo del palco. |
+| **Nastro dove si cammina** | Palco, Pit e platea: ogni cella con un cavo va fermata col nastro. Lungo i muri no. Più cavi nella stessa cella fanno un **fascio** e usano un nastro solo: conviene raggrupparli. |
+| **Il segnale incrocia la corrente a 90°** | Microfono e multipolare affiancati a un cavo che porta corrente (anche la coppia DMX + PowerCON dei PAR) per almeno 1 m: ronzio. Incrociarli ad angolo retto va bene. |
+
+La tensione del minigioco è tutta qui: il fascio risparmia nastro ma il
+microfono non ci può stare dentro; il muro è gratis ma è lungo e la via di
+fuga lo interrompe; il passacavi risolve un attraversamento ma ce ne sono
+pochi.
+
+## Scenari del prototipo
+
+1. **Festa della scuola** (livello 1): regia sul tavolo in Off Stage, 2 sub,
+   4 PAR in catena, asta del preside. 11 cavi, 1 passacavi, 16 m di nastro.
+   L'allaccio è oltre il passaggio degli artisti: serve il passacavi.
+2. **Regia in sala** (anteprima dei livelli successivi, vedi ROADMAP):
+   regia FOH in fondo alla platea, multipolare da 50 m e CEE da 25 m.
+   A sinistra la via di fuga interrompe il muro, a destra c'è il corridoio
+   da attraversare; e multipolare e corrente non possono fare lo stesso
+   fascio. 9 cavi, 2 passacavi, 22 m di nastro.
+
+Il test risolve ogni scenario con un percorso valido e controlla che il
+nastro basti con margine (≤ 85% del rotolo) ma non sia infinito (≥ 45%).
+
+## Integrazione nel gioco (proposta)
+
+- I cavi da stendere sono **quelli collegati al montaggio**
+  (`gameState.edges`), con la lunghezza del cavo scelto dal baule e le
+  posizioni vere dei pezzi (`gameState.placed`). Nel prototipo sono fissi.
+- Come lo scarico: pagina a parte in un iframe, il risultato torna con
+  `postMessage` (`{ type: 'posa-cavi', stars, inspections, cableM, tapeM,
+  ramps }`, già mandato dal prototipo).
+- Nell'isometrico, dopo la posa, i cavi seguono il percorso steso invece
+  dell'instradamento automatico (`computeRoutePoints`).
+- **Reputazione**: fase completata +5 come le altre; un cavo lasciato in un
+  passaggio senza passacavi può diventare un imprevisto dello show (qualcuno
+  inciampa e stacca il cavo: il guasto del microfono ha già la causa
+  "cavo uscito dal suo ingresso").
+- Il ronzio lasciato apposta si sente davvero durante il discorso del
+  preside (un fruscio a 50 Hz sul canale del microfono).
+
+## Da decidere
+
+- Regole svelate da Gerry o visibili mentre si posa? Nel prototipo si
+  vedono solo il nastro e i metri; gli errori li trova Gerry. Nel livello 1
+  il capo tutor potrebbe avvisare al primo errore, come al montaggio.
+- **Prolunghe**: un cavo troppo corto si allunga con un secondo cavo dal
+  baule? La giunta per terra in un passaggio sarebbe un errore in più.
+- Orologio (20:00 → 20:30) o senza tempo?
+- Più avanti: cavi aerei sulle americane, canaline, multicore con
+  splitter, cavi da tenere lontani dai tagli di luce della scena.
