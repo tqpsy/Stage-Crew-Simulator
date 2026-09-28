@@ -436,15 +436,29 @@ non toccano la scena di Phaser.
   e stativi rotti) e controlla dotazione, Test impianto, reputazione,
   scaletta, ricarica, partita interrotta e impostazione "salta". Gli altri
   test saltano lo scarico dal suo tasto.
-- **Da fare**:
-  - i pezzi **difettosi** oggi sono solo raccontati (scaletta e ritardo):
-    manca il segno sul pezzo e il tocco lungo per sistemarlo prima del
-    Test impianto;
-  - le **birre** sono salvate (`Profile.data.scarico.beers`) ma il gioco
-    non ha ancora il contatore;
-  - la grafica **isometrica** dello scarico (oggi vista dall'alto);
-  - i case consegnati nella zona sbagliata costano solo tempo: più avanti
-    potranno comparire lì nel montaggio.
+- **Pezzi difettosi** (fatto): chi arriva "difettoso" al montaggio ha un
+  **segno arancione "!"** sopra (anche i bauli dei cavi). Si tocca il pezzo
+  e nel suo pannello si preme **"Controlla e sistema"** (un attimo di
+  lavoro, poi il capo spiega cosa hai sistemato); lo stativo si sistema
+  col solo tocco; il baule aggrovigliato non dà cavi finché non premi
+  **"Sbroglia i cavi"**. Nel foglio di montaggio compare la voce "Pezzi
+  difettosi dello scarico controllati" nel giro del pezzo (corrente:
+  quadro; audio: finale, sub, top, PC; luci: PAR, stativi): la prova del
+  giro non passa finché non è a posto. Codice: `FAULT_BY_CASE`, `FAULTS`,
+  `isFaulty`, `fixFault` in `main.js`.
+- **Birre** (fatto): quelle dello scarico si sommano in
+  `Profile.data.beers` e si vedono in testata (🍺). Saranno la risorsa per
+  la stanchezza del documento del livello 1.
+- **Grafica**: resta la vista dall'alto, rifinita: livrea del furgone
+  nei colori del service, ruote, specchietti e fanali; recinzione e muri
+  della palestra; porta, finestre, spalliere, sipario e scaletta del palco;
+  personaggi che camminano (piedi e mani), gocce di sudore spingendo da
+  soli un case da due; ruote dei case (le piroettanti girano col moto) e
+  maniglie; polvere negli urti, scintille nei danni, onda colorata alle
+  consegne, vapore della moka. L'isometrico resta un'idea per dopo.
+- **Più avanti**: i case consegnati nella zona sbagliata costano solo
+  tempo (potranno comparire lì nel montaggio); scenari 2-5 coi mezzi più
+  grandi.
 - **Nota di stile**: nello spettacolo resta la regola "nessun omino da
   muovere". Lo scarico è l'unico momento con un personaggio da guidare,
   ed è voluto: è la parte fisica del mestiere.

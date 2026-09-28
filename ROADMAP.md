@@ -72,10 +72,11 @@ cambiano da una fase all'altra.
 - Il bilico va rifinito come trattore + semirimorchio separati; con il
   bilico i case vanno spostati più avanti sulla banchina.
 - Più case (e più bauli) man mano che crescono impianto e livello.
-- **Minigioco dello scarico** (16:00 in scaletta): fatto, `scarico.html`
-  aperto dopo la scaletta; i pezzi rotti mancano al montaggio. Da fare:
-  pezzi difettosi da sistemare col tocco lungo, contatore delle birre,
-  grafica isometrica, scenari 2-5 coi mezzi più grandi. Design in
+- **Minigioco dello scarico** (16:00 in scaletta): finito per il livello 1.
+  `scarico.html` si apre dopo la scaletta; i pezzi rotti mancano al
+  montaggio, i difettosi hanno il segno arancione e si sistemano dal loro
+  pannello, le birre vanno in testata. Da fare più avanti: scenari 2-5 coi
+  mezzi più grandi, eventuale grafica isometrica. Design in
   `docs/minigioco-scarico.md`.
 
 ## Test automatici

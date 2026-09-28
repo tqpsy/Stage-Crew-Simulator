@@ -582,6 +582,63 @@ function levelStock () {
 }
 function parsRequired () { const s = levelStock(); return Math.min(4, s.par, s.stativo); }
 
+/* Pezzi arrivati difettosi dallo scarico (case in stato "difettoso").
+   Sul pezzo posato compare un segno arancione: si tocca il pezzo e nel suo
+   pannello si preme "Controlla e sistema" (lo stativo si sistema col solo
+   tocco, i bauli dei cavi si sbrogliano quando si aprono). Il giro del
+   pezzo non passa la prova finché non è sistemato. Quali pezzi: i primi
+   posati del tipo; quelli sistemati si contano in scarico.fixed. */
+const FAULT_BY_CASE = { rack: 'ampli', sub1: 'sub', sub2: 'sub', top1: 'top', top2: 'top', distro: 'quadro',
+  valigetta: 'pc', par: 'par', stativi: 'stativo', corrente: 'baule:corrente', segnale: 'baule:segnale' };
+const FAULTS = {
+  ampli:   { what: 'il finale va in protezione appena lo accendi', fix: 'Hai aperto il rack e rimesso a posto il connettore del finale: niente più protezione.' },
+  sub:     { what: 'la cassa vibra: una vite della griglia si è allentata', fix: 'Viti della griglia strette: il sub non vibra più.' },
+  top:     { what: 'il tweeter gracchia: il connettore Speakon ha preso un colpo', fix: 'Connettore della testa rimesso a posto: niente più gracchi.' },
+  quadro:  { what: 'il quadro scatta alla prima accensione: un morsetto si è mosso', fix: 'Morsetto stretto: il quadro tiene.' },
+  pc:      { what: 'il PC non parte al primo colpo: la batteria si è staccata', fix: 'Batteria riagganciata: il PC parte.' },
+  par:     { what: 'le lenti del PAR sono sporche e una è fuori posto', fix: 'Lenti pulite e rimesse in sede: il PAR fa di nuovo il suo fascio.' },
+  stativo: { what: 'lo stativo è duro da aprire', fix: 'Lo stativo era duro da aprire: un colpo di mano e un po\' di grasso, sistemato.' },
+  'baule:corrente': { what: 'i cavi sono aggrovigliati', fix: 'Cavi sbrogliati e riarrotolati: il baule CORRENTE è in ordine.' },
+  'baule:segnale':  { what: 'i cavi sono aggrovigliati', fix: 'Cavi sbrogliati e riarrotolati: il baule SEGNALE è in ordine.' }
+};
+function faultCounts () {
+  const out = {}, s = Profile.data.scarico;
+  ((s && s.faultyIds) || []).forEach(id => { const t = FAULT_BY_CASE[id]; if (t) out[t] = (out[t] || 0) + 1; });
+  return out;
+}
+function faultsLeft (t) {
+  const s = Profile.data.scarico;
+  return Math.max(0, (faultCounts()[t] || 0) - ((s && s.fixed && s.fixed[t]) || 0));
+}
+function isFaulty (id) {
+  const c = gameState.placed[id];
+  const n = c ? faultsLeft(c.type) : 0;
+  return n > 0 && placedOfType(c.type).slice(0, n).some(x => x.id === id);
+}
+function fixFault (t) {
+  const s = Profile.data.scarico;
+  if (!s || !faultsLeft(t)) return;
+  s.fixed = s.fixed || {};
+  s.fixed[t] = (s.fixed[t] || 0) + 1;
+  Profile.save();
+  SFX.success();
+  showToast(FAULTS[t].fix, 'ok');
+  if (window.__scene) window.__scene.refreshFaultMarks();
+  updateFoglio();
+}
+// il pulsante "Controlla e sistema" aspetta un attimo: si sta lavorando
+function faultBox (box, t, onDone) {
+  box.hidden = false;
+  box.innerHTML = '<span><b>⚠ Arrivato difettoso dallo scarico:</b> ' + escapeHtml(FAULTS[t].what) + '.</span>'
+    + '<button type="button" class="fault-fix">' + (t.startsWith('baule:') ? 'Sbroglia i cavi' : 'Controlla e sistema') + '</button>';
+  const b = box.querySelector('.fault-fix');
+  b.addEventListener('click', () => {
+    b.disabled = true; b.textContent = t.startsWith('baule:') ? 'Sbrogli…' : 'Controlli…';
+    SFX.button();
+    setTimeout(() => { fixFault(t); box.hidden = true; box.innerHTML = ''; if (onDone) onDone(); }, 1200);
+  });
+}
+
 /* Microfono pronto per il discorso del preside: montato sull'asta e collegato
    con un XLR a un ingresso MIC del mixer. Restituisce il numero del canale
    (1-4) o null. Non conta per il Test impianto: serve dopo, per lo spettacolo. */
@@ -1545,7 +1602,7 @@ const SERVICE_NAME_MAX = 28;   // caratteri del nome (inventato) di un service
 const USED_SERVICES_KEEP = 400; // nomi di service già proposti, da non riproporre
 
 function defaultProfile () {
-  return { v: SAVE_VERSION, player: '', service: '', serviceInfo: null, usedServices: [], settings: { volume: 0.8, reducedFx: false, skipShow: false, skipScarico: false, testMusic: true, bossTips: true, tapeMarks: true, traceSignal: true }, tutorSeen: {}, logo: null, level: null, scarico: null, records: {}, reputation: { total: 0, earned: {}, log: [] } };
+  return { v: SAVE_VERSION, player: '', service: '', serviceInfo: null, usedServices: [], settings: { volume: 0.8, reducedFx: false, skipShow: false, skipScarico: false, testMusic: true, bossTips: true, tapeMarks: true, traceSignal: true }, tutorSeen: {}, logo: null, level: null, scarico: null, beers: 0, records: {}, reputation: { total: 0, earned: {}, log: [] } };
 }
 const Profile = (() => {
   let data = defaultProfile();
@@ -2176,7 +2233,7 @@ function applySettings () {
   SFX.setVolume(settings().volume);
   const tag = el('#service-tag');
   if (tag) tag.textContent = gameActive || Profile.data.service
-    ? (playerName() + ' · ' + serviceName()).toUpperCase() + ' · REPUTAZIONE ' + reputation()
+    ? (playerName() + ' · ' + serviceName()).toUpperCase() + ' · REPUTAZIONE ' + reputation() + (Profile.data.beers ? ' · 🍺 ' + Profile.data.beers : '')
     : 'STAGE CREW SIMULATOR';
   const logo = el('#service-logo');
   if (logo) logo.innerHTML = gameActive || Profile.data.service ? logoSVG(serviceLogo(), Profile.data.service, 30) : '';
@@ -2275,6 +2332,7 @@ function startNewGame (player, offer, offers) {
   Profile.data.usedServices = (offers || [offer]).map(o => o.name).concat(Profile.data.usedServices || []).slice(0, USED_SERVICES_KEEP);
   Profile.data.reputation = defaultProfile().reputation;
   Profile.data.scarico = null;
+  Profile.data.beers = 0;
   Profile.data.tutorSeen = {};   // il nuovo tecnico non ha ancora sentito i consigli del capo
   whenScene(scene => {
     gameActive = true;
@@ -2378,7 +2436,8 @@ function openScarico () {
   const f = document.createElement('iframe');
   f.id = 'scarico-frame';
   f.title = 'Lo scarico';
-  f.src = 'scarico.html?embed=1&service=' + encodeURIComponent(serviceName());
+  const logo = serviceLogo();
+  f.src = 'scarico.html?embed=1&service=' + encodeURIComponent(serviceName()) + '&bg=' + encodeURIComponent(logo.bg) + '&fg=' + encodeURIComponent(logo.fg);
   f.addEventListener('load', () => { try { f.contentWindow.focus(); } catch (e) { /* niente fuoco: si clicca */ } });
   document.body.appendChild(f);
 }
@@ -2396,8 +2455,10 @@ function finishScarico (r) {
   Profile.data.scarico = {
     skipped: !!r.skipped, lost, parsBroken, staBroken: !!staBroken, ricOk,
     delay: r.skipped ? 0 : (r.minutes || 0), beers: r.skipped ? 0 : (r.beers || 0),
-    endClock: r.endClock || '16:30', faulty: r.faulty || [], wrong: r.wrong || [], kidHits: r.kidHits || 0
+    endClock: r.endClock || '16:30', faulty: r.faulty || [], faultyIds: r.faultyIds || [], fixed: {},
+    wrong: r.wrong || [], kidHits: r.kidHits || 0
   };
+  Profile.data.beers = (Profile.data.beers || 0) + Profile.data.scarico.beers;
   if (!r.skipped) {
     const rotti = parsBroken + staBroken + (ricOk ? 0 : 1);
     const rep = (r.clean ? REP.scaricoClean : 0) + rotti * REP.scaricoBroken + (r.kidHits || 0) * REP.scaricoKid;
@@ -2425,6 +2486,8 @@ function montaggioMessage () {
   if (s && s.lost && s.lost.stativo) miss.push(s.lost.stativo === 1 ? 'uno stativo' : s.lost.stativo + ' stativi');
   const many = miss.length > 1 || (s && s.lost && (s.lost.par > 1 || s.lost.stativo > 1));
   if (miss.length) msg += ' Allo scarico si è rotto qualcosa: ' + (many ? 'mancano ' : 'manca ') + miss.join(' e ') + '.';
+  const nf = ((s && s.faultyIds) || []).filter(id => FAULT_BY_CASE[id]).length;
+  if (nf) msg += nf === 1 ? ' Un pezzo è arrivato difettoso: ha il segno arancione, toccalo e sistemalo.' : ' ' + nf + ' pezzi sono arrivati difettosi: hanno il segno arancione, toccali e sistemali.';
   return msg;
 }
 function scaricoSummary () {
@@ -3618,6 +3681,7 @@ function setSceneInput (on) {
 }
 function openRearPanel (compId) {
   const t = (gameState.placed[compId] || {}).type;
+  if (t === 'stativo' && isFaulty(compId)) { SFX.button(); fixFault('stativo'); return; }
   if (t === 'stativo') {
     const par = mountedOn(gameState.placed[compId]);
     showToast(par ? compLabel(compId) + ' regge ' + compLabel(par.id) + ': tocca il faro per il suo pannello.'
@@ -3637,6 +3701,9 @@ function openRearPanel (compId) {
   if (!REAR_PANELS[t] && t !== 'tavolo') return;
   rearPanelId = compId;
   el('#rear-detail').innerHTML = '';
+  const fb = el('#rear-fault');
+  fb.hidden = true; fb.innerHTML = '';
+  if (isFaulty(compId)) faultBox(fb, t);
   // prima visibile, poi disegnato: serve la larghezza vera del riquadro
   el('#rear-modal').classList.add('show');
   renderRearPanel();
@@ -3826,6 +3893,10 @@ function openCase (name) {
   el('#case-svg').querySelectorAll('.cc-coil').forEach(node => {
     node.addEventListener('click', () => pickCable(node.dataset.cable));
   });
+  const fb = el('#case-fault'), key = 'baule:' + name;
+  fb.hidden = true; fb.innerHTML = '';
+  el('#case-svg').classList.toggle('tangled', faultsLeft(key) > 0);
+  if (faultsLeft(key)) faultBox(fb, key, () => el('#case-svg').classList.remove('tangled'));
   el('#case-modal').classList.add('show');
   setSceneInput(false);
   SFX.caseOpen();
@@ -3841,6 +3912,7 @@ document.querySelectorAll('.case-btn').forEach(btn => btn.addEventListener('clic
 
 // prende (o rimette nel baule) un cavo
 function pickCable (cableId) {
+  if (openCaseName && faultsLeft('baule:' + openCaseName)) { showToast('Prima sbroglia i cavi: sono tutti aggrovigliati.'); return; }
   // prima si spegne l'evidenziazione del capo in attesa, poi si azzera
   if (window.__scene) window.__scene.clearPendingHighlight();
   gameState.pendingPort = null;
@@ -4096,6 +4168,12 @@ function giroChecks (giro) {
     list.push({ ok: !lights && placedOfType('par').length >= parsRequired(), what: lightsPlan(), ids: lights ? lights.ids : [], kind: 'lights' });
     const ov = dmxOverlaps();
     list.push({ ok: !ov.length, what: 'Indirizzi DMX senza sovrapposizioni', ids: [], kind: 'dmx' });
+  }
+  // pezzi arrivati difettosi dallo scarico, per il giro a cui appartengono
+  const faultTypes = { corrente: ['quadro'], audio: ['ampli', 'sub', 'top', 'pc'], luci: ['par', 'stativo'] }[g.id];
+  if (faultTypes.some(t => faultCounts()[t])) {
+    const bad = Object.keys(gameState.placed).filter(id => faultTypes.includes(gameState.placed[id].type) && isFaulty(id));
+    list.push({ ok: faultTypes.every(t => !faultsLeft(t)), what: 'Pezzi difettosi dello scarico controllati', ids: bad, kind: 'fault' });
   }
   return list;
 }
@@ -4622,6 +4700,8 @@ class StageScene extends Phaser.Scene {
       const tape = caseName === 'segnale' ? 0xeaff2b : caseName === 'corrente' ? 0xff4fb4 : null;
       this.drawFlightCase(cg, CASE_ISO, tape);
       if (!caseName) return;
+      this.casePos = this.casePos || {};
+      this.casePos[caseName] = p;
       this.add.text(p.x, p.y - 34, CABLE_CASES[caseName].title, {
         fontFamily: 'Barlow Condensed, sans-serif', fontSize: '11px', fontStyle: 'bold', color: '#e6e8eb'
       }).setOrigin(0.5).setDepth(2);
@@ -6448,7 +6528,8 @@ class StageScene extends Phaser.Scene {
       on: 'qualcosa è ancora spento.',
       stereo: 'destra e sinistra si sono scambiate.',
       lights: (lightingCheck() || {}).msg || 'le luci non sono al loro posto.',
-      dmx: 'due PAR si pestano i piedi sull\'indirizzo.'
+      dmx: 'due PAR si pestano i piedi sull\'indirizzo.',
+      fault: 'un pezzo arrivato difettoso dallo scarico va ancora controllato: toccalo (ha il segno arancione).'
     }[miss.kind];
     // secondo tentativo: il pezzo colpevole in rosso; dal terzo parla il capo
     if (miss && n >= 2) miss.ids.forEach(id => { const v = this.compVisuals[id]; if (v) this.setGlow(v, true); });
@@ -7166,6 +7247,25 @@ class StageScene extends Phaser.Scene {
     const undoBtn = el('#undo-btn'), redoBtn = el('#redo-btn');
     if (undoBtn) undoBtn.disabled = this.historyIndex <= 0;
     if (redoBtn) redoBtn.disabled = this.historyIndex >= this.history.length - 1;
+    this.refreshFaultMarks();
+  }
+
+  // segno arancione "!" sopra i pezzi (e i bauli) arrivati difettosi dallo scarico
+  refreshFaultMarks () {
+    (this.faultMarks || []).forEach(o => o.destroy());
+    this.faultMarks = [];
+    const mark = (x, y) => {
+      const g = this.add.graphics().setDepth(9000);
+      g.fillStyle(0x141519, 0.9); g.fillCircle(x, y, 11);
+      g.lineStyle(2.5, 0xf2843d, 1); g.strokeCircle(x, y, 11);
+      const t = this.add.text(x, y, '!', { fontFamily: 'Inter, sans-serif', fontSize: '15px', fontStyle: 'bold', color: '#f2843d' }).setOrigin(0.5).setDepth(9001);
+      this.faultMarks.push(g, t);
+    };
+    Object.keys(gameState.placed).filter(isFaulty).forEach(id => {
+      const v = this.compVisuals[id];
+      if (v) mark(v.container.x, v.container.y - 44);
+    });
+    Object.entries(this.casePos || {}).forEach(([name, p]) => { if (faultsLeft('baule:' + name)) mark(p.x + 22, p.y - 44); });
   }
 }
 

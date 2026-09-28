@@ -43,6 +43,8 @@ const path = require('path');
     const c = id => G.cases.find(x => x.def.id === id);
     damage(c('par'), 30); damage(c('par'), 25);
     damage(c('stativi'), 90);
+    damage(c('rack'), 70);        // difettoso: il finale va controllato al montaggio
+    damage(c('segnale'), 110);    // difettoso: cavi aggrovigliati nel baule
     // Tonino fermo (al telefono) e i due tecnici in cortile, poi ogni case al suo posto
     for (const w of G.workers) release(w);
     tonino('phone'); G.tonino.ai.t = -999;
@@ -72,7 +74,7 @@ const path = require('path');
   check(JSON.stringify(st.s.lost) === JSON.stringify({ par: 1, stativo: 0 }), 'pezzi mancanti sbagliati: ' + JSON.stringify(st.s.lost));
   check(st.par === 3 && st.stativo === 4 && st.req === 3 && st.lights === 3, 'dotazione o Test impianto sbagliati: ' + JSON.stringify(st));
   check(st.earned && st.rep === 0, 'reputazione dello scarico sbagliata: ' + st.rep);
-  check(/manca un PAR/.test(st.toast) && /sono le 16:[3-9]\d/.test(st.toast), 'il messaggio del montaggio non dice cosa manca o che ore sono: ' + st.toast);
+  check(/manca un PAR/.test(st.toast) && /sono le 1[67]:\d\d/.test(st.toast) && /segno arancione/.test(st.toast), 'il messaggio del montaggio non dice cosa manca o che ore sono: ' + st.toast);
   check(st.input, 'dopo lo scarico la scena resta bloccata');
   const sched = await ev(() => { renderSchedule(); return { now: el('#schedule-list .sched-row.now').textContent, first: el('#schedule-list .sched-row').textContent }; });
   check(/Montaggio/.test(sched.now), 'la scaletta non passa al montaggio');
@@ -93,6 +95,37 @@ const path = require('path');
   await ev(() => window.__scene.resetLevel(true));
   check(await ev(() => gameState.stock.par) === 3, 'il reset del livello ridà il PAR rotto');
   await p.waitForTimeout(600);
+
+  // birre dello scarico in testata (in orario sì, senza rotture no)
+  const beers = await ev(() => ({ n: Profile.data.beers, tag: el('#service-tag').textContent }));
+  check(beers.n === 1 && /🍺 1$/.test(beers.tag), 'birre dello scarico sbagliate: ' + JSON.stringify(beers));
+  // pezzi difettosi: il finale col segno arancione blocca il giro audio finché non lo sistemi
+  const f1 = await ev(() => {
+    const S = window.__scene, P = (ty, gx, gy) => { const w = gridToScreen(gx + .5, gy + .5); S.placeComponentAt(ty, w.x, w.y); };
+    P('tavolo', 7, 5);
+    const v = S.compVisuals[placedOfType('tavolo')[0].id].container; S.placeComponentAt('ampli', v.x, v.y);
+    const amp = placedOfType('ampli')[0];
+    const item = giroChecks(1).find(x => x.kind === 'fault');
+    openRearPanel(amp.id);
+    return { counts: faultCounts(), faulty: amp && isFaulty(amp.id), item: item && item.ok, marks: (S.faultMarks || []).length, box: !el('#rear-fault').hidden, id: amp && amp.id };
+  });
+  check(f1.counts.ampli === 1 && f1.counts['baule:segnale'] === 1 && f1.faulty && f1.item === false && f1.marks >= 4 && f1.box,
+    'finale difettoso non segnalato: ' + JSON.stringify(f1));
+  await p.click('#rear-fault .fault-fix');
+  await p.waitForTimeout(1500);
+  const f2 = await ev(id => ({ faulty: isFaulty(id), item: giroChecks(1).find(x => x.kind === 'fault').ok, box: !el('#rear-fault').hidden }), f1.id);
+  check(!f2.faulty && f2.item && !f2.box, 'il finale non si sistema: ' + JSON.stringify(f2));
+  await ev(() => closeRearPanel());
+  // baule SEGNALE aggrovigliato: prima si sbroglia, poi si prendono i cavi
+  await ev(() => openCase('segnale'));
+  await ev(() => pickCable('xlr'));
+  check(await ev(() => gameState.selectedCable) == null && /sbroglia/.test(await ev(() => el('#toast').textContent)), 'dal baule aggrovigliato si prendono cavi');
+  await p.click('#case-fault .fault-fix');
+  await p.waitForTimeout(1500);
+  await ev(() => pickCable('xlr'));
+  check(await ev(() => gameState.selectedCable) === 'xlr', 'dopo averlo sbrogliato il baule non dà i cavi');
+  await ev(() => { closeCase(); window.__scene.resetLevel(true); });
+  await p.waitForTimeout(400);
 
   // ricarica: Continua tiene lo scarico e la dotazione, e non lo rifà
   await open();
