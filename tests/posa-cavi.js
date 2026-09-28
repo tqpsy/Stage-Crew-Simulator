@@ -1,4 +1,4 @@
-/* Prototipo della posa dei cavi (prototipi/posa-cavi.html): ogni scenario
+/* Prototipo della posa dei cavi (posa-cavi.html): ogni scenario
    si può risolvere con i cavi, il nastro e i passacavi che dà; Gerry
    promuove una posa giusta e boccia ogni errore col suo motivo (passaggio
    senza passacavi, cavo lungo il passaggio, cavo in scena, ronzio, nastro
@@ -16,54 +16,14 @@ const path = require('path');
   const errs = []; p.on('pageerror', e => errs.push(e.message));
   const problems = [];
   const check = (ok, what) => { if (!ok) problems.push(what); };
-  await p.goto('file://' + path.join(__dirname, '..', 'prototipi', 'posa-cavi.html'));
+  await p.goto('file://' + path.join(__dirname, '..', 'posa-cavi.html'));
   await p.click('#btn-start');
 
-  /* risolutore: Dijkstra cella per cella con le regole di Gerry. Prima
-     microfono e multipolare, poi la corrente che non tocca le loro celle,
-     poi gli altri. Il nastro costa, così i cavi si raccolgono in fasci. */
-  const solve = () => {
-    const sc = S.scen, used = new Map();   // cella -> Set(tipi)
-    const rank = l => KINDS[l.kind].sensitive ? 0 : KINDS[l.kind].power ? 1 : 2;
-    const order = sc.lines.slice().sort((a, b) => rank(a) - rank(b));
-    const out = {};
-    for (const l of order) {
-      const from = dev(l.from).r, to = dev(l.to).r;
-      const sens = KINDS[l.kind].sensitive;
-      const ok = (i, j) => i >= 0 && i < COLS && j >= J0 && j < ROWS && !isExit(i, j) && !devAt(i, j) &&
-        (KINDS[l.kind].scene || !isInterior(i, j)) &&
-        !(used.has(key(i, j)) && [...used.get(key(i, j))].some(k => KINDS[k].sensitive ? KINDS[l.kind].power : KINDS[k].power && sens));
-      const dist = new Map(), prev = new Map(), q = [];
-      for (let i = 0; i < COLS; i++) for (let j = J0; j < ROWS; j++) if (touches(from, i, j) && ok(i, j)) { dist.set(key(i, j), 1); q.push([1, i, j]); }
-      let end = null;
-      while (q.length) {
-        q.sort((a, b) => a[0] - b[0]);
-        const [d, i, j] = q.shift();
-        if (d > dist.get(key(i, j))) continue;
-        if (touches(to, i, j)) { end = [i, j]; break; }
-        for (const [di, dj] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) {
-          const ni = i + di, nj = j + dj;
-          if (!ok(ni, nj)) continue;
-          const pa = passageAt(i, j), pb = passageAt(ni, nj);
-          if (pa && pa === pb && dj) continue;   // nel passaggio solo di traverso
-          const tape = needsTape(ni, nj) && !used.has(key(ni, nj)) ? 0.6 : 0;
-          const nd = d + 1 + tape + (pb ? 0.5 : 0);
-          if (nd < (dist.get(key(ni, nj)) ?? Infinity)) { dist.set(key(ni, nj), nd); prev.set(key(ni, nj), [i, j]); q.push([nd, ni, nj]); }
-        }
-      }
-      if (!end) { out[l.id] = null; continue; }
-      const cells = [end];
-      while (prev.has(key(...cells[0]))) cells.unshift(prev.get(key(...cells[0])));
-      cells.forEach(([i, j]) => { const k = key(i, j); if (!used.has(k)) used.set(k, new Set()); used.get(k).add(l.kind); });
-      out[l.id] = cells;
-    }
-    return out;
-  };
-
+  // la posa valida la trova la pagina stessa (autoRoute, la usa per tarare la pianta del gioco)
   for (const scen of ['festa', 'sala']) {
-    const res = await p.evaluate(({ scen, solveSrc }) => {
+    const res = await p.evaluate(scen => {
       start(scen);
-      const sol = eval('(' + solveSrc + ')')();
+      const sol = autoRoute();
       const lay = {};
       const lens = {};
       for (const l of S.scen.lines) {
@@ -77,7 +37,7 @@ const path = require('path');
       [...rows].forEach(r => { const [, j, i] = r.split(':'); const ps = passageAt(+i, +j); if (!S.ramps.has(ps.id + ':' + j)) toggleRamp(+i, +j); });
       const issues = analyze();
       return { lay, lens, issues: issues.map(i => i.type + ': ' + i.text), tape: tapeUsed(), tapeStock: S.scen.tape, ramps: S.ramps.size, rampStock: S.scen.ramps };
-    }, { scen, solveSrc: solve.toString() });
+    }, scen);
     console.log(scen, JSON.stringify({ lens: res.lens, tape: res.tape + '/' + res.tapeStock, ramps: res.ramps + '/' + res.rampStock }));
     Object.entries(res.lay).forEach(([id, r]) => check(r === true, `${scen}: il cavo ${id} non si posa: ${r}`));
     check(res.issues.length === 0, `${scen}: la posa del risolutore non passa: ${res.issues.join(' | ')}`);

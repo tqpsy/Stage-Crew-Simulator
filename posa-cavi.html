@@ -164,12 +164,15 @@ const isWall = i => i === 0 || i === COLS - 1;
 // dove i cavi vanno fermati col nastro: palco, Pit e platea, tranne lungo i muri
 const needsTape = (i, j) => { const z = zoneAt(i, j); return (z === 'scena' || z === 'pit' || z === 'platea') && !isWall(i); };
 
-// passaggi: corridoi percorsi a piedi lungo j (si attraversano in orizzontale)
-const PASSAGES = [
+// passaggi: corridoi percorsi a piedi lungo j (si attraversano in orizzontale).
+// Un passaggio o una via di fuga dove la crew ha già posato un pezzo non c'è
+// più (nel gioco il montaggio non li conosce): vedi start().
+const GYM_PASSAGES = [
   { id: 'artisti', label: 'passaggio degli artisti', r: [13, 4, 2, 4] },
   { id: 'corridoio', label: 'corridoio del pubblico', r: [9, 20, 2, 12] }
 ];
-const EXITS = [{ label: 'VIA DI FUGA', r: [0, 22, 3, 3] }];
+const GYM_EXITS = [{ label: 'VIA DI FUGA', r: [0, 22, 3, 3] }];
+let PASSAGES = GYM_PASSAGES, EXITS = GYM_EXITS;
 const inRect = (r, i, j) => i >= r[0] && i < r[0] + r[2] && j >= r[1] && j < r[1] + r[3];
 const passageAt = (i, j) => PASSAGES.find(p => inRect(p.r, i, j)) || null;
 const isExit = (i, j) => EXITS.some(e => inRect(e.r, i, j));
@@ -180,8 +183,10 @@ const isExit = (i, j) => EXITS.some(e => inRect(e.r, i, j));
 const KINDS = {
   power:   { name: 'Corrente', color: '#ff8a2a', power: true },
   mic:     { name: 'Microfono', color: '#4fb7ff', sensitive: true, scene: true },
+  signal:  { name: 'Segnale', color: '#8fd8ff', sensitive: true },
   speaker: { name: 'Casse', color: '#b98cff' },
   dmx:     { name: 'Luci (DMX + corrente)', color: '#49e07a', power: true },
+  data:    { name: 'DMX', color: '#2fbf8f' },
   multi:   { name: 'Multipolare', color: '#eee9df', sensitive: true, width: 1.6 }
 };
 
@@ -265,6 +270,10 @@ const devAt = (i, j) => Object.keys(S.scen.devices).find(d => inRect(dev(d).r, i
 const touches = (r, i, j) => !inRect(r, i, j) && (inRect(r, i - 1, j) || inRect(r, i + 1, j) || inRect(r, i, j - 1) || inRect(r, i, j + 1));
 // lunghezza stesa: da bordo a bordo dei pezzi, un passo da 50 cm per cella in più
 const pathLen = p => (p.length + 1) * CELL_M;
+/* in scena ci va il cavo del microfono, e quello di un pezzo che sta in
+   mezzo alla pedana (lì non c'è altra strada) */
+const nearInterior = r => { for (let i = r[0] - 1; i <= r[0] + r[2]; i++) for (let j = r[1] - 1; j <= r[1] + r[3]; j++) if (isInterior(i, j)) return true; return false; };
+const sceneOk = l => !!KINDS[l.kind].scene || nearInterior(dev(l.from).r) || nearInterior(dev(l.to).r);
 const lineLabel = l => `${l.name} (${dev(l.from).label} → ${dev(l.to).label})`;
 
 /* ---------------------------------------------------------------------
@@ -309,7 +318,7 @@ function analyze () {
         if (nb.some(n => passageAt(n[0], n[1]) === ps && n[1] !== j)) along.push({ c: [i, j], ps });
         else if (!S.ramps.has(ps.id + ':' + j)) open.push({ c: [i, j], ps });
       }
-      if (!KINDS[l.kind].scene && isInterior(i, j)) scene.push([i, j]);
+      if (!sceneOk(l) && isInterior(i, j)) scene.push([i, j]);
     });
     if (open.length) add('passaggio', [l.id], open.map(o => o.c), `<b>${l.name}</b> attraversa il ${open[0].ps.label} senza passacavi: il primo che passa ci inciampa e lo strappa.`);
     if (along.length) add('lungo', [l.id], along.map(o => o.c), `<b>${l.name}</b> corre lungo il ${along[0].ps.label}. Nel passacavi i cavi entrano solo di traverso: attraversalo dritto e poi prosegui fuori.`);
@@ -332,6 +341,88 @@ function analyze () {
   const t = tapeUsed();
   if (t > S.scen.tape) add('nastro', [], [], `<b>Nastro finito</b>: servono ${fmt(t)} m e il rotolo ne ha ${S.scen.tape}. Raggruppa i cavi in un fascio (un nastro per tutti) o passa lungo i muri.`);
   return issues;
+}
+
+/* RISOLUTORE — una posa valida qualunque, cella per cella (Dijkstra) con
+   le regole di Gerry: prima microfono e multipolare, poi la corrente che
+   non tocca le loro celle, poi gli altri; il nastro costa, così i cavi si
+   raccolgono in fasci. Serve a tarare la pianta del gioco (lunghezze,
+   nastro, passacavi) e ai test. Non è un aiuto per il giocatore. */
+function autoRoute () {
+  const used = new Map();   // cella -> Set(tipi)
+  const rank = l => KINDS[l.kind].sensitive ? 0 : KINDS[l.kind].power ? 1 : 2;
+  const out = {};
+  for (const l of S.scen.lines.slice().sort((a, b) => rank(a) - rank(b))) {
+    const from = dev(l.from).r, to = dev(l.to).r, sens = KINDS[l.kind].sensitive, pw = KINDS[l.kind].power;
+    const free = (i, j, strict) => i >= 0 && i < COLS && j >= J0 && j < ROWS && !isExit(i, j) && !devAt(i, j) &&
+      (sceneOk(l) || !isInterior(i, j)) &&
+      !(strict && used.has(key(i, j)) && [...used.get(key(i, j))].some(k => KINDS[k].sensitive ? pw : KINDS[k].power && sens));
+    let cells = null;
+    for (const strict of [true, false]) {
+      const dist = new Map(), prev = new Map(), q = [];
+      for (let i = 0; i < COLS; i++) for (let j = J0; j < ROWS; j++) if (touches(from, i, j) && free(i, j, strict)) { dist.set(key(i, j), 1); q.push([1, i, j]); }
+      let end = null;
+      while (q.length) {
+        let m = 0;
+        for (let k = 1; k < q.length; k++) if (q[k][0] < q[m][0]) m = k;
+        const [d, i, j] = q.splice(m, 1)[0];
+        if (d > dist.get(key(i, j))) continue;
+        if (touches(to, i, j)) { end = [i, j]; break; }
+        for (const [di, dj] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) {
+          const ni = i + di, nj = j + dj;
+          if (!free(ni, nj, strict)) continue;
+          const pa = passageAt(i, j), pb = passageAt(ni, nj);
+          if (pa && pa === pb && dj) continue;   // nel passaggio solo di traverso
+          const nd = d + 1 + (needsTape(ni, nj) && !used.has(key(ni, nj)) ? 0.6 : 0) + (pb ? 0.5 : 0);
+          if (nd < (dist.get(key(ni, nj)) ?? Infinity)) { dist.set(key(ni, nj), nd); prev.set(key(ni, nj), [i, j]); q.push([nd, ni, nj]); }
+        }
+      }
+      if (!end) continue;
+      cells = [end];
+      while (prev.has(key(...cells[0]))) cells.unshift(prev.get(key(...cells[0])));
+      break;
+    }
+    out[l.id] = cells;
+    if (cells) cells.forEach(([i, j]) => { const k = key(i, j); if (!used.has(k)) used.set(k, new Set()); used.get(k).add(l.kind); });
+  }
+  return out;
+}
+// righe di passaggio attraversate da una posa (una per passacavi)
+function rampRows (paths) {
+  const rows = new Set();
+  Object.values(paths).forEach(p => (p || []).forEach(([i, j]) => { const ps = passageAt(i, j); if (ps) rows.add(ps.id + ':' + j); }));
+  return rows;
+}
+
+/* LA PIANTA DEL GIOCO — il gioco (index.html) manda i pezzi posati e i cavi
+   collegati al montaggio. Il montaggio non guarda le lunghezze: un cavo che
+   dal vero non ci arriverebbe si allunga (nel baule c'era quello giusto).
+   Nastro e passacavi si tarano sulla posa del risolutore, con margine. */
+function buildScenario (layout) {
+  const scen = {
+    title: layout.title || 'Festa della scuola', sub: layout.sub || 'La tua regia', text: 'I cavi del tuo montaggio.',
+    devices: layout.devices, lines: layout.lines.slice(), tape: 0, ramps: 0
+  };
+  SCENARIOS.gioco = scen;
+  S.scen = scen;
+  setGym();
+  const sol = autoRoute();
+  scen.lines = scen.lines.filter(l => sol[l.id]);   // pezzi chiusi da altri pezzi: quel cavo resta sospeso
+  scen.lines.forEach(l => {
+    const need = pathLen(sol[l.id]) + 1;
+    if (l.len < need) l.len = Math.ceil(need / 5) * 5;
+  });
+  const cells = new Set();
+  Object.values(sol).forEach(p => (p || []).forEach(([i, j]) => { const ps = passageAt(i, j); if (needsTape(i, j) && !ps) cells.add(key(i, j)); }));
+  scen.tape = Math.max(4, Math.ceil(cells.size * CELL_M / 0.7));
+  scen.ramps = Math.max(1, rampRows(sol).size);
+  return scen;
+}
+// passaggi e vie di fuga della palestra, senza quelli occupati da un pezzo
+function setGym () {
+  const clear = r => !Object.values(S.scen.devices).some(d => { for (let i = d.r[0]; i < d.r[0] + d.r[2]; i++) for (let j = d.r[1]; j < d.r[1] + d.r[3]; j++) if (inRect(r, i, j)) return true; return false; });
+  PASSAGES = GYM_PASSAGES.filter(p => clear(p.r));
+  EXITS = GYM_EXITS.filter(e => clear(e.r));
 }
 
 /* ---------------------------------------------------------------------
@@ -496,8 +587,9 @@ function drawFloor () {
   ctx.font = `700 ${Math.max(8, cs * .42)}px 'Barlow Condensed', sans-serif`;
   ctx.fillStyle = '#49e07a'; ctx.save(); ctx.translate(cx(0) + cs * .5, cy(23.5)); ctx.rotate(-Math.PI / 2); ctx.fillText('USCITA', 0, 0); ctx.restore();
   ctx.fillStyle = 'rgba(242,197,61,.7)';
-  ctx.save(); ctx.translate(cx(14), cy(6)); ctx.rotate(-Math.PI / 2); ctx.fillText('ARTISTI', 0, 0); ctx.restore();
-  ctx.save(); ctx.translate(cx(10), cy(24)); ctx.rotate(-Math.PI / 2); ctx.fillText('CORRIDOIO', 0, 0); ctx.restore();
+  PASSAGES.forEach(p => {
+    ctx.save(); ctx.translate(cx(p.r[0] + p.r[2] / 2), cy(p.r[1] + Math.min(p.r[3], 8) / 2)); ctx.rotate(-Math.PI / 2); ctx.fillText(p.id === 'artisti' ? 'ARTISTI' : 'CORRIDOIO', 0, 0); ctx.restore();
+  });
 }
 
 function drawDevice (id, pulse) {
@@ -782,16 +874,17 @@ function finish () {
       <dt>Nastro usato</dt><dd>${fmt(res.tapeM)} / ${S.scen.tape} m</dd>
       <dt>Passacavi</dt><dd>${S.ramps.size} / ${S.scen.ramps}</dd>
     </dl>
-    <button class="primary" id="btn-again">Rigioca</button>
-    <button class="secondary" id="btn-other">Cambia scenario</button>`;
+    ${EMBED ? '<button class="primary" id="btn-open">Apri le porte</button>'
+      : '<button class="primary" id="btn-again">Rigioca</button><button class="secondary" id="btn-other">Cambia scenario</button>'}`;
   $('#end').hidden = false;
+  if (EMBED) { $('#btn-open').onclick = () => toGame(res); return; }
   $('#btn-again').onclick = () => { $('#end').hidden = true; start(S.key); };
   $('#btn-other').onclick = () => { $('#end').hidden = true; $('#start').hidden = false; };
-  if (window.parent !== window) window.parent.postMessage(res, '*');
 }
 
 function start (k) {
   S.key = k; S.scen = SCENARIOS[k];
+  setGym();
   S.paths = {}; S.ramps = new Set(); S.sel = null; S.rampMode = false; S.drag = null;
   S.flagged = {}; S.gerryIssues = null; S.inspections = 0; S.done = false; S.result = null;
   $('#h-title').firstChild.textContent = 'La posa dei cavi · ' + S.scen.title;
@@ -812,8 +905,33 @@ function renderScen () {
 }
 $('#scen').addEventListener('click', e => { const b = e.target.closest('button'); if (b) { S.key = b.dataset.k; renderScen(); } });
 $('#btn-start').onclick = () => { $('#start').hidden = true; if (!S.scen || S.scen !== SCENARIOS[S.key]) start(S.key); };
-renderScen();
 window.addEventListener('resize', () => { resize(); });
-start('festa');
+
+/* DENTRO IL GIOCO — index.html apre la posa in un iframe con ?embed=1:
+   la pagina chiede la pianta ('posa-cavi-pronta'), il gioco la manda
+   ('posa-cavi-pianta') e alla fine riceve il risultato ('posa-cavi-fine'). */
+const EMBED = new URLSearchParams(location.search).has('embed');
+function toGame (res) { window.parent.postMessage({ type: 'posa-cavi-fine', result: res }, '*'); }
+if (EMBED) {
+  $('#scen').hidden = true;
+  const skip = document.createElement('button');
+  skip.className = 'secondary'; skip.id = 'btn-skip';
+  skip.textContent = 'Salta la posa: le porte si aprono, ma niente reputazione';
+  skip.onclick = () => toGame({ type: 'posa-cavi', skipped: true });
+  $('#btn-start').after(skip);
+  $('#btn-start').disabled = true;
+  window.addEventListener('message', e => {
+    const d = e.data;
+    if (!d || d.type !== 'posa-cavi-pianta') return;
+    buildScenario(d.layout);
+    start('gioco');
+    $('#btn-start').disabled = false;
+  });
+  S.scen = SCENARIOS.festa; S.key = 'gioco';
+  window.parent.postMessage({ type: 'posa-cavi-pronta' }, '*');
+} else {
+  renderScen();
+  start('festa');
+}
 requestAnimationFrame(frame);
 </script>

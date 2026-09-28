@@ -1,7 +1,9 @@
 # Minigioco — La posa dei cavi (bozza di design)
 
-Stato: **prototipo** (`prototipi/posa-cavi.html`, test `tests/posa-cavi.js`).
-Le voci *Da decidere* restano aperte.
+Stato: **nel gioco** (livello 1, vedi *Integrazione nel gioco*):
+`posa-cavi.html`, test `tests/posa-cavi.js` (la pagina da sola, con due
+scenari fissi) e `tests/posa-cavi-gioco.js` (dentro il gioco). Le voci
+*Da decidere* restano aperte.
 
 ## In breve
 
@@ -67,22 +69,43 @@ pochi.
 Il test risolve ogni scenario con un percorso valido e controlla che il
 nastro basti con margine (≤ 85% del rotolo) ma non sia infinito (≥ 45%).
 
-## Integrazione nel gioco (proposta)
+## Integrazione nel gioco
 
-- I cavi da stendere sono **quelli collegati al montaggio**
-  (`gameState.edges`), con la lunghezza del cavo scelto dal baule e le
-  posizioni vere dei pezzi (`gameState.placed`). Nel prototipo sono fissi.
-- Come lo scarico: pagina a parte in un iframe, il risultato torna con
-  `postMessage` (`{ type: 'posa-cavi', stars, inspections, cableM, tapeM,
-  ramps }`, già mandato dal prototipo).
+**Fatto:**
+- In scaletta alle **20:00 — Messa in sicurezza dei cavi**: «Adesso» dopo il
+  collaudo, «Fatto» con le stelle e i giri di Gerry quando è finita.
+- Si apre da sola alla fine dello show del **primo** collaudo riuscito
+  (`afterShow`); se lo show si interrompe resta in scaletta, e il pulsante
+  della scaletta diventa «Stendi i cavi». Si fa una volta sola per partita.
+- Come lo scarico: `posa-cavi.html?embed=1` in un iframe. La pagina chiede
+  la pianta (`posa-cavi-pronta`), il gioco la manda (`posa-cavi-pianta`,
+  costruita da `posaLayout()`), il risultato torna con `posa-cavi-fine`.
+- La pianta è **quella del montaggio**: i pezzi posati nelle loro celle (i
+  pezzi montati stanno sulla loro base: PAR sullo stativo, regia sul tavolo,
+  microfono sull'asta) e i cavi di `gameState.edges` tra basi diverse. I
+  cavi che fanno la stessa strada si uniscono (PowerCON + DMX tra due PAR);
+  quelli tra pezzi dello stesso tavolo non vanno per terra.
+- Il montaggio non guarda le lunghezze: se il cavo del baule non basterebbe,
+  la posa lo allunga (a multipli di 5 m). Nastro e passacavi si tarano su
+  una posa valida trovata dalla pagina stessa (`autoRoute`), con margine.
+- Un passaggio o la via di fuga occupati da un pezzo al montaggio non ci
+  sono (il montaggio non li conosce ancora). Un cavo di un pezzo che sta in
+  mezzo alla pedana può passare in scena, come il microfono.
+- **Reputazione**, una volta sola: ★★★ +5, ★★ +3, ★ +1. Si può saltare
+  dalla sua schermata iniziale: le porte si aprono, reputazione ferma.
+- Il salvataggio tiene `cavi` (stelle, giri, metri di cavo e di nastro);
+  una partita nuova la azzera.
+
+**Da fare (proposta):**
 - Nell'isometrico, dopo la posa, i cavi seguono il percorso steso invece
   dell'instradamento automatico (`computeRoutePoints`).
-- **Reputazione**: fase completata +5 come le altre; un cavo lasciato in un
-  passaggio senza passacavi può diventare un imprevisto dello show (qualcuno
-  inciampa e stacca il cavo: il guasto del microfono ha già la causa
-  "cavo uscito dal suo ingresso").
+- Un cavo lasciato in un passaggio senza passacavi può diventare un
+  imprevisto dello show (qualcuno inciampa e stacca il cavo: il guasto del
+  microfono ha già la causa "cavo uscito dal suo ingresso").
 - Il ronzio lasciato apposta si sente davvero durante il discorso del
   preside (un fruscio a 50 Hz sul canale del microfono).
+- Passaggi e via di fuga anche al montaggio (posa guidata), così non si
+  perdono sotto un pezzo.
 
 ## Da decidere
 

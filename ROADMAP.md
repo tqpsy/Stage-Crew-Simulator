@@ -81,12 +81,13 @@ cambiano da una fase all'altra.
 
 ## Posa dei cavi
 
-- **Minigioco della posa dei cavi** (prototipo): pianta dall'alto, i cavi si
-  stendono trascinando il dito; poi Gerry il bidello controlla via di fuga,
-  passacavi nei passaggi, cavi in scena, nastro e ronzio (microfono accanto
-  alla corrente). `prototipi/posa-cavi.html`, design in
-  `docs/minigioco-posa-cavi.md`. Da fare: portarlo nel gioco dopo il Test
-  impianto, con i cavi veri del montaggio.
+- **Minigioco della posa dei cavi** (20:00 in scaletta): nel gioco per il
+  livello 1. `posa-cavi.html` si apre alla fine dello show del primo
+  collaudo con i pezzi e i cavi del montaggio; i cavi si stendono
+  trascinando il dito, poi Gerry il bidello controlla via di fuga,
+  passacavi nei passaggi, cavi in scena, nastro e ronzio. Le stelle danno
+  reputazione. Design in `docs/minigioco-posa-cavi.md`. Da fare: i cavi
+  stesi anche nell'isometrico, conseguenze nello show.
 
 ## Test automatici
 
@@ -99,6 +100,8 @@ cambiano da una fase all'altra.
   provocano errori apposta spengono i consigli (`settings().bossTips`).
 - `tests/scarico.js`: lo scarico dentro il gioco e le sue conseguenze sul
   montaggio. Senza rete servono `PHASER_PATH` e `MATTER_PATH`.
+- `tests/posa-cavi.js` (la pagina da sola) e `tests/posa-cavi-gioco.js` (la
+  posa dentro il gioco, con un montaggio vero).
 
 ## Partita, menù e highscore
 
