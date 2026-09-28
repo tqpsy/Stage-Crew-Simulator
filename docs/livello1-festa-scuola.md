@@ -204,7 +204,7 @@ Filo comune: la scuola, con i personaggi delle **materie** che prendono vita.
 | Ruolo | Scelta consigliata | Alternative |
 |------|-------------------|-------------|
 | Preside | Donald Trump ("Preside Tramp"): discorso lunghissimo, vuole il volume più alto di tutti | — |
-| DJ | Albert Einstein, "DJ E=mc²": capelli elettrizzati, BPM relativi | Leonardo da Vinci con piatti di legno inventati da lui; Sergio Mattarella serissimo alla techno |
+| DJ | **Deciso: il duo "Notte fuori controllo"**: in consolle DJ Inestimabile (Andrea Diprè), al microfono il vocalist Musa Esistenziale (Rosario Muniz). Techno. | (prima: Einstein "DJ E=mc²") |
 | Cantante con chitarra | Dante Alighieri, "Nel mezzo del cammin — unplugged" | Cristiano Ronaldo che canta e urla "SIUUU" nel mic; Napoleone con la chitarra (e l'asta del mic troppo alta) |
 | Bidello (dà le richieste extra) | **Deciso: Gerry Scotti** ("Gerry, il bidello") | — |
 
@@ -217,6 +217,32 @@ sulla fronte, abbronzatura arancio con le occhiaie chiare, sopracciglia chiare
 aggrottate, occhi a fessura, bocca a cul di gallina, faccione squadrato con
 le guance cadenti; giacca blu larga e cravatta rossa lunghissima. Nessuna
 bandiera o simbolo nazionale. Ritratto con `viewBox="6 2 88 88"`.
+
+**DJ Inestimabile e Musa Esistenziale** (fatto, disegnati sulle foto): simboli
+SVG in `img/personaggi.svg` (`dipre`, `dipre-cuffie`, `musa`, `musa-base`), stesso
+stile e stesso ritaglio del ritratto (`viewBox="6 2 88 88"`).
+- DJ Inestimabile: faccione pallido con guance piene e doppio mento, capelli
+  castano scuro con la riga a sinistra e la frangia sulla fronte, occhi
+  leggermente sbarrati e vitrei con occhiaie violacee e rossore, sudore;
+  labbro di sopra sottile con l'arco marcato, sotto pieno, ghigno appena
+  accennato; abito scuro, cravatta rossa, cuffie (al collo o in testa).
+  Si capisce che è "fatto" solo dall'espressione: niente riferimenti espliciti.
+- Musa Esistenziale: faccione largo e pallido, capelli neri lunghissimi e mossi
+  con la riga in mezzo, barba scura rasata, bocca spalancata con i denti
+  storti e giallastri; a petto nudo e pieno di peli, catenina con la croce.
+  Intero sul palco: slip bianco, niente di volgare.
+- Locandina `img/locandina-dj.svg`: rifà la scena del divano del video
+  ("per il SOCIALE" → "per la SCUOLA"), con Diprè che porge il microfono e
+  scratcha alla consolle; titolo al neon **NOTTE FUORI CONTROLLO**. Si apre
+  dalla scaletta (voce delle 21:15, tasto "Guarda la locandina"; campo
+  `poster` in `SCHEDULE`). Solo nomi d'arte.
+- DJ set (da fare): il lavoro è inseguire i guasti che combinano. Proposte:
+  gain del mixer DJ in rosso; Musa che si mangia il microfono (larsen); Musa
+  che scende verso le casse; roba del DJ attaccata alla ciabatta sbagliata
+  (scatta una fase); macchina del fumo sotto il rilevatore; cavo del
+  microfono strappato ballando; memoria luci al "drop". Finale: non vogliono
+  smettere, Gerry stacca la corrente e li butta fuori; da lì parte l'ultimo
+  obiettivo della serata.
 
 **Gerry, il bidello** (fatto): caricatura vettoriale nello stile del Preside
 Tramp (simbolo SVG `#gerry`, `viewBox 0 0 100 140`, colori piatti senza
@@ -337,7 +363,7 @@ Giro del livello: **Montaggio → Test impianto → [cambio palco → spettacolo
 
 ## Decisi (proposte accettate)
 
-- Personaggi: Preside Tramp, DJ E=mc² (Einstein), Dante unplugged, Gerry Scotti bidello.
+- Personaggi: Preside Tramp, DJ Inestimabile e Musa Esistenziale ("Notte fuori controllo"), Dante unplugged, Gerry Scotti bidello.
 - Richieste extra del livello 1: monitor per Dante, telefono del bidello, macchina del fumo.
 - Pausa: sì, con il palco oscurato.
 - Caricature: vettoriali disegnate nel codice, come i dispositivi.
