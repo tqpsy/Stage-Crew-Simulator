@@ -505,6 +505,8 @@
   #foglio{
     position:absolute; left:10px; top:10px; z-index:15;
     max-width:min(330px, calc(100% - 20px));
+    /* aperto resta dentro la scena: non copre le schede sotto */
+    max-height:calc(100% - 20px); overflow-y:auto;
     background:rgba(28,29,34,.92); border:1px solid var(--hairline); border-radius:8px;
     box-shadow:0 4px 16px rgba(0,0,0,.35); font-size:12px;
   }
@@ -527,7 +529,7 @@
      basso a sinistra, sulla platea vuota, sopra la barra "cavo in mano", e
      aperto cresce verso l'alto senza uscire dalla scena */
   @media (max-width:699px){
-    #foglio{ top:auto; bottom:60px; max-height:calc(100% - 70px); overflow-y:auto; }
+    #foglio{ top:auto; bottom:60px; max-height:calc(100% - 70px); }
   }
 
   /* Il pannello scorre INTERNAMENTE se il contenuto non ci sta (max-height +

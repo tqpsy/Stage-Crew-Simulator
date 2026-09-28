@@ -4121,7 +4121,9 @@ function updateGiroUI () {
 }
 
 // foglio di montaggio: il giro in corso, voce per voce
-let foglioOpen = window.innerWidth >= 700;
+// aperto di partenza solo sugli schermi larghi: su tablet e telefoni
+// coprirebbe le celle dove vanno i pezzi (si apre toccandolo)
+let foglioOpen = window.innerWidth >= 1100;
 function updateFoglio () {
   const box = el('#foglio');
   if (!box) return;
