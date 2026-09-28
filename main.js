@@ -6758,12 +6758,33 @@ class StageScene extends Phaser.Scene {
     g.fillStyle(col, 0.3 * a); g.fillCircle(b.x, b.y, 18);
     g.fillStyle(0xffffff, 0.85 * a); g.fillCircle(b.x, b.y, 6);
   }
-  // colori speculari: i PAR esterni un colore, quelli interni l'altro
+  // posizione speculare: 0 per i PAR più esterni, poi verso il centro
   parMirrorIndex (geo) {
     const order = geo.map((b, i) => i).sort((i, j) => geo[i].x - geo[j].x);
     const m = [];
     order.forEach((gi, k) => { m[gi] = Math.min(k, order.length - 1 - k); });
     return m;
+  }
+  /* durante lo show la consolle comanda gli INDIRIZZI, non i singoli fari:
+     i PAR con stesso universo, indirizzo e modalità ricevono gli stessi
+     canali, quindi fanno per forza la stessa cosa (colore e accensione).
+     Restituisce per ogni PAR il numero del suo gruppo, numerando i gruppi
+     dall'esterno verso il centro (e da sinistra a parità). */
+  parDmxGroups (geo) {
+    const mirror = this.parMirrorIndex(geo);
+    const byKey = new Map();
+    geo.forEach((b, i) => {
+      const d = parDmx(b.c);
+      const key = dmxUniverse(b.c.id) + ':' + d.addr + ':' + d.mode;
+      if (!byKey.has(key)) byKey.set(key, { rank: mirror[i], x: b.x, members: [] });
+      const g = byKey.get(key);
+      g.rank = Math.min(g.rank, mirror[i]); g.x = Math.min(g.x, b.x);
+      g.members.push(i);
+    });
+    const groups = [...byKey.values()].sort((a, b) => a.rank - b.rank || a.x - b.x);
+    const idx = [];
+    groups.forEach((g, n) => g.members.forEach(i => { idx[i] = n; }));
+    return { idx, count: groups.length };
   }
 
   // luci: i PAR con corrente impazziscono, colori a caso e strobo
@@ -7061,15 +7082,21 @@ class StageScene extends Phaser.Scene {
 
     const beams = this.fxObj(this.add.graphics().setDepth(45).setBlendMode(Phaser.BlendModes.ADD));
     const waves = this.fxObj(this.add.graphics().setDepth(46));
-    const PALETTE = [[0xff3b6b, 0x3b8bff], [0xffb13b, 0xff3bd1], [0x3bffb0, 0x3b8bff], [0xffffff, 0xffb13b], [0xb03bff, 0x3bfff2]];
+    // un colore diverso per ogni gruppo DMX (fino a 4 gruppi, poi si ripete)
+    const PALETTE = [
+      [0xff3b6b, 0x3b8bff, 0xffb13b, 0x3bffb0], [0xffb13b, 0xff3bd1, 0x3bfff2, 0xffffff],
+      [0x3bffb0, 0x3b8bff, 0xff3b6b, 0xffe13b], [0xffffff, 0xffb13b, 0xb03bff, 0x3bffb0],
+      [0xb03bff, 0x3bfff2, 0xffb13b, 0xff3b6b]
+    ];
     const pars = this.parBeamGeometry(placedOfType('par').filter(c => isRunning(c.id) && this.compVisuals[c.id]));
-    const mirror = this.parMirrorIndex(pars);
+    // stesso indirizzo = stesso comando: colore e accensione vanno per gruppo
+    const group = this.parDmxGroups(pars).idx;
     pars.forEach(b => { b.k = 0; });
     const speakers = this.visualsOf('sub', 'top').map(v => ({ v, s: this.fxHold(v) }));
     const st = { kick: 0, beat: 0, flash: 0 };
 
-    // i PAR si accendono a coppie speculari, dall'esterno verso il centro
-    pars.forEach((b, i) => this.fxTween({ targets: b, k: 1, delay: T_LIGHTS + mirror[i] * 350, duration: 300 }));
+    // i PAR si accendono un gruppo DMX alla volta, dall'esterno verso il centro
+    pars.forEach((b, i) => this.fxTween({ targets: b, k: 1, delay: T_LIGHTS + group[i] * 350, duration: 300 }));
     this.fxTween({ targets: pars, k: 0, delay: T_END, duration: 600 });
 
     // disegno a ~30 fps: i fasci non si muovono, pulsano col beat e
@@ -7080,7 +7107,7 @@ class StageScene extends Phaser.Scene {
       const colors = PALETTE[Math.floor(st.beat / 2) % PALETTE.length];
       const pulse = 0.55 + 0.45 * st.kick;
       pars.forEach((b, i) => {
-        const col = st.flash > 0.3 ? 0xffffff : colors[mirror[i] % 2];
+        const col = st.flash > 0.3 ? 0xffffff : colors[group[i] % colors.length];
         this.drawParBeam(beams, b, col, b.k * pulse);
       });
       // onde d'urto che escono dalle casse a ogni colpo di cassa
