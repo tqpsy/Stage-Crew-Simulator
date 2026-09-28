@@ -204,12 +204,58 @@ Filo comune: la scuola, con i personaggi delle **materie** che prendono vita.
 | Ruolo | Scelta consigliata | Alternative |
 |------|-------------------|-------------|
 | Preside | Donald Trump ("Preside Tramp"): discorso lunghissimo, vuole il volume più alto di tutti | — |
-| DJ | Albert Einstein, "DJ E=mc²": capelli elettrizzati, BPM relativi | Leonardo da Vinci con piatti di legno inventati da lui; Sergio Mattarella serissimo alla techno |
+| DJ | **Deciso: il duo "Notte fuori controllo"**: in consolle DJ Inestimabile (Andrea Diprè), al microfono il vocalist Musa Esistenziale (Rosario Muniz). Techno. | (prima: Einstein "DJ E=mc²") |
 | Cantante con chitarra | Dante Alighieri, "Nel mezzo del cammin — unplugged" | Cristiano Ronaldo che canta e urla "SIUUU" nel mic; Napoleone con la chitarra (e l'asta del mic troppo alta) |
-| Bidello (dà le richieste extra) | Gerry Scotti o Carlo Conti | Gordon Ramsay che urla per i cavi in giro |
+| Bidello (dà le richieste extra) | **Deciso: Gerry Scotti** ("Gerry, il bidello") | — |
 
 Personaggi storici: nessun problema di diritti. Personaggi viventi: caricatura
 disegnata e nome parodia.
+
+**Preside Tramp** (fatto, rifatto sulle foto): simbolo SVG `#tramp` in
+`prototipi/spettacolo-preside.html`. Tratti: ciuffo biondo enorme col riporto
+sulla fronte, abbronzatura arancio con le occhiaie chiare, sopracciglia chiare
+aggrottate, occhi a fessura, bocca a cul di gallina, faccione squadrato con
+le guance cadenti; giacca blu larga e cravatta rossa lunghissima. Nessuna
+bandiera o simbolo nazionale. Ritratto con `viewBox="6 2 88 88"`.
+
+**DJ Inestimabile e Musa Esistenziale** (fatto, disegnati sulle foto): simboli
+SVG in `img/personaggi.svg` (`dipre`, `dipre-cuffie`, `musa`, `musa-base`), stesso
+stile e stesso ritaglio del ritratto (`viewBox="6 2 88 88"`).
+- DJ Inestimabile: faccione pallido con guance piene e doppio mento, capelli
+  castano scuro con la riga a sinistra e la frangia sulla fronte, occhi
+  leggermente sbarrati e vitrei con occhiaie violacee e rossore, sudore;
+  labbro di sopra sottile con l'arco marcato, sotto pieno, ghigno appena
+  accennato; abito scuro, cravatta rossa, cuffie (al collo o in testa).
+  Si capisce che è "fatto" solo dall'espressione: niente riferimenti espliciti.
+- Musa Esistenziale: faccione largo e pallido, capelli neri lunghissimi e mossi
+  con la riga in mezzo, barba scura rasata, bocca spalancata con i denti
+  storti e giallastri; a petto nudo e pieno di peli, catenina con la croce.
+  Intero sul palco: slip bianco, niente di volgare.
+- Locandina `img/locandina-dj.svg`: rifà la scena del divano del video
+  ("per il SOCIALE" → "per la SCUOLA"), con Diprè che porge il microfono e
+  scratcha alla consolle; titolo al neon **NOTTE FUORI CONTROLLO**. Si apre
+  dalla scaletta (voce delle 21:15, tasto "Guarda la locandina"; campo
+  `poster` in `SCHEDULE`). Solo nomi d'arte.
+- DJ set (da fare): il lavoro è inseguire i guasti che combinano. Proposte:
+  gain del mixer DJ in rosso; Musa che si mangia il microfono (larsen); Musa
+  che scende verso le casse; roba del DJ attaccata alla ciabatta sbagliata
+  (scatta una fase); macchina del fumo sotto il rilevatore; cavo del
+  microfono strappato ballando; memoria luci al "drop". Finale: non vogliono
+  smettere, Gerry stacca la corrente e li butta fuori; da lì parte l'ultimo
+  obiettivo della serata.
+
+**Gerry, il bidello** (fatto): caricatura vettoriale nello stile del Preside
+Tramp (simbolo SVG `#gerry`, `viewBox 0 0 100 140`, colori piatti senza
+contorni). Tratti esagerati: testone a pera pelato con due fili in cima,
+ciuffi grigi ai lati, un sopracciglio più alto, occhi a fessura sornioni,
+nasone, sorriso storto; corporatura grossa nel camice blu da bidello con la
+camicia azzurra aperta. Per il ritratto si usa il ritaglio `viewBox="6 0 88 88"`
+(la testa è più alta di quella del preside). Dove compare:
+- `prototipi/spettacolo-preside.html`: quando il guasto lo trova lui, sale
+  sul palco per qualche secondo ("Tranquilli, ci penso io!") e la sua faccina
+  accompagna la nota nella scheda finale;
+- `scarico.html`: visto dall'alto dietro al carrello (testa pelata con la
+  corona grigia, spalle larghe nel camice blu).
 
 ## Tra una fase e l'altra (proposta)
 
@@ -317,7 +363,7 @@ Giro del livello: **Montaggio → Test impianto → [cambio palco → spettacolo
 
 ## Decisi (proposte accettate)
 
-- Personaggi: Preside Tramp, DJ E=mc² (Einstein), Dante unplugged, Gerry Scotti bidello.
+- Personaggi: Preside Tramp, DJ Inestimabile e Musa Esistenziale ("Notte fuori controllo"), Dante unplugged, Gerry Scotti bidello.
 - Richieste extra del livello 1: monitor per Dante, telefono del bidello, macchina del fumo.
 - Pausa: sì, con il palco oscurato.
 - Caricature: vettoriali disegnate nel codice, come i dispositivi.
@@ -328,6 +374,11 @@ Giro del livello: **Montaggio → Test impianto → [cambio palco → spettacolo
 
 `prototipi/spettacolo-preside.html`: la fase del discorso del preside, cliccabile,
 per provare il ritmo prima di portarla nel gioco.
+
+Nella scheda iniziale, «Cavi lasciati dalla posa» prova le conseguenze della
+posa dei cavi finita col tempo (vedi `docs/minigioco-posa-cavi.md`): cavo nel
+passaggio (qualcuno inciampa, il guasto è l'ingresso), microfono accanto alla
+corrente (ronzio), cavo in scena (il preside inciampa).
 
 ### Dopo la prima prova
 

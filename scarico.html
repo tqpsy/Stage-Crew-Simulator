@@ -976,7 +976,7 @@ function scriptEvents () {
     G.cart = { kind: 'cart', body: b, pv: { x: 0, y: 1.1 } }; b.plugin.ent = G.cart;
     b.collisionFilter.mask &= ~CAT.WALL;
     Composite.add(G.world, b);
-    bubble(G.cart, 'Buonasera ragazzi! Passo col carrello!', 3);
+    bubble(G.cart, 'Buonasera ragazzi! Sono Gerry, passo col carrello!', 3);
   });
   once('telefono', 150, () => {
     const T = G.tonino; tonino('phone'); bubble(T, 'È mia moglie, un attimo…', 3);
@@ -1368,10 +1368,13 @@ function drawCart () {
   ctx.fillStyle = '#2f6fb0'; rr(-28, -40, 56, 80, 6); ctx.fill();
   ctx.fillStyle = '#f2c53d'; ctx.beginPath(); ctx.arc(-8, -12, 13, 0, Math.PI * 2); ctx.fill();
   ctx.fillStyle = '#9fb7cc'; ctx.fillRect(4, 4, 18, 26);
-  // Gerry, il bidello, dietro al carrello
-  ctx.fillStyle = '#6d6a63'; ctx.beginPath(); ctx.ellipse(0, -58, 18, 11, 0, 0, Math.PI * 2); ctx.fill();
-  ctx.fillStyle = '#e0b48f'; ctx.beginPath(); ctx.arc(0, -58, 8, 0, Math.PI * 2); ctx.fill();
-  ctx.fillStyle = '#cfd2d6'; ctx.beginPath(); ctx.arc(0, -60, 7, Math.PI, 0); ctx.fill();
+  // Gerry, il bidello, dietro al carrello: spalle larghe nel camice blu,
+  // testone pelato con la corona di capelli grigi dietro e ai lati, nasone
+  ctx.fillStyle = '#2f5d8a'; ctx.beginPath(); ctx.ellipse(0, -58, 22, 12, 0, 0, Math.PI * 2); ctx.fill();
+  ctx.fillStyle = '#e8a883'; ctx.beginPath(); ctx.arc(0, -57, 9.5, 0, Math.PI * 2); ctx.fill();
+  ctx.fillStyle = '#d6926c'; ctx.beginPath(); ctx.arc(0, -47.5, 2.6, 0, Math.PI * 2); ctx.fill();
+  ctx.strokeStyle = '#7d7570'; ctx.lineWidth = 4; ctx.beginPath(); ctx.arc(0, -57, 8, Math.PI * 0.9, Math.PI * 2.1); ctx.stroke();
+  ctx.fillStyle = '#f4c7a4'; ctx.beginPath(); ctx.arc(-2, -59, 3, 0, Math.PI * 2); ctx.fill();
   ctx.restore();
 }
 

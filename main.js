@@ -1602,7 +1602,7 @@ const SERVICE_NAME_MAX = 28;   // caratteri del nome (inventato) di un service
 const USED_SERVICES_KEEP = 400; // nomi di service già proposti, da non riproporre
 
 function defaultProfile () {
-  return { v: SAVE_VERSION, player: '', service: '', serviceInfo: null, usedServices: [], settings: { volume: 0.8, reducedFx: false, skipShow: false, skipScarico: false, testMusic: true, bossTips: true, tapeMarks: true, traceSignal: true }, tutorSeen: {}, logo: null, level: null, scarico: null, beers: 0, records: {}, reputation: { total: 0, earned: {}, log: [] } };
+  return { v: SAVE_VERSION, player: '', service: '', serviceInfo: null, usedServices: [], settings: { volume: 0.8, reducedFx: false, skipShow: false, skipScarico: false, testMusic: true, bossTips: true, tapeMarks: true, traceSignal: true }, tutorSeen: {}, logo: null, level: null, scarico: null, cavi: null, beers: 0, records: {}, reputation: { total: 0, earned: {}, log: [] } };
 }
 const Profile = (() => {
   let data = defaultProfile();
@@ -2186,7 +2186,8 @@ const REP = {
   deviceBroken: 0,     // apparecchio rotto: non è colpa del giocatore
   scaricoClean: 3,     // scarico senza nessun danno
   scaricoBroken: -2,   // ogni pezzo rotto allo scarico (lì è colpa della crew)
-  scaricoKid: -1       // ogni bambino urtato con un case
+  scaricoKid: -1,      // ogni bambino urtato con un case
+  cavi: { 3: 5, 2: 3, 1: 1 }   // posa dei cavi, per stelle (Gerry promuove al 1°, 2°, 3°+ giro)
 };
 const REP_LOG_KEEP = 50;
 const reputation = () => Profile.data.reputation.total;
@@ -2317,8 +2318,8 @@ function openMenu (page) {
 function closeMenu () {
   menuOpen = false;
   el('#menu-modal').classList.remove('show');
-  setSceneInput(!scheduleOpen && !scaricoOpen);
-  sceneKeyboard(!scaricoOpen);
+  setSceneInput(!scheduleOpen && !scaricoOpen && !caviOpen);
+  sceneKeyboard(!scaricoOpen && !caviOpen);
 }
 const cleanName = s => String(s || '').replace(/\s+/g, ' ').trim().slice(0, NAME_MAX);
 
@@ -2332,6 +2333,7 @@ function startNewGame (player, offer, offers) {
   Profile.data.usedServices = (offers || [offer]).map(o => o.name).concat(Profile.data.usedServices || []).slice(0, USED_SERVICES_KEEP);
   Profile.data.reputation = defaultProfile().reputation;
   Profile.data.scarico = null;
+  Profile.data.cavi = null;
   Profile.data.beers = 0;
   Profile.data.tutorSeen = {};   // il nuovo tecnico non ha ancora sentito i consigli del capo
   whenScene(scene => {
@@ -2363,9 +2365,10 @@ const SCHEDULE = [
   { time: '16:00', title: 'Arrivo e scarico', text: 'Il furgone accosta al cortile: tu e Tonino portate i case nella palestra prima delle 16:30.', phase: 'scarico' },
   { time: '16:30', title: 'Montaggio impianto', text: 'Corrente dal Quadro, PC → scheda → mixer → finale → casse, i PAR in DMX dalla consolle.', phase: 'montaggio' },
   { time: '19:30', title: 'Test impianto', text: 'Il collaudo: tutto acceso senza scatti né colpi nelle casse, audio e luci a posto.', phase: 'collaudo', rep: REP.phaseDone },
+  { time: '20:00', title: 'Messa in sicurezza dei cavi', text: 'I cavi stesi per terra come si deve: via di fuga libera, passacavi nei passaggi, nastro dove si cammina. Gerry, il bidello, controlla prima di aprire.', phase: 'cavi' },
   { time: '20:30', title: 'Apertura porte', text: 'Entrano famiglie e studenti; musica di sottofondo dal PC.' },
   { time: '21:00', title: 'Discorso del Preside Tramp', text: 'Microfono su asta sul palco, sul CH 1 del mixer. Vuole essere sentito fino al parcheggio.' },
-  { time: '21:15', title: 'DJ E=mc²', text: 'Einstein alla consolle: mixer DJ → DI → mixer di sala, luci colorate al drop.' },
+  { time: '21:15', title: 'Notte fuori controllo', text: 'DJ Inestimabile in consolle e Musa Esistenziale al microfono: mixer DJ → DI → mixer di sala, il microfono del vocalist, luci colorate al drop. E tanti guasti da inseguire.', poster: 'img/locandina-dj.svg' },
   { time: '22:00', title: 'Dante unplugged', text: 'Voce e chitarra (via DI). Gli ingressi non bastano: cambio palco e via il DJ.' },
   { time: '23:00', title: 'Smontaggio', text: 'Tutto nei case e i case nel furgone. Si torna a casa.' }
 ];
@@ -2374,6 +2377,7 @@ function schedulePhaseState (phase) {
   if (!phase) return 'soon';
   if (phase === 'scarico') return scaricoDone() ? 'done' : 'now';
   if (phase === 'montaggio') return collaudoDone() ? 'done' : scaricoDone() ? 'now' : 'next';
+  if (phase === 'cavi') return caviDone() ? 'done' : collaudoDone() ? 'now' : 'next';
   return collaudoDone() ? 'done' : 'next';
 }
 const SCHEDULE_STATE_LABEL = { done: 'Fatto', now: 'Adesso', next: 'Da fare', soon: 'In arrivo' };
@@ -2394,17 +2398,22 @@ function renderSchedule () {
       + '<span class="sched-body"><b>' + escapeHtml(s.title) + '</b>'
       + (s.rep ? ' <span class="sched-rep">+' + s.rep + ' reputazione</span>' : '')
       + '<small>' + escapeHtml(s.phase === 'scarico' && scaricoDone() ? scaricoSummary()
-        : s.phase === 'montaggio' ? s.text.replace('i PAR', parsRequired() + ' PAR') : s.text) + '</small></span>'
+        : s.phase === 'cavi' && caviDone() ? caviSummary()
+        : s.phase === 'montaggio' ? s.text.replace('i PAR', parsRequired() + ' PAR') : s.text) + '</small>'
+      + (s.poster ? '<button class="sched-poster" type="button" data-poster="' + s.poster + '">🎟️ Guarda la locandina</button>' : '')
+      + '</span>'
       + '<span class="sched-state">' + SCHEDULE_STATE_LABEL[st] + '</span></li>';
   }).join('');
 }
 // first: aperta dalla nuova partita; chiudendola si parte col montaggio
-let scheduleOpen = false, scheduleFirst = false;
+let scheduleOpen = false, scheduleFirst = false, scheduleCavi = false;
 function openSchedule (first) {
   scheduleOpen = true;
   scheduleFirst = !!first;
   renderSchedule();
-  el('#schedule-go').textContent = first ? 'Al lavoro!' : 'Torna al palco';
+  // dopo il collaudo la scaletta porta alla posa dei cavi
+  scheduleCavi = !first && schedulePhaseState('cavi') === 'now';
+  el('#schedule-go').textContent = first ? 'Al lavoro!' : scheduleCavi ? 'Stendi i cavi' : 'Torna al palco';
   el('#schedule-modal').classList.add('show');
   setSceneInput(false);
 }
@@ -2413,7 +2422,7 @@ function closeSchedule () {
   scheduleOpen = false;
   el('#schedule-modal').classList.remove('show');
   if (scheduleFirst) { if (scaricoDone()) showToast(montaggioMessage(), 'ok'); else openScarico(); }
-  setTimeout(() => { if (!scheduleOpen && !scaricoOpen && !rearPanelId && !openCaseName && !menuOpen) setSceneInput(true); }, 0);
+  setTimeout(() => { if (!scheduleOpen && !scaricoOpen && !caviOpen && !rearPanelId && !openCaseName && !menuOpen) setSceneInput(true); }, 0);
   scheduleFirst = false;
 }
 
@@ -2502,10 +2511,179 @@ function scaricoSummary () {
   bits.push(s.beers ? '🍺'.repeat(s.beers) : 'nessuna birra');
   return bits.join(' · ') + '.';
 }
+/* ---------------- la posa dei cavi (20:00) ----------------
+   Minigioco a sé (posa-cavi.html), in un iframe sopra il gioco alla fine
+   dello show del primo collaudo riuscito, o dalla scaletta. La pagina
+   chiede la pianta: i pezzi posati (le basi: il PAR sta sul suo stativo,
+   la regia sul tavolo) e i cavi collegati al montaggio tra basi diverse,
+   uniti quando fanno la stessa strada (DMX e PowerCON dei PAR). Gli errori
+   li trova solo Gerry; le stelle diventano reputazione, una volta sola. */
+let caviOpen = false;
+const caviDone = () => !!Profile.data.cavi;
+const CAVI_LOOK = { sub: 'sub', stativo: 'par', asta: 'asta', tavolo: 'tavolo', quadro: 'quadro', allaccio: 'allaccio' };
+// la base di un pezzo montato (PAR → stativo, regia → tavolo, mic → asta)
+function posaBase (c) { let b = c; for (let k = 0; k < 3 && b && MOUNTS[b.type]; k++) b = mountBase(b); return b; }
+// dove sta una base: se cambia, il percorso steso alla posa non vale più
+function posaBaseKey (b) { return b ? b.id + ':' + (b.cells ? b.cells.join(' ') : 'fisso') : ''; }
+let caviLines = [];   // i cavi mandati alla posa, con gli id dei cavi del montaggio che raccolgono
+function posaLayout () {
+  const P = gameState.placed;
+  const baseOf = posaBase;
+  const devices = {};
+  Object.values(P).forEach(c => {
+    if (MOUNTS[c.type]) return;
+    let r;
+    if (c.type === 'allaccio') r = [17, 5, 1, 1];
+    else if (c.gx == null) return;
+    else {
+      // le celle occupate davvero (chiavi "i,j" da 50 cm), come la posa
+      const cs = (c.cells || [cellKey(c.gx, c.gy)]).map(k => k.split(',').map(Number));
+      const i0 = Math.min(...cs.map(x => x[0])), j0 = Math.min(...cs.map(x => x[1]));
+      r = [i0, j0, Math.max(...cs.map(x => x[0])) - i0 + 1, Math.max(...cs.map(x => x[1])) - j0 + 1];
+    }
+    const top = mountedOn(c);
+    const label = c.type === 'tavolo' ? 'REGIA' : c.type === 'stativo' && top ? compLabel(top.id) : compLabel(c.id);
+    devices[c.id] = { label, r, look: CAVI_LOOK[c.type] || 'box' };
+  });
+  const groups = new Map();
+  gameState.edges.forEach(e => {
+    const a = baseOf(P[e.a]), b = baseOf(P[e.b]);
+    if (!a || !b || a.id === b.id || !devices[a.id] || !devices[b.id]) return;
+    const k = [a.id, b.id].sort().join('|');
+    if (!groups.has(k)) groups.set(k, { from: a.id, to: b.id, cables: [] });
+    groups.get(k).cables.push(e);
+  });
+  const lines = [];
+  const lenOf = sig => { const it = cableItem(sig); const m = it && /(\d+) m/.exec(it.info); return m ? +m[1] : 5; };
+  const nameOf = sig => { const it = cableItem(sig); return it ? it.name : sig === 'usbc' ? 'USB-C' : 'Corrente'; };
+  groups.forEach(g => {
+    const cls = { power: [], dmx: [], speaker: [], sig: [] };
+    g.cables.forEach(e => (POWER_CABLE_IDS.has(e.signal) || !cableItem(e.signal) && e.signal !== 'usbc' ? cls.power
+      : e.signal === 'dmx' ? cls.dmx : e.signal === 'speakon' ? cls.speaker : cls.sig).push(e));
+    const mic = [g.from, g.to].some(id => P[id].type === 'asta');
+    const add = (kind, es) => {
+      if (!es.length) return;
+      const names = [...new Set(es.map(e => nameOf(e.signal)))].join(' + ');
+      // la linea con cui il montaggio disegna il cavo (e._pts, sullo
+      // schermo), riportata in metri: la posa parte da lì
+      const pts = es[0]._pts, sgn = baseOf(P[es[0].a]).id === g.from ? 1 : -1;
+      const guide = pts && pts.map(pt => {
+        const rx = (pt.x - ORIGIN_X) / (TILE_W / 2), ry = (pt.y - ORIGIN_Y) / (TILE_H / 2);
+        return [(rx + ry) / 2, (ry - rx) / 2];
+      });
+      lines.push({ id: 'l' + lines.length, from: g.from, to: g.to, kind, len: Math.min(...es.map(e => lenOf(e.signal))),
+        name: names + ' · ' + devices[g.to].label, guide: guide && (sgn > 0 ? guide : guide.reverse()), edges: es.map(e => e.id) });
+    };
+    if (cls.power.length && cls.dmx.length) { add('dmx', cls.power.concat(cls.dmx)); cls.power = []; cls.dmx = []; }
+    add('power', cls.power); add('data', cls.dmx); add('speaker', cls.speaker); add(mic ? 'mic' : 'signal', cls.sig);
+  });
+  caviLines = lines;
+  return { title: 'Festa della scuola', sub: 'La tua regia · Gerry controlla alle 20:30', devices, lines };
+}
+function openCavi () {
+  if (caviOpen || caviDone()) return;
+  caviOpen = true;
+  setSceneInput(false);
+  sceneKeyboard(false);
+  const f = document.createElement('iframe');
+  f.id = 'cavi-frame';
+  f.className = 'minigame-frame';
+  f.title = 'La posa dei cavi';
+  f.src = 'posa-cavi.html?embed=1';
+  f.addEventListener('load', () => { try { f.contentWindow.focus(); } catch (e) { /* niente fuoco: si tocca */ } });
+  document.body.appendChild(f);
+}
+window.addEventListener('message', ev => {
+  const d = ev.data, f = el('#cavi-frame');
+  if (!caviOpen || !d || !f) return;
+  if (d.type === 'posa-cavi-pronta') f.contentWindow.postMessage({ type: 'posa-cavi-pianta', layout: posaLayout() }, '*');
+  if (d.type === 'posa-cavi-fine') finishCavi(d.result || { skipped: true });
+});
+function finishCavi (r) {
+  const f = el('#cavi-frame');
+  if (f) f.remove();
+  caviOpen = false;
+  // late: alle 20:30 Gerry ha aperto con i cavi ancora in giro (nessuna stella)
+  const late = !r.skipped && !!r.late;
+  const stars = r.skipped || late ? 0 : Math.max(1, Math.min(3, r.stars || 1));
+  Profile.data.cavi = { skipped: !!r.skipped, late, stars, inspections: r.inspections || 0, cableM: r.cableM || 0, tapeM: r.tapeM || 0,
+    routes: caviRoutes(r.routes), left: late ? (r.left || []) : [] };
+  const rep = stars ? addReputation(REP.cavi[stars], 'Posa dei cavi alla festa della scuola', 'L' + LEVEL_ID + ':cavi') : 0;
+  Profile.save();
+  sceneKeyboard(true);
+  if (!scheduleOpen && !menuOpen && !rearPanelId && !openCaseName) setSceneInput(true);
+  applySettings();
+  whenScene(scene => scene.redrawEdges());   // i cavi seguono le pieghe della posa
+  showToast(r.skipped ? 'Posa dei cavi saltata: Gerry apre le porte, ma la reputazione non cambia.'
+    : late ? 'Sono le 20:30: Gerry apre le porte con i cavi ancora in giro. La reputazione non cambia.'
+    : 'Cavi a posto, Gerry apre le porte! ' + '★'.repeat(stars) + (rep ? ' Reputazione +' + rep + '.' : ''), 'ok');
+}
+/* I cavi piegati alla posa restano così anche nell'isometrico: per ogni
+   cavo del montaggio le pieghe in metri (dal capo a verso il capo b) e dove
+   stavano le due basi. Se una base si sposta, o il cavo si rifà, torna il
+   percorso automatico. */
+function caviRoutes (routes) {
+  const out = {};
+  if (!routes) return out;
+  caviLines.forEach(l => {
+    const pts = routes[l.id];
+    if (!pts) return;
+    (l.edges || []).forEach(id => {
+      const e = gameState.edges.find(x => x.id === id);
+      if (!e) return;
+      const a = posaBase(gameState.placed[e.a]), b = posaBase(gameState.placed[e.b]);
+      const m = pts.map(([i, j]) => [(i + .5) * CELL, (j + .5) * CELL]);
+      out[id] = { pts: a && a.id === l.from ? m : m.slice().reverse(), key: posaBaseKey(a) + '|' + posaBaseKey(b) };
+    });
+  });
+  return out;
+}
+// il percorso della posa di un cavo, sullo schermo (o null)
+function caviRoute (e) {
+  const r = Profile.data.cavi && Profile.data.cavi.routes && Profile.data.cavi.routes[e.id];
+  if (!r) return null;
+  const P = gameState.placed;
+  if (r.key !== posaBaseKey(posaBase(P[e.a])) + '|' + posaBaseKey(posaBase(P[e.b]))) return null;
+  return r.pts.map(([gx, gy]) => {
+    const p = gridToScreen(gx, gy);
+    // sulla pedana (palco e Off Stage) il cavo sta sopra il rialzo
+    return isStageCell(gx - CELL / 2, gy - CELL / 2) ? { x: p.x, y: p.y - PLATFORM_HEIGHT } : p;
+  });
+}
+/* Cosa lo show troverà ancora per terra (la posa finita col tempo): il
+   discorso del preside lo fa sentire (vedi prototipi/spettacolo-preside.html,
+   «Cavi lasciati dalla posa»). passaggio: qualcuno inciampa nel cavo e lo
+   strappa dal mixer; ronzio: 50 Hz nelle casse; scena: il preside inciampa. */
+const CAVI_LEFT = { passaggio: 'passaggio', lungo: 'passaggio', fuga: 'passaggio', ronzio: 'ronzio', scena: 'scena' };
+const CAVI_LEFT_TEXT = { passaggio: 'qualcuno inciamperà in un cavo nel passaggio', ronzio: 'nelle casse ci sarà ronzio', scena: 'il preside inciamperà in un cavo sul palco' };
+function caviLeftovers () {
+  const c = Profile.data.cavi;
+  return [...new Set(((c && c.left) || []).map(x => CAVI_LEFT[x.type]).filter(Boolean))];
+}
+function caviSummary () {
+  const c = Profile.data.cavi;
+  if (c.skipped) return 'Saltata: niente reputazione.';
+  if (c.late) {
+    const left = caviLeftovers().map(k => CAVI_LEFT_TEXT[k]);
+    return 'Finita col tempo: alle 20:30 porte aperte con i cavi in giro, niente reputazione.' + (left.length ? ' Durante lo show ' + left.join(', ') + '.' : '');
+  }
+  return '★'.repeat(c.stars) + '☆'.repeat(3 - c.stars) + ' · ' + (c.inspections === 1 ? 'promossa al primo giro di Gerry' : c.inspections + ' giri di Gerry')
+    + ' · ' + String(Math.round(c.tapeM * 10) / 10).replace('.', ',') + ' m di nastro.';
+}
+
 el('#schedule-btn').addEventListener('click', () => { SFX.button(); openSchedule(false); });
-el('#schedule-go').addEventListener('click', () => { SFX.button(); closeSchedule(); });
+el('#schedule-go').addEventListener('click', () => { SFX.button(); const cavi = scheduleCavi; closeSchedule(); if (cavi) openCavi(); });
 el('#schedule-close').addEventListener('click', () => { SFX.button(); closeSchedule(); });
 el('#schedule-modal').addEventListener('click', ev => { if (ev.target.id === 'schedule-modal') closeSchedule(); });
+// locandina di una fase della scaletta: si apre sopra la scaletta, un tocco la chiude
+el('#schedule-list').addEventListener('click', ev => {
+  const b = ev.target.closest('.sched-poster');
+  if (!b) return;
+  SFX.button();
+  el('#poster-img').src = b.dataset.poster;
+  el('#poster-modal').classList.add('show');
+});
+el('#poster-modal').addEventListener('click', () => { SFX.button(); el('#poster-modal').classList.remove('show'); });
 
 el('#menu-btn').addEventListener('click', () => { SFX.button(); openMenu('main'); });
 el('#menu-resume').addEventListener('click', () => { SFX.button(); continueGame(); });
@@ -6043,9 +6221,9 @@ class StageScene extends Phaser.Scene {
       // con un cavo selezionato, tutti gli altri si "spengono" per farlo
       // risaltare nella matassa; senza selezione restano tutti a piena vista
       const alpha = anySelected ? (isSelected ? 1 : 0.16) : 1;
-      let pts;
-      pts = (zoneA === 'stage' && zoneB === 'stage')
-        ? [from, to]
+      const route = caviRoute(e);
+      const pts = route ? [from, ...route, to]
+        : (zoneA === 'stage' && zoneB === 'stage') ? [from, to]
         : computeRoutePoints(from, to, this.stageBox, 30);
       // cavo in neoprene nero (come quelli veri), con un bordo appena più
       // chiaro per staccarlo dal pavimento e un filetto centrale del colore
@@ -6612,6 +6790,7 @@ class StageScene extends Phaser.Scene {
     const next = ch ? ' Microfono pronto sul CH ' + ch + ': il preside può salire sul palco.'
       : ' Prossimo: arriva il preside. Monta l\'asta sul palco, il microfono sulla giraffa e collegalo con un XLR a un ingresso MIC del mixer.';
     this.repGain = gameActive ? addRecord() : 0;
+    this.caviAfterShow = gameActive && !caviDone();
     showToast('Impianto collaudato, si va in scena! ' + (tip ? 'Piccolo consiglio: ' + tip : 'Procedura perfetta.')
       + (this.repGain ? ' Reputazione +' + this.repGain + '.' : gameActive ? ' Fase già completata: la reputazione non cambia.' : '') + next, 'ok');
     saveLevel();
@@ -7052,7 +7231,7 @@ class StageScene extends Phaser.Scene {
     // show saltato dalle impostazioni: solo la scritta
     if (settings().skipShow) {
       this.showBanner();
-      this.fxLater(2600, () => this.stopFx());
+      this.fxLater(2600, () => { this.stopFx(); this.afterShow(); });
       return;
     }
     const BPM = 120, BEATS = 14, BEAT_MS = 60000 / BPM;
@@ -7131,7 +7310,14 @@ class StageScene extends Phaser.Scene {
 
     // finale: la scritta, poi torna il giorno
     this.fxLater(T_END - 800, () => this.showBanner());
-    this.fxLater(T_DAY + 1300, () => this.stopFx());
+    this.fxLater(T_DAY + 1300, () => { this.stopFx(); this.afterShow(); });
+  }
+  // finito lo show del primo collaudo si stendono i cavi (se lo show si
+  // interrompe, la posa resta in scaletta)
+  afterShow () {
+    if (!this.caviAfterShow) return;
+    this.caviAfterShow = false;
+    if (!caviDone() && !menuOpen) openCavi();
   }
 
   /* ---------------- reset ---------------- */

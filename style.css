@@ -798,13 +798,20 @@
   .sched-row.done .sched-time{ color:var(--text-muted); }
   .sched-row.soon{ opacity:.55; }
   .sched-row.soon .sched-time{ color:var(--text-muted); }
+  .sched-poster{
+    align-self:flex-start; margin-top:4px; padding:4px 10px; border-radius:8px; cursor:pointer;
+    font:inherit; font-size:12px; font-weight:700; color:#fff;
+    background:linear-gradient(90deg,#e0439a,#7a3fd0); border:0;
+  }
+  #poster-modal{ z-index:120; cursor:zoom-out; padding:12px; }
+  #poster-modal img{ max-width:100%; max-height:100%; border-radius:10px; box-shadow:0 10px 40px rgba(0,0,0,.6); }
   .schedule-foot{
     position:sticky; bottom:0; display:flex; flex-direction:column;
     padding:10px 16px 14px; background:var(--bg-panel); border-top:1px solid var(--hairline);
   }
 
 /* lo scarico: minigioco a tutto schermo sopra il gioco (scarico.html) */
-#scarico-frame{position:fixed;inset:0;width:100%;height:100%;border:0;z-index:1000;background:#141519}
+#scarico-frame,#cavi-frame{position:fixed;inset:0;width:100%;height:100%;border:0;z-index:1000;background:#141519}
 
 /* pezzo arrivato difettoso dallo scarico: riquadro nel pannello e nel baule */
 .fault-box{display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin:8px 0;padding:10px 12px;border:2px solid #f2843d;border-radius:10px;background:rgba(242,132,61,.12);font-size:14px;line-height:1.4}
