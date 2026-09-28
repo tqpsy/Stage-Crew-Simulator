@@ -343,6 +343,9 @@
     <div class="pick" id="cause-pick">Guasto (per provare il prototipo)<div>
       <button data-c="" aria-pressed="true">A caso</button><button data-c="mic" aria-pressed="false">Microfono</button><button data-c="cavo" aria-pressed="false">Cavo</button><button data-c="ing" aria-pressed="false">Ingresso</button><button data-c="mixer" aria-pressed="false">Mixer</button>
     </div></div>
+    <div class="pick" id="posa-pick">Cavi lasciati dalla posa (20:00): cosa non ha sistemato il tecnico<div>
+      <button data-p="passaggio" aria-pressed="false">Nel passaggio</button><button data-p="ronzio" aria-pressed="false">Mic sulla corrente</button><button data-p="scena" aria-pressed="false">In scena</button>
+    </div></div>
     <button class="toggle" id="hints-btn" aria-pressed="true"><span>Suggerimenti nei fumetti</span><span class="sw"></span></button>
     <button class="cta" id="start">Inizia il discorso</button>
   </div>
@@ -405,6 +408,7 @@
       dimmer: 0, pars: ['bianco', 'bianco', 'bianco', 'bianco'], mem: 4,    // si parte al buio
       voiceK: 1, drift: 1, driftTo: 1, px: ENTRY_X, walkTo: null, ring: 0, ringCool: 0,
       jingle: false, larsens: 0, pops: 0, repDelta: 0, notes: [], events: [],
+      tripAt: rnd(24, 60), tripped: false, buzzSaid: false,
       mems: {
         1: { name: 'Bianco pieno', pars: ['bianco', 'bianco', 'bianco', 'bianco'], dimmer: 1 },
         2: { name: 'Festa', pars: ['viola', 'blu', 'viola', 'blu'], dimmer: 0.3 },
@@ -468,10 +472,11 @@
   };
   function script () {
     const ids = Object.keys(POOL).sort(() => Math.random() - 0.5).slice(0, 5);
-    if (forceCause && !ids.includes('cavo')) ids[4] = 'cavo';   // guasto scelto a mano: esce di sicuro
+    const tripped = posaLeft.has('passaggio');
+    if ((forceCause || tripped) && !ids.includes('cavo')) ids[4] = 'cavo';   // guasto scelto a mano (o cavo nel passaggio): esce di sicuro
     // il guasto, se esce, va tra i primi due e ha la scena tutta per sé
     const ci = ids.indexOf('cavo');
-    S.faultCause = forceCause || pick(['mic', 'cavo', 'ing', 'mixer']);
+    S.faultCause = tripped ? 'ing' : forceCause || pick(['mic', 'cavo', 'ing', 'mixer']);
     if (ci > 1) { ids.splice(ci, 1); ids.splice(Math.floor(Math.random() * 2), 0, 'cavo'); }
     // l'entrata ha una scadenza fissa: quando il preside arriva al leggio
     const evs = [{ id: 'apertura', at: 0.5, until: ARRIVE, win: ARRIVE - 0.5, target: 'preside', icon: '🎤', text: 'Sale sul palco', hint: 'frontali accesi in bianco prima che arrivi, CH' + S.wired + ' su, musica PC giù', tab: 'luci',
@@ -483,6 +488,17 @@
       at += id === 'cavo' ? FAULT_TIME[S.faultCause].limit + 4 : i >= 2 ? rnd(6, 10) : rnd(10, 14);    // verso la fine si accavallano
       at = Math.min(at, 72);
     });
+    // il cavo lasciato nel passaggio: qualcuno ci inciampa e lo strappa dal mixer
+    const fe = tripped && evs.find(e => e.id === 'cavo');
+    if (fe) {
+      const st = fe.start;
+      fe.icon = '🦶'; fe.text = 'Qualcuno inciampa nel cavo nel passaggio!';
+      fe.start = function () {
+        toast('Un ragazzo è inciampato nel cavo lasciato nel passaggio: è uscito dal mixer!', 'bad'); sfx.boo();
+        S.notes.push('Alla posa il cavo del microfono era rimasto nel passaggio senza passacavi: qualcuno ci è inciampato e l\'ha strappato dal mixer.');
+        st.call(this);
+      };
+    }
     evs.push({ id: 'finale', at: 82, win: 7, target: 'preside', icon: '🎉', text: 'Ha finito il discorso', hint: 'memoria Festa e musica su', tab: 'luci',
       ok: () => !S.pars.every(p => p === 'bianco') && S.dimmer >= 0.25 && chOut(PC) >= 0.5, hold: 0.3,
       fail: () => hit(-6, 'Finale muto e spento.') });
@@ -519,6 +535,12 @@
   // circa 5 s e 15 s di margine sul tempo che serve giocando senza errori
   const FAULT_TIME = { mixer: { bonus: 8, limit: 20 }, ing: { bonus: 11, limit: 22 }, mic: { bonus: 12, limit: 24 }, cavo: { bonus: 17, limit: 32 } };
   let forceCause = null;   // per provare il prototipo: quale guasto far uscire (null = a caso)
+  /* cosa è rimasto da sistemare alla posa dei cavi (posa-cavi.html; nel gioco
+     Profile.data.cavi.left): passaggio → qualcuno inciampa nel cavo e lo
+     strappa dal mixer (il guasto è l'ingresso); ronzio → il microfono corre
+     accanto alla corrente e nelle casse c'è un 50 Hz; scena → il preside
+     inciampa nel cavo in mezzo al palco */
+  const posaLeft = new Set();
 
   function startFault () {
     const cause = S.faultCause;
@@ -926,6 +948,19 @@
       if (chOut(PC) > 0.3 && S.micOk && !S.fault) d -= 1.5;   // musica sopra il discorso (col guasto è riempitivo)
       if (!frontLit()) d -= 0.8;                    // parla al buio
     }
+    // cavi lasciati dalla posa: ronzio del microfono accanto alla corrente,
+    // preside che inciampa nel cavo in scena
+    const buzz = posaLeft.has('ronzio') && S.micOk && !S.mute[S.micCh] ? S.fad[S.micCh] : 0;
+    sfx.buzz(buzz);
+    if (buzz > 0.2 && speaking()) {
+      d -= 0.7;
+      if (!S.buzzSaid) { S.buzzSaid = true; toast('Nelle casse c\'è un ronzio: il cavo del microfono corre accanto alla corrente.', 'bad'); S.notes.push('Ronzio nelle casse per tutto il discorso: alla posa il cavo del microfono era rimasto accanto a un cavo di corrente.'); }
+    }
+    if (posaLeft.has('scena') && !S.tripped && S.t >= S.tripAt && speaking() && !S.fault) {
+      S.tripped = true; S.px += 14;
+      hit(-8, 'Il preside inciampa nel cavo in mezzo al palco!');
+      S.notes.push('Il preside è inciampato in un cavo rimasto in mezzo al palco dopo la posa.');
+    }
     S.grad = clamp(S.grad + d * dt);
 
     // sottotitoli: più piccoli se si sente poco, più grandi se è troppo forte
@@ -951,7 +986,7 @@
   }
 
   function finish () {
-    S.running = false; voice.silence(); sfx.music(0); sfx.ring(0); sfx.applause(S.grad);
+    S.running = false; voice.silence(); sfx.music(0); sfx.ring(0); sfx.buzz(0); sfx.applause(S.grad);
     S.gerryUntil = 0; renderGerry();
     store.set('tramp-runs', store.get('tramp-runs', 0) + 1);
     let beers = 0; const notes = [];
@@ -983,6 +1018,11 @@
   const paintWired = () => document.querySelectorAll('.wired-n').forEach(e => { e.textContent = nextWired; });
   paintWired();
   $('#again').onclick = () => { nextWired = 1 + Math.floor(Math.random() * 4); paintWired(); $('#outro').hidden = true; $('#intro').hidden = false; };
+  document.querySelectorAll('#posa-pick button').forEach(b => b.onclick = () => {
+    const p = b.dataset.p, on = !posaLeft.has(p);
+    if (on) posaLeft.add(p); else posaLeft.delete(p);
+    b.setAttribute('aria-pressed', on);
+  });
   document.querySelectorAll('#cause-pick button').forEach(b => b.onclick = () => {
     forceCause = b.dataset.c || null;
     document.querySelectorAll('#cause-pick button').forEach(x => x.setAttribute('aria-pressed', x === b));
@@ -1021,7 +1061,7 @@
 
   /* ---------- suoni sintetizzati (partono solo dopo il tocco su Inizia) ---------- */
   const sfx = (() => {
-    let ac, hum, humG, ringO, ringG, musO, musG, noiseBuf;
+    let ac, hum, humG, ringO, ringG, musO, musG, noiseBuf, buzO, buzG;
     const env = (g, a, peak, rel, t0) => { g.gain.setValueAtTime(0.0001, t0); g.gain.exponentialRampToValueAtTime(peak, t0 + a); g.gain.exponentialRampToValueAtTime(0.0001, t0 + a + rel); };
     const tone = (f, dur, type, vol) => { if (!ac) return; const o = ac.createOscillator(), g = ac.createGain(); o.type = type || 'sine'; o.frequency.value = f; o.connect(g).connect(ac.destination); env(g, 0.01, vol || 0.15, dur, ac.currentTime); o.start(); o.stop(ac.currentTime + dur + 0.05); };
     const noise = (dur, vol, fl) => { if (!ac) return; const s = ac.createBufferSource(); s.buffer = noiseBuf; const f = ac.createBiquadFilter(); f.type = 'bandpass'; f.frequency.value = fl || 1500; const g = ac.createGain(); s.connect(f).connect(g).connect(ac.destination); env(g, 0.3, vol, dur, ac.currentTime); s.start(); s.stop(ac.currentTime + dur + 0.4); };
@@ -1038,7 +1078,11 @@
         [ringO, ringG] = osc('sine', 2750);
         const lp = ac.createBiquadFilter(); lp.type = 'lowpass'; lp.frequency.value = 500; lp.connect(ac.destination);
         [musO, musG] = osc('square', 110, lp);
+        // ronzio di rete: 50 Hz con le armoniche, basso e sporco
+        const bl = ac.createBiquadFilter(); bl.type = 'lowpass'; bl.frequency.value = 320; bl.connect(ac.destination);
+        [buzO, buzG] = osc('sawtooth', 50, bl);
       },
+      buzz (level) { if (!ac) return; buzG.gain.setTargetAtTime(level * 0.09, ac.currentTime, 0.1); },
       hum (on) { humOn = on; },
       humLevel (level) { if (!ac || !humOn) return; const t = ac.currentTime, s = Math.max(0, Math.sin(t * 11) * Math.sin(t * 2.7)); humG.gain.setTargetAtTime(Math.min(0.12, level * 0.09) * s, t, 0.03); },
       ring (r) { if (!ac) return; ringG.gain.setTargetAtTime(r * r * 0.12, ac.currentTime, 0.05); ringO.frequency.setTargetAtTime(2600 + r * 400, ac.currentTime, 0.1); },
@@ -1054,6 +1098,7 @@
   })();
 
   S = fresh(); buildDesk(); drawStage(); paintHeader();
+  window.__tramp = { state: () => S, posaLeft };   // per i test (tests/preside-cavi.js)
   requestAnimationFrame(tick);
 })();
 </script>

@@ -349,6 +349,11 @@ Giro del livello: **Montaggio → Test impianto → [cambio palco → spettacolo
 `prototipi/spettacolo-preside.html`: la fase del discorso del preside, cliccabile,
 per provare il ritmo prima di portarla nel gioco.
 
+Nella scheda iniziale, «Cavi lasciati dalla posa» prova le conseguenze della
+posa dei cavi finita col tempo (vedi `docs/minigioco-posa-cavi.md`): cavo nel
+passaggio (qualcuno inciampa, il guasto è l'ingresso), microfono accanto alla
+corrente (ronzio), cavo in scena (il preside inciampa).
+
 ### Dopo la prima prova
 
 - **Grafica**: quella del prototipo non è definitiva. Nel gioco vero lo

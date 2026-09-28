@@ -2519,9 +2519,14 @@ function scaricoSummary () {
 let caviOpen = false;
 const caviDone = () => !!Profile.data.cavi;
 const CAVI_LOOK = { sub: 'sub', stativo: 'par', asta: 'asta', tavolo: 'tavolo', quadro: 'quadro', allaccio: 'allaccio' };
+// la base di un pezzo montato (PAR → stativo, regia → tavolo, mic → asta)
+function posaBase (c) { let b = c; for (let k = 0; k < 3 && b && MOUNTS[b.type]; k++) b = mountBase(b); return b; }
+// dove sta una base: se cambia, il percorso steso alla posa non vale più
+function posaBaseKey (b) { return b ? b.id + ':' + (b.cells ? b.cells.join(' ') : 'fisso') : ''; }
+let caviLines = [];   // i cavi mandati alla posa, con gli id dei cavi del montaggio che raccolgono
 function posaLayout () {
   const P = gameState.placed;
-  const baseOf = c => { let b = c; for (let k = 0; k < 3 && b && MOUNTS[b.type]; k++) b = mountBase(b); return b; };
+  const baseOf = posaBase;
   const devices = {};
   Object.values(P).forEach(c => {
     if (MOUNTS[c.type]) return;
@@ -2565,11 +2570,12 @@ function posaLayout () {
         return [(rx + ry) / 2, (ry - rx) / 2];
       });
       lines.push({ id: 'l' + lines.length, from: g.from, to: g.to, kind, len: Math.min(...es.map(e => lenOf(e.signal))),
-        name: names + ' · ' + devices[g.to].label, guide: guide && (sgn > 0 ? guide : guide.reverse()) });
+        name: names + ' · ' + devices[g.to].label, guide: guide && (sgn > 0 ? guide : guide.reverse()), edges: es.map(e => e.id) });
     };
     if (cls.power.length && cls.dmx.length) { add('dmx', cls.power.concat(cls.dmx)); cls.power = []; cls.dmx = []; }
     add('power', cls.power); add('data', cls.dmx); add('speaker', cls.speaker); add(mic ? 'mic' : 'signal', cls.sig);
   });
+  caviLines = lines;
   return { title: 'Festa della scuola', sub: 'La tua regia · Gerry controlla alle 20:30', devices, lines };
 }
 function openCavi () {
@@ -2598,20 +2604,67 @@ function finishCavi (r) {
   // late: alle 20:30 Gerry ha aperto con i cavi ancora in giro (nessuna stella)
   const late = !r.skipped && !!r.late;
   const stars = r.skipped || late ? 0 : Math.max(1, Math.min(3, r.stars || 1));
-  Profile.data.cavi = { skipped: !!r.skipped, late, stars, inspections: r.inspections || 0, cableM: r.cableM || 0, tapeM: r.tapeM || 0 };
+  Profile.data.cavi = { skipped: !!r.skipped, late, stars, inspections: r.inspections || 0, cableM: r.cableM || 0, tapeM: r.tapeM || 0,
+    routes: caviRoutes(r.routes), left: late ? (r.left || []) : [] };
   const rep = stars ? addReputation(REP.cavi[stars], 'Posa dei cavi alla festa della scuola', 'L' + LEVEL_ID + ':cavi') : 0;
   Profile.save();
   sceneKeyboard(true);
   if (!scheduleOpen && !menuOpen && !rearPanelId && !openCaseName) setSceneInput(true);
   applySettings();
+  whenScene(scene => scene.redrawEdges());   // i cavi seguono le pieghe della posa
   showToast(r.skipped ? 'Posa dei cavi saltata: Gerry apre le porte, ma la reputazione non cambia.'
     : late ? 'Sono le 20:30: Gerry apre le porte con i cavi ancora in giro. La reputazione non cambia.'
     : 'Cavi a posto, Gerry apre le porte! ' + '★'.repeat(stars) + (rep ? ' Reputazione +' + rep + '.' : ''), 'ok');
 }
+/* I cavi piegati alla posa restano così anche nell'isometrico: per ogni
+   cavo del montaggio le pieghe in metri (dal capo a verso il capo b) e dove
+   stavano le due basi. Se una base si sposta, o il cavo si rifà, torna il
+   percorso automatico. */
+function caviRoutes (routes) {
+  const out = {};
+  if (!routes) return out;
+  caviLines.forEach(l => {
+    const pts = routes[l.id];
+    if (!pts) return;
+    (l.edges || []).forEach(id => {
+      const e = gameState.edges.find(x => x.id === id);
+      if (!e) return;
+      const a = posaBase(gameState.placed[e.a]), b = posaBase(gameState.placed[e.b]);
+      const m = pts.map(([i, j]) => [(i + .5) * CELL, (j + .5) * CELL]);
+      out[id] = { pts: a && a.id === l.from ? m : m.slice().reverse(), key: posaBaseKey(a) + '|' + posaBaseKey(b) };
+    });
+  });
+  return out;
+}
+// il percorso della posa di un cavo, sullo schermo (o null)
+function caviRoute (e) {
+  const r = Profile.data.cavi && Profile.data.cavi.routes && Profile.data.cavi.routes[e.id];
+  if (!r) return null;
+  const P = gameState.placed;
+  if (r.key !== posaBaseKey(posaBase(P[e.a])) + '|' + posaBaseKey(posaBase(P[e.b]))) return null;
+  return r.pts.map(([gx, gy]) => {
+    const p = gridToScreen(gx, gy);
+    // sulla pedana (palco e Off Stage) il cavo sta sopra il rialzo
+    return isStageCell(gx - CELL / 2, gy - CELL / 2) ? { x: p.x, y: p.y - PLATFORM_HEIGHT } : p;
+  });
+}
+/* Cosa lo show troverà ancora per terra (la posa finita col tempo): il
+   discorso del preside lo fa sentire (vedi prototipi/spettacolo-preside.html,
+   «Cavi lasciati dalla posa»). passaggio: qualcuno inciampa nel cavo e lo
+   strappa dal mixer; ronzio: 50 Hz nelle casse; scena: il preside inciampa. */
+const CAVI_LEFT = { passaggio: 'passaggio', lungo: 'passaggio', fuga: 'passaggio', ronzio: 'ronzio', scena: 'scena' };
+const CAVI_LEFT_TEXT = { passaggio: 'qualcuno inciamperà in un cavo nel passaggio', ronzio: 'nelle casse ci sarà ronzio', scena: 'il preside inciamperà in un cavo sul palco' };
+function caviLeftovers () {
+  const c = Profile.data.cavi;
+  return [...new Set(((c && c.left) || []).map(x => CAVI_LEFT[x.type]).filter(Boolean))];
+}
 function caviSummary () {
   const c = Profile.data.cavi;
   if (c.skipped) return 'Saltata: niente reputazione.';
-  if (c.late) return 'Finita col tempo: alle 20:30 porte aperte con i cavi in giro, niente reputazione.';
+  if (c.late) {
+    const left = caviLeftovers().map(k => CAVI_LEFT_TEXT[k]);
+    return 'Finita col tempo: alle 20:30 porte aperte con i cavi in giro, niente reputazione.' + (left.length ? ' Durante lo show ' + left.join(', ') + '.' : '');
+  }
   return '★'.repeat(c.stars) + '☆'.repeat(3 - c.stars) + ' · ' + (c.inspections === 1 ? 'promossa al primo giro di Gerry' : c.inspections + ' giri di Gerry')
     + ' · ' + String(Math.round(c.tapeM * 10) / 10).replace('.', ',') + ' m di nastro.';
 }
@@ -6157,9 +6210,9 @@ class StageScene extends Phaser.Scene {
       // con un cavo selezionato, tutti gli altri si "spengono" per farlo
       // risaltare nella matassa; senza selezione restano tutti a piena vista
       const alpha = anySelected ? (isSelected ? 1 : 0.16) : 1;
-      let pts;
-      pts = (zoneA === 'stage' && zoneB === 'stage')
-        ? [from, to]
+      const route = caviRoute(e);
+      const pts = route ? [from, ...route, to]
+        : (zoneA === 'stage' && zoneB === 'stage') ? [from, to]
         : computeRoutePoints(from, to, this.stageBox, 30);
       // cavo in neoprene nero (come quelli veri), con un bordo appena più
       // chiaro per staccarlo dal pavimento e un filetto centrale del colore
