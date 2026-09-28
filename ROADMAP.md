@@ -97,9 +97,10 @@ cambiano da una fase all'altra.
   ingresso MIC del mixer acceso; riceve l'ingresso cablato, i PAR montati, i
   cavi lasciati dalla posa e le birre, e restituisce reputazione (una volta
   sola) e birre. Design in `docs/livello1-festa-scuola.md`.
-- Da fare: DJ set e Dante unplugged come fasi successive; lo spettacolo sul
-  palco isometrico invece che sul disegno del discorso (vedi *Dopo la prima
-  prova* nel design del livello).
+  Il discorso resta col suo palco disegnato di fronte, non va
+  nell'isometrico (deciso). Il microfono va bene su qualsiasi ingresso MIC,
+  purché cablato.
+- Da fare: il DJ set (21:15) come fase successiva. Dopo il DJ: da decidere.
 
 ## Test automatici
 

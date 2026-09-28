@@ -2369,7 +2369,7 @@ const SCHEDULE = [
   { time: '19:30', title: 'Test impianto', text: 'Il collaudo: tutto acceso senza scatti né colpi nelle casse, audio e luci a posto.', phase: 'collaudo', rep: REP.phaseDone },
   { time: '20:00', title: 'Messa in sicurezza dei cavi', text: 'I cavi stesi per terra come si deve: via di fuga libera, passacavi nei passaggi, nastro dove si cammina. Gerry, il bidello, controlla prima di aprire.', phase: 'cavi' },
   { time: '20:30', title: 'Apertura porte', text: 'Entrano famiglie e studenti; musica di sottofondo dal PC.', phase: 'porte' },
-  { time: '21:00', title: 'Discorso del Preside Tramp', text: 'Microfono su asta sul palco, sul CH 1 del mixer. Vuole essere sentito fino al parcheggio.', phase: 'preside' },
+  { time: '21:00', title: 'Discorso del Preside Tramp', text: 'Microfono su asta sul palco, cablato a un ingresso MIC del mixer: ricordati quale. Vuole essere sentito fino al parcheggio.', phase: 'preside' },
   { time: '21:15', title: 'Notte fuori controllo', text: 'DJ Inestimabile in consolle e Musa Esistenziale al microfono: mixer DJ → DI → mixer di sala, il microfono del vocalist, luci colorate al drop. E tanti guasti da inseguire.', poster: 'img/locandina-dj.svg' },
   { time: '22:00', title: 'Dante unplugged', text: 'Voce e chitarra (via DI). Gli ingressi non bastano: cambio palco e via il DJ.' },
   { time: '23:00', title: 'Smontaggio', text: 'Tutto nei case e i case nel furgone. Si torna a casa.' }

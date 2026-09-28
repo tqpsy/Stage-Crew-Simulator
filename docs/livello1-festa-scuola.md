@@ -342,7 +342,9 @@ Giro del livello: **Montaggio → Test impianto → [cambio palco → spettacolo
 - **Header**: barra del tempo con faccia del personaggio e orologio; il
   gradimento del pubblico è la barra più grande, con la percentuale; la
   stanchezza sta nel tasto della 🍺 (la birra la fa scendere); reputazione.
-- **Palco isometrico**: resta la vista di gioco. Sopra compaiono i personaggi
+- **Palco isometrico**: resta la vista di gioco del montaggio. Il discorso
+  del preside invece ha il suo palco disegnato di fronte (vedi *Il discorso
+  nel gioco*). Per le altre fasi, da decidere: sopra compaiono i personaggi
   (preside al microfono, DJ alla consolle, Dante sullo sgabello) e il pubblico
   in platea: teste che si muovono a tempo, colore e fumetti che ne mostrano l'umore.
 - **Imprevisti**: fumetto sopra il personaggio o il dispositivo, con un anello
@@ -403,9 +405,9 @@ corrente (ronzio), cavo in scena (il preside inciampa).
 
 ### Dopo la prima prova
 
-- **Grafica**: quella del prototipo non è definitiva. Nel gioco vero lo
-  spettacolo si svolge sul palco isometrico che c'è già; del prototipo restano
-  l'impianto dell'interfaccia (header, fumetti, banco regia).
+- **Grafica**: il discorso resta com'è stato costruito (palco disegnato di
+  fronte, header, fumetti, banco regia), non si sposta sul palco isometrico
+  (deciso).
 - **Guasti veri, non "tocca e risolvi"**: il microfono muto va diagnosticato
   e riparato con decisioni di cablaggio (vedi *Il guasto del microfono* sotto).
 - **Lingua dei personaggi**: ognuno parla una lingua fatta solo del suo nome
@@ -466,8 +468,9 @@ Il guasto si risolve ricordando il cablaggio, non premendo un pulsante.
   - *Qualcuno ha toccato il mixer*: il canale del preside è in MUTE o col fader
     tutto giù. Si sistema dal banco.
 - **La domanda della memoria**: «in che ingresso era?». La risposta è
-  l'ingresso cablato al montaggio (la scaletta chiede il CH 1; nel prototipo
-  è estratto a caso a ogni partita e scritto solo nella scheda iniziale). Se
+  l'ingresso cablato al montaggio: va bene qualsiasi MIC 1–4, purché sia
+  cablato (deciso). Aperta da sola, la pagina lo estrae a caso a ogni partita
+  e lo scrive solo nella scheda iniziale. Se
   lo rimetti altrove nessun avviso: la voce arriva su un canale col fader giù,
   bisogna accorgersene dai meter; a fine discorso −2 reputazione.
 - **Musica di riempimento**: durante il guasto si può alzare il PC; il
