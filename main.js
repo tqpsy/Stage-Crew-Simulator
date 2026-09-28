@@ -2365,7 +2365,7 @@ const SCHEDULE = [
   { time: '19:30', title: 'Test impianto', text: 'Il collaudo: tutto acceso senza scatti né colpi nelle casse, audio e luci a posto.', phase: 'collaudo', rep: REP.phaseDone },
   { time: '20:30', title: 'Apertura porte', text: 'Entrano famiglie e studenti; musica di sottofondo dal PC.' },
   { time: '21:00', title: 'Discorso del Preside Tramp', text: 'Microfono su asta sul palco, sul CH 1 del mixer. Vuole essere sentito fino al parcheggio.' },
-  { time: '21:15', title: 'DJ E=mc²', text: 'Einstein alla consolle: mixer DJ → DI → mixer di sala, luci colorate al drop.' },
+  { time: '21:15', title: 'Notte fuori controllo', text: 'DJ Inestimabile in consolle e Musa Esistenziale al microfono: mixer DJ → DI → mixer di sala, il microfono del vocalist, luci colorate al drop. E tanti guasti da inseguire.', poster: 'img/locandina-dj.svg' },
   { time: '22:00', title: 'Dante unplugged', text: 'Voce e chitarra (via DI). Gli ingressi non bastano: cambio palco e via il DJ.' },
   { time: '23:00', title: 'Smontaggio', text: 'Tutto nei case e i case nel furgone. Si torna a casa.' }
 ];
@@ -2394,7 +2394,9 @@ function renderSchedule () {
       + '<span class="sched-body"><b>' + escapeHtml(s.title) + '</b>'
       + (s.rep ? ' <span class="sched-rep">+' + s.rep + ' reputazione</span>' : '')
       + '<small>' + escapeHtml(s.phase === 'scarico' && scaricoDone() ? scaricoSummary()
-        : s.phase === 'montaggio' ? s.text.replace('i PAR', parsRequired() + ' PAR') : s.text) + '</small></span>'
+        : s.phase === 'montaggio' ? s.text.replace('i PAR', parsRequired() + ' PAR') : s.text) + '</small>'
+      + (s.poster ? '<button class="sched-poster" type="button" data-poster="' + s.poster + '">🎟️ Guarda la locandina</button>' : '')
+      + '</span>'
       + '<span class="sched-state">' + SCHEDULE_STATE_LABEL[st] + '</span></li>';
   }).join('');
 }
@@ -2506,6 +2508,15 @@ el('#schedule-btn').addEventListener('click', () => { SFX.button(); openSchedule
 el('#schedule-go').addEventListener('click', () => { SFX.button(); closeSchedule(); });
 el('#schedule-close').addEventListener('click', () => { SFX.button(); closeSchedule(); });
 el('#schedule-modal').addEventListener('click', ev => { if (ev.target.id === 'schedule-modal') closeSchedule(); });
+// locandina di una fase della scaletta: si apre sopra la scaletta, un tocco la chiude
+el('#schedule-list').addEventListener('click', ev => {
+  const b = ev.target.closest('.sched-poster');
+  if (!b) return;
+  SFX.button();
+  el('#poster-img').src = b.dataset.poster;
+  el('#poster-modal').classList.add('show');
+});
+el('#poster-modal').addEventListener('click', () => { SFX.button(); el('#poster-modal').classList.remove('show'); });
 
 el('#menu-btn').addEventListener('click', () => { SFX.button(); openMenu('main'); });
 el('#menu-resume').addEventListener('click', () => { SFX.button(); continueGame(); });
