@@ -1,0 +1,1108 @@
+<title>La posa dei cavi</title>
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@600;700&family=Permanent+Marker&family=Inter:wght@400;500;600;700&display=swap">
+<style>
+  /* Prototipo del minigioco della posa dei cavi (docs/minigioco-posa-cavi.md):
+     la palestra vista dall'alto, i cavi si stendono trascinando il dito cella
+     per cella, poi Gerry il bidello controlla prima dell'apertura porte.
+     Stessi colori e caratteri del gioco: solo tema scuro, come il gioco. */
+  :root{
+    color-scheme: dark;
+    --bg-deck:#141519; --bg-panel:#1c1d22; --bg-raised:#24252b; --hairline:#34363e;
+    --text:#eee9df; --muted:#8b8e98; --amber:#f2a541; --green:#49b06a; --red:#e0503f; --yellow:#f2c53d;
+    --paper:#f4f1ea; --ink:#141519;
+    --k-power:#ff8a2a; --k-mic:#4fb7ff; --k-speaker:#b98cff; --k-dmx:#49e07a; --k-multi:#eee9df;
+    --display:'Barlow Condensed', 'Arial Narrow', sans-serif;
+    --ui:'Inter', system-ui, sans-serif;
+    --marker:'Permanent Marker', 'Comic Sans MS', cursive;
+  }
+  *{box-sizing:border-box}
+  [hidden]{display:none!important}
+  html,body{height:100%}
+  body{margin:0;background:var(--bg-deck);color:var(--text);font-family:var(--ui);overflow:hidden;-webkit-tap-highlight-color:transparent;user-select:none;-webkit-user-select:none}
+  button{font:inherit;color:inherit;cursor:pointer}
+  button:focus-visible{outline:2px solid var(--amber);outline-offset:2px}
+  #app{height:100%;display:grid;grid-template-rows:auto 1fr auto;grid-template-columns:minmax(0,1fr);max-width:1100px;margin:0 auto}
+
+  /* ---- testata ---- */
+  header{padding:8px 16px;background:var(--bg-panel);border-bottom:1px solid var(--hairline);display:flex;align-items:center;gap:12px;flex-wrap:wrap}
+  .title{font-family:var(--display);font-size:20px;letter-spacing:.04em;line-height:1;flex:1 1 100%}
+  @media (min-width:640px){.title{flex:1 1 auto}}
+  .stats{display:flex;gap:14px;align-items:center;margin-left:auto}
+  .title small{display:block;font-family:var(--ui);font-size:11px;color:var(--muted);letter-spacing:0;margin-top:3px}
+  .stat{display:flex;flex-direction:column;align-items:flex-end;font-size:10px;color:var(--muted);text-transform:uppercase;letter-spacing:.06em;line-height:1.1}
+  .stat b{font-family:var(--display);font-size:19px;letter-spacing:.02em;color:var(--text);font-variant-numeric:tabular-nums;font-weight:700}
+  .stat.over b{color:var(--red)}
+  .stat.late b{color:var(--red);animation:blinkc 1s steps(2) infinite}
+  @keyframes blinkc{50%{opacity:.35}}
+  @media (prefers-reduced-motion:reduce){.stat.late b{animation:none}}
+  .icon-btn{border:1px solid var(--hairline);background:var(--bg-raised);border-radius:8px;padding:6px 10px;font-size:15px;line-height:1}
+
+  /* ---- pianta ---- */
+  #map{position:relative;min-height:0;overflow:hidden;background:#0c0d10}
+  #cv{position:absolute;inset:0;width:100%;height:100%;display:block;touch-action:none}
+  #toast{position:absolute;left:50%;top:10px;transform:translateX(-50%);background:var(--bg-raised);border:2px solid var(--hairline);padding:8px 14px;border-radius:10px;font-size:14px;font-weight:600;line-height:1.3;box-shadow:0 6px 20px rgba(0,0,0,.5);z-index:3;opacity:0;transition:opacity .2s;pointer-events:none;max-width:calc(100% - 32px);text-align:center}
+  #toast.show{opacity:1}#toast.bad{border-color:var(--red)}#toast.ok{border-color:var(--green)}
+
+  /* ---- banco in basso: cavi da posare e attrezzi ---- */
+  #desk{background:var(--bg-panel);border-top:1px solid var(--hairline);padding:8px 16px calc(10px + env(safe-area-inset-bottom,0px));display:grid;gap:8px}
+  #lines{display:flex;gap:6px;overflow-x:auto;padding-bottom:2px;scrollbar-width:thin}
+  .chip{flex:none;display:flex;align-items:center;gap:6px;border:1px solid var(--hairline);background:var(--bg-raised);border-radius:999px;padding:5px 10px 5px 8px;font-size:13px;white-space:nowrap}
+  .chip i{width:12px;height:12px;border-radius:50%;flex:none}
+  .chip small{color:var(--muted);font-variant-numeric:tabular-nums}
+  .chip.done{opacity:.75}.chip.done small{color:var(--green)}
+  .chip.bad{border-color:var(--red)}.chip.bad small{color:#ff9b8f}
+  .chip[aria-pressed=true]{border-color:var(--amber);box-shadow:inset 0 0 0 1px var(--amber);opacity:1}
+  .chip.flash{animation:flash .45s ease-in-out 3}
+  @keyframes flash{50%{border-color:var(--amber);background:#3a2c14}}
+  #info{font-size:13px;color:var(--muted);line-height:1.35;min-height:2.7em}
+  #info b{color:var(--text)}
+  .tools{display:flex;gap:8px;min-width:0}
+  .tool{border:1px solid var(--hairline);background:var(--bg-raised);border-radius:8px;padding:9px 10px;font-size:14px;font-weight:600;white-space:nowrap}
+  .tool[aria-pressed=true]{border-color:var(--yellow);color:var(--yellow);background:#2d2812}
+  @media (max-width:480px){.tool{padding:9px 8px;font-size:13px}.tool.go{font-size:16px!important;letter-spacing:.03em!important}}
+  .tool:disabled{opacity:.4;cursor:default}
+  .tool.go{flex:1;min-width:0;border-color:var(--amber);color:var(--amber);font-family:var(--display);font-size:18px;letter-spacing:.06em;font-weight:700}
+
+  /* ---- schede ---- */
+  .overlay{position:fixed;inset:0;background:rgba(8,8,10,.8);display:grid;place-items:center;padding:16px;z-index:10;overflow:auto}
+  .card{background:var(--bg-panel);border:1px solid var(--hairline);border-radius:14px;padding:18px;max-width:520px;width:100%;display:grid;gap:12px;box-shadow:0 12px 40px rgba(0,0,0,.6)}
+  .card h1{margin:0;font-family:var(--display);font-size:30px;letter-spacing:.04em;line-height:1}
+  .card h1 small{display:block;font-family:var(--ui);font-size:12px;color:var(--amber);letter-spacing:.04em;text-transform:uppercase;margin-bottom:6px}
+  .card p{margin:0;line-height:1.45}
+  .card ul{margin:0;padding-left:18px;display:grid;gap:6px;line-height:1.4;font-size:14px}
+  .card .primary{background:var(--amber);color:#1a1206;border:0;border-radius:10px;padding:12px;font-family:var(--display);font-size:20px;letter-spacing:.06em;font-weight:700}
+  .card .secondary{background:var(--bg-raised);border:1px solid var(--hairline);border-radius:10px;padding:10px;font-size:14px}
+  .scen{display:grid;gap:6px}
+  .scen button{text-align:left;background:var(--bg-raised);border:1px solid var(--hairline);border-radius:10px;padding:10px 12px}
+  .scen button[aria-pressed=true]{border-color:var(--amber);box-shadow:inset 0 0 0 1px var(--amber)}
+  .scen b{display:block;font-family:var(--display);font-size:18px;letter-spacing:.04em}
+  .scen small{color:var(--muted);font-size:12px;line-height:1.3}
+  .legend{display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:6px;font-size:12px;color:var(--muted)}
+  .legend span{display:flex;align-items:center;gap:6px}
+  .legend i{width:22px;height:14px;border-radius:3px;flex:none;border:1px solid #0006}
+  .gerry{display:flex;gap:12px;align-items:flex-start}
+  .gerry svg{flex:none}
+  .bubble{background:var(--paper);color:var(--ink);border-radius:12px;padding:10px 12px;font-size:14px;line-height:1.4;position:relative}
+  .bubble::before{content:"";position:absolute;left:-7px;top:18px;width:14px;height:14px;background:var(--paper);transform:rotate(45deg)}
+  .bubble b{display:block;font-size:15px;margin-bottom:4px}
+  .bubble ol{margin:6px 0 0;padding-left:18px;display:grid;gap:5px}
+  .bubble li b{display:inline;font-size:inherit;margin:0}
+  .stars{font-size:34px;letter-spacing:.1em;color:var(--yellow);text-align:center}
+  .stars span{color:#3a3c44}
+  .facts{display:grid;grid-template-columns:1fr auto;gap:4px 12px;font-size:14px}
+  .facts dd{margin:0;text-align:right;font-variant-numeric:tabular-nums;font-weight:600}
+  .facts dt{color:var(--muted)}
+</style>
+
+<!-- Gerry, il bidello: lo stesso simbolo del prototipo del preside (docs/livello1-festa-scuola.md) -->
+<svg width="0" height="0" style="position:absolute" aria-hidden="true"><defs>
+    <!-- Gerry Scotti, il bidello, caricatura vettoriale: testone pelato a pera, ciuffi grigi ai lati, occhi sornioni, nasone, sorriso storto, camice blu -->
+    <symbol id="gerry" viewBox="0 0 100 140">
+    <!-- camice da bidello blu, spalle larghe -->
+    <path d="M2 140 L6 104 Q12 92 32 88 Q50 84 68 88 Q88 92 94 104 L98 140 Z" fill="#2f5d8a"/>
+    <path d="M34 88 L50 112 L66 88 L58 86 L50 98 L42 86 Z" fill="#23476b"/>
+    <path d="M40 88 L50 106 L60 88 L54 86 L50 94 L46 86 Z" fill="#a9c8e8"/>
+    <path d="M46 88 L50 100 L54 88 Z" fill="#cf8c68"/>
+    <rect x="64" y="108" width="15" height="12" rx="1.5" fill="#23476b"/>
+    <rect x="67" y="104" width="2" height="8" rx="1" fill="#e9c23f"/>
+    <rect x="20" y="110" width="17" height="7" rx="1.5" fill="#f4f1ea"/>
+    <!-- collo largo -->
+    <rect x="34" y="76" width="32" height="14" rx="4" fill="#cf8c68"/>
+    <!-- orecchie -->
+    <ellipse cx="16" cy="56" rx="5" ry="8" fill="#cf8c68"/><ellipse cx="84" cy="56" rx="5" ry="8" fill="#cf8c68"/>
+    <!-- testone a pera: cranio alto e pelato, mascelle larghissime -->
+    <path d="M50 4 Q76 4 78 34 Q86 50 86 64 Q86 86 50 92 Q14 86 14 64 Q14 50 22 34 Q24 4 50 4 Z" fill="#e8a883"/>
+    <ellipse cx="44" cy="17" rx="11" ry="5" fill="#f4c7a4"/>
+    <path d="M34 10 Q44 3 56 5 M40 12 Q50 6 62 8" stroke="#7d7570" stroke-width="1.4" fill="none" stroke-linecap="round"/>
+    <!-- ciuffi grigi solo ai lati, gonfi -->
+    <path d="M14 58 Q8 38 16 26 Q22 20 28 20 Q22 32 22 44 Q20 52 20 58 Z" fill="#7d7570"/>
+    <path d="M86 58 Q92 38 84 26 Q78 20 72 20 Q78 32 78 44 Q80 52 80 58 Z" fill="#7d7570"/>
+    <!-- sopracciglia alte e sornione -->
+    <path d="M28 40 Q36 33 44 38 M56 36 Q64 29 72 36" stroke="#5f5752" stroke-width="3" fill="none" stroke-linecap="round"/>
+    <!-- occhi a fessura -->
+    <path d="M30 48 Q37 43.5 44 47.5 Q37 50 30 48 Z M56 47 Q63 42.5 70 47.5 Q63 49.5 56 47 Z" fill="#f4e8de"/>
+    <circle cx="38" cy="47" r="1.9" fill="#6d8a92"/><circle cx="64" cy="46.4" r="1.9" fill="#6d8a92"/>
+    <path d="M30 48 Q37 43 44 47.5 M56 47.5 Q63 42.5 70 47.5" stroke="#2a1d12" stroke-width="2.2" fill="none" stroke-linecap="round"/>
+    <!-- nasone carnoso -->
+    <path d="M47 46 Q45 56 42 61 Q40 68 50 68 Q60 68 58 61 Q55 56 53 46 Z" fill="#d6926c"/>
+    <!-- solchi del sorriso -->
+    <path d="M38 62 Q28 68 31 79 M62 62 Q73 66 72 74" stroke="#c07e5c" stroke-width="2" fill="none" stroke-linecap="round"/>
+    <!-- sorrisone da una guancia all'altra -->
+    <path d="M30 75 Q48 94 73 68 Q52 77 30 75 Z" fill="#5e2220"/>
+    <path d="M33 75.6 Q52 78.4 70 69.6 L68 73.6 Q52 82 35 79 Z" fill="#fbfaf5"/>
+    </symbol>
+</defs></svg>
+
+<div id="app">
+  <header>
+    <div class="title" id="h-title">La posa dei cavi<small id="h-sub"></small></div>
+    <div class="stats">
+      <div class="stat" id="st-clock">Ore<b id="v-clock">20:00</b></div>
+      <div class="stat" id="st-lines">Sistemati<b id="v-lines">0/0</b></div>
+      <div class="stat" id="st-tape">Nastro<b id="v-tape">0/0 m</b></div>
+      <div class="stat">Passacavi<b id="v-ramps">0/0</b></div>
+      <button class="icon-btn" id="btn-help" title="Regole">?</button>
+    </div>
+  </header>
+
+  <div id="map">
+    <canvas id="cv"></canvas>
+    <div id="toast"></div>
+  </div>
+
+  <div id="desk">
+    <div id="lines"></div>
+    <div id="info"></div>
+    <div class="tools">
+      <button class="tool" id="t-redo" disabled>Com'era</button>
+      <button class="tool" id="t-ramp" aria-pressed="false">Passacavi</button>
+      <button class="tool go" id="t-check">CHIAMA GERRY</button>
+    </div>
+  </div>
+</div>
+
+<div class="overlay" id="start">
+  <div class="card">
+    <h1><small>Prima dell'apertura porte</small>La posa dei cavi</h1>
+    <p>Il montaggio è fatto e funziona, ma i cavi sono ancora come li hai tirati: dritti da presa a presa, dove capita. Prima di far entrare il pubblico passa Gerry, il bidello, a controllare. Sta a te decidere quali sistemare.</p>
+    <ul>
+      <li><b>Prendi un cavo in un punto e tiralo</b>: si piega lì, come una corda, e compare un pallino. Trascina i pallini per spostare le pieghe; vicino a un muro, al bordo del palco o a un'altra piega il cavo ci si allinea da solo. Il cavo ha la sua lunghezza: quando è tirato non va oltre. <b>Com'era</b> lo rimette come al montaggio.</li>
+      <li><b>Via di fuga</b> (rossa): lì per terra non ci passa niente, mai.</li>
+      <li><b>Passaggi</b> (a strisce): si attraversano dritti, dentro un <b>passacavi</b>. Mai lungo il passaggio.</li>
+      <li><b>In scena</b> solo il cavo del microfono. Gli altri stanno lungo i bordi del palco.</li>
+      <li>Sul palco, nel Pit e in platea i cavi vanno <b>fermati col nastro</b>. Lungo i muri no. Più cavi insieme nello stesso fascio usano un nastro solo.</li>
+      <li>Il microfono (e il multipolare) <b>incrocia la corrente a 90°</b>, non le corre accanto: fa ronzio.</li>
+      <li><b>Hai tempo fino alle 20:30.</b> A quell'ora Gerry passa comunque: se trova ancora qualcosa apre le porte così, e la posa finisce senza stelle.</li>
+    </ul>
+    <div class="legend" id="legend"></div>
+    <div class="scen" id="scen"></div>
+    <button class="primary" id="btn-start">Guarda i cavi</button>
+  </div>
+</div>
+
+<div class="overlay" id="gerry-box" hidden><div class="card" id="gerry-card"></div></div>
+<div class="overlay" id="end" hidden><div class="card" id="end-card"></div></div>
+
+<script>
+'use strict';
+/* ---------------------------------------------------------------------
+   LA PALESTRA — la stessa del livello 1 (main.js), in celle da 50 cm:
+   20 colonne (10 m) × 32 righe (16 m). Righe 0-3 cortile (fuori), 4-7
+   backstage, 8-15 palco (pedana 2-6 m, Off Stage 6-8 m), 16-19 Pit,
+   20-27 platea, 28-31 regia di sala (FOH).
+   --------------------------------------------------------------------- */
+const COLS = 20, ROWS = 32, J0 = 4, CELL_M = 0.5;
+const VR = ROWS - J0;   // righe viste (il cortile non si vede)
+const zoneAt = (i, j) => {
+  if (j < 4) return 'cortile';
+  if (j < 8) return 'backstage';
+  if (j < 16) return i >= 4 && i < 12 ? 'scena' : i >= 12 && i < 16 ? 'offstage' : 'lato';
+  if (j < 20) return 'pit';
+  if (j < 28) return 'platea';
+  return 'foh';
+};
+const ZONE_NAME = { backstage: 'BACKSTAGE', scena: 'PALCO', offstage: 'OFF STAGE', lato: '', pit: 'PIT', platea: 'PLATEA', foh: 'REGIA DI SALA' };
+// in mezzo alla pedana (il bordo largo 50 cm resta per i cavi)
+const isInterior = (i, j) => i >= 5 && i <= 10 && j >= 9 && j <= 14;
+const isWall = i => i === 0 || i === COLS - 1;
+// dove i cavi vanno fermati col nastro: palco, Pit e platea, tranne lungo i muri
+const needsTape = (i, j) => { const z = zoneAt(i, j); return (z === 'scena' || z === 'pit' || z === 'platea') && !isWall(i); };
+
+// passaggi: corridoi percorsi a piedi lungo j (si attraversano in orizzontale).
+// Un passaggio o una via di fuga dove la crew ha già posato un pezzo non c'è
+// più (nel gioco il montaggio non li conosce): vedi start().
+const GYM_PASSAGES = [
+  { id: 'artisti', label: 'passaggio degli artisti', r: [13, 4, 2, 4] },
+  { id: 'corridoio', label: 'corridoio del pubblico', r: [9, 20, 2, 12] }
+];
+const GYM_EXITS = [{ label: 'VIA DI FUGA', r: [0, 22, 3, 3] }];
+let PASSAGES = GYM_PASSAGES, EXITS = GYM_EXITS;
+const inRect = (r, i, j) => i >= r[0] && i < r[0] + r[2] && j >= r[1] && j < r[1] + r[3];
+const passageAt = (i, j) => PASSAGES.find(p => inRect(p.r, i, j)) || null;
+const isExit = (i, j) => EXITS.some(e => inRect(e.r, i, j));
+
+/* tipi di cavo: power = porta corrente (anche la coppia DMX + PowerCON dei
+   PAR), sensitive = segnale debole che prende il ronzio se corre accanto
+   alla corrente */
+const KINDS = {
+  power:   { name: 'Corrente', color: '#ff8a2a', power: true },
+  mic:     { name: 'Microfono', color: '#4fb7ff', sensitive: true, scene: true },
+  signal:  { name: 'Segnale', color: '#8fd8ff', sensitive: true },
+  speaker: { name: 'Casse', color: '#b98cff' },
+  dmx:     { name: 'Luci (DMX + corrente)', color: '#49e07a', power: true },
+  data:    { name: 'DMX', color: '#2fbf8f' },
+  multi:   { name: 'Multipolare', color: '#eee9df', sensitive: true, width: 1.6 }
+};
+
+/* SCENARI — pezzi posati (rettangoli di celle [i, j, larghezza, altezza]) e
+   cavi da stendere. Nel gioco i cavi saranno quelli collegati davvero al
+   montaggio (gameState.edges); qui sono fissi. */
+const COMMON = {
+  allaccio: { label: 'ALLACCIO', r: [17, 4, 2, 1], look: 'allaccio' },
+  quadro:   { label: 'QUADRO', r: [9, 5, 1, 2], look: 'quadro' },
+  subsx:    { label: 'SUB SX', r: [2, 16, 2, 2], look: 'sub' },
+  subdx:    { label: 'SUB DX', r: [14, 16, 2, 2], look: 'sub' }
+};
+const SCENARIOS = {
+  festa: {
+    title: 'Festa della scuola', sub: 'Livello 1 · regia in Off Stage',
+    text: 'Il montaggio del livello 1: regia sul tavolo in Off Stage, 2 sub, 4 PAR in catena, il microfono del preside.',
+    tape: 16, ramps: 1,
+    devices: Object.assign({}, COMMON, {
+      regia: { label: 'REGIA', r: [14, 9, 2, 6], look: 'tavolo' },
+      asta:  { label: 'ASTA', r: [8, 13, 1, 1], look: 'asta' },
+      tsx:   { label: 'TAGLIO SX', r: [3, 12, 1, 1], look: 'par' },
+      tdx:   { label: 'TAGLIO DX', r: [12, 14, 1, 1], look: 'par' },
+      fsx:   { label: 'FRONT. SX', r: [5, 19, 1, 1], look: 'par' },
+      fdx:   { label: 'FRONT. DX', r: [13, 19, 1, 1], look: 'par' }
+    }),
+    lines: [
+      { id: 'a', from: 'allaccio', to: 'quadro', kind: 'power', len: 10, name: 'CEE 400V' },
+      { id: 'b', from: 'quadro', to: 'regia', kind: 'power', len: 10, name: 'CEE 16A regia' },
+      { id: 'c', from: 'quadro', to: 'subsx', kind: 'power', len: 10, name: 'Corrente sub SX' },
+      { id: 'd', from: 'quadro', to: 'subdx', kind: 'power', len: 10, name: 'Corrente sub DX' },
+      { id: 'e', from: 'regia', to: 'subsx', kind: 'speaker', len: 15, name: 'Speakon SX' },
+      { id: 'f', from: 'regia', to: 'subdx', kind: 'speaker', len: 15, name: 'Speakon DX' },
+      { id: 'g', from: 'asta', to: 'regia', kind: 'mic', len: 10, name: 'XLR microfono' },
+      { id: 'h', from: 'regia', to: 'tdx', kind: 'dmx', len: 5, name: 'PAR 1' },
+      { id: 'i', from: 'tdx', to: 'fdx', kind: 'dmx', len: 5, name: 'PAR 2' },
+      { id: 'j', from: 'fdx', to: 'fsx', kind: 'dmx', len: 5, name: 'PAR 3' },
+      { id: 'k', from: 'fsx', to: 'tsx', kind: 'dmx', len: 5, name: 'PAR 4' }
+    ]
+  },
+  sala: {
+    title: 'Regia in sala', sub: 'Anteprima livelli successivi · FOH',
+    text: 'La regia va in fondo alla sala: multipolare da 50 m e corrente da 25 m da portare oltre il pubblico.',
+    tape: 22, ramps: 2,
+    devices: Object.assign({}, COMMON, {
+      rack: { label: 'RACK + STAGE BOX', r: [14, 10, 2, 3], look: 'rack' },
+      asta: { label: 'ASTA', r: [8, 12, 1, 1], look: 'asta' },
+      foh:  { label: 'REGIA FOH', r: [3, 29, 4, 2], look: 'tavolo' }
+    }),
+    lines: [
+      { id: 'a', from: 'allaccio', to: 'quadro', kind: 'power', len: 10, name: 'CEE 400V' },
+      { id: 'b', from: 'quadro', to: 'rack', kind: 'power', len: 10, name: 'CEE 16A rack' },
+      { id: 'c', from: 'quadro', to: 'foh', kind: 'power', len: 25, name: 'CEE 16A FOH' },
+      { id: 'd', from: 'rack', to: 'foh', kind: 'multi', len: 50, name: 'Multipolare' },
+      { id: 'e', from: 'asta', to: 'rack', kind: 'mic', len: 10, name: 'XLR microfono' },
+      { id: 'f', from: 'rack', to: 'subsx', kind: 'speaker', len: 15, name: 'Speakon SX' },
+      { id: 'g', from: 'rack', to: 'subdx', kind: 'speaker', len: 15, name: 'Speakon DX' },
+      { id: 'h', from: 'quadro', to: 'subsx', kind: 'power', len: 10, name: 'Corrente sub SX' },
+      { id: 'i', from: 'quadro', to: 'subdx', kind: 'power', len: 10, name: 'Corrente sub DX' }
+    ]
+  }
+};
+
+/* ---------------------------------------------------------------------
+   STATO
+   --------------------------------------------------------------------- */
+const S = {
+  scen: null, key: 'festa',
+  pts: {},            // id cavo -> la corda: [capo, maniglie..., capo] in celle
+  paths: {},          // id cavo -> [[i, j], ...] celle toccate (ricavate da pts)
+  ramps: new Set(),   // 'idPassaggio:j' — un passacavi copre il passaggio in larghezza su quella riga
+  sel: null, rampMode: false,
+  grab: null,         // { id, k (maniglia) o seg (tratto), x, y, moved }
+  flagged: {},        // id cavo -> celle segnate da Gerry (fino a quando il cavo non cambia)
+  inspections: 0, done: false,
+  clock: 0            // minuti di gioco dalle 20:00 (alle 30 Gerry apre le porte)
+};
+/* OROLOGIO — dalle 20:00 alle 20:30, come lo scarico: un minuto vero sono
+   sei minuti di gioco (cinque minuti in tutto). Corre solo mentre si
+   posa: fermo con le schede aperte (regole, Gerry). */
+const CLOCK_END = 30, CLOCK_RATE = 6 / 60000;   // minuti di gioco per millisecondo
+const clockText = m => '20:' + String(Math.min(CLOCK_END, Math.floor(m))).padStart(2, '0');
+const $ = s => document.querySelector(s);
+const fmt = m => (Math.round(m * 10) / 10).toString().replace('.', ',');
+const key = (i, j) => i + ',' + j;
+const lineById = id => S.scen.lines.find(l => l.id === id);
+const dev = id => S.scen.devices[id];
+const devAt = (i, j) => Object.keys(S.scen.devices).find(d => inRect(dev(d).r, i, j)) || null;
+const touches = (r, i, j) => !inRect(r, i, j) && (inRect(r, i - 1, j) || inRect(r, i + 1, j) || inRect(r, i, j - 1) || inRect(r, i, j + 1));
+// lunghezza stesa: da bordo a bordo dei pezzi, un passo da 50 cm per cella in più
+const pathLen = p => (p.length + 1) * CELL_M;
+/* in scena ci va il cavo del microfono, e quello di un pezzo che sta in
+   mezzo alla pedana (lì non c'è altra strada) */
+const nearInterior = r => { for (let i = r[0] - 1; i <= r[0] + r[2]; i++) for (let j = r[1] - 1; j <= r[1] + r[3]; j++) if (isInterior(i, j)) return true; return false; };
+const sceneOk = l => !!KINDS[l.kind].scene || nearInterior(dev(l.from).r) || nearInterior(dev(l.to).r);
+const lineLabel = l => `${l.name} (${dev(l.from).label} → ${dev(l.to).label})`;
+
+/* ---------------------------------------------------------------------
+   REGOLE — cosa guarda Gerry. Tutto si ricava dai percorsi.
+   --------------------------------------------------------------------- */
+// direzione del cavo in ogni cella: 'h', 'v' o 'c' (curva)
+function pathDirs (l, p) {
+  const a = dev(l.from).r, b = dev(l.to).r;
+  const nearest = (r, c) => [Math.min(Math.max(c[0], r[0]), r[0] + r[2] - 1), Math.min(Math.max(c[1], r[1]), r[1] + r[3] - 1)];
+  const pts = [nearest(a, p[0]), ...p, nearest(b, p[p.length - 1])];
+  return p.map((c, k) => {
+    const pr = pts[k], nx = pts[k + 2];
+    const h1 = pr[1] === c[1], h2 = nx[1] === c[1];
+    return h1 && h2 ? 'h' : !h1 && !h2 ? 'v' : 'c';
+  });
+}
+function tapeCells () {
+  const set = new Set();
+  for (const id in S.paths) for (const [i, j] of S.paths[id]) {
+    const p = passageAt(i, j);
+    if (needsTape(i, j) && !(p && S.ramps.has(p.id + ':' + j))) set.add(key(i, j));
+  }
+  return set;
+}
+const tapeUsed = () => tapeCells().size * CELL_M;
+
+function analyze () {
+  const issues = [];
+  const add = (type, ids, cells, text) => issues.push({ type, ids, cells, text });
+  const laid = S.scen.lines.filter(l => S.paths[l.id]);
+  const use = new Map();   // cella -> [{ l, dir }]
+  laid.forEach(l => {
+    const p = S.paths[l.id], dirs = pathDirs(l, p);
+    const along = [], open = [], scene = [], exit = [];
+    p.forEach(([i, j], k) => {
+      const kk = key(i, j);
+      if (!use.has(kk)) use.set(kk, []);
+      use.get(kk).push({ l, dir: dirs[k] });
+      const ps = passageAt(i, j);
+      if (ps) {
+        const nb = [p[k - 1], p[k + 1]].filter(Boolean);
+        if (nb.some(n => passageAt(n[0], n[1]) === ps && n[1] !== j)) along.push({ c: [i, j], ps });
+        else if (!S.ramps.has(ps.id + ':' + j)) open.push({ c: [i, j], ps });
+      }
+      if (!sceneOk(l) && isInterior(i, j)) scene.push([i, j]);
+      if (isExit(i, j)) exit.push([i, j]);
+    });
+    if (exit.length) add('fuga', [l.id], exit, `<b>${l.name}</b> passa sulla via di fuga: lì per terra non ci deve essere niente, neanche col passacavi.`);
+    if (open.length) add('passaggio', [l.id], open.map(o => o.c), `<b>${l.name}</b> attraversa il ${open[0].ps.label} senza passacavi: il primo che passa ci inciampa e lo strappa.`);
+    if (along.length) add('lungo', [l.id], along.map(o => o.c), `<b>${l.name}</b> corre lungo il ${along[0].ps.label}. Nel passacavi i cavi entrano solo di traverso: attraversalo dritto e poi prosegui fuori.`);
+    if (scene.length) add('scena', [l.id], scene, `<b>${l.name}</b> passa in mezzo alla scena: il preside ci inciampa. Sul palco solo il cavo del microfono, gli altri lungo i bordi.`);
+  });
+  // ronzio: segnale debole affiancato a un cavo di corrente per almeno 1 m
+  const pairs = new Map();
+  use.forEach((list, kk) => {
+    list.filter(u => KINDS[u.l.kind].sensitive).forEach(s => list.filter(u => KINDS[u.l.kind].power).forEach(pw => {
+      if (s.dir === 'c' || s.dir !== pw.dir) return;
+      const pk = s.l.id + '|' + pw.l.id;
+      if (!pairs.has(pk)) pairs.set(pk, { s: s.l, pw: pw.l, cells: [] });
+      pairs.get(pk).cells.push(kk.split(',').map(Number));
+    }));
+  });
+  pairs.forEach(({ s, pw, cells }) => {
+    if (cells.length < 2) return;
+    add('ronzio', [s.id], cells, `<b>${s.name}</b> corre accanto a <b>${pw.name}</b> per ${fmt(cells.length * CELL_M)} m: ronzio nelle casse. Il segnale incrocia la corrente a 90°, non ci va affiancato.`);
+  });
+  const t = tapeUsed();
+  if (t > S.scen.tape) add('nastro', [], [], `<b>Nastro finito</b>: servono ${fmt(t)} m e il rotolo ne ha ${S.scen.tape}. Raggruppa i cavi in un fascio (un nastro per tutti) o passa lungo i muri.`);
+  return issues;
+}
+
+/* RISOLUTORE — una posa valida qualunque, cella per cella (Dijkstra) con
+   le regole di Gerry: prima microfono e multipolare, poi la corrente che
+   non tocca le loro celle, poi gli altri; il nastro costa, così i cavi si
+   raccolgono in fasci. Serve a tarare la pianta del gioco (lunghezze,
+   nastro, passacavi) e ai test. Non è un aiuto per il giocatore. */
+function autoRoute () {
+  const used = new Map();   // cella -> Set(tipi)
+  const rank = l => KINDS[l.kind].sensitive ? 0 : KINDS[l.kind].power ? 1 : 2;
+  const out = {};
+  for (const l of S.scen.lines.slice().sort((a, b) => rank(a) - rank(b))) {
+    const from = dev(l.from).r, to = dev(l.to).r, sens = KINDS[l.kind].sensitive, pw = KINDS[l.kind].power;
+    const free = (i, j, strict) => i >= 0 && i < COLS && j >= J0 && j < ROWS && !isExit(i, j) && !devAt(i, j) &&
+      (sceneOk(l) || !isInterior(i, j)) &&
+      !(strict && used.has(key(i, j)) && [...used.get(key(i, j))].some(k => KINDS[k].sensitive ? pw : KINDS[k].power && sens));
+    let cells = null;
+    for (const strict of [true, false]) {
+      const dist = new Map(), prev = new Map(), q = [];
+      for (let i = 0; i < COLS; i++) for (let j = J0; j < ROWS; j++) if (touches(from, i, j) && free(i, j, strict)) { dist.set(key(i, j), 1); q.push([1, i, j]); }
+      let end = null;
+      while (q.length) {
+        let m = 0;
+        for (let k = 1; k < q.length; k++) if (q[k][0] < q[m][0]) m = k;
+        const [d, i, j] = q.splice(m, 1)[0];
+        if (d > dist.get(key(i, j))) continue;
+        if (touches(to, i, j)) { end = [i, j]; break; }
+        for (const [di, dj] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) {
+          const ni = i + di, nj = j + dj;
+          if (!free(ni, nj, strict)) continue;
+          const pa = passageAt(i, j), pb = passageAt(ni, nj);
+          if (pa && pa === pb && dj) continue;   // nel passaggio solo di traverso
+          const nd = d + 1 + (needsTape(ni, nj) && !used.has(key(ni, nj)) ? 0.6 : 0) + (pb ? 0.5 : 0);
+          if (nd < (dist.get(key(ni, nj)) ?? Infinity)) { dist.set(key(ni, nj), nd); prev.set(key(ni, nj), [i, j]); q.push([nd, ni, nj]); }
+        }
+      }
+      if (!end) continue;
+      cells = [end];
+      while (prev.has(key(...cells[0]))) cells.unshift(prev.get(key(...cells[0])));
+      break;
+    }
+    out[l.id] = cells;
+    if (cells) cells.forEach(([i, j]) => { const k = key(i, j); if (!used.has(k)) used.set(k, new Set()); used.get(k).add(l.kind); });
+  }
+  return out;
+}
+/* LA CORDA — un cavo è una corda con dei punti fermi: i due capi stanno
+   nelle celle accanto ai loro pezzi, in mezzo ci sono le maniglie. Tra due
+   punti il cavo va dritto. Le celle che tocca (regole di Gerry e nastro)
+   si ricavano dalla corda: S.paths. */
+// celle da a a b (comprese), senza salti in diagonale
+function raster (a, b) {
+  const out = [a.slice()];
+  let i = a[0], j = a[1], ti = 0, tj = 0;
+  const di = Math.sign(b[0] - i), dj = Math.sign(b[1] - j), ni = Math.abs(b[0] - i), nj = Math.abs(b[1] - j);
+  while (ti < ni || tj < nj) {
+    const stepI = tj >= nj || (ti < ni && (ti + .5) / ni < (tj + .5) / nj);
+    if (stepI) { i += di; ti++; } else { j += dj; tj++; }
+    out.push([i, j]);
+  }
+  return out;
+}
+function cellsOf (pts) {
+  const out = [];
+  for (let k = 1; k < pts.length; k++) raster(pts[k - 1], pts[k]).forEach((c, n) => { if (k === 1 || n > 0) out.push(c); });
+  if (pts.length === 1) out.push(pts[0].slice());
+  return out;
+}
+// lunghezza della corda: i tratti dritti tra i punti, più mezzo metro per salire sui due pezzi
+const ropeLen = pts => pts.slice(1).reduce((t, p, k) => t + Math.hypot(p[0] - pts[k][0], p[1] - pts[k][1]), 0) * CELL_M + CELL_M;
+const lineLen = id => ropeLen(S.pts[id]);
+// cella libera accanto al pezzo, la più vicina a un punto
+function anchorToward (r, p) {
+  let best = null, bd = Infinity;
+  for (let i = r[0] - 1; i <= r[0] + r[2]; i++) for (let j = r[1] - 1; j <= r[1] + r[3]; j++) {
+    if (!touches(r, i, j) || i < 0 || i >= COLS || j < J0 || j >= ROWS || devAt(i, j)) continue;
+    const d = Math.hypot(i - p[0], j - p[1]);
+    if (d < bd) { bd = d; best = [i, j]; }
+  }
+  return best;
+}
+const devMid = id => { const r = dev(id).r; return [r[0] + (r[2] - 1) / 2, r[1] + (r[3] - 1) / 2]; };
+// i capi seguono la maniglia più vicina (o l'altro pezzo, senza maniglie)
+function fixAnchors (l, pts) {
+  const n = pts.length;
+  pts[0] = anchorToward(dev(l.from).r, n > 2 ? pts[1] : devMid(l.to)) || pts[0];
+  pts[n - 1] = anchorToward(dev(l.to).r, n > 2 ? pts[n - 2] : pts[0]) || pts[n - 1];
+  return pts;
+}
+// via le maniglie inutili: sopra un'altra o in riga con le vicine
+function tidy (pts) {
+  for (let k = pts.length - 2; k >= 1; k--) {
+    const a = pts[k - 1], b = pts[k], c = pts[k + 1];
+    const same = (b[0] === a[0] && b[1] === a[1]) || (b[0] === c[0] && b[1] === c[1]);
+    const cross = (b[0] - a[0]) * (c[1] - a[1]) - (b[1] - a[1]) * (c[0] - a[0]);
+    const between = (b[0] - a[0]) * (c[0] - b[0]) + (b[1] - a[1]) * (c[1] - b[1]) >= 0;
+    if (same || (cross === 0 && between)) pts.splice(k, 1);
+  }
+  return pts;
+}
+function setPts (id, pts) { S.pts[id] = pts; S.paths[id] = cellsOf(pts); }
+
+/* COM'È STATO TIRATO — al montaggio il cavo va dritto da presa a presa (e
+   gira intorno alla pedana, come lo disegna il gioco): le sue curve
+   diventano le maniglie. Via di fuga, passaggi e scena non li guarda: è
+   proprio quello che c'è da sistemare. */
+function dropPts (l) {
+  const inner = (l.guide || []).slice(1, -1).map(([x, y]) => [Math.round(x / CELL_M - .5), Math.round(y / CELL_M - .5)])
+    .map(([i, j]) => [Math.min(COLS - 1, Math.max(0, i)), Math.min(ROWS - 1, Math.max(J0, j))])
+    .filter(([i, j]) => !devAt(i, j));
+  const pts = fixAnchors(l, [[0, 0], ...inner, [0, 0]]);
+  return pts[0] && pts[pts.length - 1] ? tidy(pts) : null;
+}
+// le corde del montaggio di uno scenario (una volta sola): il cavo steso
+// è almeno lungo così, quindi la lunghezza sale se serve
+function dropAll (scen) {
+  if (scen.drop) return scen.drop;
+  const keep = S.scen; S.scen = scen;
+  scen.drop = {};
+  scen.lines.forEach(l => {
+    const p = dropPts(l);
+    if (!p) return;
+    scen.drop[l.id] = p;
+    if (l.len < ropeLen(p)) l.len = Math.ceil(ropeLen(p) / 5) * 5;
+  });
+  S.scen = keep;
+  return scen.drop;
+}
+
+// righe di passaggio attraversate da una posa (una per passacavi)
+function rampRows (paths) {
+  const rows = new Set();
+  Object.values(paths).forEach(p => (p || []).forEach(([i, j]) => { const ps = passageAt(i, j); if (ps) rows.add(ps.id + ':' + j); }));
+  return rows;
+}
+
+/* LA PIANTA DEL GIOCO — il gioco (index.html) manda i pezzi posati e i cavi
+   collegati al montaggio. Il montaggio non guarda le lunghezze: un cavo che
+   dal vero non ci arriverebbe si allunga (nel baule c'era quello giusto).
+   Nastro e passacavi si tarano sulla posa del risolutore, con margine. */
+function buildScenario (layout) {
+  const scen = {
+    title: layout.title || 'Festa della scuola', sub: layout.sub || 'La tua regia', text: 'I cavi del tuo montaggio.',
+    devices: layout.devices, lines: layout.lines.slice(), tape: 0, ramps: 0
+  };
+  SCENARIOS.gioco = scen;
+  S.scen = scen;
+  setGym();
+  const sol = autoRoute();
+  scen.lines = scen.lines.filter(l => sol[l.id] && dropPts(l));   // pezzi chiusi da altri pezzi: quel cavo resta sospeso
+  scen.lines.forEach(l => {
+    const need = pathLen(sol[l.id]) + 1;
+    if (l.len < need) l.len = Math.ceil(need / 5) * 5;
+  });
+  const cells = new Set();
+  Object.values(sol).forEach(p => (p || []).forEach(([i, j]) => { const ps = passageAt(i, j); if (needsTape(i, j) && !ps) cells.add(key(i, j)); }));
+  scen.tape = Math.max(4, Math.ceil(cells.size * CELL_M / 0.7));
+  scen.ramps = Math.max(1, rampRows(sol).size);
+  return scen;
+}
+// passaggi e vie di fuga della palestra, senza quelli occupati da un pezzo
+function setGym () {
+  const clear = r => !Object.values(S.scen.devices).some(d => { for (let i = d.r[0]; i < d.r[0] + d.r[2]; i++) for (let j = d.r[1]; j < d.r[1] + d.r[3]; j++) if (inRect(r, i, j)) return true; return false; });
+  PASSAGES = GYM_PASSAGES.filter(p => clear(p.r));
+  EXITS = GYM_EXITS.filter(e => clear(e.r));
+}
+
+/* ---------------------------------------------------------------------
+   POSA — un passo alla volta, con le stesse regole per il dito e per i test
+   --------------------------------------------------------------------- */
+let toastT = 0;
+function toast (msg, cls) {
+  const t = $('#toast');
+  t.textContent = msg; t.className = 'show ' + (cls || '');
+  clearTimeout(toastT); toastT = setTimeout(() => { t.className = ''; }, 2200);
+}
+/* sposta la maniglia k verso la cella c, un passo alla volta: si ferma
+   contro un pezzo o quando la corda è tesa (cavo finito). Vicino alle
+   maniglie accanto si mette in riga con loro (tratti dritti), vicino a un
+   muro o al bordo del palco ci si appoggia. Torna il motivo se si è fermata. */
+const SNAP_I = [0, 4, 11, 19], SNAP_J = [J0, 8, 15, 19, ROWS - 1];
+function snap (c, a, b) {
+  let [i, j] = c;
+  const near = (v, list) => { let best = null; list.forEach(x => { if (Math.abs(v - x) <= 1 && (best === null || Math.abs(v - x) < Math.abs(v - best))) best = x; }); return best; };
+  const si = near(i, [a[0], b[0]]) ?? near(i, SNAP_I), sj = near(j, [a[1], b[1]]) ?? near(j, SNAP_J);
+  const out = [si ?? i, sj ?? j];
+  return devAt(...out) ? c : out;
+}
+function moveHandle (id, k, c) {
+  const l = lineById(id);
+  let why = null;
+  const target = [Math.min(COLS - 1, Math.max(0, c[0])), Math.min(ROWS - 1, Math.max(J0, c[1]))];
+  const steps = raster(S.pts[id][k], target).slice(1);
+  for (const st of steps) {
+    if (devAt(...st)) { why = 'C\'è ' + dev(devAt(...st)).label + ': giraci intorno.'; break; }
+    const pts = S.pts[id].map(p => p.slice());
+    pts[k] = st;
+    fixAnchors(l, pts);   // prima i capi seguono il dito, poi la piega si mette in riga con loro
+    pts[k] = snap(st, pts[k - 1], pts[k + 1]);
+    fixAnchors(l, pts);
+    if (ropeLen(pts) > l.len + 1e-9) { why = `Cavo tirato: ${l.name} è lungo ${l.len} m.`; break; }
+    setPts(id, pts);
+  }
+  return why;
+}
+// il cavo è cambiato: Gerry dovrà ricontrollarlo
+function changed (id) {
+  delete S.flagged[id];
+  if (S.gerryIssues) S.gerryIssues = S.gerryIssues.filter(x => !x.ids.includes(id));
+  render();
+}
+// per i test (e per il risolutore): stende un cavo lungo queste celle
+function layPath (id, cells) {
+  const l = lineById(id);
+  if (!cells || !cells.length) return 'nessuna cella';
+  for (let k = 0; k < cells.length; k++) {
+    if (devAt(...cells[k])) return 'passa sopra ' + dev(devAt(...cells[k])).label;
+    if (k && Math.abs(cells[k][0] - cells[k - 1][0]) + Math.abs(cells[k][1] - cells[k - 1][1]) !== 1) return 'salto';
+  }
+  if (!touches(dev(l.from).r, ...cells[0])) return 'non parte da ' + dev(l.from).label;
+  if (!touches(dev(l.to).r, ...cells[cells.length - 1])) return 'non arriva a ' + dev(l.to).label;
+  const pts = tidy(cells.map(c => c.slice()));
+  if (ropeLen(pts) > l.len + 1e-9) return `Cavo finito: ${l.name} è lungo ${l.len} m.`;
+  setPts(id, pts);
+  changed(id);
+  return true;
+}
+function toggleRamp (i, j) {
+  const p = passageAt(i, j);
+  if (!p) { toast('Il passacavi va sui passaggi (le strisce).', 'bad'); return false; }
+  const k = p.id + ':' + j;
+  if (S.ramps.has(k)) S.ramps.delete(k);
+  else if (S.ramps.size >= S.scen.ramps) { toast(`Hai solo ${S.scen.ramps} passacavi: toccane uno posato per toglierlo.`, 'bad'); return false; }
+  else S.ramps.add(k);
+  render();
+  return true;
+}
+
+/* ---------------------------------------------------------------------
+   DISEGNO
+   --------------------------------------------------------------------- */
+const cv = $('#cv'), ctx = cv.getContext('2d');
+let cs = 20, ox = 0, oy = 0, W = 0, H = 0;
+function resize () {
+  const box = $('#map').getBoundingClientRect();
+  const dpr = window.devicePixelRatio || 1;
+  W = box.width; H = box.height;
+  cv.width = Math.round(W * dpr); cv.height = Math.round(H * dpr);
+  ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+  cs = Math.max(6, Math.floor(Math.min((W - 16) / COLS, (H - 16) / VR)));
+  ox = Math.round((W - COLS * cs) / 2); oy = Math.round((H - VR * cs) / 2);
+}
+const cx = i => ox + i * cs, cy = j => oy + (j - J0) * cs;
+const center = (i, j) => [cx(i) + cs / 2, cy(j) + cs / 2];
+const toCell = (x, y) => [Math.floor((x - ox) / cs), Math.floor((y - oy) / cs) + J0];
+
+function hatch (x, y, w, h, color, gap, lw) {
+  ctx.save(); ctx.beginPath(); ctx.rect(x, y, w, h); ctx.clip();
+  ctx.strokeStyle = color; ctx.lineWidth = lw || 2;
+  for (let t = -h; t < w; t += gap) { ctx.beginPath(); ctx.moveTo(x + t, y + h); ctx.lineTo(x + t + h, y); ctx.stroke(); }
+  ctx.restore();
+}
+function drawFloor () {
+  const zc = { backstage: '#1b1c21', scena: '#3a2f24', offstage: '#2a2520', lato: '#18191d', pit: '#1d1f25', platea: '#17181c', foh: '#1c1e23' };
+  for (let j = J0; j < ROWS; j++) for (let i = 0; i < COLS; i++) {
+    ctx.fillStyle = zc[zoneAt(i, j)];
+    ctx.fillRect(cx(i), cy(j), cs, cs);
+  }
+  // assi della pedana
+  ctx.strokeStyle = 'rgba(0,0,0,.25)'; ctx.lineWidth = 1;
+  for (let j = 8; j < 16; j++) { ctx.beginPath(); ctx.moveTo(cx(4), cy(j) + .5); ctx.lineTo(cx(16), cy(j) + .5); ctx.stroke(); }
+  // "in scena": la zona dove si esibiscono
+  ctx.fillStyle = 'rgba(242,197,61,.06)'; ctx.fillRect(cx(5), cy(9), cs * 6, cs * 6);
+  ctx.setLineDash([4, 4]); ctx.strokeStyle = 'rgba(242,197,61,.35)'; ctx.strokeRect(cx(5) + .5, cy(9) + .5, cs * 6 - 1, cs * 6 - 1); ctx.setLineDash([]);
+  // bordo della pedana
+  ctx.strokeStyle = '#6b5a45'; ctx.lineWidth = 2; ctx.strokeRect(cx(4), cy(8), cs * 12, cs * 8);
+  ctx.strokeStyle = 'rgba(107,90,69,.6)'; ctx.lineWidth = 1; ctx.beginPath(); ctx.moveTo(cx(12), cy(8)); ctx.lineTo(cx(12), cy(16)); ctx.stroke();
+  // sedie in platea (senza sedie su corridoio e via di fuga)
+  ctx.fillStyle = '#23252c';
+  for (let j = 20; j < 28; j++) for (let i = 1; i < COLS - 1; i++) {
+    if (passageAt(i, j) || isExit(i, j) || j % 2) continue;
+    ctx.fillRect(cx(i) + cs * .18, cy(j) + cs * .25, cs * .64, cs * .5);
+  }
+  // griglia leggera
+  ctx.strokeStyle = 'rgba(255,255,255,.035)'; ctx.lineWidth = 1;
+  for (let i = 0; i <= COLS; i++) { ctx.beginPath(); ctx.moveTo(cx(i) + .5, cy(J0)); ctx.lineTo(cx(i) + .5, cy(ROWS)); ctx.stroke(); }
+  for (let j = J0; j <= ROWS; j++) { ctx.beginPath(); ctx.moveTo(cx(0), cy(j) + .5); ctx.lineTo(cx(COLS), cy(j) + .5); ctx.stroke(); }
+  // nomi delle zone
+  ctx.font = `700 ${Math.max(9, cs * .55)}px 'Barlow Condensed', sans-serif`; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+  ctx.fillStyle = 'rgba(238,233,223,.18)';
+  ctx.fillText('BACKSTAGE', cx(4.5), cy(7.5));
+  ctx.fillText('PALCO', cx(8), cy(8.5));
+  ctx.fillText('OFF STAGE', cx(14), cy(8.5));
+  ctx.fillText('PIT', cx(10), cy(17.2));
+  ctx.fillText('PLATEA', cx(15), cy(20.5));
+  ctx.fillText('REGIA DI SALA', cx(15), cy(28.6));
+  // passaggi a strisce
+  PASSAGES.forEach(p => {
+    const [i, j, w, h] = p.r;
+    hatch(cx(i), cy(j), w * cs, h * cs, 'rgba(242,197,61,.22)', 8, 3);
+    ctx.strokeStyle = 'rgba(242,197,61,.45)'; ctx.lineWidth = 1; ctx.strokeRect(cx(i) + .5, cy(j) + .5, w * cs - 1, h * cs - 1);
+  });
+  // vie di fuga
+  EXITS.forEach(e => {
+    const [i, j, w, h] = e.r;
+    ctx.fillStyle = 'rgba(224,80,63,.18)'; ctx.fillRect(cx(i), cy(j), w * cs, h * cs);
+    hatch(cx(i), cy(j), w * cs, h * cs, 'rgba(224,80,63,.45)', 6, 2);
+    ctx.strokeStyle = '#e0503f'; ctx.lineWidth = 2; ctx.strokeRect(cx(i) + 1, cy(j) + 1, w * cs - 2, h * cs - 2);
+  });
+  // muri e porte
+  ctx.strokeStyle = '#5b5e68'; ctx.lineWidth = 3;
+  ctx.strokeRect(cx(0) - 1.5, cy(J0) - 1.5, COLS * cs + 3, VR * cs + 3);
+  const door = (x1, y1, x2, y2, col) => { ctx.strokeStyle = col; ctx.lineWidth = 5; ctx.beginPath(); ctx.moveTo(x1, y1); ctx.lineTo(x2, y2); ctx.stroke(); };
+  door(cx(13), cy(J0) - 1.5, cx(15), cy(J0) - 1.5, '#0c0d10');                // porta sul cortile
+  door(cx(0) - 1.5, cy(22), cx(0) - 1.5, cy(25), '#49e07a');                   // uscita di sicurezza
+  door(cx(9), cy(ROWS) + 1.5, cx(11), cy(ROWS) + 1.5, '#0c0d10');             // ingresso del pubblico
+  ctx.font = `700 ${Math.max(8, cs * .42)}px 'Barlow Condensed', sans-serif`;
+  ctx.fillStyle = '#49e07a'; ctx.save(); ctx.translate(cx(0) + cs * .5, cy(23.5)); ctx.rotate(-Math.PI / 2); ctx.fillText('USCITA', 0, 0); ctx.restore();
+  ctx.fillStyle = 'rgba(242,197,61,.7)';
+  PASSAGES.forEach(p => {
+    ctx.save(); ctx.translate(cx(p.r[0] + p.r[2] / 2), cy(p.r[1] + Math.min(p.r[3], 8) / 2)); ctx.rotate(-Math.PI / 2); ctx.fillText(p.id === 'artisti' ? 'ARTISTI' : 'CORRIDOIO', 0, 0); ctx.restore();
+  });
+}
+
+function drawDevice (id, pulse) {
+  const d = dev(id), [i, j, w, h] = d.r;
+  const x = cx(i) + 1.5, y = cy(j) + 1.5, ww = w * cs - 3, hh = h * cs - 3;
+  const look = d.look;
+  const fill = { allaccio: '#2f6b3f', quadro: '#8b8f98', sub: '#101114', tavolo: '#5a4632', rack: '#2a2c32', asta: '#2a2c32', par: '#2a2c32' }[look] || '#2c2e35';
+  ctx.fillStyle = fill; ctx.strokeStyle = '#0c0d10'; ctx.lineWidth = 1.5;
+  ctx.beginPath(); ctx.roundRect(x, y, ww, hh, Math.min(4, cs * .2)); ctx.fill(); ctx.stroke();
+  if (look === 'sub') {
+    ctx.strokeStyle = '#3a3c44'; ctx.lineWidth = 2;
+    ctx.beginPath(); ctx.arc(x + ww / 2, y + hh / 2, Math.min(ww, hh) * .34, 0, 7); ctx.stroke();
+    ctx.fillStyle = '#26282e'; ctx.fillRect(x + ww * .2, y + hh * .2, ww * .6, hh * .6);   // la testa appoggiata sopra
+  } else if (look === 'par' || look === 'asta') {
+    ctx.strokeStyle = '#6b6f79'; ctx.lineWidth = 1.2;
+    for (let a = 0; a < 3; a++) { const t = a * 2.094 + .5; ctx.beginPath(); ctx.moveTo(x + ww / 2, y + hh / 2); ctx.lineTo(x + ww / 2 + Math.cos(t) * ww * .45, y + hh / 2 + Math.sin(t) * hh * .45); ctx.stroke(); }
+    ctx.fillStyle = look === 'par' ? '#f2c53d' : '#c3c7ce';
+    ctx.beginPath(); ctx.arc(x + ww / 2, y + hh / 2, Math.min(ww, hh) * .2, 0, 7); ctx.fill();
+  } else if (look === 'tavolo') {
+    ctx.fillStyle = '#26282e';
+    const vert = hh > ww;
+    for (let k = 0; k < 3; k++) vert ? ctx.fillRect(x + ww * .15, y + hh * (.08 + k * .3), ww * .7, hh * .22) : ctx.fillRect(x + ww * (.06 + k * .32), y + hh * .15, ww * .26, hh * .7);
+  } else if (look === 'quadro') {
+    ctx.fillStyle = '#ff8a2a'; ctx.fillRect(x + ww * .2, y + hh * .15, ww * .6, hh * .12);
+  } else if (look === 'rack') {
+    ctx.fillStyle = '#3a3d45'; for (let k = 0; k < 4; k++) ctx.fillRect(x + ww * .12, y + hh * (.1 + k * .22), ww * .76, hh * .14);
+  }
+  if (pulse) {
+    ctx.strokeStyle = `rgba(242,165,65,${.55 + .45 * Math.sin(performance.now() / 180)})`; ctx.lineWidth = 3;
+    ctx.beginPath(); ctx.roundRect(x - 3, y - 3, ww + 6, hh + 6, 6); ctx.stroke();
+  }
+}
+
+// etichetta di nastro del pezzo: si disegna sopra i cavi, così si legge sempre
+function drawLabel (id) {
+  const d = dev(id), [i, j, w, h] = d.r, look = d.look;
+  const x = cx(i) + 1.5, y = cy(j) + 1.5, ww = w * cs - 3, hh = h * cs - 3;
+  ctx.font = `700 ${Math.max(9, Math.min(13, cs * .5))}px 'Barlow Condensed', sans-serif`;
+  const tw = ctx.measureText(d.label).width + 8, th = Math.max(12, Math.min(16, cs * .62));
+  let lx = x + ww / 2, ly = y - th / 2 - 2;
+  if (look === 'tavolo' || look === 'rack') ly = y + hh / 2;
+  if (d.r[1] === J0) ly = y + hh + th / 2 + 2;
+  lx = Math.min(Math.max(lx, cx(0) + tw / 2 + 2), cx(COLS) - tw / 2 - 2);
+  ctx.fillStyle = 'rgba(234,255,43,.92)'; ctx.fillRect(lx - tw / 2, ly - th / 2, tw, th);
+  ctx.fillStyle = '#141519'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle'; ctx.fillText(d.label, lx, ly + 1);
+}
+
+// punti della corda sullo schermo: dal bordo del pezzo, per i suoi punti, al bordo dell'altro
+function ropePoints (l, pts) {
+  const edge = (r, c) => {
+    const [x, y] = center(c[0], c[1]);
+    return [Math.min(Math.max(x, cx(r[0]) + 2), cx(r[0] + r[2]) - 2), Math.min(Math.max(y, cy(r[1]) + 2), cy(r[1] + r[3]) - 2)];
+  };
+  return [edge(dev(l.from).r, pts[0]), ...pts.map(c => center(c[0], c[1])), edge(dev(l.to).r, pts[pts.length - 1])];
+}
+function strokeCable (pts, color, w, off, alpha) {
+  if (pts.length < 2) return;
+  ctx.globalAlpha = alpha == null ? 1 : alpha;
+  ctx.lineJoin = 'round'; ctx.lineCap = 'round';
+  ctx.beginPath(); pts.forEach(([x, y], k) => (k ? ctx.lineTo : ctx.moveTo).call(ctx, x + off, y + off));
+  ctx.strokeStyle = '#0c0d10'; ctx.lineWidth = w + 2.5; ctx.stroke();
+  ctx.strokeStyle = color; ctx.lineWidth = w; ctx.stroke();
+  ctx.globalAlpha = 1;
+}
+const laneOff = idx => ((idx % 5) - 2) * Math.max(1.2, cs * .07);
+function drawCables () {
+  const w = Math.max(2.5, cs * .18);
+  const sel = S.sel;
+  // con un cavo in mano gli altri si spengono: si vede solo quello
+  const order = S.scen.lines.map((l, idx) => ({ l, idx })).sort((a, b) => (a.l.id === sel) - (b.l.id === sel));
+  order.forEach(({ l, idx }) => {
+    const pts = S.pts[l.id]; if (!pts) return;
+    const on = l.id === sel, a = sel && !on ? .28 : 1;
+    const rp = ropePoints(l, pts);
+    strokeCable(rp, KINDS[l.kind].color, w * (KINDS[l.kind].width || 1) * (on ? 1.35 : 1), on ? 0 : laneOff(idx), a);
+    if (l.kind === 'dmx') strokeCable(rp, '#ff8a2a', w * .35, on ? 0 : laneOff(idx), a);   // la PowerCON accanto
+  });
+  // maniglie del cavo in mano, e i metri che restano
+  if (sel && S.pts[sel]) {
+    const l = lineById(sel), pts = S.pts[sel];
+    const R = Math.max(9, cs * .5);
+    pts.slice(1, -1).forEach(([i, j], n) => {
+      const [x, y] = center(i, j), hot = S.grab && S.grab.id === sel && S.grab.k === n + 1;
+      ctx.beginPath(); ctx.arc(x, y, hot ? R * 1.25 : R, 0, 7);
+      ctx.fillStyle = hot ? '#f2a541' : '#eee9df'; ctx.fill();
+      ctx.lineWidth = 3; ctx.strokeStyle = '#141519'; ctx.stroke();
+    });
+    const left = l.len - lineLen(sel);
+    const at = S.grab && S.grab.id === sel && S.grab.k ? pts[S.grab.k] : pts[Math.floor(pts.length / 2)];
+    const [x, y] = center(at[0], at[1]);
+    const txt = fmt(Math.max(0, left)) + ' m liberi';
+    ctx.font = `700 15px 'Barlow Condensed', sans-serif`;
+    const tw = ctx.measureText(txt).width + 12;
+    const bx = Math.min(Math.max(x - tw / 2, cx(0)), cx(COLS) - tw), by = Math.max(y - R - 26, cy(J0) + 2);
+    ctx.fillStyle = left < 1 ? '#e0503f' : '#141519'; ctx.fillRect(bx, by, tw, 20);
+    ctx.fillStyle = '#fff'; ctx.textAlign = 'left'; ctx.textBaseline = 'middle'; ctx.fillText(txt, bx + 6, by + 11);
+  }
+}
+function drawRamps () {
+  S.ramps.forEach(k => {
+    const [pid, js] = k.split(':'); const p = PASSAGES.find(x => x.id === pid), j = +js;
+    const x = cx(p.r[0]) - 3, y = cy(j) + 1, w = p.r[2] * cs + 6, h = cs - 2;
+    ctx.fillStyle = '#f2c53d'; ctx.fillRect(x, y, w, h);
+    hatch(x, y, w, h, '#141519', 9, 3);
+    ctx.strokeStyle = '#0c0d10'; ctx.lineWidth = 1.5; ctx.strokeRect(x, y, w, h);
+  });
+}
+function drawFlags () {
+  const t = performance.now() / 300;
+  const cells = [];
+  Object.values(S.flagged).forEach(list => cells.push(...list));
+  ctx.strokeStyle = `rgba(224,80,63,${.6 + .4 * Math.sin(t)})`; ctx.lineWidth = 2.5;
+  cells.forEach(([i, j]) => { ctx.strokeRect(cx(i) + 2, cy(j) + 2, cs - 4, cs - 4); });
+}
+let lastT = 0;
+function advanceClock (min) {
+  if (S.done || !S.scen) return;
+  S.clock = Math.min(CLOCK_END, S.clock + min);
+  $('#v-clock').textContent = clockText(S.clock);
+  $('#st-clock').classList.toggle('late', S.clock >= CLOCK_END - 5);
+  if (S.clock >= CLOCK_END) timeUp();
+}
+function frame (t) {
+  const dt = lastT ? Math.min(250, t - lastT) : 0; lastT = t;
+  if (!S.done && $('#start').hidden && $('#gerry-box').hidden && $('#end').hidden) advanceClock(dt * CLOCK_RATE);
+  ctx.clearRect(0, 0, W, H);
+  drawFloor();
+  drawRamps();
+  const sel = S.sel ? lineById(S.sel) : null;
+  Object.keys(S.scen.devices).forEach(id => drawDevice(id, sel && (sel.from === id || sel.to === id)));
+  drawCables();
+  Object.keys(S.scen.devices).forEach(drawLabel);
+  drawFlags();
+  if (S.rampMode) {   // col passacavi in mano i passaggi lampeggiano
+    ctx.strokeStyle = `rgba(242,197,61,${.5 + .5 * Math.sin(performance.now() / 200)})`; ctx.lineWidth = 3;
+    PASSAGES.forEach(p => ctx.strokeRect(cx(p.r[0]), cy(p.r[1]), p.r[2] * cs, p.r[3] * cs));
+  }
+  requestAnimationFrame(frame);
+}
+
+/* ---------------------------------------------------------------------
+   DITO / MOUSE
+   --------------------------------------------------------------------- */
+/* Si prende il cavo in un punto qualsiasi e si tira: lì nasce una maniglia
+   e il cavo si piega. Le maniglie del cavo in mano si trascinano. Un tocco
+   su un cavo lo prende in mano (dove ce n'è più d'uno, il tocco dopo passa
+   al successivo); un tocco sul pavimento lo lascia. */
+function pointerXY (e) { const b = cv.getBoundingClientRect(); return [e.clientX - b.left, e.clientY - b.top]; }
+function segDist (x, y, a, b) {
+  const dx = b[0] - a[0], dy = b[1] - a[1], L = dx * dx + dy * dy;
+  const t = L ? Math.max(0, Math.min(1, ((x - a[0]) * dx + (y - a[1]) * dy) / L)) : 0;
+  return Math.hypot(x - a[0] - t * dx, y - a[1] - t * dy);
+}
+// i cavi vicini al punto, dal più vicino; seg = tratto della corda (0 = dal pezzo al primo punto)
+function cablesAt (x, y) {
+  const reach = Math.max(14, cs * .8), out = [];
+  S.scen.lines.forEach((l, idx) => {
+    const pts = S.pts[l.id]; if (!pts) return;
+    const rp = ropePoints(l, pts).map(([px, py]) => [px + laneOff(idx), py + laneOff(idx)]);
+    let best = Infinity, seg = 0;
+    for (let k = 1; k < rp.length; k++) { const d = segDist(x, y, rp[k - 1], rp[k]); if (d < best) { best = d; seg = k - 1; } }
+    if (best < reach) out.push({ id: l.id, d: best, seg });
+  });
+  return out.sort((a, b) => a.d - b.d);
+}
+cv.addEventListener('pointerdown', e => {
+  if (S.done) return;
+  const [x, y] = pointerXY(e);
+  S.down = { x, y, sel: S.sel };
+  if (S.rampMode) return;
+  let g = null;
+  if (S.sel) {   // prima le maniglie del cavo in mano
+    const pts = S.pts[S.sel], R = Math.max(18, cs * .8);
+    for (let k = 1; k < pts.length - 1; k++) { const [hx, hy] = center(...pts[k]); if (Math.hypot(x - hx, y - hy) < R) g = { id: S.sel, k }; }
+  }
+  if (!g) {
+    const hits = cablesAt(x, y);
+    const h = hits.find(v => v.id === S.sel) || hits[0];
+    if (h) g = { id: h.id, seg: h.seg };
+  }
+  if (!g) return;
+  S.grab = Object.assign(g, { x, y, moved: false, hits: cablesAt(x, y).map(v => v.id) });
+  cv.setPointerCapture(e.pointerId);
+});
+cv.addEventListener('pointermove', e => {
+  const g = S.grab; if (!g) return;
+  const [x, y] = pointerXY(e);
+  if (!g.moved && Math.hypot(x - g.x, y - g.y) < 8) return;
+  if (!g.moved) {
+    g.moved = true;
+    S.sel = g.id;
+    if (!g.k) {   // presa a metà di un tratto: lì nasce una maniglia
+      const pts = S.pts[g.id];
+      if (pts.length >= 8) { toast('Troppe pieghe: sposta quelle che ci sono.', 'bad'); S.grab = null; render(); return; }
+      const c = toCell(g.x, g.y);
+      const at = devAt(...c) ? pts[Math.min(g.seg, pts.length - 1)] : c;
+      pts.splice(g.seg + 1 > pts.length - 1 ? pts.length - 1 : Math.max(1, g.seg + 1), 0, at.slice());
+      g.k = Math.max(1, Math.min(g.seg + 1, pts.length - 2));
+      setPts(g.id, fixAnchors(lineById(g.id), pts));
+    }
+    render();
+  }
+  const why = moveHandle(g.id, g.k, toCell(x, y));
+  if (why && why !== g.lastWhy) toast(why, 'bad');
+  g.lastWhy = why;
+});
+cv.addEventListener('pointerup', e => {
+  const g = S.grab, dn = S.down; S.grab = null; S.down = null;
+  if (g && g.moved) {
+    const pts = tidy(S.pts[g.id]);
+    setPts(g.id, fixAnchors(lineById(g.id), pts));
+    changed(g.id);
+    return;
+  }
+  if (S.done || !dn) return;
+  const [x, y] = pointerXY(e);
+  if (Math.hypot(x - dn.x, y - dn.y) >= 8) return;
+  if (S.rampMode) { toggleRamp(...toCell(x, y)); return; }
+  if (g) {   // tocco su un cavo: lo prende; ritoccando dove ce n'è più d'uno, passa al prossimo
+    const k = g.hits.indexOf(dn.sel);
+    S.sel = dn.sel && k >= 0 ? g.hits[(k + 1) % g.hits.length] : g.id;
+  } else S.sel = null;
+  render();
+});
+cv.addEventListener('pointercancel', () => { S.grab = null; S.down = null; render(); });
+
+/* ---------------------------------------------------------------------
+   BANCO, GERRY E FINE
+   --------------------------------------------------------------------- */
+function render () {
+  const lines = S.scen.lines;
+  $('#v-lines').textContent = lines.filter(l => isMoved(l.id)).length + '/' + lines.length;
+  const t = tapeUsed();
+  $('#v-tape').textContent = fmt(t) + '/' + S.scen.tape + ' m';
+  $('#st-tape').classList.toggle('over', t > S.scen.tape);
+  $('#v-ramps').textContent = S.ramps.size + '/' + S.scen.ramps;
+  $('#lines').innerHTML = lines.map(l => {
+    const moved = isMoved(l.id);
+    const st = (moved ? '✓ ' : '') + fmt(lineLen(l.id)) + '/' + l.len + ' m';
+    const cls = ['chip', moved ? 'done' : '', S.flagged[l.id] ? 'bad' : ''].join(' ');
+    return `<button class="${cls}" data-id="${l.id}" aria-pressed="${S.sel === l.id}"><i style="background:${KINDS[l.kind].color}"></i>${l.name}<small>${st}</small></button>`;
+  }).join('');
+  const sel = S.sel && lineById(S.sel);
+  let info;
+  if (S.rampMode) info = `<b>Passacavi in mano.</b> Tocca una riga di un passaggio a strisce per posarlo (o toglierlo). Copre il passaggio da parte a parte e i cavi lo attraversano di traverso.`;
+  else if (!sel) info = 'I cavi sono come li hai tirati al montaggio. <b>Prendi un cavo e tiralo</b>: si piega dove lo prendi. Oppure chiama Gerry se ti sembrano a posto.';
+  else {
+    info = `<b>${lineLabel(sel)}</b> · ${fmt(lineLen(sel.id))} di ${sel.len} m. ` +
+      (isMoved(sel.id) ? 'Trascina i pallini per spostare le pieghe, o prendi il cavo in un altro punto per piegarlo lì.' : 'È come l\'hai tirato al montaggio: prendilo in un punto e tiralo per piegarlo, magari lungo un muro o il bordo del palco.');
+    if (S.flagged[sel.id] && S.gerryIssues) { const is = S.gerryIssues.find(x => x.ids.includes(sel.id)); if (is) info += `<br><span style="color:#ff9b8f">Gerry: ${is.text.replace(/<[^>]+>/g, '')}</span>`; }
+  }
+  $('#info').innerHTML = info;
+  $('#t-redo').disabled = !(sel && isMoved(sel.id));
+  $('#t-ramp').setAttribute('aria-pressed', S.rampMode);
+  $('#t-ramp').textContent = `Passacavi (${S.scen.ramps - S.ramps.size})`;
+}
+$('#lines').addEventListener('click', e => {
+  const b = e.target.closest('.chip'); if (!b) return;
+  S.sel = S.sel === b.dataset.id ? null : b.dataset.id; S.rampMode = false; render();
+});
+// «Com'era»: il cavo torna come era stato tirato al montaggio
+$('#t-redo').onclick = () => { const d = S.sel && S.scen.drop[S.sel]; if (d) { setPts(S.sel, d.map(c => c.slice())); changed(S.sel); } };
+function isMoved (id) { const a = S.pts[id], b = S.scen.drop && S.scen.drop[id]; return !!a && !!b && JSON.stringify(a) !== JSON.stringify(b); }
+$('#t-ramp').onclick = () => { S.rampMode = !S.rampMode; render(); };
+$('#t-check').onclick = () => inspect();
+$('#btn-help').onclick = () => { $('#start').hidden = false; };
+
+// Gerry, il bidello (simbolo #gerry): testa e spalle nel fumetto
+const GERRY = `<svg width="64" height="90" viewBox="0 0 100 140" aria-hidden="true"><use href="#gerry"/></svg>`;
+
+function inspect () {
+  if (S.done) return;
+  S.inspections++;
+  const issues = analyze();
+  S.gerryIssues = issues;
+  S.flagged = {};
+  issues.forEach(is => is.ids.forEach(id => { S.flagged[id] = (S.flagged[id] || []).concat(is.cells); }));
+  render();
+  if (!issues.length) { finish(); return; }
+  const open = ['Fermi tutti!', 'Ancora no, ragazzi.', 'Ci siamo quasi…'][Math.min(2, S.inspections - 1)];
+  showGerry(open, 'Prima di aprire le porte qui va sistemato:', issues);
+}
+function showGerry (title, text, issues) {
+  $('#gerry-card').innerHTML = `<div class="gerry">${GERRY}<div class="bubble"><b>${title}</b>${text}
+    ${issues.length ? '<ol>' + issues.slice(0, 5).map(i => `<li>${i.text}</li>`).join('') + '</ol>' + (issues.length > 5 ? `<small>…e altre ${issues.length - 5} cose.</small>` : '') : ''}</div></div>
+    <button class="primary" id="btn-fix">Sistemo</button>`;
+  $('#gerry-box').hidden = false;
+  $('#btn-fix').onclick = () => { $('#gerry-box').hidden = true; };
+}
+// alle 20:30 Gerry passa comunque: se è tutto a posto va come un giro
+// chiesto; se no apre le porte così, e la posa finisce senza stelle
+function timeUp () {
+  if (S.done) return;
+  S.grab = null;
+  $('#gerry-box').hidden = true;
+  S.inspections++;
+  const issues = analyze();
+  S.gerryIssues = issues;
+  S.flagged = {};
+  issues.forEach(is => is.ids.forEach(id => { S.flagged[id] = (S.flagged[id] || []).concat(is.cells); }));
+  finish(issues.length ? issues : null);
+}
+function finish (late) {
+  S.done = true;
+  const stars = late ? 0 : S.inspections === 1 ? 3 : S.inspections === 2 ? 2 : 1;
+  const metres = Object.keys(S.pts).reduce((t, id) => t + lineLen(id), 0);
+  const res = { type: 'posa-cavi', scenario: S.key, stars, inspections: S.inspections, cableM: metres, tapeM: tapeUsed(), ramps: S.ramps.size, late: !!late, clock: clockText(S.clock),
+    // le corde (capi e pieghe, in celle da 50 cm) da un pezzo all'altro: il gioco le usa nell'isometrico
+    routes: Object.fromEntries(Object.entries(S.pts).map(([id, pts]) => [id, pts.map(c => c.slice())])),
+    // cosa è rimasto da sistemare alle 20:30: lo show se ne accorge
+    left: (late || []).map(i => ({ type: i.type, kinds: i.ids.map(id => lineById(id).kind) })) };
+  S.result = res;
+  const line = late ? `Sono le 20:30, la gente è fuori che aspetta: apro così. Ma guarda qui: ${late.length === 1 ? 'una cosa non va' : late.length + ' cose non vanno'}.<ol>${late.slice(0, 3).map(i => `<li>${i.text}</li>`).join('')}</ol>`
+    : { 3: 'Perfetto al primo giro. Neanche io l\'avrei fatto meglio, e io i cavi li scavalco da trent\'anni!', 2: 'Adesso sì. Si può aprire!', 1: 'Finalmente. Apro le porte, ma la prossima volta pensaci prima.' }[stars];
+  $('#end-card').innerHTML = `<h1><small>${S.scen.title} · porte aperte alle ${clockText(S.clock)}</small>${late ? 'Cavi in giro' : 'Cavi a posto'}</h1>
+    <div class="stars">${'★'.repeat(stars)}<span>${'★'.repeat(3 - stars)}</span></div>
+    <div class="gerry">${GERRY}<div class="bubble">${line}</div></div>
+    <dl class="facts">
+      <dt>Giri di controllo di Gerry</dt><dd>${S.inspections}</dd>
+      <dt>Cavo steso</dt><dd>${fmt(metres)} m</dd>
+      <dt>Nastro usato</dt><dd>${fmt(res.tapeM)} / ${S.scen.tape} m</dd>
+      <dt>Passacavi</dt><dd>${S.ramps.size} / ${S.scen.ramps}</dd>
+    </dl>
+    ${EMBED ? '<button class="primary" id="btn-open">Apri le porte</button>'
+      : '<button class="primary" id="btn-again">Rigioca</button><button class="secondary" id="btn-other">Cambia scenario</button>'}`;
+  $('#end').hidden = false;
+  if (EMBED) { $('#btn-open').onclick = () => toGame(res); return; }
+  $('#btn-again').onclick = () => { $('#end').hidden = true; start(S.key); };
+  $('#btn-other').onclick = () => { $('#end').hidden = true; $('#start').hidden = false; };
+}
+
+function start (k) {
+  S.key = k; S.scen = SCENARIOS[k];
+  setGym();
+  // si parte dai cavi come sono stati tirati al montaggio
+  const drop = dropAll(S.scen);
+  S.pts = {}; S.paths = {};
+  S.scen.lines.forEach(l => { if (drop[l.id]) setPts(l.id, drop[l.id].map(c => c.slice())); });
+  S.ramps = new Set(); S.sel = null; S.rampMode = false; S.grab = null;
+  S.flagged = {}; S.gerryIssues = null; S.inspections = 0; S.done = false; S.result = null;
+  S.clock = 0; $('#v-clock').textContent = clockText(0); $('#st-clock').classList.remove('late');
+  $('#h-title').firstChild.textContent = 'La posa dei cavi · ' + S.scen.title;
+  $('#h-sub').textContent = S.scen.sub;
+  resize(); render();
+}
+
+// scheda iniziale: legenda e scelta dello scenario
+$('#legend').innerHTML = [
+  ['repeating-linear-gradient(135deg,#e0503f 0 3px,#3a1a17 3px 6px)', 'Via di fuga'],
+  ['repeating-linear-gradient(135deg,#6b5a2a 0 4px,#1d1e22 4px 8px)', 'Passaggio'],
+  ['repeating-linear-gradient(135deg,#f2c53d 0 4px,#141519 4px 8px)', 'Passacavi'],
+  ['#3a2f24', 'Palco (in scena al centro)']
+].map(([bg, t]) => `<span><i style="background:${bg}"></i>${t}</span>`).join('') +
+  Object.values(KINDS).map(k => `<span><i style="background:${k.color}"></i>${k.name}</span>`).join('');
+function renderScen () {
+  $('#scen').innerHTML = Object.entries(SCENARIOS).map(([k, s]) => `<button data-k="${k}" aria-pressed="${S.key === k}"><b>${s.title}</b><small>${s.text}</small></button>`).join('');
+}
+$('#scen').addEventListener('click', e => { const b = e.target.closest('button'); if (b) { S.key = b.dataset.k; renderScen(); } });
+$('#btn-start').onclick = () => { $('#start').hidden = true; if (!S.scen || S.scen !== SCENARIOS[S.key]) start(S.key); };
+window.addEventListener('resize', () => { resize(); });
+
+/* DENTRO IL GIOCO — index.html apre la posa in un iframe con ?embed=1:
+   la pagina chiede la pianta ('posa-cavi-pronta'), il gioco la manda
+   ('posa-cavi-pianta') e alla fine riceve il risultato ('posa-cavi-fine'). */
+const EMBED = new URLSearchParams(location.search).has('embed');
+function toGame (res) { window.parent.postMessage({ type: 'posa-cavi-fine', result: res }, '*'); }
+if (EMBED) {
+  $('#scen').hidden = true;
+  const skip = document.createElement('button');
+  skip.className = 'secondary'; skip.id = 'btn-skip';
+  skip.textContent = 'Salta la posa: le porte si aprono, ma niente reputazione';
+  skip.onclick = () => toGame({ type: 'posa-cavi', skipped: true });
+  $('#btn-start').after(skip);
+  $('#btn-start').disabled = true;
+  window.addEventListener('message', e => {
+    const d = e.data;
+    if (!d || d.type !== 'posa-cavi-pianta') return;
+    buildScenario(d.layout);
+    start('gioco');
+    $('#btn-start').disabled = false;
+  });
+  S.scen = SCENARIOS.festa; S.key = 'gioco';
+  window.parent.postMessage({ type: 'posa-cavi-pronta' }, '*');
+} else {
+  renderScen();
+  start('festa');
+}
+requestAnimationFrame(frame);
+</script>
