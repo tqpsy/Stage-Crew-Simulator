@@ -28,6 +28,13 @@ esempio **20:00 — Messa in sicurezza dei cavi**.
   accanto al pezzo.
 - Attrezzi: **passacavi** (pochi, si posano sui passaggi) e **nastro
   gaffer** (un rotolo di tot metri: il contatore in alto).
+- **Gli errori si vedono solo quando passa Gerry** (deciso). Mentre si
+  posa non c'è nessun avviso: il capo tutor del montaggio qui non parla.
+  Si vedono solo le cose che si toccano con mano: i metri di cavo che
+  restano, il nastro rimasto sul rotolo, i passacavi ancora in mano; e il
+  dito si ferma davanti a un muro, a un pezzo o alla via di fuga (lì il
+  cavo non entra fisicamente). Dopo il giro di Gerry i punti sbagliati
+  restano segnati in rosso finché non si rifà quel cavo.
 - Quando è tutto steso si chiama Gerry. Al primo giro senza errori:
   ★★★; al secondo ★★; poi ★.
 
@@ -79,9 +86,6 @@ nastro basti con margine (≤ 85% del rotolo) ma non sia infinito (≥ 45%).
 
 ## Da decidere
 
-- Regole svelate da Gerry o visibili mentre si posa? Nel prototipo si
-  vedono solo il nastro e i metri; gli errori li trova Gerry. Nel livello 1
-  il capo tutor potrebbe avvisare al primo errore, come al montaggio.
 - **Prolunghe**: un cavo troppo corto si allunga con un secondo cavo dal
   baule? La giunta per terra in un passaggio sarebbe un errore in più.
 - Orologio (20:00 → 20:30) o senza tempo?
