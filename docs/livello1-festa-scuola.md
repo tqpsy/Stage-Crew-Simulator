@@ -206,10 +206,30 @@ Filo comune: la scuola, con i personaggi delle **materie** che prendono vita.
 | Preside | Donald Trump ("Preside Tramp"): discorso lunghissimo, vuole il volume più alto di tutti | — |
 | DJ | Albert Einstein, "DJ E=mc²": capelli elettrizzati, BPM relativi | Leonardo da Vinci con piatti di legno inventati da lui; Sergio Mattarella serissimo alla techno |
 | Cantante con chitarra | Dante Alighieri, "Nel mezzo del cammin — unplugged" | Cristiano Ronaldo che canta e urla "SIUUU" nel mic; Napoleone con la chitarra (e l'asta del mic troppo alta) |
-| Bidello (dà le richieste extra) | Gerry Scotti o Carlo Conti | Gordon Ramsay che urla per i cavi in giro |
+| Bidello (dà le richieste extra) | **Deciso: Gerry Scotti** ("Gerry, il bidello") | — |
 
 Personaggi storici: nessun problema di diritti. Personaggi viventi: caricatura
 disegnata e nome parodia.
+
+**Preside Tramp** (fatto, rifatto sulle foto): simbolo SVG `#tramp` in
+`prototipi/spettacolo-preside.html`. Tratti: ciuffo biondo enorme col riporto
+sulla fronte, abbronzatura arancio con le occhiaie chiare, sopracciglia chiare
+aggrottate, occhi a fessura, bocca a cul di gallina, faccione squadrato con
+le guance cadenti; giacca blu larga e cravatta rossa lunghissima. Nessuna
+bandiera o simbolo nazionale. Ritratto con `viewBox="6 2 88 88"`.
+
+**Gerry, il bidello** (fatto): caricatura vettoriale nello stile del Preside
+Tramp (simbolo SVG `#gerry`, `viewBox 0 0 100 140`, colori piatti senza
+contorni). Tratti esagerati: testone a pera pelato con due fili in cima,
+ciuffi grigi ai lati, un sopracciglio più alto, occhi a fessura sornioni,
+nasone, sorriso storto; corporatura grossa nel camice blu da bidello con la
+camicia azzurra aperta. Per il ritratto si usa il ritaglio `viewBox="6 0 88 88"`
+(la testa è più alta di quella del preside). Dove compare:
+- `prototipi/spettacolo-preside.html`: quando il guasto lo trova lui, sale
+  sul palco per qualche secondo ("Tranquilli, ci penso io!") e la sua faccina
+  accompagna la nota nella scheda finale;
+- `scarico.html`: visto dall'alto dietro al carrello (testa pelata con la
+  corona grigia, spalle larghe nel camice blu).
 
 ## Tra una fase e l'altra (proposta)
 
