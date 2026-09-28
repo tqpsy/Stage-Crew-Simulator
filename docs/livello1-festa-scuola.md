@@ -212,7 +212,7 @@ Personaggi storici: nessun problema di diritti. Personaggi viventi: caricatura
 disegnata e nome parodia.
 
 **Preside Tramp** (fatto, rifatto sulle foto): simbolo SVG `#tramp` in
-`prototipi/spettacolo-preside.html`. Tratti: ciuffo biondo enorme col riporto
+`preside.html`. Tratti: ciuffo biondo enorme col riporto
 sulla fronte, abbronzatura arancio con le occhiaie chiare, sopracciglia chiare
 aggrottate, occhi a fessura, bocca a cul di gallina, faccione squadrato con
 le guance cadenti; giacca blu larga e cravatta rossa lunghissima. Nessuna
@@ -251,7 +251,7 @@ ciuffi grigi ai lati, un sopracciglio più alto, occhi a fessura sornioni,
 nasone, sorriso storto; corporatura grossa nel camice blu da bidello con la
 camicia azzurra aperta. Per il ritratto si usa il ritaglio `viewBox="6 0 88 88"`
 (la testa è più alta di quella del preside). Dove compare:
-- `prototipi/spettacolo-preside.html`: quando il guasto lo trova lui, sale
+- `preside.html`: quando il guasto lo trova lui, sale
   sul palco per qualche secondo ("Tranquilli, ci penso io!") e la sua faccina
   accompagna la nota nella scheda finale;
 - `scarico.html`: visto dall'alto dietro al carrello (testa pelata con la
@@ -286,7 +286,8 @@ professionalità, non la sfortuna.
 - **Apparecchio rotto: 0**, non è colpa del giocatore.
 - Ogni fase e ogni richiesta extra contano una volta sola per service: rifarle
   non aggiunge altro.
-- Nel gioco oggi c'è la prima fase: il collaudo dell'impianto (+5). I numeri
+- Nel gioco oggi ci sono il collaudo dell'impianto (+5), la posa dei cavi
+  (stelle) e il discorso del preside (vedi *Il discorso nel gioco*). I numeri
   sono in `REP` in `main.js`.
 
 ## Animazione di errore (proposta)
@@ -370,10 +371,30 @@ Giro del livello: **Montaggio → Test impianto → [cambio palco → spettacolo
 - Reputazione salvata nel browser del giocatore.
 - I numeri (gradimento, stress, pazienza) si tarano giocando.
 
-## Prototipo
+## Il discorso nel gioco
 
-`prototipi/spettacolo-preside.html`: la fase del discorso del preside, cliccabile,
-per provare il ritmo prima di portarla nel gioco.
+`preside.html`: la fase del discorso del preside. Nato come prototipo in
+`prototipi/`, ora è nel gioco: finita la posa dei cavi (anche saltata) si apre
+in un iframe sopra il palco, o dalla scaletta («Il preside sale sul palco»).
+
+- **Serve il microfono**: montato sull'asta e collegato con un XLR a un
+  ingresso MIC 1–4 del mixer acceso (`presideReady()` in `main.js`). Il Test
+  impianto non lo chiede: se manca, dopo la posa un avviso dice cosa collegare
+  e il preside sale da solo pochi secondi dopo il collegamento.
+- **Il montaggio vero entra nel discorso**: l'ingresso cablato (la risposta a
+  «in che ingresso era?» quando si guasta), i PAR montati col nome e il ruolo
+  del loro stativo (frontali e tagli, da sinistra a destra: se allo scarico
+  se n'è rotto qualcuno ce ne sono meno), i cavi lasciati dalla posa
+  (`caviLeftovers()`) e le birre in tasca.
+- **Esito**: la reputazione del discorso (5 + gradimento − larsen ± guasto e
+  richieste, vedi sotto) conta una volta sola (`L1:preside`); le birre
+  guadagnate vanno in tasca, quelle bevute si tolgono. Si può saltare dalla
+  scheda iniziale: il preside parla lo stesso, reputazione ferma. La scaletta
+  mostra il riassunto (pubblico, larsen, birre, reputazione).
+- Aperta da sola, la pagina resta il banco di prova: ingresso a caso, 4 PAR,
+  scelta del guasto e dei cavi lasciati dalla posa.
+- Test: `tests/preside-gioco.js` (dentro il gioco), `tests/preside-cavi.js`
+  (le conseguenze della posa, pagina da sola).
 
 Nella scheda iniziale, «Cavi lasciati dalla posa» prova le conseguenze della
 posa dei cavi finita col tempo (vedi `docs/minigioco-posa-cavi.md`): cavo nel

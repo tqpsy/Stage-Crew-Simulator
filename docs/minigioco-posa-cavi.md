@@ -119,10 +119,10 @@ nastro basti con margine (≤ 85% del rotolo) ma non sia infinito (≥ 45%).
   qualcuno inciampa nel cavo e lo strappa dal mixer, il guasto del preside
   è l'ingresso; *ronzio*: 50 Hz nelle casse, più forte col fader del
   microfono, e il pubblico cala; *scena*: il preside inciampa nel cavo in
-  mezzo al palco. La scaletta lo anticipa. Lo show non è ancora nel gioco:
-  il prototipo del preside ha la scelta «Cavi lasciati dalla posa» per
-  provarlo (`tests/preside-cavi.js`); quando il discorso entrerà nel gioco
-  leggerà `caviLeftovers()`.
+  mezzo al palco. La scaletta lo anticipa. Il discorso del preside
+  (`preside.html`, dopo la posa) riceve `caviLeftovers()` dal gioco; aperto
+  da solo ha la scelta «Cavi lasciati dalla posa» per provarlo
+  (`tests/preside-cavi.js`).
 
 **Da fare:**
 - Passaggi e via di fuga anche al montaggio (posa guidata), così non si
@@ -139,7 +139,7 @@ nastro basti con margine (≤ 85% del rotolo) ma non sia infinito (≥ 45%).
   tutto a posto conta come un giro chiesto; se no apre le porte così, la
   posa finisce **senza stelle** e la reputazione non cambia. La scaletta
   lo racconta («Finita col tempo»).
-- Gerry è lo stesso disegno del prototipo del preside (simbolo `#gerry`).
+- Gerry è lo stesso disegno del discorso del preside (simbolo `#gerry` in `preside.html`).
 
 ## Più avanti
 

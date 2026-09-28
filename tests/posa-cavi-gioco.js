@@ -128,7 +128,8 @@ const path = require('path');
   check(iso1.n > 10 && !iso1.bad.length, "nell'isometrico i cavi non seguono la posa: " + JSON.stringify(iso1));
   // una sola volta: un altro show o la scaletta non la riaprono
   await ev(() => { const s = window.__scene; s.caviAfterShow = true; s.afterShow(); openSchedule(false); });
-  check(await p.textContent('#schedule-go') === 'Torna al palco', 'la scaletta propone di nuovo la posa');
+  // dopo la posa la scaletta porta al discorso del preside (tests/preside-gioco.js)
+  check(await p.textContent('#schedule-go') === 'Il preside sale sul palco', 'la scaletta propone di nuovo la posa, o non porta al discorso');
   await ev(() => closeSchedule());
   check(!(await p.$('#cavi-frame')), 'la posa si riapre dopo averla fatta');
   // resta dopo la ricarica

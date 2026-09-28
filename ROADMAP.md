@@ -87,8 +87,19 @@ cambiano da una fase all'altra.
   come corde, a tempo fino alle 20:30. Gerry il bidello controlla via di
   fuga, passacavi nei passaggi, cavi in scena, nastro e ronzio. Le stelle
   danno reputazione. Nell'isometrico i cavi seguono le pieghe; gli errori
-  lasciati alle 20:30 passano allo show (`caviLeftovers()`, già provati nel
-  prototipo del preside). Design in `docs/minigioco-posa-cavi.md`.
+  lasciati alle 20:30 passano al discorso del preside (`caviLeftovers()`).
+  Design in `docs/minigioco-posa-cavi.md`.
+
+## Spettacolo
+
+- **Discorso del preside** (21:00): nel gioco. `preside.html` si apre dopo la
+  posa dei cavi (o dalla scaletta) quando il microfono è sull'asta e in un
+  ingresso MIC del mixer acceso; riceve l'ingresso cablato, i PAR montati, i
+  cavi lasciati dalla posa e le birre, e restituisce reputazione (una volta
+  sola) e birre. Design in `docs/livello1-festa-scuola.md`.
+- Da fare: DJ set e Dante unplugged come fasi successive; lo spettacolo sul
+  palco isometrico invece che sul disegno del discorso (vedi *Dopo la prima
+  prova* nel design del livello).
 
 ## Test automatici
 
@@ -102,8 +113,10 @@ cambiano da una fase all'altra.
 - `tests/scarico.js`: lo scarico dentro il gioco e le sue conseguenze sul
   montaggio. Senza rete servono `PHASER_PATH` e `MATTER_PATH`.
 - `tests/posa-cavi.js` (la pagina da sola) e `tests/posa-cavi-gioco.js` (la
-  posa dentro il gioco, con un montaggio vero); `tests/preside-cavi.js`: i
-  cavi lasciati dalla posa nel prototipo del preside.
+  posa dentro il gioco, con un montaggio vero); `tests/preside-gioco.js`: il
+  discorso del preside dentro il gioco, dopo collaudo e posa;
+  `tests/preside-cavi.js`: i cavi lasciati dalla posa nel discorso (pagina da
+  sola).
 
 ## Partita, menù e highscore
 
