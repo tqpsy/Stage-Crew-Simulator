@@ -390,6 +390,9 @@
     display:none; align-items:center; gap:12px;
     background:#1c1d22; border:1px solid var(--amber); border-radius:6px;
     padding:7px 8px 7px 14px; font-size:13px; max-width:92%;
+    /* con left:50% il riquadro non potrebbe superare metà della scena e
+       andrebbe a capo parola per parola, in una colonna alta sopra i pezzi */
+    width:max-content;
     z-index:15; box-shadow:0 4px 16px rgba(0,0,0,.4);
     /* i tocchi passano ai dispositivi sotto la barra (sui telefoni piccoli
        la scena è bassa e la barra li coprirebbe); solo "Annulla" è attivo */
