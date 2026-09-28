@@ -83,10 +83,10 @@ cambiano da una fase all'altra.
 
 - **Minigioco della posa dei cavi** (20:00 in scaletta): nel gioco per il
   livello 1. `posa-cavi.html` si apre alla fine dello show del primo
-  collaudo con i pezzi e i cavi del montaggio; i cavi si stendono
-  trascinando il dito, poi Gerry il bidello controlla via di fuga,
-  passacavi nei passaggi, cavi in scena, nastro e ronzio. Le stelle danno
-  reputazione. Design in `docs/minigioco-posa-cavi.md`. Da fare: i cavi
+  collaudo con i cavi come tirati al montaggio; si sistemano piegandoli
+  come corde, a tempo fino alle 20:30. Gerry il bidello controlla via di
+  fuga, passacavi nei passaggi, cavi in scena, nastro e ronzio. Le stelle
+  danno reputazione. Design in `docs/minigioco-posa-cavi.md`. Da fare: i cavi
   stesi anche nell'isometrico, conseguenze nello show.
 
 ## Test automatici

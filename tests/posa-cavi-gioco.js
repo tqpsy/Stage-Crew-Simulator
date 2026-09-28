@@ -136,6 +136,16 @@ const path = require('path');
   const sk = await ev(() => ({ cavi: Profile.data.cavi, rep: 'L1:cavi' in Profile.data.reputation.earned, input: !caviOpen }));
   check(sk.cavi && sk.cavi.skipped && !sk.rep && sk.input, 'posa saltata male: ' + JSON.stringify(sk));
 
+  // posa finita col tempo: niente stelle, niente reputazione, la scaletta lo dice
+  const late = await ev(() => {
+    Profile.data.cavi = null; caviOpen = true;
+    finishCavi({ type: 'posa-cavi', stars: 0, late: true, inspections: 1, cableM: 40, tapeM: 20 });
+    renderSchedule();
+    return { cavi: Profile.data.cavi, rep: 'L1:cavi' in Profile.data.reputation.earned, toast: el('#toast').textContent,
+      row: [...document.querySelectorAll('.sched-row')].find(r => /cavi/.test(r.textContent)).textContent };
+  });
+  check(late.cavi && late.cavi.late && late.cavi.stars === 0 && !late.rep && /20:30/.test(late.toast) && /Finita col tempo/.test(late.row), 'posa finita col tempo gestita male: ' + JSON.stringify(late));
+
   check(errs.length === 0, 'errori JS: ' + errs.join(' | '));
   await b.close();
   if (problems.length) { console.log('PROBLEMI:\n- ' + problems.join('\n- ')); process.exit(1); }

@@ -33,6 +33,9 @@
   .stat{display:flex;flex-direction:column;align-items:flex-end;font-size:10px;color:var(--muted);text-transform:uppercase;letter-spacing:.06em;line-height:1.1}
   .stat b{font-family:var(--display);font-size:19px;letter-spacing:.02em;color:var(--text);font-variant-numeric:tabular-nums;font-weight:700}
   .stat.over b{color:var(--red)}
+  .stat.late b{color:var(--red);animation:blinkc 1s steps(2) infinite}
+  @keyframes blinkc{50%{opacity:.35}}
+  @media (prefers-reduced-motion:reduce){.stat.late b{animation:none}}
   .icon-btn{border:1px solid var(--hairline);background:var(--bg-raised);border-radius:8px;padding:6px 10px;font-size:15px;line-height:1}
 
   /* ---- pianta ---- */
@@ -84,6 +87,7 @@
   .bubble::before{content:"";position:absolute;left:-7px;top:18px;width:14px;height:14px;background:var(--paper);transform:rotate(45deg)}
   .bubble b{display:block;font-size:15px;margin-bottom:4px}
   .bubble ol{margin:6px 0 0;padding-left:18px;display:grid;gap:5px}
+  .bubble li b{display:inline;font-size:inherit;margin:0}
   .stars{font-size:34px;letter-spacing:.1em;color:var(--yellow);text-align:center}
   .stars span{color:#3a3c44}
   .facts{display:grid;grid-template-columns:1fr auto;gap:4px 12px;font-size:14px}
@@ -91,10 +95,50 @@
   .facts dt{color:var(--muted)}
 </style>
 
+<!-- Gerry, il bidello: lo stesso simbolo del prototipo del preside (docs/livello1-festa-scuola.md) -->
+<svg width="0" height="0" style="position:absolute" aria-hidden="true"><defs>
+    <!-- Gerry Scotti, il bidello, caricatura vettoriale: testone pelato a pera, ciuffi grigi ai lati, occhi sornioni, nasone, sorriso storto, camice blu -->
+    <symbol id="gerry" viewBox="0 0 100 140">
+    <!-- camice da bidello blu, spalle larghe -->
+    <path d="M2 140 L6 104 Q12 92 32 88 Q50 84 68 88 Q88 92 94 104 L98 140 Z" fill="#2f5d8a"/>
+    <path d="M34 88 L50 112 L66 88 L58 86 L50 98 L42 86 Z" fill="#23476b"/>
+    <path d="M40 88 L50 106 L60 88 L54 86 L50 94 L46 86 Z" fill="#a9c8e8"/>
+    <path d="M46 88 L50 100 L54 88 Z" fill="#cf8c68"/>
+    <rect x="64" y="108" width="15" height="12" rx="1.5" fill="#23476b"/>
+    <rect x="67" y="104" width="2" height="8" rx="1" fill="#e9c23f"/>
+    <rect x="20" y="110" width="17" height="7" rx="1.5" fill="#f4f1ea"/>
+    <!-- collo largo -->
+    <rect x="34" y="76" width="32" height="14" rx="4" fill="#cf8c68"/>
+    <!-- orecchie -->
+    <ellipse cx="16" cy="56" rx="5" ry="8" fill="#cf8c68"/><ellipse cx="84" cy="56" rx="5" ry="8" fill="#cf8c68"/>
+    <!-- testone a pera: cranio alto e pelato, mascelle larghissime -->
+    <path d="M50 4 Q76 4 78 34 Q86 50 86 64 Q86 86 50 92 Q14 86 14 64 Q14 50 22 34 Q24 4 50 4 Z" fill="#e8a883"/>
+    <ellipse cx="44" cy="17" rx="11" ry="5" fill="#f4c7a4"/>
+    <path d="M34 10 Q44 3 56 5 M40 12 Q50 6 62 8" stroke="#7d7570" stroke-width="1.4" fill="none" stroke-linecap="round"/>
+    <!-- ciuffi grigi solo ai lati, gonfi -->
+    <path d="M14 58 Q8 38 16 26 Q22 20 28 20 Q22 32 22 44 Q20 52 20 58 Z" fill="#7d7570"/>
+    <path d="M86 58 Q92 38 84 26 Q78 20 72 20 Q78 32 78 44 Q80 52 80 58 Z" fill="#7d7570"/>
+    <!-- sopracciglia alte e sornione -->
+    <path d="M28 40 Q36 33 44 38 M56 36 Q64 29 72 36" stroke="#5f5752" stroke-width="3" fill="none" stroke-linecap="round"/>
+    <!-- occhi a fessura -->
+    <path d="M30 48 Q37 43.5 44 47.5 Q37 50 30 48 Z M56 47 Q63 42.5 70 47.5 Q63 49.5 56 47 Z" fill="#f4e8de"/>
+    <circle cx="38" cy="47" r="1.9" fill="#6d8a92"/><circle cx="64" cy="46.4" r="1.9" fill="#6d8a92"/>
+    <path d="M30 48 Q37 43 44 47.5 M56 47.5 Q63 42.5 70 47.5" stroke="#2a1d12" stroke-width="2.2" fill="none" stroke-linecap="round"/>
+    <!-- nasone carnoso -->
+    <path d="M47 46 Q45 56 42 61 Q40 68 50 68 Q60 68 58 61 Q55 56 53 46 Z" fill="#d6926c"/>
+    <!-- solchi del sorriso -->
+    <path d="M38 62 Q28 68 31 79 M62 62 Q73 66 72 74" stroke="#c07e5c" stroke-width="2" fill="none" stroke-linecap="round"/>
+    <!-- sorrisone da una guancia all'altra -->
+    <path d="M30 75 Q48 94 73 68 Q52 77 30 75 Z" fill="#5e2220"/>
+    <path d="M33 75.6 Q52 78.4 70 69.6 L68 73.6 Q52 82 35 79 Z" fill="#fbfaf5"/>
+    </symbol>
+</defs></svg>
+
 <div id="app">
   <header>
     <div class="title" id="h-title">La posa dei cavi<small id="h-sub"></small></div>
     <div class="stats">
+      <div class="stat" id="st-clock">Ore<b id="v-clock">20:00</b></div>
       <div class="stat" id="st-lines">Sistemati<b id="v-lines">0/0</b></div>
       <div class="stat" id="st-tape">Nastro<b id="v-tape">0/0 m</b></div>
       <div class="stat">Passacavi<b id="v-ramps">0/0</b></div>
@@ -129,6 +173,7 @@
       <li><b>In scena</b> solo il cavo del microfono. Gli altri stanno lungo i bordi del palco.</li>
       <li>Sul palco, nel Pit e in platea i cavi vanno <b>fermati col nastro</b>. Lungo i muri no. Più cavi insieme nello stesso fascio usano un nastro solo.</li>
       <li>Il microfono (e il multipolare) <b>incrocia la corrente a 90°</b>, non le corre accanto: fa ronzio.</li>
+      <li><b>Hai tempo fino alle 20:30.</b> A quell'ora Gerry passa comunque: se trova ancora qualcosa apre le porte così, e la posa finisce senza stelle.</li>
     </ul>
     <div class="legend" id="legend"></div>
     <div class="scen" id="scen"></div>
@@ -136,7 +181,7 @@
   </div>
 </div>
 
-<div class="overlay" id="gerry" hidden><div class="card" id="gerry-card"></div></div>
+<div class="overlay" id="gerry-box" hidden><div class="card" id="gerry-card"></div></div>
 <div class="overlay" id="end" hidden><div class="card" id="end-card"></div></div>
 
 <script>
@@ -260,8 +305,14 @@ const S = {
   sel: null, rampMode: false,
   grab: null,         // { id, k (maniglia) o seg (tratto), x, y, moved }
   flagged: {},        // id cavo -> celle segnate da Gerry (fino a quando il cavo non cambia)
-  inspections: 0, done: false
+  inspections: 0, done: false,
+  clock: 0            // minuti di gioco dalle 20:00 (alle 30 Gerry apre le porte)
 };
+/* OROLOGIO — dalle 20:00 alle 20:30, come lo scarico: un minuto vero sono
+   sei minuti di gioco (cinque minuti in tutto). Corre solo mentre si
+   posa: fermo con le schede aperte (regole, Gerry). */
+const CLOCK_END = 30, CLOCK_RATE = 6 / 60000;   // minuti di gioco per millisecondo
+const clockText = m => '20:' + String(Math.min(CLOCK_END, Math.floor(m))).padStart(2, '0');
 const $ = s => document.querySelector(s);
 const fmt = m => (Math.round(m * 10) / 10).toString().replace('.', ',');
 const key = (i, j) => i + ',' + j;
@@ -780,7 +831,17 @@ function drawFlags () {
   ctx.strokeStyle = `rgba(224,80,63,${.6 + .4 * Math.sin(t)})`; ctx.lineWidth = 2.5;
   cells.forEach(([i, j]) => { ctx.strokeRect(cx(i) + 2, cy(j) + 2, cs - 4, cs - 4); });
 }
-function frame () {
+let lastT = 0;
+function advanceClock (min) {
+  if (S.done || !S.scen) return;
+  S.clock = Math.min(CLOCK_END, S.clock + min);
+  $('#v-clock').textContent = clockText(S.clock);
+  $('#st-clock').classList.toggle('late', S.clock >= CLOCK_END - 5);
+  if (S.clock >= CLOCK_END) timeUp();
+}
+function frame (t) {
+  const dt = lastT ? Math.min(250, t - lastT) : 0; lastT = t;
+  if (!S.done && $('#start').hidden && $('#gerry-box').hidden && $('#end').hidden) advanceClock(dt * CLOCK_RATE);
   ctx.clearRect(0, 0, W, H);
   drawFloor();
   drawRamps();
@@ -923,12 +984,8 @@ $('#t-ramp').onclick = () => { S.rampMode = !S.rampMode; render(); };
 $('#t-check').onclick = () => inspect();
 $('#btn-help').onclick = () => { $('#start').hidden = false; };
 
-// Gerry Scotti, il bidello: capelli grigi, occhiali, sorriso da quiz
-const GERRY = `<svg width="64" height="64" viewBox="0 0 64 64" aria-hidden="true">
-  <circle cx="32" cy="34" r="22" fill="#f0c9a4"/><path d="M10 30 Q12 10 32 10 Q52 10 54 30 Q50 18 32 18 Q14 18 10 30Z" fill="#c9c6c0"/>
-  <circle cx="24" cy="32" r="6" fill="none" stroke="#2a2c32" stroke-width="2.5"/><circle cx="40" cy="32" r="6" fill="none" stroke="#2a2c32" stroke-width="2.5"/>
-  <line x1="30" y1="32" x2="34" y2="32" stroke="#2a2c32" stroke-width="2.5"/><circle cx="24" cy="32" r="1.8" fill="#2a2c32"/><circle cx="40" cy="32" r="1.8" fill="#2a2c32"/>
-  <path d="M22 44 Q32 53 42 44" fill="#fff" stroke="#8a4b35" stroke-width="2"/><rect x="18" y="56" width="28" height="8" rx="3" fill="#3f6fb0"/></svg>`;
+// Gerry, il bidello (simbolo #gerry): testa e spalle nel fumetto
+const GERRY = `<svg width="64" height="90" viewBox="0 0 100 140" aria-hidden="true"><use href="#gerry"/></svg>`;
 
 function inspect () {
   if (S.done) return;
@@ -946,17 +1003,31 @@ function showGerry (title, text, issues) {
   $('#gerry-card').innerHTML = `<div class="gerry">${GERRY}<div class="bubble"><b>${title}</b>${text}
     ${issues.length ? '<ol>' + issues.slice(0, 5).map(i => `<li>${i.text}</li>`).join('') + '</ol>' + (issues.length > 5 ? `<small>…e altre ${issues.length - 5} cose.</small>` : '') : ''}</div></div>
     <button class="primary" id="btn-fix">Sistemo</button>`;
-  $('#gerry').hidden = false;
-  $('#btn-fix').onclick = () => { $('#gerry').hidden = true; };
+  $('#gerry-box').hidden = false;
+  $('#btn-fix').onclick = () => { $('#gerry-box').hidden = true; };
 }
-function finish () {
+// alle 20:30 Gerry passa comunque: se è tutto a posto va come un giro
+// chiesto; se no apre le porte così, e la posa finisce senza stelle
+function timeUp () {
+  if (S.done) return;
+  S.grab = null;
+  $('#gerry-box').hidden = true;
+  S.inspections++;
+  const issues = analyze();
+  S.gerryIssues = issues;
+  S.flagged = {};
+  issues.forEach(is => is.ids.forEach(id => { S.flagged[id] = (S.flagged[id] || []).concat(is.cells); }));
+  finish(issues.length ? issues : null);
+}
+function finish (late) {
   S.done = true;
-  const stars = S.inspections === 1 ? 3 : S.inspections === 2 ? 2 : 1;
+  const stars = late ? 0 : S.inspections === 1 ? 3 : S.inspections === 2 ? 2 : 1;
   const metres = Object.keys(S.pts).reduce((t, id) => t + lineLen(id), 0);
-  const res = { type: 'posa-cavi', scenario: S.key, stars, inspections: S.inspections, cableM: metres, tapeM: tapeUsed(), ramps: S.ramps.size };
+  const res = { type: 'posa-cavi', scenario: S.key, stars, inspections: S.inspections, cableM: metres, tapeM: tapeUsed(), ramps: S.ramps.size, late: !!late, clock: clockText(S.clock) };
   S.result = res;
-  const line = { 3: 'Perfetto al primo giro. Neanche io l\'avrei fatto meglio, e io i cavi li scavalco da trent\'anni!', 2: 'Adesso sì. Si può aprire!', 1: 'Finalmente. Apro le porte, ma la prossima volta pensaci prima.' }[stars];
-  $('#end-card').innerHTML = `<h1><small>${S.scen.title} · porte aperte</small>Cavi a posto</h1>
+  const line = late ? `Sono le 20:30, la gente è fuori che aspetta: apro così. Ma guarda qui: ${late.length === 1 ? 'una cosa non va' : late.length + ' cose non vanno'}.<ol>${late.slice(0, 3).map(i => `<li>${i.text}</li>`).join('')}</ol>`
+    : { 3: 'Perfetto al primo giro. Neanche io l\'avrei fatto meglio, e io i cavi li scavalco da trent\'anni!', 2: 'Adesso sì. Si può aprire!', 1: 'Finalmente. Apro le porte, ma la prossima volta pensaci prima.' }[stars];
+  $('#end-card').innerHTML = `<h1><small>${S.scen.title} · porte aperte alle ${clockText(S.clock)}</small>${late ? 'Cavi in giro' : 'Cavi a posto'}</h1>
     <div class="stars">${'★'.repeat(stars)}<span>${'★'.repeat(3 - stars)}</span></div>
     <div class="gerry">${GERRY}<div class="bubble">${line}</div></div>
     <dl class="facts">
@@ -982,6 +1053,7 @@ function start (k) {
   S.scen.lines.forEach(l => { if (drop[l.id]) setPts(l.id, drop[l.id].map(c => c.slice())); });
   S.ramps = new Set(); S.sel = null; S.rampMode = false; S.grab = null;
   S.flagged = {}; S.gerryIssues = null; S.inspections = 0; S.done = false; S.result = null;
+  S.clock = 0; $('#v-clock').textContent = clockText(0); $('#st-clock').classList.remove('late');
   $('#h-title').firstChild.textContent = 'La posa dei cavi · ' + S.scen.title;
   $('#h-sub').textContent = S.scen.sub;
   resize(); render();

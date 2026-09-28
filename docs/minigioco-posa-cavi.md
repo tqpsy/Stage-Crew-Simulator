@@ -2,8 +2,7 @@
 
 Stato: **nel gioco** (livello 1, vedi *Integrazione nel gioco*):
 `posa-cavi.html`, test `tests/posa-cavi.js` (la pagina da sola, con due
-scenari fissi) e `tests/posa-cavi-gioco.js` (dentro il gioco). Le voci
-*Da decidere* restano aperte.
+scenari fissi) e `tests/posa-cavi-gioco.js` (dentro il gioco).
 
 ## In breve
 
@@ -105,7 +104,7 @@ nastro basti con margine (≤ 85% del rotolo) ma non sia infinito (≥ 45%).
 - Un passaggio o la via di fuga occupati da un pezzo al montaggio non ci
   sono (il montaggio non li conosce ancora). Un cavo di un pezzo che sta in
   mezzo alla pedana può passare in scena, come il microfono.
-- **Reputazione**, una volta sola: ★★★ +5, ★★ +3, ★ +1. Si può saltare
+- **Reputazione**, una volta sola: ★★★ +5, ★★ +3, ★ +1, finita col tempo 0. Si può saltare
   dalla sua schermata iniziale: le porte si aprono, reputazione ferma.
 - Il salvataggio tiene `cavi` (stelle, giri, metri di cavo e di nastro);
   una partita nuova la azzera.
@@ -121,10 +120,20 @@ nastro basti con margine (≤ 85% del rotolo) ma non sia infinito (≥ 45%).
 - Passaggi e via di fuga anche al montaggio (posa guidata), così non si
   perdono sotto un pezzo.
 
-## Da decidere
+## Decisi dopo la prova
 
-- **Prolunghe**: un cavo troppo corto si allunga con un secondo cavo dal
-  baule? La giunta per terra in un passaggio sarebbe un errore in più.
-- Orologio (20:00 → 20:30) o senza tempo?
-- Più avanti: cavi aerei sulle americane, canaline, multicore con
+- **Niente prolunghe**: ogni cavo ha la sua lunghezza e basta. Se una strada
+  non ci sta, se ne cerca un'altra.
+- **A tempo**: dalle 20:00 alle 20:30, un minuto vero sono sei minuti di
+  gioco (cinque minuti in tutto, come lo scarico). L'orologio è in alto,
+  corre solo mentre si posa (fermo con le regole o Gerry aperti) e negli
+  ultimi cinque minuti lampeggia. Alle 20:30 Gerry passa comunque: se è
+  tutto a posto conta come un giro chiesto; se no apre le porte così, la
+  posa finisce **senza stelle** e la reputazione non cambia. La scaletta
+  lo racconta («Finita col tempo»).
+- Gerry è lo stesso disegno del prototipo del preside (simbolo `#gerry`).
+
+## Più avanti
+
+- cavi aerei sulle americane, canaline, multicore con
   splitter, cavi da tenere lontani dai tagli di luce della scena.

@@ -107,7 +107,7 @@ const path = require('path');
     layPath('e', [[13, 13], [12, 13], [11, 13], [10, 13], [9, 13], [9, 14], [9, 15], [8, 15], [7, 15], [6, 15], [5, 15], [4, 15], [3, 15]]);
     S.scen.lines.forEach(l => { if (!S.paths[l.id]) S.paths[l.id] = [[0, 4]]; });   // tutto "steso" per far passare Gerry
     inspect(); const first = S.inspections;
-    return { first, flagged: Object.keys(S.flagged).length > 0, open: !document.querySelector('#gerry').hidden };
+    return { first, flagged: Object.keys(S.flagged).length > 0, open: !document.querySelector('#gerry-box').hidden };
   });
   check(gerry.first === 1 && gerry.flagged && gerry.open, 'Gerry non segnala gli errori: ' + JSON.stringify(gerry));
   await p.click('#btn-fix');
@@ -150,6 +150,37 @@ const path = require('path');
   const floor = await p.evaluate(() => { const b = cv.getBoundingClientRect(); return [b.left + cx(17) + cs / 2, b.top + cy(26) + cs / 2]; });
   await p.mouse.click(...floor);
   check(await p.evaluate(() => S.sel === null), 'un tocco sul pavimento non lascia il cavo');
+
+  // l'orologio: fermo con le regole aperte, poi corre; alle 20:30 Gerry
+  // passa da solo: con i cavi come al montaggio apre senza stelle, con una
+  // posa giusta promuove come un giro chiesto
+  const clock = await p.evaluate(async () => {
+    const out = {};
+    start('festa');
+    document.querySelector('#start').hidden = false;
+    await new Promise(r => setTimeout(r, 400));
+    out.stopped = S.clock === 0;
+    document.querySelector('#start').hidden = true;
+    await new Promise(r => setTimeout(r, 400));
+    out.runs = S.clock > 0 && S.clock < 1;
+    advanceClock(26);
+    out.late = document.querySelector('#st-clock').classList.contains('late') && document.querySelector('#v-clock').textContent === '20:26';
+    advanceClock(10);
+    out.over = S.result && { stars: S.result.stars, late: S.result.late, clock: S.result.clock, card: /Cavi in giro/.test(document.querySelector('#end-card').textContent) };
+    document.querySelector('#end').hidden = true;
+    start('festa');
+    const sol = autoRoute();
+    S.scen.lines.forEach(l => layPath(l.id, sol[l.id]));
+    rampRows(sol).forEach(k => { const [pid, j] = k.split(':'); const ps = PASSAGES.find(x => x.id === pid); toggleRamp(ps.r[0], +j); });
+    advanceClock(30);
+    out.good = S.result && { stars: S.result.stars, late: S.result.late };
+    document.querySelector('#end').hidden = true;
+    return out;
+  });
+  check(clock.stopped && clock.runs, "l'orologio non si ferma con le regole aperte o non corre: " + JSON.stringify(clock));
+  check(clock.late, "l'orologio non avvisa negli ultimi cinque minuti");
+  check(clock.over && clock.over.stars === 0 && clock.over.late && clock.over.clock === '20:30' && clock.over.card, 'alle 20:30 con errori la posa non finisce senza stelle: ' + JSON.stringify(clock.over));
+  check(clock.good && clock.good.stars === 3 && !clock.good.late, 'alle 20:30 con la posa giusta Gerry non promuove: ' + JSON.stringify(clock.good));
 
   check(errs.length === 0, 'errori JS: ' + errs.join(' | '));
   await b.close();

@@ -2595,19 +2595,23 @@ function finishCavi (r) {
   const f = el('#cavi-frame');
   if (f) f.remove();
   caviOpen = false;
-  const stars = r.skipped ? 0 : Math.max(1, Math.min(3, r.stars || 1));
-  Profile.data.cavi = { skipped: !!r.skipped, stars, inspections: r.inspections || 0, cableM: r.cableM || 0, tapeM: r.tapeM || 0 };
+  // late: alle 20:30 Gerry ha aperto con i cavi ancora in giro (nessuna stella)
+  const late = !r.skipped && !!r.late;
+  const stars = r.skipped || late ? 0 : Math.max(1, Math.min(3, r.stars || 1));
+  Profile.data.cavi = { skipped: !!r.skipped, late, stars, inspections: r.inspections || 0, cableM: r.cableM || 0, tapeM: r.tapeM || 0 };
   const rep = stars ? addReputation(REP.cavi[stars], 'Posa dei cavi alla festa della scuola', 'L' + LEVEL_ID + ':cavi') : 0;
   Profile.save();
   sceneKeyboard(true);
   if (!scheduleOpen && !menuOpen && !rearPanelId && !openCaseName) setSceneInput(true);
   applySettings();
   showToast(r.skipped ? 'Posa dei cavi saltata: Gerry apre le porte, ma la reputazione non cambia.'
+    : late ? 'Sono le 20:30: Gerry apre le porte con i cavi ancora in giro. La reputazione non cambia.'
     : 'Cavi a posto, Gerry apre le porte! ' + '★'.repeat(stars) + (rep ? ' Reputazione +' + rep + '.' : ''), 'ok');
 }
 function caviSummary () {
   const c = Profile.data.cavi;
   if (c.skipped) return 'Saltata: niente reputazione.';
+  if (c.late) return 'Finita col tempo: alle 20:30 porte aperte con i cavi in giro, niente reputazione.';
   return '★'.repeat(c.stars) + '☆'.repeat(3 - c.stars) + ' · ' + (c.inspections === 1 ? 'promossa al primo giro di Gerry' : c.inspections + ' giri di Gerry')
     + ' · ' + String(Math.round(c.tapeM * 10) / 10).replace('.', ',') + ' m di nastro.';
 }
