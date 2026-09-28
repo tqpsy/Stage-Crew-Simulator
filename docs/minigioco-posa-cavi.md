@@ -58,7 +58,7 @@ esempio **20:00 — Messa in sicurezza dei cavi**.
 
 | Regola | Cosa succede nel gioco |
 |---|---|
-| **Via di fuga libera** | La zona davanti all'uscita di sicurezza è rossa: il cavo non ci entra proprio (il dito si ferma e lo dice). |
+| **Via di fuga libera** | La zona davanti all'uscita di sicurezza è rossa: lì per terra non ci deve essere niente. Un cavo ci può finire sopra (così lo lascia il montaggio): Gerry lo boccia. |
 | **Passaggi con il passacavi** | Passaggio degli artisti e corridoio del pubblico sono a strisce. Si attraversano **di traverso**, dentro un passacavi. Senza passacavi, o correndo lungo il passaggio, Gerry boccia. |
 | **Niente cavi in scena** | In mezzo alla pedana passa solo il cavo del microfono (va all'asta). Gli altri stanno lungo il bordo del palco. |
 | **Nastro dove si cammina** | Palco, Pit e platea: ogni cella con un cavo va fermata col nastro. Lungo i muri no. Più cavi nella stessa cella fanno un **fascio** e usano un nastro solo: conviene raggrupparli. |
