@@ -1620,7 +1620,7 @@ const SERVICE_NAME_MAX = 28;   // caratteri del nome (inventato) di un service
 const USED_SERVICES_KEEP = 400; // nomi di service già proposti, da non riproporre
 
 function defaultProfile () {
-  return { v: SAVE_VERSION, player: '', service: '', serviceInfo: null, usedServices: [], settings: { volume: 0.8, reducedFx: false, skipShow: false, skipScarico: false, testMusic: true, bossTips: true, tapeMarks: true, traceSignal: true }, tutorSeen: {}, logo: null, level: null, scarico: null, cavi: null, preside: null, cambioDj: null, beers: 0, records: {}, reputation: { total: 0, earned: {}, log: [] } };
+  return { v: SAVE_VERSION, player: '', service: '', serviceInfo: null, usedServices: [], settings: { volume: 0.8, reducedFx: false, skipShow: false, skipScarico: false, testMusic: true, bossTips: true, tapeMarks: true, traceSignal: true }, tutorSeen: {}, logo: null, level: null, scarico: null, cavi: null, preside: null, cambioDj: null, dj: null, beers: 0, records: {}, reputation: { total: 0, earned: {}, log: [] } };
 }
 const Profile = (() => {
   let data = defaultProfile();
@@ -2356,7 +2356,12 @@ function startNewGame (player, offer, offers) {
   Profile.data.scarico = null;
   Profile.data.cavi = null;
   Profile.data.preside = null;
+  Profile.data.dj = null;
   Profile.data.cambioDj = null;
+  // uno show del DJ ancora aperto o in arrivo della partita vecchia
+  clearTimeout(djTimer);
+  if (el('#dj-frame')) el('#dj-frame').remove();
+  djOpen = false;
   Profile.data.beers = 0;
   Profile.data.tutorSeen = {};   // il nuovo tecnico non ha ancora sentito i consigli del capo
   whenScene(scene => {
@@ -2392,7 +2397,7 @@ const SCHEDULE = [
   { time: '20:30', title: 'Apertura porte', text: 'Entrano famiglie e studenti; musica di sottofondo dal PC.', phase: 'porte' },
   { time: '21:00', title: 'Discorso del Preside Tramp', text: 'Microfono su asta sul palco, cablato a un ingresso MIC del mixer: ricordati quale. Vuole essere sentito fino al parcheggio.', phase: 'preside' },
   { time: '21:10', title: 'Cambio palco: arriva il DJ', text: 'DJ Inestimabile porta la sua consolle: corrente, uscite nella DI e dalla DI al mixer. Il microfono resta dov\'è, per Musa Esistenziale. Il pubblico aspetta: non metterci troppo.', phase: 'cambio-dj', rep: REP.changeDone },
-  { time: '21:15', title: 'Notte fuori controllo', text: 'DJ Inestimabile in consolle e Musa Esistenziale al microfono: mixer DJ → DI → mixer di sala, il microfono del vocalist, luci colorate al drop. E tanti guasti da inseguire.', poster: 'img/locandina-dj.svg' },
+  { time: '21:15', title: 'Notte fuori controllo', text: 'DJ Inestimabile in consolle e Musa Esistenziale al microfono: mixer DJ → DI → mixer di sala, il microfono del vocalist, luci colorate al drop. E tanti guasti da inseguire.', poster: 'img/locandina-dj.svg', phase: 'dj' },
   { time: '22:00', title: 'Dante unplugged', text: 'Voce e chitarra (via DI). Gli ingressi non bastano: cambio palco e via il DJ.' },
   { time: '23:00', title: 'Smontaggio', text: 'Tutto nei case e i case nel furgone. Si torna a casa.' }
 ];
@@ -2405,6 +2410,7 @@ function schedulePhaseState (phase) {
   if (phase === 'porte') return caviDone() ? 'done' : 'next';
   if (phase === 'preside') return presideDone() ? 'done' : caviDone() ? 'now' : 'next';
   if (phase === 'cambio-dj') return cambioDjDone() ? 'done' : presideDone() ? 'now' : 'next';
+  if (phase === 'dj') return djDone() ? 'done' : cambioDjDone() ? 'now' : 'next';
   return collaudoDone() ? 'done' : 'next';
 }
 const SCHEDULE_STATE_LABEL = { done: 'Fatto', now: 'Adesso', next: 'Da fare', soon: 'In arrivo' };
@@ -2428,6 +2434,7 @@ function renderSchedule () {
         : s.phase === 'cavi' && caviDone() ? caviSummary()
         : s.phase === 'preside' && presideDone() ? presideSummary()
         : s.phase === 'cambio-dj' && cambioDjDone() ? cambioSummary()
+        : s.phase === 'dj' && djDone() ? djSummary()
         : s.phase === 'montaggio' ? s.text.replace('i PAR', parsRequired() + ' PAR') : s.text) + '</small>'
       + (s.poster ? '<button class="sched-poster" type="button" data-poster="' + s.poster + '">🎟️ Guarda la locandina</button>' : '')
       + '</span>'
@@ -2444,8 +2451,8 @@ function openSchedule (first) {
   // dopo il collaudo la scaletta porta alla posa dei cavi, poi al discorso
   // del preside, poi al cambio palco per il DJ
   scheduleNext = first ? null : schedulePhaseState('cavi') === 'now' ? 'cavi' : schedulePhaseState('preside') === 'now' ? 'preside'
-    : schedulePhaseState('cambio-dj') === 'now' && !cambioDj() ? 'cambio-dj' : null;
-  el('#schedule-go').textContent = first ? 'Al lavoro!' : { cavi: 'Stendi i cavi', preside: 'Il preside sale sul palco', 'cambio-dj': 'Inizia il cambio palco' }[scheduleNext] || 'Torna al palco';
+    : schedulePhaseState('cambio-dj') === 'now' && !cambioDj() ? 'cambio-dj' : schedulePhaseState('dj') === 'now' ? 'dj' : null;
+  el('#schedule-go').textContent = first ? 'Al lavoro!' : { cavi: 'Stendi i cavi', preside: 'Il preside sale sul palco', 'cambio-dj': 'Inizia il cambio palco', dj: 'Via al DJ set' }[scheduleNext] || 'Torna al palco';
   el('#schedule-modal').classList.add('show');
   setSceneInput(false);
 }
@@ -2714,8 +2721,9 @@ function caviSummary () {
    PAR montati coi loro ruoli, i cavi lasciati dalla posa e le birre in
    tasca. L'esito torna al gioco: reputazione una volta sola, birre. */
 let presideOpen = false, presideTimer = null;
+let djOpen = false;              // lo spettacolo del DJ (openDj, più sotto)
 const presideDone = () => !!Profile.data.preside;
-const minigameOpen = () => scaricoOpen || caviOpen || presideOpen;
+const minigameOpen = () => scaricoOpen || caviOpen || presideOpen || djOpen;
 // cosa manca perché il preside possa parlare (null se è tutto pronto)
 function presideReady () {
   const asta = placedOfType('asta')[0], mic = placedOfType('mic').find(m => mountBase(m));
@@ -2931,13 +2939,85 @@ function finishCambioDj () {
     + (c.slow ? 'Il pubblico però ha aspettato troppo. ' : 'Cambio fatto in ' + mmss(c.ms) + '. ')
     + (c.micMoved ? 'Il microfono non è più sul CH ' + c.micCh + ': Musa dovrà cercarselo. ' : '')
     + (rep ? 'Reputazione ' + (rep > 0 ? '+' : '') + rep + '. ' : '')
-    + 'Lo spettacolo del DJ arriva presto.', 'ok');
+    + 'Tra poco si accendono le luci del set.', 'ok');
+  djSoon(6000);
 }
 function cambioSummary () {
   const c = cambioDj();
   return (c.slow ? 'Finito a pazienza esaurita: il pubblico ha fischiato.' : 'Finito in ' + mmss(c.ms) + ', prima dei fischi.')
-    + (c.micMoved ? ' Microfono spostato dal CH ' + c.micCh + '.' : '') + ' Il DJ set arriva presto.';
+    + (c.micMoved ? ' Microfono spostato dal CH ' + c.micCh + '.' : '');
 }
+/* ---------------- lo spettacolo del DJ (21:15) ----------------
+   «Notte fuori controllo» (dj.html), in un iframe sopra il gioco dopo il
+   cambio palco, o dalla scaletta e dal foglio. Il tecnico fa le luci a ritmo
+   del brano e insegue i guasti del DJ; per il guasto grosso sceglie se andarci
+   lui, pagare una birra al capo o lasciarlo a Gerry. La pagina riceve le
+   birre in tasca, il nome del capo e i PAR montati; l'esito torna al gioco:
+   reputazione una volta sola, birre bevute e guadagnate. */
+let djTimer = null;
+const djDone = () => !!Profile.data.dj;
+function openDj () {
+  clearTimeout(djTimer);
+  if (djOpen || djDone() || !cambioDjDone() || minigameOpen()) return;
+  djOpen = true;
+  setSceneInput(false);
+  sceneKeyboard(false);
+  if (window.__scene) window.__scene.stopFx();
+  const f = document.createElement('iframe');
+  f.id = 'dj-frame';
+  f.className = 'minigame-frame';
+  f.title = 'Notte fuori controllo';
+  f.allow = 'autoplay';
+  f.src = 'dj.html?embed=1';
+  f.addEventListener('load', () => { try { f.contentWindow.focus(); } catch (e) { /* niente fuoco: si tocca */ } });
+  document.body.appendChild(f);
+}
+// finito il cambio palco il DJ attacca da solo, appena letto l'avviso
+function djSoon (ms) {
+  clearTimeout(djTimer);
+  djTimer = setTimeout(() => {
+    if (!scheduleOpen && !menuOpen && !rearPanelId && !openCaseName && !cambioCardOpen) openDj();
+  }, ms || 3000);
+}
+window.addEventListener('message', ev => {
+  const d = ev.data, f = el('#dj-frame');
+  if (!djOpen || !d || !f) return;
+  if (d.type === 'dj-pronto') {
+    const info = Profile.data.serviceInfo;
+    f.contentWindow.postMessage({ type: 'dj-dati', beers: Profile.data.beers || 0, boss: info && info.boss ? info.boss : '', pars: presidePars().map(p => p.label) }, '*');
+  }
+  if (d.type === 'dj-fine') finishDj(d.result || { skipped: true });
+});
+function finishDj (r) {
+  const f = el('#dj-frame');
+  if (f) f.remove();
+  djOpen = false;
+  const skipped = !!r.skipped;
+  const num = (v, d) => Number.isFinite(+v) ? Math.round(+v) : d;
+  const beers = skipped ? 0 : Math.max(0, num(r.beers, 0)), drunk = skipped ? 0 : Math.max(0, num(r.drunk, 0));
+  const paid = skipped || r.fase !== 'capo' ? 0 : 1;          // la birra pagata al capo
+  Profile.data.dj = { skipped, grad: skipped ? 0 : num(r.grad, 0), rep: skipped ? 0 : num(r.rep, 0), beers, drunk: drunk + paid,
+    stars: skipped ? 0 : num(r.stars, 0), larsens: skipped ? 0 : num(r.larsens, 0), fase: skipped ? null : (['tu', 'capo', 'gerry'].includes(r.fase) ? r.fase : null) };
+  Profile.data.beers = Math.max(0, (Profile.data.beers || 0) - drunk - paid + beers);
+  const rep = skipped ? 0 : addReputation(Profile.data.dj.rep, 'Notte fuori controllo: le luci del DJ set', 'L' + LEVEL_ID + ':dj');
+  Profile.save();
+  sceneKeyboard(true);
+  if (!scheduleOpen && !menuOpen && !rearPanelId && !openCaseName) setSceneInput(true);
+  applySettings();
+  const p = Profile.data.dj;
+  showToast(skipped ? 'DJ set saltato: la musica c\'è stata lo stesso, ma la reputazione non cambia.'
+    : 'Gerry ha staccato la corrente: il DJ set è finito. Pubblico al ' + p.grad + '%.' + (rep ? ' Reputazione ' + (rep > 0 ? '+' : '') + rep + '.' : '')
+      + (beers ? ' 🍺 +' + beers + '.' : ''), skipped || p.grad >= 40 ? 'ok' : undefined);
+  updateFoglio();
+}
+function djSummary () {
+  const p = Profile.data.dj;
+  if (p.skipped) return 'Saltato: niente reputazione.';
+  const who = { tu: 'la fase l\'hai riarmata tu', capo: 'la fase l\'ha riarmata il capo (una birra)', gerry: 'la fase l\'ha riarmata Gerry' }[p.fase];
+  return '★'.repeat(p.stars) + '☆'.repeat(5 - p.stars) + ' · pubblico al ' + p.grad + '%' + (p.larsens ? ' · larsen: ' + p.larsens : ' · niente larsen')
+    + (who ? ' · ' + who : '') + (p.beers ? ' · 🍺 +' + p.beers : '') + ' · reputazione ' + (p.rep >= 0 ? '+' : '') + p.rep + '.';
+}
+
 el('#cambio-go').addEventListener('click', () => { SFX.button(); closeCambioCard(); });
 el('#cambio-close').addEventListener('click', () => { SFX.button(); closeCambioCard(); });
 
@@ -2946,7 +3026,7 @@ el('#schedule-go').addEventListener('click', () => {
   SFX.button();
   const next = scheduleNext;
   closeSchedule();
-  if (next === 'cavi') openCavi(); else if (next === 'preside') openPreside(); else if (next === 'cambio-dj') startCambioDj();
+  if (next === 'cavi') openCavi(); else if (next === 'preside') openPreside(); else if (next === 'cambio-dj') startCambioDj(); else if (next === 'dj') openDj();
 });
 el('#schedule-close').addEventListener('click', () => { SFX.button(); closeSchedule(); });
 el('#schedule-modal').addEventListener('click', ev => { if (ev.target.id === 'schedule-modal') closeSchedule(); });
@@ -4698,10 +4778,15 @@ function updateFoglio () {
     body = '<ul class="fg-list">' + list.map(x => '<li class="' + (x.ok ? 'ok' : '') + '">' + (x.ok ? '✓' : '○') + ' ' + escapeHtml(x.what) + '</li>').join('') + '</ul>'
       + '<p class="fg-note">Quando è tutto a posto premi PRONTI: tocca al DJ.</p>';
     patience = true;
-  } else if (cambioDjDone()) {
+  } else if (cambioDjDone() && !djDone()) {
     icon = '🎧 ';
-    head = 'Cambio palco fatto';
-    body = '<p class="fg-note">DJ Inestimabile e Musa Esistenziale sono pronti a partire. Lo spettacolo del DJ arriva presto.</p>';
+    head = 'Prossimo: Notte fuori controllo';
+    body = '<p class="fg-note">DJ Inestimabile e Musa Esistenziale sono pronti. Tu vai alla consolle luci: le memorie si suonano a tempo col brano.</p>'
+      + '<button type="button" class="fg-go" id="foglio-dj">Via al DJ set</button>';
+  } else if (djDone()) {
+    icon = '🎧 ';
+    head = 'DJ set finito';
+    body = '<p class="fg-note">' + escapeHtml(djSummary()) + ' Alle 22:00 Dante unplugged arriva presto.</p>';
   } else if (caviDone() && !presideDone()) {
     // il discorso del preside: pronto se il microfono è cablato
     const missing = presideReady();
@@ -4726,6 +4811,8 @@ function updateFoglio () {
   if (go) go.addEventListener('click', () => { SFX.button(); startCambioDj(); });
   const pr = el('#foglio-preside');
   if (pr) pr.addEventListener('click', () => { SFX.button(); openPreside(); });
+  const dg = el('#foglio-dj');
+  if (dg) dg.addEventListener('click', () => { SFX.button(); openDj(); });
 }
 
 // cambio di scheda verso una chiusa: si spiega perché

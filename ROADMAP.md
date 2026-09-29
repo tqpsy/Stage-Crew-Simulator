@@ -104,11 +104,12 @@ cambiano da una fase all'altra.
 
 ## Show del DJ set
 
-- **Luci a tempo stile Guitar Hero** (21:15 in scaletta): prototipo in
-  `prototipi/spettacolo-dj.html`, mappa del brano generata da
-  `strumenti/mappa-dj.py` (griglia, voce separata, sezioni). Da fare:
-  collegarlo al gioco dopo il cambio palco e farci arrivare i guasti del DJ.
-  Design in `docs/spettacolo-dj.md`.
+- **Light Operator Hero** (21:15 in scaletta): fatto, `dj.html` dopo il
+  cambio palco. Luci a ritmo su quattro memorie, guasti-nota, PAR senza DMX,
+  fase del Quadro con la scelta tu / capo / Gerry e il rewind del DJ, finale
+  di Gerry. Mappa del brano da `strumenti/mappa-dj.py`. Da fare: l'audio
+  nella catena simulata, il brano caricato dal giocatore, guasti a caso,
+  l'assistente al posto del capo dal livello 2. Vedi `docs/spettacolo-dj.md`.
 
 ## Test automatici
 

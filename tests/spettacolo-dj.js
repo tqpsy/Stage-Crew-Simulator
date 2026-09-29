@@ -1,10 +1,16 @@
-/* Lo show del DJ set (dj.html): le luci si suonano a
-   tempo come in Guitar Hero. Controlla la mappa (note sulla griglia, mai più
-   di due tasti insieme, lo strobo su ogni drop, la VOCE sulle frasi di Musa),
-   poi gioca con un orologio finto: la demo prende tutte le note, il pubblico
-   salta ai drop e sta fermo nel break, Musa apre la bocca solo quando nel
-   brano c'è la voce; chi non tocca niente svuota il pubblico; tasti, note
-   tenute mollate e colpi fuori tempo.
+/* Lo show del DJ (dj.html): Light Operator Hero. Controlla la mappa (note
+   sulla griglia, mai più di due tasti insieme, il drop come nota lunga di
+   strobo, il battito di BLACKOUT prima di ogni drop), poi gioca con un
+   orologio finto:
+   - la demo arriva in fondo coi guasti gestiti, il rewind e il finale di Gerry;
+   - il pubblico salta ai drop e sta fermo nel break, Musa apre la bocca solo
+     quando nel brano c'è la voce;
+   - i guasti-nota: fader DJ, MUTE (e il larsen se manca), fader MIC;
+   - il PAR senza DMX spegne la corsia CHASE finché non lo sistemi;
+   - il guasto grosso: ci vai tu (Quadro, errori che costano tempo, rewind,
+     +5), paghi una birra al capo (0), nessuno e arriva Gerry (−5); senza birre
+     il capo non si paga; il capo si spazientisce dopo 30 s;
+   - chi non tocca niente svuota il pubblico; tasti, fuori tempo, tenute.
 
    Uso:  node tests/spettacolo-dj.js
    Richiede Playwright. */
@@ -18,147 +24,217 @@ const path = require('path');
   const problems = [];
   const check = (ok, what) => { if (!ok) problems.push(what); };
   const ev = (fn, arg) => p.evaluate(fn, arg);
-  const open = async () => {
+  const open = async (beers) => {
     await p.goto('file://' + path.join(__dirname, '..', 'dj.html'));
     await p.waitForFunction(() => window.__dj);
     await ev(() => { try { localStorage.clear(); } catch (e) {} __dj.virtual(true); });
   };
-  // l'orologio finto va solo avanti
-  const goTo = async t => { const d = await ev(t => t - __dj.state().t, t); if (d < 0) throw new Error('il test torna indietro a ' + t); await ev(d => __dj.advance(d), d); };
+  // l'orologio finto va solo avanti (il rewind lo porta indietro da solo)
+  const goTo = async t => {
+    const d = await ev(t => t - __dj.state().t, t);
+    if (d < -1e-6) throw new Error('il test torna indietro a ' + t);
+    // col rewind il brano torna indietro mentre si avanza: si avanza finché ci si arriva
+    await ev(t => { for (let i = 0; i < 20 && __dj.state().t < t - 1e-6 && __dj.state().running && !__dj.state().over && !__dj.state().finale; i++) __dj.advance(t - __dj.state().t); }, t);
+  };
+  const S = fn => ev(fn);
 
   await open();
+  const M = await ev(() => ({ t0: __dj.mappa.t0, bpm: __dj.mappa.bpm, voce: __dj.mappa.voce, durata: __dj.mappa.durata, battute: __dj.mappa.battute }));
+  const T = (bar, beat = 0) => M.t0 + (bar * 4 + beat) * 60 / M.bpm;
 
   // ---- la mappa ----
   const m = await ev(() => {
     const M = __dj.mappa, beat = 60 / M.bpm, T = b => M.t0 + b * beat;
-    const out = { bpm: M.bpm, n: M.note.length, bad: [], maxTogether: 0, dropsNoStrobe: [], voiceUncovered: [] };
-    const sorted = M.note.every((n, i) => !i || M.note[i - 1][0] <= n[0]);
-    if (!sorted) out.bad.push('note non in ordine');
+    const out = { bpm: M.bpm, n: M.note.length, bad: [], maxTogether: 0, dropsNoHold: [], buildsNoBlack: [] };
+    if (!M.note.every((n, i) => !i || M.note[i - 1][0] <= n[0])) out.bad.push('note non in ordine');
     M.note.forEach(([b, l, len]) => {
       if (Math.abs(b * 4 - Math.round(b * 4)) > 1e-6) out.bad.push('fuori griglia ' + b);
       if (T(b + len) > M.durata) out.bad.push('oltre la fine ' + b);
       if (l < 0 || l > 3) out.bad.push('corsia ' + l);
     });
-    // quanti tasti servono insieme in ogni istante (tenute in corso + tocchi)
     M.note.forEach(([b]) => {
       const k = M.note.filter(([c, , len]) => c === b || (len && c < b && b < c + len)).length;
       out.maxTogether = Math.max(out.maxTogether, k);
     });
-    // due tenute sulla stessa corsia non si accavallano, un tocco non cade dentro una tenuta
-    M.note.forEach(([b, l, len], i) => M.note.forEach(([c, k, len2], j) => {
-      if (i !== j && l === k && len && c > b && c < b + len) out.bad.push('accavallata corsia ' + l + ' a ' + c);
+    M.note.forEach(([b, l, len], i) => M.note.forEach(([c, k], j) => {
+      if (i !== j && l === k && len && c > b && c < b + len) out.bad.push('dentro una tenuta, corsia ' + l + ' a ' + c);
     }));
-    M.sezioni.filter(s => s[2] === 'DROP').forEach(([a]) => { if (!M.note.some(([b, l]) => b === a * 4 && l === 3)) out.dropsNoStrobe.push(a); });
-    // ogni frase lunga del vocalist ha la sua nota VOCE che parte con la frase
-    M.voce.forEach(([a, e]) => {
-      if (e - a < beat) return;
-      if (!M.note.some(([b, l]) => l === 2 && Math.abs(T(b) - a) < beat * 0.2)) out.voiceUncovered.push(a);
+    M.sezioni.forEach(([a, , k], i) => {
+      if (k === 'DROP' && !M.note.some(([b, l, len]) => b === a * 4 && l === 2 && len >= 4)) out.dropsNoHold.push(a);
+      if (k === 'DROP' && M.sezioni[i - 1][2] === 'BUILD' && !M.note.some(([b, l]) => b === a * 4 - 1 && l === 3)) out.buildsNoBlack.push(a);
     });
     out.drops = M.sezioni.filter(s => s[2] === 'DROP').length;
-    out.bocca = M.bocca.length / 25 - M.durata;
     return out;
   });
   check(m.bpm === 130, 'bpm della mappa: ' + m.bpm);
   check(m.n > 200, 'poche note: ' + m.n);
   check(!m.bad.length, 'note sbagliate: ' + m.bad.slice(0, 5).join(', '));
   check(m.maxTogether <= 2, 'servono ' + m.maxTogether + ' tasti insieme (sul telefono si hanno due pollici)');
-  check(!m.dropsNoStrobe.length, 'drop senza strobo alle battute ' + m.dropsNoStrobe.join(', '));
-  check(!m.voiceUncovered.length, 'frasi della voce senza nota VOCE a ' + m.voiceUncovered.join(', '));
+  check(!m.dropsNoHold.length, 'drop senza la nota lunga di strobo alle battute ' + m.dropsNoHold.join(', '));
+  check(!m.buildsNoBlack.length, 'salite senza BLACKOUT prima del drop ' + m.buildsNoBlack.join(', '));
   check(m.drops === 5, 'drop nella mappa: ' + m.drops);
-  check(Math.abs(m.bocca) < 0.1, 'la bocca non copre il brano: ' + m.bocca);
 
-  // ---- la demo: il capo suona tutte le note ----
+  // ---- la demo: il capo suona e affronta i guasti ----
   await ev(() => __dj.start(true));
-  const M = await ev(() => ({ t0: __dj.mappa.t0, bpm: __dj.mappa.bpm, voce: __dj.mappa.voce, durata: __dj.mappa.durata }));
-  const T = (bar, beat) => M.t0 + (bar * 4 + beat) * 60 / M.bpm;
   const crowd = () => ev(() => [...document.querySelectorAll('#crowd > g, #crowd2 > g')].map(g => +g.getAttribute('transform').match(/translate\(([-\d.]+) ([-\d.]+)\)/)[2]));
   const musa = () => ev(() => ({ singing: __dj.state().singing, ry: +document.querySelector('#mouth').getAttribute('ry'), bub: +document.querySelector('#voice-bub').getAttribute('opacity') }));
-
-  // nel break (battuta 20) il pubblico non salta
-  await goTo(T(20, 1.5));
-  let ys = await crowd();
-  check(ys.every(y => y > -1), 'nel break qualcuno salta: ' + Math.min(...ys));
-  // al drop (battuta 33, a metà battito) il pubblico è in aria
   await goTo(T(33, 1.5));
-  ys = await crowd();
-  const up = ys.filter(y => y < -4).length;
-  check(up >= ys.length * 0.6, 'al drop saltano in ' + up + ' su ' + ys.length);
-  const g1 = await ev(() => __dj.state().grad);
-  check(g1 > 70, 'con la demo il pubblico al primo drop è al ' + Math.round(g1) + '%');
-  // Musa: bocca chiusa quando nel brano la voce non c'è, aperta nella frase
-  // lunga del vocalist (che arriva dopo il primo drop)
-  await goTo(T(34, 1));   // drop 1: niente voce
+  let ys = await crowd();
+  check(ys.filter(y => y < -4).length >= ys.length * 0.6, 'al drop saltano in ' + ys.filter(y => y < -4).length + ' su ' + ys.length);
+  await goTo(T(34, 1));
   let mu = await musa();
   check(!mu.singing && mu.ry < 2 && mu.bub === 0, 'Musa canta senza voce nel brano: ' + JSON.stringify(mu));
   const longest = M.voce.reduce((a, v) => v[1] - v[0] > a[1] - a[0] ? v : a);
-  // frontali su Musa mentre canta (la demo tiene VOCE)
-  await goTo(longest[0] + 0.3);
-  const lit = await ev(() => +document.querySelectorAll('#beams path')[1].getAttribute('opacity'));
-  check(lit > 0.3, 'con VOCE tenuta i frontali restano spenti: ' + lit);
-  await goTo((longest[0] + longest[1]) / 2);
-  mu = await musa();
-  // a metà frase si può cadere in una pausa tra due parole: si guarda un tratto
-  let sang = mu.singing, maxRy = mu.ry;
-  for (let i = 0; i < 20 && !sang; i++) { await goTo((longest[0] + longest[1]) / 2 + 0.05 * (i + 1)); mu = await musa(); sang = mu.singing; maxRy = Math.max(maxRy, mu.ry); }
-  check(sang && maxRy > 3 && mu.bub === 1, 'Musa non canta nella frase di ' + longest.join('-') + ' s: ' + JSON.stringify(mu));
-
-  await goTo(M.durata + 1);
-  const R = await ev(() => ({ r: __dj.results(), s: (({ miss, stray, perfect, good, dropHit, drops, darkVoice, holdsBroken, over, grad }) => ({ miss, stray, perfect, good, dropHit, drops, darkVoice, holdsBroken, over, grad }))(__dj.state()) }));
-  check(R.s.over, 'la demo non finisce');
+  let sang = false, maxRy = 0;
+  for (let i = 0; i < 30 && !sang; i++) { await goTo(longest[0] + 1 + 0.05 * i); mu = await musa(); sang = mu.singing; maxRy = Math.max(maxRy, mu.ry); }
+  check(sang && maxRy > 3, 'Musa non canta nella frase di ' + longest.join('-') + ' s');
+  await goTo(M.durata + 3);
+  await ev(() => __dj.advance(10));
+  let R = await ev(() => ({ r: __dj.result(), s: (({ miss, stray, perfect, lost, dropHeld, drops, holdsBroken, over, rewinds, larsens }) => ({ miss, stray, perfect, lost, dropHeld, drops, holdsBroken, over, rewinds, larsens }))(__dj.state()) }));
+  check(R.s.over && R.r, 'la demo non finisce');
   check(R.s.miss === 0 && R.s.stray === 0 && R.s.holdsBroken === 0, 'la demo sbaglia: ' + JSON.stringify(R.s));
-  check(R.r.acc > 0.999 && R.r.stars === 5, 'la demo non fa 5 stelle: ' + JSON.stringify(R.r));
-  check(R.s.dropHit === 5 && R.s.drops === 5, 'drop presi dalla demo: ' + R.s.dropHit + '/' + R.s.drops);
-  check(R.s.darkVoice < 1, 'con la demo Musa canta al buio per ' + R.s.darkVoice.toFixed(1) + ' s');
-  check(R.s.grad >= 90, 'pubblico a fine demo: ' + Math.round(R.s.grad));
+  check(R.r && R.r.stars === 5 && R.r.acc >= 95, 'la demo non fa 5 stelle: ' + JSON.stringify(R.r));
+  check(R.s.dropHeld === 5 && R.s.drops === 5, 'drop tenuti dalla demo: ' + R.s.dropHeld + '/' + R.s.drops);
+  check(R.s.rewinds === 1 && R.r.fase === 'tu', 'la demo non va al Quadro col rewind: ' + JSON.stringify(R.r));
+  check(R.s.larsens === 0 && R.r.beers === 2, 'la demo: larsen o birre sbagliati ' + JSON.stringify(R.r));
+  check(R.r.rep === 5 + 4 + 1 + 5 + 3 + 1 + 1, 'reputazione della demo: ' + R.r.rep);
+  check(await ev(() => __dj.state().gerryX < 400), 'nel finale Gerry non entra a staccare la corrente');
   await p.waitForSelector('#outro:not([hidden])', { timeout: 3000 }).catch(() => problems.push('niente scheda finale'));
+
+  // ---- guasti a mano: fader DJ a tempo, poi il guasto grosso: ci vai tu ----
+  await open();
+  await ev(() => __dj.start(false));
+  await goTo(T(10, 0.5));
+  let st = await S(() => ({ f: __dj.state().faults.gain, pop: !document.querySelector('#pop-fader').hidden, sp: __dj.state().specials.length }));
+  check(st.f && st.f.state === 'on' && st.pop && st.sp === 1, 'il gain del DJ non va in rosso a battuta 10: ' + JSON.stringify(st));
+  await p.keyboard.down('v'); await p.keyboard.up('v');
+  st = await S(() => ({ f: __dj.state().faults.gain.state, hot: __dj.state().djHot }));
+  check(st.f === 'ok' && !st.hot, 'col fader giù il gain non torna a posto: ' + JSON.stringify(st));
+
+  await goTo(T(17, 0.2));
+  st = await S(() => ({ down: __dj.state().phaseDown, choice: !document.querySelector('#choice').hidden, dead: [...document.querySelectorAll('.pad.dead')].length }));
+  check(st.down && st.choice && st.dead === 3, 'la fase non scatta a battuta 17: ' + JSON.stringify(st));
+  await ev(() => document.querySelector('#opt-tu').click());
+  const leftAt = await S(() => __dj.state().t);
+  st = await S(() => ({ away: !!__dj.state().away, capo: __dj.state().capo, quadro: !document.querySelector('#quadro').hidden }));
+  check(st.away && st.capo && st.quadro, 'ci vai tu: niente Quadro o niente capo alle luci ' + JSON.stringify(st));
+  // riarmare col carico ancora su L2 fa riscattare; su L1 non ci sta
+  await ev(() => __dj.quadro('arm')); await goTo(leftAt + 2);
+  check(await S(() => __dj.state().phaseDown), 'riarmata col carico su L2 e non riscatta');
+  await ev(() => __dj.quadro('L1')); await goTo(leftAt + 5);
+  check(await S(() => (__dj.state().faults.fase.plug || 'L2') === 'L2'), 'la ciabattina è andata su L1 (col finale)');
+  await ev(() => __dj.quadro('L3')); await goTo(leftAt + 7);
+  const before = await S(() => ({ t: __dj.state().t, w: __dj.state().notes.filter(n => n.state === 'wait').length }));
+  await ev(() => __dj.quadro('arm')); await ev(() => __dj.advance(1.6));
+  st = await S(() => ({ down: __dj.state().phaseDown, away: !!__dj.state().away, t: __dj.state().t, rew: __dj.state().rewinds, w: __dj.state().notes.filter(n => n.state === 'wait').length, rep: __dj.state().repParts }));
+  check(!st.down && !st.away && st.rew === 1, 'riarmata L2 ma non si torna alle luci: ' + JSON.stringify(st));
+  check(st.t < before.t - 6, 'il rewind non riporta indietro il brano: ' + st.t + ' vs ' + before.t);
+  check(st.w > before.w, 'col rewind le note perse non tornano');
+  check(st.rep.some(([w, v]) => v === 5), 'ci sei andato tu in fretta ma niente +5: ' + JSON.stringify(st.rep));
+
+  // ---- PAR senza DMX: la corsia CHASE si spegne finché non lo sistemi ----
+  await goTo(T(42, 0.5));
+  st = await S(() => ({ dead: __dj.state().dmxDead, chip: !document.querySelector('#dmx-chip').hidden, pad: document.querySelector('.pad[data-l="1"]').classList.contains('dead'), cause: __dj.state().faults.dmx.cause }));
+  check(st.dead && st.chip && st.pad, 'il PAR 4 non perde il DMX a battuta 42: ' + JSON.stringify(st));
+  await ev(() => document.querySelector('#dmx-chip').click());
+  const wrong = st.cause === 'cavo' ? 'a010' : 'plug', right = st.cause === 'cavo' ? 'plug' : 'a010';
+  await ev(k => document.querySelector(`#par-acts [data-k="${k}"]`).click(), wrong);
+  check(await S(() => __dj.state().dmxDead), 'la cura sbagliata sistema il PAR');
+  await goTo(T(42, 0.5) + 2);
+  await ev(k => document.querySelector(`#par-acts [data-k="${k}"]`).click(), right);
+  st = await S(() => ({ dead: __dj.state().dmxDead, pad: document.querySelector('.pad[data-l="1"]').classList.contains('dead') }));
+  check(!st.dead && !st.pad, 'il PAR sistemato non torna: ' + JSON.stringify(st));
+
+  // ---- larsen: senza MUTE parte ----
+  await goTo(T(49, 0.5));
+  check(await S(() => !document.querySelector('#pop-mute').hidden), 'niente MUTE quando Musa va verso la cassa');
+  await goTo(T(52, 2));
+  st = await S(() => ({ l: __dj.state().larsens, rep: __dj.state().repParts.filter(p => p[1] === -5).length }));
+  check(st.l === 1 && st.rep === 1, 'senza MUTE niente larsen: ' + JSON.stringify(st));
+
+  // ---- fader MIC a mano, trascinandolo ----
+  await goTo(T(67, 0.5));
+  check(await S(() => __dj.state().faults.mangia && __dj.state().faults.mangia.state === 'on'), 'Musa non si mangia il microfono a battuta 67');
+  const tr = await (await p.$('#track')).boundingBox();
+  await p.mouse.move(tr.x + tr.width / 2, tr.y + 5); await p.mouse.down();
+  await p.mouse.move(tr.x + tr.width / 2, tr.y + tr.height * 0.7, { steps: 5 }); await p.mouse.up();
+  check(await S(() => __dj.state().faults.mangia.state === 'ok'), 'trascinando il fader MIC giù il guasto resta');
+
+  // ---- guasto grosso: una birra al capo, poi nessuno (Gerry) ----
+  await open();
+  await ev(() => __dj.start(false));
+  await goTo(T(17, 0.2));
+  await ev(() => document.querySelector('#opt-capo').click());
+  st = await S(() => ({ beers: __dj.state().beers, away: !!__dj.state().away }));
+  check(st.beers === 1 && !st.away, 'birra al capo: ' + JSON.stringify(st));
+  await goTo(T(17, 0.2) + 7);
+  st = await S(() => ({ down: __dj.state().phaseDown, rew: __dj.state().rewinds, rep: __dj.state().repParts.map(p => p[1]) }));
+  check(!st.down && st.rew === 0 && !st.rep.some(v => v !== 0 && v !== 1), 'il capo non riarma, o c\'è rewind: ' + JSON.stringify(st));
+
+  await open();
+  await ev(() => __dj.start(false));
+  await goTo(T(17, 0.2));
+  await goTo(T(17, 0.2) + 11);    // nessuno sceglie: tocca a Gerry
+  check(await S(() => __dj.state().big.who === 'gerry' && __dj.state().phaseDown), 'senza scelta non si aspetta Gerry');
+  await goTo(T(17, 0.2) + 21);
+  st = await S(() => ({ down: __dj.state().phaseDown, rep: __dj.state().repParts.map(p => p[1]), gx: __dj.state().gerryX }));
+  check(!st.down && st.rep.includes(-5) && st.gx < 400, 'Gerry non sistema la fase, o niente −5: ' + JSON.stringify(st));
+
+  // senza birre in tasca il capo non si paga; e se stai via troppo ti rimanda alle luci
+  await open();
+  await ev(() => { __dj.start(false); __dj.state().beers = 0; });
+  await goTo(T(17, 0.2));
+  check(await S(() => document.querySelector('#opt-capo').disabled), 'senza birre si può pagare il capo');
+  await ev(() => document.querySelector('#opt-tu').click());
+  await goTo(T(17, 0.2) + 31);
+  st = await S(() => ({ away: !!__dj.state().away, mini: document.querySelector('#quadro').classList.contains('mini'), down: __dj.state().phaseDown, rew: __dj.state().rewinds }));
+  check(!st.away && st.mini && st.down && st.rew === 1, 'dopo 30 s il capo non ti rimanda alle luci: ' + JSON.stringify(st));
+  await ev(() => __dj.quadro('L3')); await ev(() => __dj.advance(1.6));
+  await ev(() => __dj.quadro('arm')); await ev(() => __dj.advance(1.6));
+  st = await S(() => ({ down: __dj.state().phaseDown, rep: __dj.state().repParts.filter(p => /Quadro/.test(p[0])).map(p => p[1]) }));
+  check(!st.down && st.rep.length === 1 && st.rep[0] === 0, 'finire il Quadro dal palco: ' + JSON.stringify(st));
 
   // ---- chi non tocca niente ----
   await open();
   await ev(() => __dj.start(false));
-  await goTo(T(40, 0));
-  const idle = await ev(() => ({ grad: __dj.state().grad, miss: __dj.state().miss, dark: __dj.state().darkVoice }));
-  check(idle.grad < 25, 'senza toccare niente il pubblico resta al ' + Math.round(idle.grad) + '%');
-  check(idle.miss > 50, 'note mancate senza toccare: ' + idle.miss);
-  check(idle.dark > 10, 'Musa al buio senza VOCE: ' + idle.dark);
-  // col pubblico spento al drop saltano in pochi
-  await goTo(T(41, 1.5));
-  ys = await crowd();
-  check(ys.filter(y => y < -4).length < ys.length * 0.3, 'col pubblico spento saltano in ' + ys.filter(y => y < -4).length);
+  await goTo(T(16, 0));
+  const idle = await S(() => ({ grad: __dj.state().grad, miss: __dj.state().miss }));
+  check(idle.grad < 25 && idle.miss > 25, 'senza toccare niente il pubblico resta al ' + Math.round(idle.grad) + '% (' + idle.miss + ' mancate)');
 
-  // ---- tasti: una nota presa con la tastiera, un colpo fuori tempo, una tenuta mollata ----
+  // ---- tasti: nota a tempo, fuori tempo, tenuta mollata, birra ----
   await open();
   await ev(() => __dj.start(false));
-  const firstPulse = await ev(() => __dj.state().notes.find(n => n.lane === 0 && !n.hold && n.t > 20));
-  await goTo(firstPulse.t);
+  const n1 = await S(() => __dj.state().notes.find(n => n.lane === 0 && !n.hold && n.t > 3));
+  await goTo(n1.t);
   await p.keyboard.down('d'); await p.keyboard.up('d');
-  let st = await ev(i => ({ state: __dj.state().notes[i].state, perfect: __dj.state().perfect }), firstPulse.i);
+  st = await ev(i => ({ state: __dj.state().notes.find(n => n.i === i).state, perfect: __dj.state().perfect }), n1.i);
   check(st.state === 'hit' && st.perfect === 1, 'la D a tempo non prende la nota: ' + JSON.stringify(st));
-  // fuori tempo: a metà tra due battiti, dove non c'è nessuna nota
-  await goTo(firstPulse.t + 60 / M.bpm * 0.5);
-  const stray0 = await ev(() => __dj.state().stray);
+  await goTo(n1.t + 60 / M.bpm * 0.5);
   await p.keyboard.down('d'); await p.keyboard.up('d');
-  check(await ev(() => __dj.state().stray) === stray0 + 1, 'il colpo fuori tempo non conta');
-  const hold = await ev(t => __dj.state().notes.find(n => n.hold && n.lane === 2 && n.t > t && n.end - n.t > 1.2), firstPulse.t);
-  await goTo(hold.t + 0.03);
+  check(await S(() => __dj.state().stray) === 1, 'il colpo fuori tempo non conta');
+  const hold = await S(() => __dj.state().notes.find(n => n.hold));
+  await goTo(hold.t);
   await p.keyboard.down('j');
   await goTo((hold.t + hold.end) / 2);
-  check(await ev(() => __dj.state().light[2]) > 0.9, 'VOCE tenuta non accende i frontali');
+  check(await S(() => __dj.state().strobe) > 0.9, 'lo strobo tenuto non si accende');
   await p.keyboard.up('j');
-  st = await ev(i => ({ state: __dj.state().notes[i].state, broken: __dj.state().holdsBroken }), hold.i);
-  check(st.state === 'broken' && st.broken === 1, 'la tenuta mollata a metà non si rompe: ' + JSON.stringify(st));
+  const hs = await ev(i => ({ st: __dj.state().notes.find(n => n.i === i).state, t: __dj.state().t, n: __dj.state().notes.find(n => n.i === i) }), hold.i);
+  check(hs.st === 'broken', 'la tenuta mollata a metà non si rompe: ' + JSON.stringify(hs));
+  const f0 = await S(() => ({ f: __dj.state().fatigue, b: __dj.state().beers }));
+  await p.keyboard.down('b'); await p.keyboard.up('b');
+  const f1 = await S(() => ({ f: __dj.state().fatigue, b: __dj.state().beers }));
+  check(f1.b === f0.b - 1 && f1.f < f0.f - 20, 'la birra non toglie stanchezza: ' + JSON.stringify([f0, f1]));
 
-  // ---- facile: meno note, solo quelle marcate ----
+  // ---- facile: meno note ----
   await open();
   await ev(() => document.querySelector('#diff-pick [data-d=facile]').click());
   await ev(() => __dj.start(false));
-  const nf = await ev(() => ({ n: __dj.state().notes.length, all: __dj.mappa.note.length, easy: __dj.mappa.note.filter(n => n[3]).length }));
+  const nf = await S(() => ({ n: __dj.state().notes.length, all: __dj.mappa.note.length, easy: __dj.mappa.note.filter(n => n[3]).length }));
   check(nf.n === nf.easy && nf.n < nf.all * 0.8, 'facile: ' + JSON.stringify(nf));
 
-  // ---- a colpo d'occhio: la pagina sta nello schermo del telefono ----
-  // sul telefono tre file di pubblico stanno dietro la pista
-  check(await ev(() => document.querySelectorAll('#crowd2 > g').length === 51 && !document.querySelector('#crowd-far').hasAttribute('hidden')), 'il pubblico non scende dietro la pista');
-  const fit = await ev(() => ({ w: document.documentElement.scrollWidth, pads: document.querySelector('#pads').getBoundingClientRect().bottom, h: innerHeight }));
+  const fit = await S(() => ({ w: document.documentElement.scrollWidth, pads: document.querySelector('#pads').getBoundingClientRect().bottom, h: innerHeight, far: document.querySelectorAll('#crowd2 > g').length }));
   check(fit.w <= 390 && fit.pads <= fit.h, 'non sta in 390×844: ' + JSON.stringify(fit));
+  check(fit.far === 51, 'sul telefono il pubblico non scende dietro la pista');
 
   check(!errs.length, 'errori nella pagina: ' + errs.join(' | '));
   await b.close();

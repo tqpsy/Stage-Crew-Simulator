@@ -103,7 +103,7 @@ const path = require('path');
   await p.waitForSelector('#foglio-cambio');
   check(!(await p.isVisible('.tab-btn[data-tab="dj"]')), 'la scheda DJ si vede prima del cambio palco');
   const sched = await ev(() => { renderSchedule(); return [...document.querySelectorAll('#schedule-list .sched-row')].map(r => r.className.split(' ')[1] + ':' + r.querySelector('b').textContent); });
-  check(sched.includes('done:Discorso del Preside Tramp') && sched.includes('now:Cambio palco: arriva il DJ') && sched.includes('soon:Notte fuori controllo'), 'scaletta dopo il discorso: ' + sched.join(' | '));
+  check(sched.includes('done:Discorso del Preside Tramp') && sched.includes('now:Cambio palco: arriva il DJ') && sched.includes('next:Notte fuori controllo'), 'scaletta dopo il discorso: ' + sched.join(' | '));
   await p.click('#schedule-btn');
   check(await p.textContent('#schedule-go') === 'Inizia il cambio palco', 'la scaletta non porta al cambio palco: ' + await p.textContent('#schedule-go'));
   await p.click('#schedule-close');
@@ -164,7 +164,7 @@ const path = require('path');
   const fine = await ev(() => ({ done: cambioDjDone(), toast: el('#toast').textContent, rep: reputation(), btn: el('#run-btn').textContent, head: el('#foglio .fg-head').textContent, status: el('#circuit-text').textContent }));
   check(fine.done && /Pronti!/.test(fine.toast) && /Reputazione \+3/.test(fine.toast), 'cambio non promosso: ' + fine.toast);
   check(fine.rep === rep0 + 3, 'reputazione del cambio: ' + rep0 + ' -> ' + fine.rep);
-  check(fine.btn === '▶ TEST IMPIANTO' && /Cambio palco fatto/.test(fine.head) && fine.status === 'IMPIANTO OK', 'dopo il cambio: ' + JSON.stringify(fine));
+  check(fine.btn === '▶ TEST IMPIANTO' && /Notte fuori controllo/.test(fine.head) && fine.status === 'IMPIANTO OK', 'dopo il cambio: ' + JSON.stringify(fine));
   const sched2 = await ev(() => { renderSchedule(); return el('#schedule-list').textContent; });
   check(/Finito in \d+:\d\d, prima dei fischi/.test(sched2), 'la scaletta non segna il cambio fatto');
   // rifarlo non vale altro

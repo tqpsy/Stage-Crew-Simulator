@@ -44,3 +44,6 @@ La posa dei cavi ha due test: `tests/posa-cavi.js` (la pagina da sola) e
 `preside.html`, dopo la posa) ne ha altri due: `tests/preside-gioco.js`
 (dentro il gioco, dopo collaudo e posa) e `tests/preside-cavi.js` (le
 conseguenze della posa, pagina da sola).
+Lo spettacolo del DJ (21:15, `dj.html`, dopo il cambio palco) ha
+`tests/spettacolo-dj.js` (la pagina da sola) e `tests/dj-gioco.js` (dentro
+il gioco).

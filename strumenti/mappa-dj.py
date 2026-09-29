@@ -2,7 +2,8 @@
 
 Legge il brano, trova la griglia dei battiti, separa la voce del vocalist e
 scrive dj-mappa.js: sezioni, frasi della voce, apertura della
-bocca di Musa e le note-luce da suonare (stile Guitar Hero).
+bocca di Musa e le note-luce da suonare (stile Guitar Hero), una corsia per
+memoria della consolle luci.
 
 Uso:
   pip install numpy librosa soundfile onnxruntime torch
@@ -29,7 +30,7 @@ SEZIONI = [
     (48, 51, 'DROP'), (52, 60, 'GROOVE'), (61, 63, 'BUILD'), (64, 71, 'DROP'),
     (72, 75, 'BUILD'), (76, 82, 'DROP'), (83, 84, 'OUTRO'),
 ]
-SX, DX, VOCE, STROBO = 0, 1, 2, 3
+COLORI, CHASE, STROBO, BLACKOUT = 0, 1, 2, 3
 
 
 def griglia(y, sr):
@@ -113,56 +114,53 @@ def sezione(bar):
     return 'OUTRO', bar, bar
 
 
-def note_luce(frasi, beat, t0, n_bar):
-    """[battito, corsia, durata in battiti, anche in FACILE (1) o solo NORMALE (0)]"""
-    q = lambda s: round((s - t0) / beat * 4) / 4        # secondi -> battiti, al sedicesimo
+def note_luce(n_bar):
+    """[battito, corsia, durata in battiti, anche in FACILE (1) o solo NORMALE (0)].
+    Le corsie sono le memorie della consolle luci: COLORI pulsa sulla cassa,
+    CHASE fa girare i PAR sui controtempi, STROBO si tiene sul drop (la nota
+    lunga) e dà i colpi della salita, BLACKOUT è il battito al buio prima del
+    drop."""
     note = []
-    voce = [(q(a), max(q(b), q(a) + 0.5)) for a, b in frasi]
-    canta = lambda b: any(a - 0.01 <= b < e for a, e in voce)
-    for a, e in voce:
-        note.append([a, VOCE, e - a if e - a >= 1 else 0, 1])
     for bar in range(n_bar):
         k, s0, s1 = sezione(bar)
         b0 = bar * 4
         if k == 'INTRO':
             if bar % 2 == 0:
-                note.append([b0, SX if bar % 4 == 0 else DX, 0, 1])
+                note.append([b0, COLORI, 0, 1])
         elif k == 'BREAK':
-            note.append([b0, SX if bar % 2 == 0 else DX, 0, 1])
-            if not canta(b0 + 2):
-                note.append([b0 + 2, DX if bar % 2 == 0 else SX, 0, 0])
+            note.append([b0, COLORI, 0, 1])
+            note.append([b0 + 2, CHASE, 0, 0])
         elif k == 'GROOVE':
             for i in range(4):
-                note.append([b0 + i, SX if i % 2 == 0 else DX, 0, 1 if i % 2 == 0 else 0])
+                note.append([b0 + i, COLORI if i % 2 == 0 else CHASE, 0, 1 if i % 2 == 0 else 0])
         elif k == 'BUILD':
-            if bar == s0:
-                # lo strobo tenuto fino all'ultimo battito prima del drop: quello è buio
-                note.append([b0, STROBO, (s1 + 1) * 4 - 1 - b0, 1])
-            for i in (0, 2) if bar < s1 else (0, 1, 2):
-                if not canta(b0 + i):
-                    note.append([b0 + i, SX if i % 4 == 0 else DX, 0, 1 if i == 0 else 0])
+            if bar < s1:
+                for i in range(4):
+                    note.append([b0 + i, CHASE, 0, 1 if i % 2 == 0 else 0])
+            else:
+                # l'ultima battuta sale a colpi di strobo, poi un battito al buio
+                for i in range(3):
+                    note.append([b0 + i, STROBO, 0, 1 if i == 0 else 0])
+                note.append([b0 + 3, BLACKOUT, 0, 1])
         elif k == 'DROP':
             j = bar - s0
-            for i in range(4):
-                b = b0 + i
-                if i == 0 and j == 0:
-                    note.append([b, STROBO, 0, 1])                 # il drop: flash
-                elif i == 0 and j % 4 == 0:
-                    note.append([b, STROBO, 0, 1])
-                elif i == 0:
-                    note.append([b, SX, 0, 1])
-                    if not canta(b):
-                        note.append([b, DX, 0, 0])                 # accordo: i due lati insieme
-                else:
-                    note.append([b, DX if i % 2 else SX, 0, 1 if i == 2 else 0])
+            if j == 0:
+                # il drop: nota lunga di strobo per tutta la prima battuta
+                note.append([b0, STROBO, 4, 1])
+                for i in (1, 2, 3):
+                    note.append([b0 + i, COLORI, 0, 1 if i == 2 else 0])
+            else:
+                for i in range(4):
+                    if i == 0 and j % 4 == 0:
+                        note.append([b0, STROBO, 0, 1])
+                    else:
+                        note.append([b0 + i, COLORI if i % 2 == 0 else CHASE, 0, 1 if i % 2 == 0 else 0])
         elif k == 'OUTRO':
             if bar == s1:
-                note.append([b0, SX, 0, 1]); note.append([b0, DX, 0, 1])
+                note.append([b0, COLORI, 0, 1]); note.append([b0, CHASE, 0, 1])
+                note.append([b0 + 3, BLACKOUT, 0, 1])
             else:
-                note.append([b0, SX, 0, 1]); note.append([b0 + 2, DX, 0, 0])
-    # un tocco singolo sopra una nota tenuta della stessa corsia non si può suonare
-    tenute = [(n[0], n[0] + n[2], n[1]) for n in note if n[2] > 0]
-    note = [n for n in note if n[2] > 0 or not any(a < n[0] <= e and c == n[1] for a, e, c in tenute)]
+                note.append([b0, COLORI, 0, 1]); note.append([b0 + 2, CHASE, 0, 0])
     note.sort(key=lambda n: (n[0], n[1]))
     return note
 
@@ -180,7 +178,7 @@ def main():
         a = t0 + bar * 4 * beat
         m = (t >= a) & (t < a + 4 * beat)
         print(f'battuta {bar:2d} {a:6.2f} s  {sezione(bar)[0]:6s} voce {db[m].mean() if m.any() else -99:6.1f} dB')
-    note = note_luce(frasi, beat, t0, n_bar)
+    note = note_luce(n_bar)
     dati = {
         'brano': 'Notte fuori controllo', 'file': 'audio/notte-fuori-controllo.mp3',
         'bpm': bpm, 't0': t0, 'durata': durata, 'battute': n_bar,
