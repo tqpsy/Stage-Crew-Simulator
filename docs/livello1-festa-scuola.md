@@ -470,14 +470,16 @@ Giro del livello: **Montaggio → Test impianto → [cambio palco → spettacolo
   stanchezza sta nel tasto della 🍺 (la birra la fa scendere); reputazione.
 - **Palco isometrico**: resta la vista di gioco del montaggio. Il discorso
   del preside invece ha il suo palco disegnato di fronte (vedi *Il discorso
-  nel gioco*). Per le altre fasi, da decidere: sopra compaiono i personaggi
-  (preside al microfono, DJ alla consolle, Dante sullo sgabello) e il pubblico
-  in platea: teste che si muovono a tempo, colore e fumetti che ne mostrano l'umore.
+  nel gioco*). **Deciso: anche le altre fasi di spettacolo (DJ, cantante)
+  non vanno nell'isometrico**: come il preside, ognuna ha il suo palco
+  disegnato di fronte, con i personaggi e il pubblico in platea (teste che
+  si muovono a tempo, colore e fumetti che ne mostrano l'umore).
 - **Imprevisti**: fumetto sopra il personaggio o il dispositivo, con un anello
   che si svuota (giallo → rosso). Toccare il fumetto apre direttamente il comando
   giusto (fader, memoria, pannello), per giocare al volo anche sul telefono.
   Esito: spunta verde e +gradimento, oppure suono del guaio e −gradimento.
-- **Banco regia**: la barra in basso del montaggio diventa un cassetto con due
+- **Banco regia** (deciso: **nei livelli successivi**, non nel livello 1):
+  la barra in basso del montaggio diventa un cassetto con due
   schede, MIXER e LUCI (sul telefono occupa metà schermo sotto il palco; su
   computer sta di lato).
   - MIXER: una striscia per canale con fader verticale, meter con zona verde,
@@ -498,6 +500,10 @@ Giro del livello: **Montaggio → Test impianto → [cambio palco → spettacolo
 - Caricature: vettoriali disegnate nel codice, come i dispositivi.
 - Reputazione salvata nel browser del giocatore.
 - I numeri (gradimento, stress, pazienza) si tarano giocando.
+- Fasi di spettacolo fuori dall'isometrico: ognuna col suo palco di fronte.
+- Banco regia completo (mixer e consolle luci con memorie): nei livelli
+  successivi.
+- PAR: nel livello 1 si puntano da soli in base al ruolo, come ora.
 
 ## Il discorso nel gioco
 
