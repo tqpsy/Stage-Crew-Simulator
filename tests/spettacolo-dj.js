@@ -1,8 +1,11 @@
 /* Lo show del DJ (dj.html): Light Operator Hero. Controlla la mappa (note
    sulla griglia, mai più di due tasti insieme, il drop come nota lunga di
-   strobo, il battito di BLACKOUT prima di ogni drop), poi gioca con un
+   strobo, la pausa prima di ogni drop, nessuna nota dopo il taglio di
+   Gerry, i drop via via più fitti), poi gioca con un
    orologio finto:
-   - la demo arriva in fondo coi guasti gestiti, il rewind e il finale di Gerry;
+   - la demo arriva in fondo coi guasti gestiti e il rewind; verso la fine
+     Gerry arriva arrabbiato e stacca la corrente: musica e luci via;
+   - finestre più strette e note più veloci verso la fine;
    - il pubblico salta ai drop e sta fermo nel break, Musa apre la bocca solo
      quando nel brano c'è la voce;
    - i guasti-nota: fader DJ, MUTE (e il larsen se manca), fader MIC;
@@ -45,12 +48,12 @@ const path = require('path');
   // ---- la mappa ----
   const m = await ev(() => {
     const M = __dj.mappa, beat = 60 / M.bpm, T = b => M.t0 + b * beat;
-    const out = { bpm: M.bpm, n: M.note.length, bad: [], maxTogether: 0, dropsNoHold: [], buildsNoBlack: [] };
+    const out = { bpm: M.bpm, n: M.note.length, bad: [], maxTogether: 0, dropsNoHold: [], buildsNoBlack: [], afterCut: M.note.filter(([b, , len]) => b + len > M.taglio).length, dens: [] };
     if (!M.note.every((n, i) => !i || M.note[i - 1][0] <= n[0])) out.bad.push('note non in ordine');
     M.note.forEach(([b, l, len]) => {
       if (Math.abs(b * 4 - Math.round(b * 4)) > 1e-6) out.bad.push('fuori griglia ' + b);
       if (T(b + len) > M.durata) out.bad.push('oltre la fine ' + b);
-      if (l < 0 || l > 3) out.bad.push('corsia ' + l);
+      if (l < 0 || l > 2) out.bad.push('corsia ' + l);
     });
     M.note.forEach(([b]) => {
       const k = M.note.filter(([c, , len]) => c === b || (len && c < b && b < c + len)).length;
@@ -61,7 +64,9 @@ const path = require('path');
     }));
     M.sezioni.forEach(([a, , k], i) => {
       if (k === 'DROP' && !M.note.some(([b, l, len]) => b === a * 4 && l === 2 && len >= 4)) out.dropsNoHold.push(a);
-      if (k === 'DROP' && M.sezioni[i - 1][2] === 'BUILD' && !M.note.some(([b, l]) => b === a * 4 - 1 && l === 3)) out.buildsNoBlack.push(a);
+      // il battito prima del drop è una pausa
+      if (k === 'DROP' && M.sezioni[i - 1][2] === 'BUILD' && M.note.some(([b]) => b >= a * 4 - 1 && b < a * 4)) out.buildsNoBlack.push(a);
+      if (k === 'DROP') out.dens.push(M.note.filter(([b]) => b >= a * 4 && b < (M.sezioni[i][1] + 1) * 4).length / (M.sezioni[i][1] - a + 1));
     });
     out.drops = M.sezioni.filter(s => s[2] === 'DROP').length;
     return out;
@@ -71,9 +76,12 @@ const path = require('path');
   check(!m.bad.length, 'note sbagliate: ' + m.bad.slice(0, 5).join(', '));
   check(m.maxTogether <= 2, 'servono ' + m.maxTogether + ' tasti insieme (sul telefono si hanno due pollici)');
   check(!m.dropsNoHold.length, 'drop senza la nota lunga di strobo alle battute ' + m.dropsNoHold.join(', '));
-  check(!m.buildsNoBlack.length, 'salite senza BLACKOUT prima del drop ' + m.buildsNoBlack.join(', '));
+  check(!m.buildsNoBlack.length, 'note nel battito di pausa prima dei drop ' + m.buildsNoBlack.join(', '));
+  check(!m.afterCut, 'note dopo che Gerry stacca la corrente: ' + m.afterCut);
+  check(m.dens[4] > m.dens[0] + 0.5 && m.dens.every((d, i) => !i || d >= m.dens[i - 1]), 'i drop non si fanno più fitti: ' + m.dens.map(d => d.toFixed(1)).join(' '));
   check(m.drops === 5, 'drop nella mappa: ' + m.drops);
 
+  let st;
   // ---- la demo: il capo suona e affronta i guasti ----
   await ev(() => __dj.start(true));
   const crowd = () => ev(() => [...document.querySelectorAll('#crowd > g, #crowd2 > g')].map(g => +g.getAttribute('transform').match(/translate\(([-\d.]+) ([-\d.]+)\)/)[2]));
@@ -88,8 +96,26 @@ const path = require('path');
   let sang = false, maxRy = 0;
   for (let i = 0; i < 30 && !sang; i++) { await goTo(longest[0] + 1 + 0.05 * i); mu = await musa(); sang = mu.singing; maxRy = Math.max(maxRy, mu.ry); }
   check(sang && maxRy > 3, 'Musa non canta nella frase di ' + longest.join('-') + ' s');
-  await goTo(M.durata + 3);
-  await ev(() => __dj.advance(10));
+  // più avanti il pezzo, finestre più strette e note più veloci
+  const early = await ev(() => ({ w: __dj.windows()[1], l: __dj.look(), f: __dj.state().fatigue }));
+  // verso la fine Gerry arriva arrabbiato, poi stacca la corrente di botto
+  const cut = await ev(() => __dj.cut);
+  await goTo(T(81, 1));
+  const late = await ev(() => ({ w: __dj.windows()[1], l: __dj.look(), f: __dj.state().fatigue }));
+  check(late.l < early.l - 0.1 && late.w / (1 - late.f / 250) < early.w / (1 - early.f / 250) - 0.005, 'la pista non si fa più difficile: ' + JSON.stringify({ early, late }));
+  st = await ev(() => ({ angry: __dj.state().gerryAngry, say: __dj.state().gerrySay, x: __dj.state().gerryX, face: +document.querySelector('#gerry-angry').getAttribute('opacity') }));
+  check(st.angry && /parolacce/i.test(st.say) && st.x < 400 && st.face === 1, 'Gerry non arriva arrabbiato prima del taglio: ' + JSON.stringify(st));
+  check(cut < M.durata - 2, 'Gerry stacca troppo tardi: ' + cut);
+  await goTo(cut - 0.05);
+  check(!(await ev(() => __dj.state().finale)), 'la corrente va via prima del taglio');
+  await ev(() => __dj.advance(0.2));
+  st = await ev(() => ({ fin: !!__dj.state().finale, dark: +document.querySelector('#dark').getAttribute('opacity'), beams: [...document.querySelectorAll('#beams path')].map(b => +b.getAttribute('opacity')), pads: [...document.querySelectorAll('.pad')].length }));
+  check(st.fin && st.dark > 0.4 && st.beams.every(o => o === 0), 'al taglio non va via tutto: ' + JSON.stringify(st));
+  check(st.pads === 3 && !(await p.$('.pad[data-l="3"]')), 'c\'è ancora un quarto tasto (BLACKOUT)');
+  await ev(() => __dj.advance(3));
+  st = await ev(() => ({ talk: __dj.state().talk, say: __dj.state().gerrySay }));
+  check(st.talk || st.say, 'dopo il taglio nessuno litiga: ' + JSON.stringify(st));
+  await ev(() => __dj.advance(6));
   let R = await ev(() => ({ r: __dj.result(), s: (({ miss, stray, perfect, lost, dropHeld, drops, holdsBroken, over, rewinds, larsens }) => ({ miss, stray, perfect, lost, dropHeld, drops, holdsBroken, over, rewinds, larsens }))(__dj.state()) }));
   check(R.s.over && R.r, 'la demo non finisce');
   check(R.s.miss === 0 && R.s.stray === 0 && R.s.holdsBroken === 0, 'la demo sbaglia: ' + JSON.stringify(R.s));
@@ -98,14 +124,13 @@ const path = require('path');
   check(R.s.rewinds === 1 && R.r.fase === 'tu', 'la demo non va al Quadro col rewind: ' + JSON.stringify(R.r));
   check(R.s.larsens === 0 && R.r.beers === 2, 'la demo: larsen o birre sbagliati ' + JSON.stringify(R.r));
   check(R.r.rep === 5 + 4 + 1 + 5 + 3 + 1 + 1, 'reputazione della demo: ' + R.r.rep);
-  check(await ev(() => __dj.state().gerryX < 400), 'nel finale Gerry non entra a staccare la corrente');
   await p.waitForSelector('#outro:not([hidden])', { timeout: 3000 }).catch(() => problems.push('niente scheda finale'));
 
   // ---- guasti a mano: fader DJ a tempo, poi il guasto grosso: ci vai tu ----
   await open();
   await ev(() => __dj.start(false));
   await goTo(T(10, 0.5));
-  let st = await S(() => ({ f: __dj.state().faults.gain, pop: !document.querySelector('#pop-fader').hidden, sp: __dj.state().specials.length }));
+  st = await S(() => ({ f: __dj.state().faults.gain, pop: !document.querySelector('#pop-fader').hidden, sp: __dj.state().specials.length }));
   check(st.f && st.f.state === 'on' && st.pop && st.sp === 1, 'il gain del DJ non va in rosso a battuta 10: ' + JSON.stringify(st));
   await p.keyboard.down('v'); await p.keyboard.up('v');
   st = await S(() => ({ f: __dj.state().faults.gain.state, hot: __dj.state().djHot }));
@@ -113,7 +138,7 @@ const path = require('path');
 
   await goTo(T(17, 0.2));
   st = await S(() => ({ down: __dj.state().phaseDown, choice: !document.querySelector('#choice').hidden, dead: [...document.querySelectorAll('.pad.dead')].length }));
-  check(st.down && st.choice && st.dead === 3, 'la fase non scatta a battuta 17: ' + JSON.stringify(st));
+  check(st.down && st.choice && st.dead === 2, 'la fase non scatta a battuta 17: ' + JSON.stringify(st));
   await ev(() => document.querySelector('#opt-tu').click());
   const leftAt = await S(() => __dj.state().t);
   st = await S(() => ({ away: !!__dj.state().away, capo: __dj.state().capo, quadro: !document.querySelector('#quadro').hidden }));

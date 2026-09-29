@@ -318,6 +318,11 @@ minuti in loop, sotto i 3–4 MB, diritti liberi), con BPM e secondo del drop.
 Passa per la catena simulata: fader, mute, L/R, distorsione del gain in
 rosso, ronzio della DI.
 
+**Cambiato giocando**: tre corsie (niente BLACKOUT: il battito prima del
+drop è una pausa), il set si fa via via più difficile, e il finale è Gerry
+che, arrabbiato per il casino e le parolacce, stacca la corrente di botto
+poco prima della fine del brano.
+
 **Fatto** (`dj.html`, dopo il cambio palco): com'è stato costruito, coi
 numeri, è in `docs/spettacolo-dj.md`. Dell'audio restano da fare la catena
 simulata e il brano caricato dal giocatore.

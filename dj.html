@@ -12,7 +12,7 @@
     color-scheme: dark;
     --bg-deck:#141519; --bg-panel:#1c1d22; --bg-raised:#24252b; --hairline:#34363e;
     --text:#eee9df; --muted:#8b8e98; --amber:#f2a541; --green:#49b06a; --red:#e0503f; --yellow:#f2c53d;
-    --l0:#ff3d8b; --l1:#2fc3ff; --l2:#f4f1ea; --l3:#9a8cff;
+    --l0:#ff3d8b; --l1:#2fc3ff; --l2:#f4f1ea;
     --display:'Barlow Condensed', 'Arial Narrow', sans-serif;
     --ui:'Inter', system-ui, sans-serif;
     --marker:'Permanent Marker', 'Comic Sans MS', cursive;
@@ -90,14 +90,14 @@
   @keyframes pop{0%{opacity:1;transform:translateY(6px) scale(.9)}40%{opacity:1;transform:none}100%{opacity:0;transform:translateY(-10px)}}
   #banner{position:absolute;left:0;right:0;top:8px;text-align:center;font-family:var(--marker);font-size:22px;color:var(--amber);pointer-events:none;opacity:0;transition:opacity .3s;text-shadow:0 2px 8px #000;z-index:2}
   #banner.show{opacity:1}
-  .pads{display:grid;grid-template-columns:repeat(4,1fr);gap:8px}
+  .pads{display:grid;grid-template-columns:repeat(3,1fr);gap:8px}
   .pad{position:relative;height:66px;border-radius:12px;border:2px solid var(--c);background:color-mix(in srgb,var(--c) 14%,#15161a);display:grid;place-items:center;align-content:center;gap:2px;touch-action:none;padding:0}
   .pad b{font-family:var(--display);font-size:17px;letter-spacing:.06em;line-height:1}
   .pad small{font-size:10px;color:var(--muted);letter-spacing:.04em;line-height:1.1}
   .pad.down{background:color-mix(in srgb,var(--c) 55%,#15161a);box-shadow:0 0 18px color-mix(in srgb,var(--c) 70%,transparent)}
   .pad.down b{color:#111}.pad.down small{color:#222}
   .pad.dead{border-color:#3a3c44;background:#18191d;box-shadow:none}.pad.dead b{color:#55575f}
-  .pad[data-l="0"]{--c:var(--l0)}.pad[data-l="1"]{--c:var(--l1)}.pad[data-l="2"]{--c:var(--l2)}.pad[data-l="3"]{--c:var(--l3)}
+  .pad[data-l="0"]{--c:var(--l0)}.pad[data-l="1"]{--c:var(--l1)}.pad[data-l="2"]{--c:var(--l2)}
 
   /* ---- guasto grosso: chi ci va, e il Quadro ---- */
   #choice{position:absolute;left:0;right:0;top:8px;z-index:3;margin:0 auto;width:min(360px,100%);background:rgba(28,29,34,.97);border:2px solid var(--red);border-radius:12px;padding:10px;display:grid;gap:8px;box-shadow:0 8px 24px rgba(0,0,0,.6)}
@@ -139,7 +139,7 @@
   .card .tag{font-size:11px;letter-spacing:.08em;text-transform:uppercase;color:var(--muted)}
   .card p{margin:0;font-size:15px;line-height:1.5}
   .card ul{margin:0;padding-left:18px;font-size:15px;line-height:1.5}
-  .lanes-help{display:grid;grid-template-columns:repeat(4,1fr);gap:6px;text-align:center;font-size:11px;line-height:1.3;color:var(--muted)}
+  .lanes-help{display:grid;grid-template-columns:repeat(3,1fr);gap:6px;text-align:center;font-size:11px;line-height:1.3;color:var(--muted)}
   .lanes-help b{display:block;font-family:var(--display);font-size:15px;letter-spacing:.05em;color:var(--c)}
   .lanes-help div{border:1px solid var(--hairline);border-top:3px solid var(--c);border-radius:8px;padding:6px 4px;background:var(--bg-raised)}
   .pick{display:grid;gap:6px;font-size:13px;color:var(--muted)}
@@ -404,7 +404,22 @@
         <g id="voice-bars" fill="#141519"></g>
       </g>
       <!-- Gerry, il bidello: entra quando ci pensa lui, e alla fine stacca la corrente -->
-      <g id="gerry" transform="translate(430 70)"><use href="#gerry" width="58" height="81"/></g>
+      <g id="gerry-g" transform="translate(430 70)"><svg width="58" height="81" viewBox="0 0 100 140" overflow="visible"><use href="#gerry"/>
+        <!-- Gerry arrabbiato: via il sorriso e le sopracciglia sornione, fronte rossa, bocca che urla -->
+        <g id="gerry-angry" opacity="0">
+          <path d="M28 40 Q36 33 44 38 M56 36 Q64 29 72 36" stroke="#e8a883" stroke-width="5.5" fill="none" stroke-linecap="round"/>
+          <path d="M27 64 Q50 60 77 62 L77 84 Q50 92 25 84 Z" fill="#e8a883"/>
+          <ellipse cx="50" cy="26" rx="25" ry="13" fill="#e0503f" opacity=".35"/>
+          <path d="M27 37 L45 44 M73 36 L55 43" stroke="#5f5752" stroke-width="3.6" fill="none" stroke-linecap="round"/>
+          <path d="M36 66 Q50 61 64 66" stroke="#c07e5c" stroke-width="2" fill="none" stroke-linecap="round"/>
+          <ellipse id="gerry-mouth" cx="50" cy="77" rx="9" ry="6" fill="#5e2220"/>
+          <rect x="43" y="72" width="14" height="2.6" rx="1" fill="#fbfaf5"/>
+          <text x="84" y="16" font-size="16">💢</text>
+        </g></svg></g>
+      <g id="talk-bub" opacity="0">
+        <path id="talk-bub-bg" d="M0 0" fill="#f4f1ea" stroke="#141519" stroke-width="1.5"/>
+        <text id="talk-bub-t" font-family="Inter, sans-serif" font-size="9" font-weight="700" fill="#141519" text-anchor="middle"></text>
+      </g>
       <g id="gerry-bub" opacity="0">
         <path id="gerry-bub-bg" d="M0 0" fill="#f4f1ea" stroke="#141519" stroke-width="1.5"/>
         <text id="gerry-bub-t" font-family="Inter, sans-serif" font-size="9" font-weight="700" fill="#141519" text-anchor="middle"></text>
@@ -464,7 +479,6 @@
       <button class="pad" data-l="0"><b>COLORI</b><small>tutti i PAR<kbd> · D</kbd></small></button>
       <button class="pad" data-l="1"><b>CHASE</b><small>PAR in giro<kbd> · F</kbd></small></button>
       <button class="pad" data-l="2"><b>STROBO</b><small>flash<kbd> · J</kbd></small></button>
-      <button class="pad" data-l="3"><b>BLACKOUT</b><small>tutto spento<kbd> · K</kbd></small></button>
     </div>
     <div id="quadro" hidden>
       <div class="q-head"><b>AL QUADRO</b><span id="q-time">0 s</span></div>
@@ -490,13 +504,13 @@
       <div style="--c:var(--l0)"><b>COLORI</b>tutti i PAR sulla cassa</div>
       <div style="--c:var(--l1)"><b>CHASE</b>i PAR girano sui controtempi</div>
       <div style="--c:var(--l2)"><b>STROBO</b>il drop è una nota lunga: tienila</div>
-      <div style="--c:var(--l3)"><b>BLACKOUT</b>il battito al buio prima del drop</div>
     </div>
     <ul>
       <li>I guasti piccoli arrivano come <b>note speciali</b>: tira giù il fader che va in rosso, dai il <b>MUTE</b> quando Musa va verso la cassa.</li>
       <li>Se un PAR perde il DMX la sua corsia diventa grigia: <b>tocca il PAR</b> e sistemalo quando puoi.</li>
       <li>Per un guasto grosso scegli chi ci va: <b>tu</b>, <b>il capo</b> per una 🍺, o <b>Gerry</b>. Se ci vai tu, al ritorno il DJ fa il <b>rewind</b>.</li>
-      <li>Tastiera: <b>D F J K</b>, M per il mute, V per il fader.</li>
+      <li>Più va avanti il pezzo, più le note corrono e si fanno fitte.</li>
+      <li>Tastiera: <b>D F J</b>, M per il mute, V per il fader, B per la birra.</li>
     </ul>
     <div class="pick" id="diff-pick">Difficoltà<div>
       <button data-d="facile" aria-pressed="false">Facile</button><button data-d="normale" aria-pressed="true">Normale</button>
@@ -546,12 +560,14 @@
   const beatAt = t => (t - M.t0) / BEAT;
   const timeOf = b => M.t0 + b * BEAT;
   const barAt = t => Math.floor(beatAt(t) / 4 + 1e-6);
-  const END = timeOf(M.battute * 4);          // fine dell'ultima battuta
-  const LOOK = 1.9;                           // secondi di pista visibili prima della riga
+  // secondi di pista visibili prima della riga: col passare del pezzo le note corrono di più
+  const look = () => 1.9 - 0.45 * clamp(S.t / CUT, 0, 1);
   const PERFECT0 = 0.08, GOOD0 = 0.16;        // livello 1: finestre larghe (secondi)
-  const LANE_C = ['#ff3d8b', '#2fc3ff', '#f4f1ea', '#9a8cff'];
-  const KEYS = { KeyD: 0, KeyF: 1, KeyJ: 2, KeyK: 3 };
-  const COLORI = 0, CHASE = 1, STROBO = 2, BLACKOUT = 3;
+  const LANE_C = ['#ff3d8b', '#2fc3ff', '#f4f1ea'];
+  const KEYS = { KeyD: 0, KeyF: 1, KeyJ: 2 };
+  const COLORI = 0, CHASE = 1, STROBO = 2, NL = 3;
+  // Gerry arriva arrabbiato a GERRY_BAR e stacca la corrente a CUT, poco prima della fine del brano
+  const CUT = timeOf(M.taglio), GERRY_BAR = 80;
   // colori per sezione: [memoria COLORI, memoria CHASE]
   const PALETTE = { INTRO: ['#3f5bff', '#7a3fff'], GROOVE: ['#ff3d8b', '#2fc3ff'], BREAK: ['#7a3fff', '#3f7fe0'], BUILD: ['#f4f1ea', '#f2a541'], DROP: ['#ff2a2a', '#39ff6a'], OUTRO: ['#f2a541', '#ff3d8b'] };
   const BANNER = { GROOVE: 'Groove: pulsa sulla cassa', BREAK: 'Break', BUILD: 'Sale! Poi un battito al buio', DROP: 'DROP! Tieni lo strobo!', OUTRO: 'Chiusura' };
@@ -597,18 +613,19 @@
       perfect: 0, good: 0, miss: 0, lost: 0, stray: 0, holdsBroken: 0,
       fatigue: 30, beers: pocket, drunk: 0, favours: 0,
       notes, specials: [],
-      down: [false, false, false, false], holding: [null, null, null, null],
-      colori: 0, chase: 0, chaseIdx: 0, strobe: 0, flash: 0, blackUntil: -1, lastQ: -1,
+      down: [false, false, false], holding: [null, null, null],
+      colori: 0, chase: 0, chaseIdx: 0, strobe: 0, flash: 0, lastQ: -1,
       faults: {}, active: null, repParts: [], larsens: 0, lines: [],
       phaseDown: false, dmxDead: false, big: null, away: null, capo: false,
       dj: 0.5, mic: 0.5, djHot: false, micHot: false, micMuted: false, musaX: 112, musaGo: 0,
-      gerryX: 430, gerrySay: '', gerryUntil: -1,
+      gerryX: 430, gerrySay: '', gerryUntil: -1, gerryAngry: false, talk: null,
       sec: null, drops: 0, dropHeld: 0, singing: false, micUp: 0, audioOn: false,
       finale: null, rewinds: 0
     };
   }
-  const windows = () => { const k = 1 - S.fatigue / 250; return [PERFECT0 * k, GOOD0 * k]; };
-  const deadLanes = () => [S.phaseDown, S.phaseDown || S.dmxDead, false, S.phaseDown];
+  // la stanchezza stringe la finestra, e anche il pezzo che va avanti (fino a −18% alla fine)
+  const windows = () => { const k = (1 - S.fatigue / 250) * (1 - 0.18 * clamp(S.t / CUT, 0, 1)); return [PERFECT0 * k, GOOD0 * k]; };
+  const deadLanes = () => [S.phaseDown, S.phaseDown || S.dmxDead, false];
 
   /* ---------- il tempo del brano: l'audio comanda, il resto lo segue ---------- */
   const song = $('#song');
@@ -625,7 +642,7 @@
       return this.base + (p - this.basePerf) / 1000;
     }
   };
-  // salto nel brano: il rewind del DJ e il «ancora uno!» del finale
+  // salto nel brano: il rewind del DJ
   function seek (t) {
     S.t = t;
     if (clock.virtual) { clock.vt = t; return; }
@@ -675,6 +692,7 @@
   // col palco sopra la pista (telefono in verticale) la prima fila resta sul palco
   // e le altre tre scendono dietro la pista: il palco si vede più grande
   let crowdUnder = null;
+  let VIS = [0, 400];        // la parte del palco (in unità della scena) che si vede davvero
   function layoutCrowd () {
     const st = $('#stage').getBoundingClientRect(), rg = $('#rig').getBoundingClientRect();
     const under = rg.top >= st.bottom - 2 && rg.left <= st.left + 2;
@@ -684,6 +702,8 @@
       $('#scene').setAttribute('viewBox', under ? '0 0 400 212' : '0 0 400 250');
       $('#crowd-far').toggleAttribute('hidden', !under);
     }
+    const vw = st.width / Math.max(st.width / 400, st.height / (under ? 212 : 250));
+    VIS = [Math.max(0, 200 - vw / 2), Math.min(400, 200 + vw / 2)];
     if (!under) return;
     // stessa scala e stesso centro del palco: le file continuano quelle di sopra
     const far = $('#crowd-far').getBoundingClientRect();
@@ -695,7 +715,7 @@
 
   // la luce di ogni PAR adesso: [intensità, colore]
   function parLight (i, pal) {
-    if (S.phaseDown || S.t < S.blackUntil || (S.finale && S.finale.off)) return [0, '#000'];
+    if (S.phaseDown || S.finale) return [0, '#000'];
     if (i === 3 && S.dmxDead) return [0, '#000'];
     let v = 0, c = pal[0];
     if (i === 1 || i === 2) { v = 0.28; c = '#fff6e0'; }           // i frontali tengono Musa in luce
@@ -707,7 +727,7 @@
   function drawStage () {
     const t = S.t, sec = sectionAt(t), pal = PALETTE[sec.k];
     const b = beatAt(t), bf = ((b % 1) + 1) % 1;
-    const off = !!(S.finale && S.finale.off);
+    const off = !!S.finale;
     const onMusic = t >= 0 && !off && (t < M.durata || S.finale);
     let side = 0, washC = pal[0];
     for (let i = 0; i < 4; i++) {
@@ -728,7 +748,8 @@
     $('#crowd-glow2').setAttribute('fill', washC); $('#crowd-glow2').setAttribute('opacity', glow.getAttribute('opacity'));
     $('#haze-r').setAttribute('opacity', (sec.k === 'BUILD' ? 0.5 : sec.k === 'DROP' ? 0.3 : 0.12).toFixed(2));
     // il blackout (e la corrente staccata da Gerry) spegne la sala
-    $('#dark').setAttribute('opacity', off ? 0.82 : t < S.blackUntil ? 0.6 : 0);
+    // Gerry ha staccato la corrente: sala al buio, resta la luce d'emergenza
+    $('#dark').setAttribute('opacity', off ? 0.55 : 0);
 
     // casse e consolle a tempo; il gain in rosso accende tutti i LED
     const kickOn = onMusic && (sec.k === 'GROOVE' || sec.k === 'DROP' || sec.k === 'OUTRO');
@@ -770,11 +791,23 @@
     const ring = S.faults.larsen && S.faults.larsen.state === 'larsen' ? 1 : S.musaGo > 0.5 && !S.micMuted ? (S.musaGo - 0.5) : 0;
     $('#ring').setAttribute('opacity', ring.toFixed(2));
 
-    // Gerry
-    $('#gerry').setAttribute('transform', `translate(${S.gerryX.toFixed(1)} 70)`);
+    // Gerry: arrabbiato trema e urla
+    const shake = S.gerryAngry || S.finale ? Math.sin(performance.now() / 35) * 1.2 : 0;
+    $('#gerry-g').setAttribute('transform', `translate(${(S.gerryX + shake).toFixed(1)} 70)`);
+    $('#gerry-angry').setAttribute('opacity', S.gerryAngry || S.finale ? 1 : 0);
+    $('#gerry-mouth').setAttribute('ry', (S.gerrySay ? 4 + 3 * Math.abs(Math.sin(performance.now() / 90)) : 2).toFixed(1));
+    const tb = $('#talk-bub');
+    if (S.talk) {
+      const cxw = S.talk.who === 'musa' ? S.musaX + 31 - out : 269 - out, w = Math.max(60, S.talk.text.length * 5.2 + 14);
+      const x0 = Math.min(VIS[1] - 4 - w, Math.max(VIS[0] + 4, cxw - w / 2));
+      $('#talk-bub-bg').setAttribute('d', `M${x0} 40 h${w} v18 h-${w / 2 - 6} l-6 7 v-7 h-${w / 2} z`);
+      $('#talk-bub-t').setAttribute('x', (x0 + w / 2).toFixed(1)); $('#talk-bub-t').setAttribute('y', 52.5);
+      $('#talk-bub-t').textContent = S.talk.text;
+      tb.setAttribute('opacity', 1);
+    } else tb.setAttribute('opacity', 0);
     const gb = $('#gerry-bub');
     if (S.gerrySay && S.gerryX < 400) {
-      const w = Math.max(60, S.gerrySay.length * 5.2 + 14), x0 = Math.min(392 - w, Math.max(8, S.gerryX + 29 - w / 2));
+      const w = Math.max(60, S.gerrySay.length * 5.2 + 14), x0 = Math.min(VIS[1] - 4 - w, Math.max(VIS[0] + 4, S.gerryX + 29 - w / 2));
       $('#gerry-bub-bg').setAttribute('d', `M${x0} 40 h${w} v18 h-${w / 2 - 6} l-6 7 v-7 h-${w / 2} z`);
       $('#gerry-bub-t').setAttribute('x', (x0 + w / 2).toFixed(1)); $('#gerry-bub-t').setAttribute('y', 52.5);
       $('#gerry-bub-t').textContent = S.gerrySay;
@@ -787,7 +820,8 @@
     const lastBuildBeat = sec.k === 'BUILD' && b >= (sec.b + 1) * 4 - 1;
     people.forEach(o => {
       let dy = 0, dx = 0, armsOn = 0, phone = 0;
-      if (onMusic && !S.paused) {
+      if (S.finale) dy = 2;
+      else if (onMusic && !S.paused) {
         const pf = (((b + o.ph) % 1) + 1) % 1;
         if (sec.k === 'DROP') {
           if (o.keen < mood * 1.15 - 0.05) { dy = -Math.sin(pf * Math.PI) * (6 + 5 * mood); armsOn = o.keen < mood * 0.8 ? 1 : 0; }
@@ -822,15 +856,15 @@
   const SPECIAL_LABEL = { 'fader-dj': '⬇ FADER DJ', 'fader-mic': '⬇ FADER MIC', mute: '🔇 MUTE MIC' };
   function drawRoad () {
     if (!W) resize();
-    const t = S.t, hitY = H - 22, laneW = W / 4, dead = deadLanes();
+    const t = S.t, hitY = H - 22, laneW = W / NL, dead = deadLanes(), LOOK = look();
     const yOf = tt => hitY - (tt - t) / LOOK * (hitY - 10);
     cx.clearRect(0, 0, W, H);
-    for (let l = 0; l < 4; l++) {
+    for (let l = 0; l < NL; l++) {
       cx.fillStyle = dead[l] ? 'rgba(40,41,46,.75)' : S.down[l] ? LANE_C[l] + '2a' : (l % 2 ? 'rgba(26,27,34,.45)' : 'rgba(16,17,22,.3)');
       cx.fillRect(l * laneW, 0, laneW, H);
     }
     cx.strokeStyle = '#2a2c33'; cx.lineWidth = 1;
-    for (let l = 1; l < 4; l++) { cx.beginPath(); cx.moveTo(l * laneW, 0); cx.lineTo(l * laneW, H); cx.stroke(); }
+    for (let l = 1; l < NL; l++) { cx.beginPath(); cx.moveTo(l * laneW, 0); cx.lineTo(l * laneW, H); cx.stroke(); }
     if (S.finale) return;
     const b0 = Math.ceil(beatAt(t - 0.3)), b1 = Math.floor(beatAt(t + LOOK));
     for (let b = b0; b <= b1; b++) {
@@ -843,7 +877,7 @@
       }
     }
     cx.fillStyle = '#eee9df22'; cx.fillRect(0, hitY - 2, W, 4);
-    for (let l = 0; l < 4; l++) {
+    for (let l = 0; l < NL; l++) {
       cx.strokeStyle = dead[l] ? '#3a3c44' : LANE_C[l]; cx.lineWidth = S.down[l] ? 4 : 2;
       cx.beginPath(); cx.arc(l * laneW + laneW / 2, hitY, Math.min(18, laneW * 0.28), 0, Math.PI * 2); cx.stroke();
     }
@@ -867,10 +901,9 @@
       if (y < -r || y > H + r) return;
       const grey = n.state !== 'wait' || dead[n.lane];
       cx.globalAlpha = n.state === 'wait' ? 1 : 0.3;
-      cx.fillStyle = grey ? '#55575f' : n.lane === BLACKOUT ? '#0c0d10' : LANE_C[n.lane];
+      cx.fillStyle = grey ? '#55575f' : LANE_C[n.lane];
       cx.beginPath(); cx.ellipse(x, y, r, r * 0.62, 0, 0, Math.PI * 2); cx.fill();
-      if (n.lane === BLACKOUT) { cx.strokeStyle = grey ? '#55575f' : LANE_C[3]; cx.lineWidth = 3; cx.stroke(); }
-      else { cx.fillStyle = grey ? '#777' : '#fff'; cx.beginPath(); cx.ellipse(x, y - r * 0.12, r * 0.45, r * 0.24, 0, 0, Math.PI * 2); cx.fill(); }
+      { cx.fillStyle = grey ? '#777' : '#fff'; cx.beginPath(); cx.ellipse(x, y - r * 0.12, r * 0.45, r * 0.24, 0, 0, Math.PI * 2); cx.fill(); }
       if (n.lane === STROBO && !grey) { cx.fillStyle = '#141519'; cx.font = `700 ${Math.round(r * 0.9)}px Inter, sans-serif`; cx.textAlign = 'center'; cx.fillText('⚡', x, y + r * 0.32); }
       cx.globalAlpha = 1;
     });
@@ -902,8 +935,7 @@
   function fire (lane, t) {
     if (lane === COLORI) S.colori = 1;
     else if (lane === CHASE) { S.chaseIdx = (S.chaseIdx + 1) % 4; S.chase = 1; }
-    else if (lane === STROBO) { S.strobe = 1; S.flash = 0.06; }
-    else S.blackUntil = t + BEAT * 0.9;
+    else { S.strobe = 1; S.flash = 0.06; }
   }
   function press (lane) {
     // mentre sei al Quadro le luci le suona il capo
@@ -1008,7 +1040,7 @@
     }
     if (id === 'fase') {
       S.phaseDown = true; sfx.clack(); paintPads();
-      for (let l = 0; l < 4; l++) if (deadLanes()[l] && S.holding[l]) { S.holding[l].state = 'lost'; S.holding[l] = null; }
+      for (let l = 0; l < NL; l++) if (deadLanes()[l] && S.holding[l]) { S.holding[l].state = 'lost'; S.holding[l] = null; }
       S.big = { start: S.t, until: S.t + CHOICE_S };
       openChoice();
     }
@@ -1110,7 +1142,7 @@
     if (who === 'tu') {
       S.favours++;
       S.away = { from: S.t, steps: [] };
-      for (let l = 0; l < 4; l++) { S.down[l] = false; if (S.holding[l]) { S.holding[l].state = 'broken'; S.holding[l] = null; } }
+      for (let l = 0; l < NL; l++) { S.down[l] = false; if (S.holding[l]) { S.holding[l].state = 'broken'; S.holding[l] = null; } }
       S.capo = true; breakCombo(); paintPads();
       $('#quadro').hidden = false; $('#quadro').classList.remove('mini'); $('#rig').appendChild($('#quadro'));
       renderQuadro();
@@ -1177,7 +1209,7 @@
   function backToLights (forced) {
     const away = S.t - S.away.from;
     S.away = null; S.capo = false; S.capoPress = false;
-    for (let l = 0; l < 4; l++) S.down[l] = false;
+    for (let l = 0; l < NL; l++) S.down[l] = false;
     paintPads();
     if (forced) {
       S.big.forced = true;
@@ -1258,11 +1290,15 @@
     } else S.musaGo = Math.max(0, S.musaGo - dt / (BEAT * 2));
     S.musaX = 112 - 58 * S.musaGo;
     stepBig(dt);
-    // Gerry entra in scena, parla e se ne va
-    const gerryOn = S.finale ? S.finale.gerry : (S.gerryIn != null && S.t - S.gerryIn < 4);
-    const tx = gerryOn ? (S.finale ? 300 : 330) : 430;
+    // Gerry entra in scena: per aiutare (la fase del Quadro) o, verso la fine,
+    // arrabbiato per il casino e le parolacce, fino a staccare la corrente
+    const bb = beatAt(S.t) - GERRY_BAR * 4;
+    S.gerryAngry = bb >= 0;
+    const gerryOn = S.gerryAngry || (S.gerryIn != null && S.t - S.gerryIn < 4);
+    const tx = gerryOn ? (S.gerryAngry ? 172 : 300) : 430;
     S.gerryX += (tx - S.gerryX) * Math.min(1, dt * 2.5);
-    if (S.gerryUntil >= 0 && S.t > S.gerryUntil && !S.finale) S.gerrySay = '';
+    if (S.gerryAngry) S.gerrySay = bb < 4 ? 'Cos\'è \'sto casino?!' : bb < 8 ? 'Parolacce davanti ai bambini?!' : 'Adesso stacco tutto!';
+    else if (S.gerryUntil >= 0 && S.t > S.gerryUntil) S.gerrySay = '';
   }
 
   /* ---------- il capo suona le luci: nella demo tutte, al tuo posto una su tre la manca ---------- */
@@ -1274,7 +1310,7 @@
         S.down[n.lane] = false; S.capoPress = true; press(n.lane); S.capoPress = false; if (!n.hold) S.down[n.lane] = false;
       }
     }
-    for (let l = 0; l < 4; l++) { const h = S.holding[l]; if (h && t >= h.end) release(l); }
+    for (let l = 0; l < NL; l++) { const h = S.holding[l]; if (h && t >= h.end) release(l); }
     paintPads();
   }
   // la demo affronta anche i guasti, come farebbe un tecnico esperto
@@ -1314,7 +1350,7 @@
         if (!S.capo) judge('MANCATA', '#8b8e98');
       }
     }
-    for (let l = 0; l < 4; l++) {
+    for (let l = 0; l < NL; l++) {
       const n = S.holding[l];
       if (!n) continue;
       if (!S.capo) S.score += Math.round(dt * 40 * S.mult);
@@ -1339,34 +1375,44 @@
     S.grad = clamp(S.grad + (50 - S.grad) * dt * 0.004);
     const sec = sectionAt(S.t);
     if (sec !== S.sec && S.t >= 0) {
-      if (S.sec) { const bn = BANNER[sec.k]; if (bn) banner(bn); }
-      if (sec.k === 'DROP' && (!S.sec || S.sec.a < sec.a)) S.drops++;
+      const newDrop = sec.k === 'DROP' && (!S.sec || S.sec.a < sec.a);
+      if (newDrop) S.drops++;
+      if (S.sec) { const bn = newDrop && S.drops >= 3 ? 'DROP! Il ritmo sale' : BANNER[sec.k]; if (bn) banner(bn); }
       S.sec = sec;
     }
-    if (S.t >= END && !S.over) startFinale();
+    if (S.t >= CUT && !S.over) startFinale();
     paint();
   }
 
-  /* ---------- finale: non vogliono smettere, Gerry stacca la corrente ---------- */
+  /* ---------- finale: Gerry stacca la corrente di botto ----------
+     Poco prima della fine del brano: va via tutto, musica e luci, il pubblico
+     fa «Ohhhh» e Gerry litiga coi musicisti, poi li butta fuori. */
+  const TALK = [
+    [0.7, 'musa', 'Ehi! Eravamo sul più bello!'],
+    [2.3, 'gerry', 'Qui è una scuola! Basta parolacce!'],
+    [3.9, 'dj', 'Io sono INESTIMABILE!'],
+    [5.3, 'gerry', 'Fuori! Tutti e due!']
+  ];
   function startFinale () {
-    if (S.away) backToLights();
-    for (let l = 0; l < 4; l++) { S.down[l] = false; S.holding[l] = null; }
-    ['pop-par', 'pop-mute', 'pop-fader', 'choice', 'dmx-chip'].forEach(id => { $('#' + id).hidden = true; });
-    $('#quadro').hidden = true; S.capo = false; paintPads();
-    S.finale = { f: 0, push: 0, gerry: false, off: false, t0: timeOf(76 * 4) };
-    banner('«ANCORA UNO!» Non vogliono smettere…');
-    seek(S.finale.t0);
-    if (!clock.virtual) { song.play().catch(() => {}); }
+    if (S.away) { S.away = null; S.capo = false; }
+    for (let l = 0; l < NL; l++) { S.down[l] = false; S.holding[l] = null; }
+    ['pop-par', 'pop-mute', 'pop-fader', 'choice', 'dmx-chip', 'quadro'].forEach(id => { $('#' + id).hidden = true; });
+    S.capo = false; paintPads();
+    S.notes = S.notes.filter(n => n.state !== 'wait' || n.t < CUT);
+    S.finale = { f: 0, push: 0 };
+    S.colori = S.chase = S.strobe = 0; S.singing = false;
+    song.pause(); sfx.clack(); sfx.ooh();
+    $('#toast').className = '';
+    banner('Gerry ha staccato la corrente!');
   }
   function stepFinale (dt) {
     const F = S.finale;
     F.f += dt;
-    if (!F.off) S.t = F.t0 + F.f;
-    if (F.f > 1.5) F.gerry = true;
-    if (F.f > 2.5 && F.f < 4.5) S.gerrySay = 'È mezzanotte! Basta!';
-    if (F.f >= 4.5 && !F.off) { F.off = true; song.pause(); sfx.clack(); S.gerrySay = 'Corrente staccata. Fuori!'; S.colori = S.chase = S.strobe = 0; }
-    if (F.off) F.push = Math.min(260, F.push + dt * 110);
-    S.gerryX += ((F.gerry ? 300 : 430) - S.gerryX) * Math.min(1, dt * 2.5);
+    const line = TALK.filter(l => F.f >= l[0]).pop();
+    S.gerrySay = line && line[1] === 'gerry' ? line[2] : '';
+    S.talk = line && line[1] !== 'gerry' ? { who: line[1], text: line[2] } : null;
+    if (F.f >= 5.3) F.push = Math.min(260, F.push + dt * 110);
+    S.gerryX += (172 - S.gerryX) * Math.min(1, dt * 2.5);
     if (F.f >= 8 && !S.over) finish();
   }
 
@@ -1396,8 +1442,8 @@
     S.paused = !S.paused;
     $('#pausa').hidden = !S.paused;
     $('#pause-btn').textContent = S.paused ? '▶' : '⏸';
-    if (S.paused) { if (!S.finale) S.t = clock.now(); song.pause(); for (let l = 0; l < 4; l++) release(l); }
-    else if (!clock.virtual && !(S.finale && S.finale.off)) {
+    if (S.paused) { if (!S.finale) S.t = clock.now(); song.pause(); for (let l = 0; l < NL; l++) release(l); }
+    else if (!clock.virtual && !S.finale) {
       if (S.audioOn) { song.currentTime = S.t; song.play().catch(() => {}); clock.base = S.t; clock.basePerf = performance.now(); }
       else clock.startPerf = performance.now() - (S.t + 2) * 1000;
     }
@@ -1423,6 +1469,7 @@
     if (R.grad >= 70) { beers++; notes.push('🍺 Pubblico contento (almeno 70%).'); }
     notes.push(`${R.hits} note su ${R.total} a tempo (${S.perfect} perfette), ${S.miss} mancate${S.lost ? ', ' + S.lost + ' perse con le luci spente' : ''}.`);
     if (S.drops) notes.push(`Drop tenuti fino in fondo: ${S.dropHeld} su ${S.drops}.`);
+    notes.push('Gerry ha staccato la corrente: troppo casino e troppe parolacce.');
     if (S.rewinds) notes.push('Il DJ ha fatto il rewind: le note perse al Quadro sono tornate.');
     if (S.drunk) notes.push('Birre bevute durante il set: ' + S.drunk + '.');
     S.repParts.forEach(([what, v]) => notes.push(what + (v ? ` (${v > 0 ? '+' : ''}${v})` : '') + '.'));
@@ -1495,6 +1542,20 @@
       cheer () { noise(1.6, 0.12, 2200); },
       beer () { noise(0.5, 0.08, 3000); },
       ok () { tone(660, 0.1, 'triangle', 0.08); setTimeout(() => tone(990, 0.15, 'triangle', 0.08), 90); },
+      // il pubblico che fa «Ohhhh»: tante voci che scendono, filtrate come una vocale
+      ooh () {
+        if (!ac) return;
+        const t0 = ac.currentTime, f = ac.createBiquadFilter(), g = ac.createGain();
+        f.type = 'bandpass'; f.frequency.value = 520; f.Q.value = 3;
+        f.connect(g).connect(ac.destination);
+        g.gain.setValueAtTime(0.0001, t0); g.gain.exponentialRampToValueAtTime(0.18, t0 + 0.25); g.gain.exponentialRampToValueAtTime(0.0001, t0 + 2.2);
+        for (let i = 0; i < 9; i++) {
+          const o = ac.createOscillator(); o.type = 'sawtooth';
+          const f0 = 170 + Math.random() * 180;
+          o.frequency.setValueAtTime(f0, t0); o.frequency.linearRampToValueAtTime(f0 * 0.82, t0 + 2);
+          o.connect(f); o.start(t0 + Math.random() * 0.12); o.stop(t0 + 2.3);
+        }
+      },
       clack () { tone(90, 0.12, 'square', 0.25); noise(0.08, 0.2, 1200); },
       crackle () { noise(0.05, 0.12, 4000, 'highpass'); },
       larsen () { if (!ac) return; const o = ac.createOscillator(), g = ac.createGain(); o.frequency.value = 2750; o.connect(g).connect(ac.destination); const t0 = ac.currentTime; g.gain.setValueAtTime(0.001, t0); g.gain.exponentialRampToValueAtTime(0.2, t0 + 0.4); g.gain.exponentialRampToValueAtTime(0.001, t0 + 2.2); o.start(); o.stop(t0 + 2.3); },
@@ -1511,6 +1572,7 @@
   // per i test (tests/spettacolo-dj.js, tests/dj-gioco.js): orologio finto, stato e comandi
   window.__dj = {
     state: () => S, mappa: M, start, press, release, results, result: () => result,
+    windows, look, cut: CUT,
     choose, quadro, setFader, muteMic, openParPanel, fixPar, drinkBeer,
     virtual (on) { clock.virtual = on; },
     advance (sec, fps = 60) {

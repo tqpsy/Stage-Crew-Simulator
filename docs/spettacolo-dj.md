@@ -8,14 +8,14 @@ aprendo `dj.html`. Il design deciso è in `docs/livello1-festa-scuola.md`
 ## La pista delle luci
 
 Il brano vero è `audio/notte-fuori-controllo.mp3`. Il tecnico è l'operatore
-luci: quattro corsie, una per memoria della consolle luci.
+luci: tre corsie, una per memoria della consolle luci. Niente tasto di
+blackout: il battito prima di ogni drop è una pausa.
 
 | Corsia | Tasto | Sul palco | Quando |
 |---|---|---|---|
 | COLORI | D | tutti i PAR nel colore della sezione | sulla cassa |
 | CHASE | F | un PAR alla volta, in giro | sui controtempi e sulle salite |
 | STROBO | J | lo strobo al centro | il **drop** è una nota lunga (una battuta); colpi sulla salita |
-| BLACKOUT | K | tutto spento per un battito | il battito prima di ogni drop |
 
 - Nota presa: la luce parte, gradimento su, combo (×2 ogni 10, fino a ×4).
   Mancata: gradimento giù (di più nei drop), combo a zero. Premere senza
@@ -23,6 +23,12 @@ luci: quattro corsie, una per memoria della consolle luci.
 - Il drop tenuto fino in fondo fa il boato (+4 gradimento).
 - Livello 1: finestre larghe (perfetto 80 ms, bene 160 ms). La **stanchezza**
   sale col tempo e le stringe; la **birra** (🍺, tasto B) la toglie.
+- **Si fa via via più difficile**: dal terzo drop i controtempi a ottavi
+  nella corsia CHASE, dal quarto anche a metà battuta, nell'ultimo gli
+  accordi COLORI + CHASE; le ultime salite con lo strobo a ottavi. Le note
+  corrono sempre più veloci (da 1,9 a 1,45 s di pista) e la finestra si
+  stringe fino al 18% verso la fine, oltre alla stanchezza. Da 4 note per
+  battuta nel primo drop a 5 nell'ultimo.
 - Mai più di due tasti insieme: sul telefono si gioca coi pollici.
 - Il vocalist parla quando nel brano c'è la voce (voce separata dal brano);
   il pubblico salta ai drop in proporzione al gradimento. Sul telefono le file
@@ -33,7 +39,7 @@ luci: quattro corsie, una per memoria della consolle luci.
 | Battuta | Guasto | Tipo | Cosa fare |
 |---|---|---|---|
 | 10 | il DJ alza il suo volume, in rosso | nota speciale | tirare giù il **fader DJ** (trascinare, o V) prima che la nota arrivi |
-| 17 (break) | la ciabattina del DJ fa scattare **L2**: PAR spenti, corsie COLORI, CHASE e BLACKOUT grigie | guasto grosso | scegliere chi va al Quadro |
+| 17 (break) | la ciabattina del DJ fa scattare **L2**: PAR spenti, corsie COLORI e CHASE grigie | guasto grosso | scegliere chi va al Quadro |
 | 42 | PAR 4 perde il DMX: corsia CHASE grigia | rompe la pista | toccare il PAR (o P): connettore da rinfilare o indirizzo da rimettere (010) |
 | 49 | Musa va verso la cassa mentre canta | nota speciale | **MUTE MIC** (M) in tempo, o larsen |
 | 67 | Musa si mangia il microfono | nota speciale | tirare giù il **fader MIC** |
@@ -62,8 +68,12 @@ cura sbagliata del PAR costa un secondo e mezzo.
 
 ## Finale ed esito
 
-Finito il brano non vogliono smettere: «ancora uno!», riparte l'ultimo drop,
-entra Gerry e stacca la corrente, e li spinge fuori. Poi la scheda finale.
+Dalla battuta 80 Gerry sale sul palco arrabbiato (fronte rossa, bocca che
+urla, trema): troppo casino, e le parolacce davanti ai bambini. Alla battuta
+82, terzo battito, poco prima della fine del brano, **stacca la corrente di
+botto**: via la musica e tutte le luci, il pubblico fa «Ohhhh», e al buio
+Gerry litiga con Musa e il DJ, poi li butta fuori. Dopo il taglio non ci sono
+più note (`taglio` nella mappa). Poi la scheda finale.
 
 - Reputazione: 5 + (gradimento − 60) / 10 + guasti: +1 per ogni nota speciale
   presa in tempo, +3 per il PAR sistemato entro 12 s, la scelta del Quadro
@@ -79,7 +89,8 @@ entra Gerry e stacca la corrente, e li spinge fuori. Poi la scheda finale.
 `strumenti/mappa-dj.py` scrive `dj-mappa.js`: griglia a 130 BPM (primo
 battito 0,296 s, 85 battute), voce separata col modello UVR-MDX-NET Voc_FT
 (25 frasi, e l'apertura della bocca di Musa), sezioni scritte a mano come si
-fa con Guitar Hero, note dalle regole di `note_luce`. In **Facile** restano
+fa con Guitar Hero, note dalle regole di `note_luce`, il battito del taglio
+di Gerry (`TAGLIO`). In **Facile** restano
 le note sui tempi forti.
 
 ## Test

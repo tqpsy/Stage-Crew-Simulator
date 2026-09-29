@@ -3,7 +3,7 @@
 Legge il brano, trova la griglia dei battiti, separa la voce del vocalist e
 scrive dj-mappa.js: sezioni, frasi della voce, apertura della
 bocca di Musa e le note-luce da suonare (stile Guitar Hero), una corsia per
-memoria della consolle luci.
+memoria della consolle luci, e il battito in cui Gerry stacca la corrente.
 
 Uso:
   pip install numpy librosa soundfile onnxruntime torch
@@ -30,7 +30,9 @@ SEZIONI = [
     (48, 51, 'DROP'), (52, 60, 'GROOVE'), (61, 63, 'BUILD'), (64, 71, 'DROP'),
     (72, 75, 'BUILD'), (76, 82, 'DROP'), (83, 84, 'OUTRO'),
 ]
-COLORI, CHASE, STROBO, BLACKOUT = 0, 1, 2, 3
+COLORI, CHASE, STROBO = 0, 1, 2
+# Gerry stacca la corrente qui (battito): poco prima della fine del brano
+TAGLIO = 82 * 4 + 2
 
 
 def griglia(y, sr):
@@ -118,9 +120,14 @@ def note_luce(n_bar):
     """[battito, corsia, durata in battiti, anche in FACILE (1) o solo NORMALE (0)].
     Le corsie sono le memorie della consolle luci: COLORI pulsa sulla cassa,
     CHASE fa girare i PAR sui controtempi, STROBO si tiene sul drop (la nota
-    lunga) e dà i colpi della salita, BLACKOUT è il battito al buio prima del
-    drop."""
+    lunga) e dà i colpi della salita. Il battito prima del drop resta vuoto:
+    è una pausa. Il set si fa via via più difficile: i drop dopo il secondo
+    aggiungono controtempi a ottavi, le ultime salite vanno a ottavi, l'ultimo
+    drop ha gli accordi. Niente note dopo TAGLIO: lì Gerry stacca la corrente."""
     note = []
+    drop_i = {a: i for i, (a, b, k) in enumerate([x for x in SEZIONI if x[2] == 'DROP'])}
+    build_i = {a: i for i, (a, b, k) in enumerate([x for x in SEZIONI if x[2] == 'BUILD'])}
+    groove_i = {a: i for i, (a, b, k) in enumerate([x for x in SEZIONI if x[2] == 'GROOVE'])}
     for bar in range(n_bar):
         k, s0, s1 = sezione(bar)
         b0 = bar * 4
@@ -133,34 +140,40 @@ def note_luce(n_bar):
         elif k == 'GROOVE':
             for i in range(4):
                 note.append([b0 + i, COLORI if i % 2 == 0 else CHASE, 0, 1 if i % 2 == 0 else 0])
+            if groove_i[s0] >= 1 and bar % 2 == 1:
+                note.append([b0 + 3.5, CHASE, 0, 0])
         elif k == 'BUILD':
+            fast = build_i[s0] >= 2
             if bar < s1:
                 for i in range(4):
                     note.append([b0 + i, CHASE, 0, 1 if i % 2 == 0 else 0])
             else:
-                # l'ultima battuta sale a colpi di strobo, poi un battito al buio
-                for i in range(3):
-                    note.append([b0 + i, STROBO, 0, 1 if i == 0 else 0])
-                note.append([b0 + 3, BLACKOUT, 0, 1])
+                # l'ultima battuta sale a colpi di strobo (a ottavi nelle salite
+                # dopo la seconda), poi un battito di pausa prima del drop
+                for x in ([0, 0.5, 1, 1.5, 2, 2.5] if fast else [0, 1, 2]):
+                    note.append([b0 + x, STROBO, 0, 1 if x == 0 else 0])
         elif k == 'DROP':
-            j = bar - s0
+            j, d = bar - s0, drop_i[s0]
             if j == 0:
                 # il drop: nota lunga di strobo per tutta la prima battuta
                 note.append([b0, STROBO, 4, 1])
                 for i in (1, 2, 3):
                     note.append([b0 + i, COLORI, 0, 1 if i == 2 else 0])
-            else:
-                for i in range(4):
-                    if i == 0 and j % 4 == 0:
-                        note.append([b0, STROBO, 0, 1])
-                    else:
-                        note.append([b0 + i, COLORI if i % 2 == 0 else CHASE, 0, 1 if i % 2 == 0 else 0])
+                continue
+            for i in range(4):
+                if i == 0 and j % 4 == 0:
+                    note.append([b0, STROBO, 0, 1])
+                elif i == 0 and d >= 4 and j % 2 == 1:
+                    note.append([b0, COLORI, 0, 1]); note.append([b0, CHASE, 0, 0])   # accordo
+                else:
+                    note.append([b0 + i, COLORI if i % 2 == 0 else CHASE, 0, 1 if i % 2 == 0 else 0])
+            if d >= 2 and j % 2 == 0:
+                note.append([b0 + 3.5, CHASE, 0, 0])
+            if d >= 3 and j % 2 == 1:
+                note.append([b0 + 1.5, CHASE, 0, 0])
         elif k == 'OUTRO':
-            if bar == s1:
-                note.append([b0, COLORI, 0, 1]); note.append([b0, CHASE, 0, 1])
-                note.append([b0 + 3, BLACKOUT, 0, 1])
-            else:
-                note.append([b0, COLORI, 0, 1]); note.append([b0 + 2, CHASE, 0, 0])
+            note.append([b0, COLORI, 0, 1]); note.append([b0 + 2, CHASE, 0, 0])
+    note = [n for n in note if n[0] + n[2] <= TAGLIO]
     note.sort(key=lambda n: (n[0], n[1]))
     return note
 
@@ -183,7 +196,7 @@ def main():
         'brano': 'Notte fuori controllo', 'file': 'audio/notte-fuori-controllo.mp3',
         'bpm': bpm, 't0': t0, 'durata': durata, 'battute': n_bar,
         'sezioni': [[a, b, k] for a, b, k in SEZIONI],
-        'voce': frasi, 'bocca': bocca, 'note': note,
+        'voce': frasi, 'bocca': bocca, 'note': note, 'taglio': TAGLIO,
     }
     with open(USCITA, 'w') as f:
         f.write('/* Generato da strumenti/mappa-dj.py: non modificare a mano. */\n')
