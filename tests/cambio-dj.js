@@ -1,4 +1,4 @@
-/* Il cambio palco per il DJ: dopo la posa dei cavi il foglio propone il
+/* Il cambio palco per il DJ: dopo la posa dei cavi e il discorso del preside il foglio propone il
    cambio, la carta del DJ dice cosa collegare, la scheda DJ dà la consolle,
    la prova PRONTI boccia con l'indizio giusto finché manca qualcosa e
    promuove quando consolle → DI → mixer suona e il resto dell'impianto è
@@ -85,6 +85,9 @@ const path = require('path');
       const status = el('#circuit-text').textContent;
       await sleep(300);
       finishCavi({ stars: 3, inspections: 1, cableM: 40, tapeM: 3 });
+      // il discorso del preside (preside.html, vedi tests/preside-gioco.js) finito
+      presideOpen = true;
+      finishPreside({ type: 'preside', grad: 75, rep: 6, beers: 1, drunk: 0, larsens: 0 });
       return { fails, giro, status, stock: Object.entries(gameState.stock).filter(([, v]) => v > 0).map(([k]) => k).sort().join(',') };
     });
     check(!r.fails.length && r.giro === 3 && r.status === 'IMPIANTO OK', 'impianto di partenza non collaudato: ' + JSON.stringify(r));
@@ -96,11 +99,11 @@ const path = require('path');
   await open();
   await nuovaSerata();
 
-  // ---- dopo la posa: il foglio propone il cambio, la scaletta pure
+  // ---- dopo la posa e il discorso: il foglio propone il cambio, la scaletta pure
   await p.waitForSelector('#foglio-cambio');
   check(!(await p.isVisible('.tab-btn[data-tab="dj"]')), 'la scheda DJ si vede prima del cambio palco');
   const sched = await ev(() => { renderSchedule(); return [...document.querySelectorAll('#schedule-list .sched-row')].map(r => r.className.split(' ')[1] + ':' + r.querySelector('b').textContent); });
-  check(sched.includes('done:Discorso del Preside Tramp') && sched.includes('now:Cambio palco: arriva il DJ') && sched.includes('soon:Notte fuori controllo'), 'scaletta dopo la posa: ' + sched.join(' | '));
+  check(sched.includes('done:Discorso del Preside Tramp') && sched.includes('now:Cambio palco: arriva il DJ') && sched.includes('soon:Notte fuori controllo'), 'scaletta dopo il discorso: ' + sched.join(' | '));
   await p.click('#schedule-btn');
   check(await p.textContent('#schedule-go') === 'Inizia il cambio palco', 'la scaletta non porta al cambio palco: ' + await p.textContent('#schedule-go'));
   await p.click('#schedule-close');

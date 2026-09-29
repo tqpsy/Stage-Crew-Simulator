@@ -1,5 +1,5 @@
 /* I cavi lasciati dalla posa si fanno sentire nel discorso del preside
-   (prototipi/spettacolo-preside.html, «Cavi lasciati dalla posa»): cavo nel
+   (preside.html aperta da sola, «Cavi lasciati dalla posa»): cavo nel
    passaggio → qualcuno ci inciampa e il guasto è l'ingresso; microfono
    accanto alla corrente → ronzio che fa calare il pubblico; cavo in scena →
    il preside inciampa. Senza niente di rimasto, niente di tutto questo.
@@ -15,7 +15,7 @@ const path = require('path');
   const errs = []; p.on('pageerror', e => errs.push(e.message));
   const problems = [];
   const check = (ok, what) => { if (!ok) problems.push(what); };
-  const url = 'file://' + path.join(__dirname, '..', 'prototipi', 'spettacolo-preside.html');
+  const url = 'file://' + path.join(__dirname, '..', 'preside.html');
   // prova una partita con questi cavi rimasti e guarda cosa succede a metà discorso
   const run = async left => {
     await p.goto(url);

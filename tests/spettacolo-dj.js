@@ -1,4 +1,4 @@
-/* Lo show del DJ set (prototipi/spettacolo-dj.html): le luci si suonano a
+/* Lo show del DJ set (dj.html): le luci si suonano a
    tempo come in Guitar Hero. Controlla la mappa (note sulla griglia, mai più
    di due tasti insieme, lo strobo su ogni drop, la VOCE sulle frasi di Musa),
    poi gioca con un orologio finto: la demo prende tutte le note, il pubblico
@@ -19,7 +19,7 @@ const path = require('path');
   const check = (ok, what) => { if (!ok) problems.push(what); };
   const ev = (fn, arg) => p.evaluate(fn, arg);
   const open = async () => {
-    await p.goto('file://' + path.join(__dirname, '..', 'prototipi', 'spettacolo-dj.html'));
+    await p.goto('file://' + path.join(__dirname, '..', 'dj.html'));
     await p.waitForFunction(() => window.__dj);
     await ev(() => { try { localStorage.clear(); } catch (e) {} __dj.virtual(true); });
   };

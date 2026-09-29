@@ -1,7 +1,7 @@
-"""Mappa ritmica dello show del DJ set (prototipi/spettacolo-dj.html).
+"""Mappa ritmica dello show del DJ set (dj.html).
 
 Legge il brano, trova la griglia dei battiti, separa la voce del vocalist e
-scrive prototipi/dj-set-mappa.js: sezioni, frasi della voce, apertura della
+scrive dj-mappa.js: sezioni, frasi della voce, apertura della
 bocca di Musa e le note-luce da suonare (stile Guitar Hero).
 
 Uso:
@@ -19,7 +19,7 @@ import numpy as np, librosa
 
 BRANO = sys.argv[1] if len(sys.argv) > 1 else 'audio/notte-fuori-controllo.mp3'
 MODELLO = sys.argv[2] if len(sys.argv) > 2 else 'voc.onnx'
-USCITA = 'prototipi/dj-set-mappa.js'
+USCITA = 'dj-mappa.js'
 
 # battute (da 0), comprese: INTRO, GROOVE, BREAK, BUILD (sale verso il drop),
 # DROP (si salta), OUTRO
@@ -182,7 +182,7 @@ def main():
         print(f'battuta {bar:2d} {a:6.2f} s  {sezione(bar)[0]:6s} voce {db[m].mean() if m.any() else -99:6.1f} dB')
     note = note_luce(frasi, beat, t0, n_bar)
     dati = {
-        'brano': 'Notte fuori controllo', 'file': '../audio/notte-fuori-controllo.mp3',
+        'brano': 'Notte fuori controllo', 'file': 'audio/notte-fuori-controllo.mp3',
         'bpm': bpm, 't0': t0, 'durata': durata, 'battute': n_bar,
         'sezioni': [[a, b, k] for a, b, k in SEZIONI],
         'voce': frasi, 'bocca': bocca, 'note': note,

@@ -206,10 +206,10 @@ Il cambio palco (staccare ciò che non serve e ripatchare) fa parte del gioco.
   flight case) la porta DJ Inestimabile; compare in una scheda **DJ** che si
   apre solo col cambio. La **DI** è del service: è nella dotazione del
   montaggio (scheda Regia), dove non serve, e va tenuta per il DJ.
-- **Quando**: dopo la posa dei cavi. Lo spettacolo del preside non è ancora
-  nel gioco (è il prototipo `prototipi/spettacolo-preside.html`), quindi in
-  scaletta conta come fatto e il cambio delle 21:10 diventa «Adesso». Parte
-  dal foglio (tasto «Inizia il cambio palco») o dalla scaletta.
+- **Quando**: dopo il discorso del preside (`preside.html`, anche saltato):
+  il cambio delle 21:10 diventa «Adesso». Parte dal foglio (tasto «Inizia il
+  cambio palco») o dalla scaletta. Prima, il foglio propone il discorso («Il
+  preside sale sul palco») e dice cosa manca al microfono.
 - **La carta del DJ** (si apre all'inizio): DJ Inestimabile e Musa
   Esistenziale arrivano, la locandina, quanto aspetta il pubblico e il
   canale del microfono. Poi la stessa lista la spunta il foglio:
@@ -232,13 +232,94 @@ Il cambio palco (staccare ciò che non serve e ripatchare) fa parte del gioco.
 - Codice: `cambioChecks`, `startCambioDj`, `finishCambioDj` e
   `runCambioTest` in `main.js`; stato in `Profile.data.cambioDj`. Test:
   `tests/cambio-dj.js`.
-- **Lo show del DJ** (prototipo): le luci si suonano a tempo col brano come in
-  Guitar Hero, Musa parla quando nel brano c'è la voce, il pubblico salta ai
-  drop. Design in `docs/spettacolo-dj.md`, prototipo
-  `prototipi/spettacolo-dj.html`.
-- **Da fare**: portare lo spettacolo del DJ nel gioco, con i suoi guasti. La
+- **Da fare**: lo spettacolo del DJ (vedi *Lo spettacolo del DJ: Light
+  Operator Hero* qui sotto), con i suoi guasti. La
   «ciabattina del DJ» piena di roba che fa scattare una fase appartiene lì
   (tra i guasti proposti); oggi la consolle consuma poco.
+
+## Lo spettacolo del DJ: Light Operator Hero (deciso)
+
+Nel set di «Notte fuori controllo» il giocatore non fa il DJ: è l'**operatore
+luci** e fa le luci a ritmo, come un Guitar Hero delle luci. I guasti non lo
+tirano fuori dal gioco a ritmo, se non quelli grossi, e allora è lui a
+scegliere chi va a sistemarli.
+
+**La pista delle luci**
+- In basso 4 corsie, una per memoria luci: **colori**, **chase**, **strobo**,
+  **blackout**. Le note scendono a tempo di musica e si premono quando toccano
+  la linea.
+- Nota presa: le luci sul palco fanno quella scena, il pubblico salta, il
+  gradimento sale e cresce la combo. Nota mancata: luci in ritardo o ferme,
+  gradimento giù, combo azzerata.
+- Il **drop** è una nota lunga da tenere premuta: presa, boato del pubblico.
+- Livello 1: note lente, finestra larga, un guasto alla volta. La
+  **stanchezza** stringe la finestra, la birra la riallarga.
+- Il ritmo viene dalla musica: con un file audio vero (vedi sotto) servono i
+  suoi BPM e dove cadono i drop; senza, il ritmo techno generato dal codice.
+
+**I guasti, in tre modi**
+1. **Guasti che diventano note speciali**, risolti senza lasciare la pista:
+   - Musa si avvicina alle casse: nota rossa **MUTE MIC**; presa a tempo
+     evita il larsen, mancata il larsen parte;
+   - volume del DJ in rosso: nota **fader** da trascinare in giù;
+   - Musa si mangia il microfono: nota fader sul suo canale.
+2. **Guasti che rompono la pista** (le luci):
+   - un PAR perde il DMX: la sua corsia diventa grigia e quelle note non si
+     prendono più. Si tocca il PAR, si sistema cavo o indirizzo e la corsia
+     torna. Si può andare avanti con 3 corsie e sistemarlo in un momento
+     calmo.
+3. **Guasti grossi**, che portano fuori dalla pista:
+   - la ciabattina del DJ fa scattare una fase del Quadro (metà impianto
+     spento): si va al Quadro, si riarma e si sposta la spina su un'altra
+     fase;
+   - arrivano apposta nei momenti calmi del pezzo (le pause prima del drop):
+     sistemare subito o aspettare la pausa è una scelta.
+
+**Chi va a sistemare un guasto grosso**
+
+| Scelta | Cosa succede | Reputazione |
+|---|---|---|
+| **Ci vai tu** (gratis) | Il capo ti dà il cambio alle luci; tu sistemi il guasto | **+5** se in fretta, 0 se lento |
+| **Paghi una 🍺 al capo** | Ci va lui, tu resti alle luci senza perdere la combo | **0** (e una birra in meno) |
+| **Nessuno** | Dopo un po' ci pensa Gerry, il pubblico intanto patisce | **−5** (come il guasto trovato dal bidello) |
+
+- **Il capo alle luci è peggio di te**: prende le note in automatico ma ne
+  manca una su tre e la combo si azzera.
+- **Il capo si spazientisce**: se stai via troppo (proposta: 30 s) torna lui
+  alle luci e il guasto lo finisci con la pista che scorre; reputazione ridotta.
+- **La birra ha un costo vero**: è una birra in meno contro la stanchezza.
+  Senza birre in tasca la scelta non c'è: ci vai tu.
+- Il capo solo per i guasti grossi (fase che scatta, PAR senza DMX); i
+  guasti-nota restano del giocatore. Al massimo **due favori per set**.
+- Dal livello 2 il capo non c'è più (tutor solo al livello 1): al suo posto
+  un **assistente** da assumere con la reputazione, pagato a birre.
+
+**Il rewind del DJ**
+- Quando torni alle luci dopo aver sistemato un guasto grosso, DJ
+  Inestimabile fa lo **scratch** e riporta il brano **qualche battuta
+  indietro**: le note perse mentre eri via tornano e si possono riprendere.
+- Il rewind copre il tempo in cui sei stato via, **fino a 8 battute**: veloce
+  recuperi tutto, lento solo l'ultimo pezzo.
+- Il gradimento perso si recupera riprendendo quelle note, con un piccolo
+  bonus del pubblico al rewind (come nelle serate vere). La **combo riparte
+  da zero**.
+- **Solo se ci vai tu**: col capo pagato non serve (non hai perso note), con
+  Gerry niente rewind (il DJ è offeso e va avanti). **Uno per guasto.**
+- Con un file audio vero è lo scratch sul brano stesso: suono dello scratch
+  e il pezzo che riparte da qualche secondo prima.
+
+**Finale**: il set finisce, non vogliono smettere, Gerry stacca la corrente e
+li butta fuori (scena comica, il giocatore non fa niente). Gradimento, combo
+e guasti gestiti diventano birre e reputazione, una volta sola (come il
+discorso del preside).
+
+**Audio**: si potrà caricare un brano come base del set (MP3 stereo, 1–2
+minuti in loop, sotto i 3–4 MB, diritti liberi), con BPM e secondo del drop.
+Passa per la catena simulata: fader, mute, L/R, distorsione del gain in
+rosso, ronzio della DI.
+
+Un prototipo del gioco a ritmo è già in lavorazione in un'altra sessione:
+questa sezione è il riferimento per unirlo ai guasti.
 
 ## Personaggi (proposta)
 
@@ -255,7 +336,7 @@ Personaggi storici: nessun problema di diritti. Personaggi viventi: caricatura
 disegnata e nome parodia.
 
 **Preside Tramp** (fatto, rifatto sulle foto): simbolo SVG `#tramp` in
-`prototipi/spettacolo-preside.html`. Tratti: ciuffo biondo enorme col riporto
+`preside.html`. Tratti: ciuffo biondo enorme col riporto
 sulla fronte, abbronzatura arancio con le occhiaie chiare, sopracciglia chiare
 aggrottate, occhi a fessura, bocca a cul di gallina, faccione squadrato con
 le guance cadenti; giacca blu larga e cravatta rossa lunghissima. Nessuna
@@ -279,7 +360,8 @@ stile e stesso ritaglio del ritratto (`viewBox="6 2 88 88"`).
   scratcha alla consolle; titolo al neon **NOTTE FUORI CONTROLLO**. Si apre
   dalla scaletta (voce delle 21:15, tasto "Guarda la locandina"; campo
   `poster` in `SCHEDULE`). Solo nomi d'arte.
-- DJ set (da fare): il lavoro è inseguire i guasti che combinano. Proposte:
+- DJ set (da fare, vedi *Lo spettacolo del DJ: Light Operator Hero*): il
+  lavoro è fare le luci a ritmo e inseguire i guasti che combinano. Proposte:
   gain del mixer DJ in rosso; Musa che si mangia il microfono (larsen); Musa
   che scende verso le casse; roba del DJ attaccata alla ciabatta sbagliata
   (scatta una fase); macchina del fumo sotto il rilevatore; cavo del
@@ -294,7 +376,7 @@ ciuffi grigi ai lati, un sopracciglio più alto, occhi a fessura sornioni,
 nasone, sorriso storto; corporatura grossa nel camice blu da bidello con la
 camicia azzurra aperta. Per il ritratto si usa il ritaglio `viewBox="6 0 88 88"`
 (la testa è più alta di quella del preside). Dove compare:
-- `prototipi/spettacolo-preside.html`: quando il guasto lo trova lui, sale
+- `preside.html`: quando il guasto lo trova lui, sale
   sul palco per qualche secondo ("Tranquilli, ci penso io!") e la sua faccina
   accompagna la nota nella scheda finale;
 - `scarico.html`: visto dall'alto dietro al carrello (testa pelata con la
@@ -331,7 +413,8 @@ professionalità, non la sfortuna.
 - Ogni fase e ogni richiesta extra contano una volta sola per service: rifarle
   non aggiunge altro.
 - Nel gioco oggi ci sono il collaudo dell'impianto (+5), lo scarico, la posa
-  dei cavi e il cambio palco per il DJ. I numeri sono in `REP` in `main.js`.
+  dei cavi, il discorso del preside (vedi *Il discorso nel gioco*) e il cambio
+  palco per il DJ. I numeri sono in `REP` in `main.js`.
 
 ## Animazione di errore (proposta)
 
@@ -385,7 +468,9 @@ Giro del livello: **Montaggio → Test impianto → [cambio palco → spettacolo
 - **Header**: barra del tempo con faccia del personaggio e orologio; il
   gradimento del pubblico è la barra più grande, con la percentuale; la
   stanchezza sta nel tasto della 🍺 (la birra la fa scendere); reputazione.
-- **Palco isometrico**: resta la vista di gioco. Sopra compaiono i personaggi
+- **Palco isometrico**: resta la vista di gioco del montaggio. Il discorso
+  del preside invece ha il suo palco disegnato di fronte (vedi *Il discorso
+  nel gioco*). Per le altre fasi, da decidere: sopra compaiono i personaggi
   (preside al microfono, DJ alla consolle, Dante sullo sgabello) e il pubblico
   in platea: teste che si muovono a tempo, colore e fumetti che ne mostrano l'umore.
 - **Imprevisti**: fumetto sopra il personaggio o il dispositivo, con un anello
@@ -414,10 +499,30 @@ Giro del livello: **Montaggio → Test impianto → [cambio palco → spettacolo
 - Reputazione salvata nel browser del giocatore.
 - I numeri (gradimento, stress, pazienza) si tarano giocando.
 
-## Prototipo
+## Il discorso nel gioco
 
-`prototipi/spettacolo-preside.html`: la fase del discorso del preside, cliccabile,
-per provare il ritmo prima di portarla nel gioco.
+`preside.html`: la fase del discorso del preside. Nato come prototipo in
+`prototipi/`, ora è nel gioco: finita la posa dei cavi (anche saltata) si apre
+in un iframe sopra il palco, o dalla scaletta («Il preside sale sul palco»).
+
+- **Serve il microfono**: montato sull'asta e collegato con un XLR a un
+  ingresso MIC 1–4 del mixer acceso (`presideReady()` in `main.js`). Il Test
+  impianto non lo chiede: se manca, dopo la posa un avviso dice cosa collegare
+  e il preside sale da solo pochi secondi dopo il collegamento.
+- **Il montaggio vero entra nel discorso**: l'ingresso cablato (la risposta a
+  «in che ingresso era?» quando si guasta), i PAR montati col nome e il ruolo
+  del loro stativo (frontali e tagli, da sinistra a destra: se allo scarico
+  se n'è rotto qualcuno ce ne sono meno), i cavi lasciati dalla posa
+  (`caviLeftovers()`) e le birre in tasca.
+- **Esito**: la reputazione del discorso (5 + gradimento − larsen ± guasto e
+  richieste, vedi sotto) conta una volta sola (`L1:preside`); le birre
+  guadagnate vanno in tasca, quelle bevute si tolgono. Si può saltare dalla
+  scheda iniziale: il preside parla lo stesso, reputazione ferma. La scaletta
+  mostra il riassunto (pubblico, larsen, birre, reputazione).
+- Aperta da sola, la pagina resta il banco di prova: ingresso a caso, 4 PAR,
+  scelta del guasto e dei cavi lasciati dalla posa.
+- Test: `tests/preside-gioco.js` (dentro il gioco), `tests/preside-cavi.js`
+  (le conseguenze della posa, pagina da sola).
 
 Nella scheda iniziale, «Cavi lasciati dalla posa» prova le conseguenze della
 posa dei cavi finita col tempo (vedi `docs/minigioco-posa-cavi.md`): cavo nel
@@ -426,9 +531,9 @@ corrente (ronzio), cavo in scena (il preside inciampa).
 
 ### Dopo la prima prova
 
-- **Grafica**: quella del prototipo non è definitiva. Nel gioco vero lo
-  spettacolo si svolge sul palco isometrico che c'è già; del prototipo restano
-  l'impianto dell'interfaccia (header, fumetti, banco regia).
+- **Grafica**: il discorso resta com'è stato costruito (palco disegnato di
+  fronte, header, fumetti, banco regia), non si sposta sul palco isometrico
+  (deciso).
 - **Guasti veri, non "tocca e risolvi"**: il microfono muto va diagnosticato
   e riparato con decisioni di cablaggio (vedi *Il guasto del microfono* sotto).
 - **Lingua dei personaggi**: ognuno parla una lingua fatta solo del suo nome
@@ -489,8 +594,9 @@ Il guasto si risolve ricordando il cablaggio, non premendo un pulsante.
   - *Qualcuno ha toccato il mixer*: il canale del preside è in MUTE o col fader
     tutto giù. Si sistema dal banco.
 - **La domanda della memoria**: «in che ingresso era?». La risposta è
-  l'ingresso cablato al montaggio (la scaletta chiede il CH 1; nel prototipo
-  è estratto a caso a ogni partita e scritto solo nella scheda iniziale). Se
+  l'ingresso cablato al montaggio: va bene qualsiasi MIC 1–4, purché sia
+  cablato (deciso). Aperta da sola, la pagina lo estrae a caso a ogni partita
+  e lo scrive solo nella scheda iniziale. Se
   lo rimetti altrove nessun avviso: la voce arriva su un canale col fader giù,
   bisogna accorgersene dai meter; a fine discorso −2 reputazione.
 - **Musica di riempimento**: durante il guasto si può alzare il PC; il

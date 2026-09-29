@@ -1620,7 +1620,7 @@ const SERVICE_NAME_MAX = 28;   // caratteri del nome (inventato) di un service
 const USED_SERVICES_KEEP = 400; // nomi di service già proposti, da non riproporre
 
 function defaultProfile () {
-  return { v: SAVE_VERSION, player: '', service: '', serviceInfo: null, usedServices: [], settings: { volume: 0.8, reducedFx: false, skipShow: false, skipScarico: false, testMusic: true, bossTips: true, tapeMarks: true, traceSignal: true }, tutorSeen: {}, logo: null, level: null, scarico: null, cavi: null, cambioDj: null, beers: 0, records: {}, reputation: { total: 0, earned: {}, log: [] } };
+  return { v: SAVE_VERSION, player: '', service: '', serviceInfo: null, usedServices: [], settings: { volume: 0.8, reducedFx: false, skipShow: false, skipScarico: false, testMusic: true, bossTips: true, tapeMarks: true, traceSignal: true }, tutorSeen: {}, logo: null, level: null, scarico: null, cavi: null, preside: null, cambioDj: null, beers: 0, records: {}, reputation: { total: 0, earned: {}, log: [] } };
 }
 const Profile = (() => {
   let data = defaultProfile();
@@ -2193,7 +2193,8 @@ function saveLevel () {
    - apparecchio rotto: 0, non è colpa del giocatore.
    Parte da 0 e non va sotto lo 0. Ogni fase (e ogni richiesta extra) conta
    una volta sola per tecnico: rifarla non aggiunge altro. I numeri sono
-   quelli del documento di design e del prototipo del preside. */
+   quelli del documento di design; la reputazione del discorso del preside
+   la calcola preside.html con gli stessi numeri. */
 const REP = {
   phaseDone: 5,        // fase completata (oggi: il collaudo dell'impianto)
   faultFixedFast: 3,   // guasto risolto in fretta
@@ -2338,8 +2339,8 @@ function openMenu (page) {
 function closeMenu () {
   menuOpen = false;
   el('#menu-modal').classList.remove('show');
-  setSceneInput(!scheduleOpen && !scaricoOpen && !caviOpen);
-  sceneKeyboard(!scaricoOpen && !caviOpen);
+  setSceneInput(!scheduleOpen && !minigameOpen());
+  sceneKeyboard(!minigameOpen());
 }
 const cleanName = s => String(s || '').replace(/\s+/g, ' ').trim().slice(0, NAME_MAX);
 
@@ -2354,6 +2355,7 @@ function startNewGame (player, offer, offers) {
   Profile.data.reputation = defaultProfile().reputation;
   Profile.data.scarico = null;
   Profile.data.cavi = null;
+  Profile.data.preside = null;
   Profile.data.cambioDj = null;
   Profile.data.beers = 0;
   Profile.data.tutorSeen = {};   // il nuovo tecnico non ha ancora sentito i consigli del capo
@@ -2387,8 +2389,8 @@ const SCHEDULE = [
   { time: '16:30', title: 'Montaggio impianto', text: 'Corrente dal Quadro, PC → scheda → mixer → finale → casse, i PAR in DMX dalla consolle.', phase: 'montaggio' },
   { time: '19:30', title: 'Test impianto', text: 'Il collaudo: tutto acceso senza scatti né colpi nelle casse, audio e luci a posto.', phase: 'collaudo', rep: REP.phaseDone },
   { time: '20:00', title: 'Messa in sicurezza dei cavi', text: 'I cavi stesi per terra come si deve: via di fuga libera, passacavi nei passaggi, nastro dove si cammina. Gerry, il bidello, controlla prima di aprire.', phase: 'cavi' },
-  { time: '20:30', title: 'Apertura porte', text: 'Entrano famiglie e studenti; musica di sottofondo dal PC.' },
-  { time: '21:00', title: 'Discorso del Preside Tramp', text: 'Microfono su asta sul palco, sul CH 1 del mixer. Vuole essere sentito fino al parcheggio.', phase: 'preside' },
+  { time: '20:30', title: 'Apertura porte', text: 'Entrano famiglie e studenti; musica di sottofondo dal PC.', phase: 'porte' },
+  { time: '21:00', title: 'Discorso del Preside Tramp', text: 'Microfono su asta sul palco, cablato a un ingresso MIC del mixer: ricordati quale. Vuole essere sentito fino al parcheggio.', phase: 'preside' },
   { time: '21:10', title: 'Cambio palco: arriva il DJ', text: 'DJ Inestimabile porta la sua consolle: corrente, uscite nella DI e dalla DI al mixer. Il microfono resta dov\'è, per Musa Esistenziale. Il pubblico aspetta: non metterci troppo.', phase: 'cambio-dj', rep: REP.changeDone },
   { time: '21:15', title: 'Notte fuori controllo', text: 'DJ Inestimabile in consolle e Musa Esistenziale al microfono: mixer DJ → DI → mixer di sala, il microfono del vocalist, luci colorate al drop. E tanti guasti da inseguire.', poster: 'img/locandina-dj.svg' },
   { time: '22:00', title: 'Dante unplugged', text: 'Voce e chitarra (via DI). Gli ingressi non bastano: cambio palco e via il DJ.' },
@@ -2400,10 +2402,9 @@ function schedulePhaseState (phase) {
   if (phase === 'scarico') return scaricoDone() ? 'done' : 'now';
   if (phase === 'montaggio') return collaudoDone() ? 'done' : scaricoDone() ? 'now' : 'next';
   if (phase === 'cavi') return caviDone() ? 'done' : collaudoDone() ? 'now' : 'next';
-  // lo spettacolo del preside non è ancora nel gioco: dopo la posa dei cavi
-  // conta come fatto, e si passa al cambio palco per il DJ
-  if (phase === 'preside') return caviDone() ? 'done' : 'next';
-  if (phase === 'cambio-dj') return cambioDjDone() ? 'done' : caviDone() ? 'now' : 'next';
+  if (phase === 'porte') return caviDone() ? 'done' : 'next';
+  if (phase === 'preside') return presideDone() ? 'done' : caviDone() ? 'now' : 'next';
+  if (phase === 'cambio-dj') return cambioDjDone() ? 'done' : presideDone() ? 'now' : 'next';
   return collaudoDone() ? 'done' : 'next';
 }
 const SCHEDULE_STATE_LABEL = { done: 'Fatto', now: 'Adesso', next: 'Da fare', soon: 'In arrivo' };
@@ -2425,7 +2426,7 @@ function renderSchedule () {
       + (s.rep ? ' <span class="sched-rep">+' + s.rep + ' reputazione</span>' : '')
       + '<small>' + escapeHtml(s.phase === 'scarico' && scaricoDone() ? scaricoSummary()
         : s.phase === 'cavi' && caviDone() ? caviSummary()
-        : s.phase === 'preside' && caviDone() ? presideSummary()
+        : s.phase === 'preside' && presideDone() ? presideSummary()
         : s.phase === 'cambio-dj' && cambioDjDone() ? cambioSummary()
         : s.phase === 'montaggio' ? s.text.replace('i PAR', parsRequired() + ' PAR') : s.text) + '</small>'
       + (s.poster ? '<button class="sched-poster" type="button" data-poster="' + s.poster + '">🎟️ Guarda la locandina</button>' : '')
@@ -2433,17 +2434,18 @@ function renderSchedule () {
       + '<span class="sched-state">' + SCHEDULE_STATE_LABEL[st] + '</span></li>';
   }).join('');
 }
-// first: aperta dalla nuova partita; chiudendola si parte col montaggio
-let scheduleOpen = false, scheduleFirst = false, scheduleCavi = false, scheduleCambio = false;
+// first: aperta dalla nuova partita; chiudendola si parte col montaggio.
+// scheduleNext: la fase che il tasto della scaletta apre (posa, discorso o cambio palco)
+let scheduleOpen = false, scheduleFirst = false, scheduleNext = null;
 function openSchedule (first) {
   scheduleOpen = true;
   scheduleFirst = !!first;
   renderSchedule();
-  // dopo il collaudo la scaletta porta alla posa dei cavi, dopo la posa al
-  // cambio palco per il DJ
-  scheduleCavi = !first && schedulePhaseState('cavi') === 'now';
-  scheduleCambio = !first && !scheduleCavi && schedulePhaseState('cambio-dj') === 'now' && !cambioDj();
-  el('#schedule-go').textContent = first ? 'Al lavoro!' : scheduleCavi ? 'Stendi i cavi' : scheduleCambio ? 'Inizia il cambio palco' : 'Torna al palco';
+  // dopo il collaudo la scaletta porta alla posa dei cavi, poi al discorso
+  // del preside, poi al cambio palco per il DJ
+  scheduleNext = first ? null : schedulePhaseState('cavi') === 'now' ? 'cavi' : schedulePhaseState('preside') === 'now' ? 'preside'
+    : schedulePhaseState('cambio-dj') === 'now' && !cambioDj() ? 'cambio-dj' : null;
+  el('#schedule-go').textContent = first ? 'Al lavoro!' : { cavi: 'Stendi i cavi', preside: 'Il preside sale sul palco', 'cambio-dj': 'Inizia il cambio palco' }[scheduleNext] || 'Torna al palco';
   el('#schedule-modal').classList.add('show');
   setSceneInput(false);
 }
@@ -2452,7 +2454,7 @@ function closeSchedule () {
   scheduleOpen = false;
   el('#schedule-modal').classList.remove('show');
   if (scheduleFirst) { if (scaricoDone()) showToast(montaggioMessage(), 'ok'); else openScarico(); }
-  setTimeout(() => { if (!scheduleOpen && !scaricoOpen && !caviOpen && !cambioCardOpen && !rearPanelId && !openCaseName && !menuOpen) setSceneInput(true); }, 0);
+  setTimeout(() => { if (!scheduleOpen && !minigameOpen() && !cambioCardOpen && !rearPanelId && !openCaseName && !menuOpen) setSceneInput(true); }, 0);
   scheduleFirst = false;
 }
 
@@ -2644,15 +2646,13 @@ function finishCavi (r) {
   if (!scheduleOpen && !menuOpen && !rearPanelId && !openCaseName) setSceneInput(true);
   applySettings();
   whenScene(scene => scene.redrawEdges());   // i cavi seguono le pieghe della posa
-  showToast(r.skipped ? 'Posa dei cavi saltata: Gerry apre le porte, ma la reputazione non cambia.'
+  const missing = presideReady();
+  showToast((r.skipped ? 'Posa dei cavi saltata: Gerry apre le porte, ma la reputazione non cambia.'
     : late ? 'Sono le 20:30: Gerry apre le porte con i cavi ancora in giro. La reputazione non cambia.'
-    : 'Cavi a posto, Gerry apre le porte! ' + '★'.repeat(stars) + (rep ? ' Reputazione +' + rep + '.' : ''), 'ok');
-  // dopo il preside tocca al DJ: il cambio palco parte dal foglio (o dalla
-  // scaletta), appena letto il messaggio della posa
+    : 'Cavi a posto, Gerry apre le porte! ' + '★'.repeat(stars) + (rep ? ' Reputazione +' + rep + '.' : ''))
+    + (missing ? ' Alle 21:00 parla il preside: ' + missing : ' Alle 21:00 il preside sale sul palco.'), 'ok');
   updateFoglio();
-  setTimeout(() => {
-    if (!cambioDj() && caviDone()) showToast('Il preside ha finito di parlare. Alle 21:10 il cambio palco per il DJ: parte dal foglio in alto a sinistra o dalla scaletta 📋.', 'ok');
-  }, Math.max(3200, el('#toast').textContent.length * 60) + 300);
+  if (!missing) presideSoon();
 }
 /* I cavi piegati alla posa restano così anche nell'isometrico: per ogni
    cavo del montaggio le pieghe in metri (dal capo a verso il capo b) e dove
@@ -2687,8 +2687,7 @@ function caviRoute (e) {
   });
 }
 /* Cosa lo show troverà ancora per terra (la posa finita col tempo): il
-   discorso del preside lo fa sentire (vedi prototipi/spettacolo-preside.html,
-   «Cavi lasciati dalla posa»). passaggio: qualcuno inciampa nel cavo e lo
+   discorso del preside lo fa sentire (preside.html, vedi openPreside). passaggio: qualcuno inciampa nel cavo e lo
    strappa dal mixer; ronzio: 50 Hz nelle casse; scena: il preside inciampa. */
 const CAVI_LEFT = { passaggio: 'passaggio', lungo: 'passaggio', fuga: 'passaggio', ronzio: 'ronzio', scena: 'scena' };
 const CAVI_LEFT_TEXT = { passaggio: 'qualcuno inciamperà in un cavo nel passaggio', ronzio: 'nelle casse ci sarà ronzio', scena: 'il preside inciamperà in un cavo sul palco' };
@@ -2707,9 +2706,108 @@ function caviSummary () {
     + ' · ' + String(Math.round(c.tapeM * 10) / 10).replace('.', ',') + ' m di nastro.';
 }
 
+/* ---------------- il discorso del preside (21:00) ----------------
+   La prima fase di spettacolo (preside.html), in un iframe sopra il gioco
+   dopo la posa dei cavi, o dalla scaletta. Serve il microfono montato
+   sull'asta e collegato a un ingresso MIC del mixer acceso: la pagina riceve
+   quell'ingresso (la risposta a «in che ingresso era?» quando si guasta), i
+   PAR montati coi loro ruoli, i cavi lasciati dalla posa e le birre in
+   tasca. L'esito torna al gioco: reputazione una volta sola, birre. */
+let presideOpen = false, presideTimer = null;
+const presideDone = () => !!Profile.data.preside;
+const minigameOpen = () => scaricoOpen || caviOpen || presideOpen;
+// cosa manca perché il preside possa parlare (null se è tutto pronto)
+function presideReady () {
+  const asta = placedOfType('asta')[0], mic = placedOfType('mic').find(m => mountBase(m));
+  if (!asta || !mic) return 'monta l\'asta sul palco e il microfono sulla giraffa, poi collegalo con un XLR a un ingresso MIC del mixer.';
+  if (!micChannel()) return 'collega il microfono con un XLR a un ingresso MIC (1-4) del mixer.';
+  const mx = placedOfType('mixer')[0];
+  if (!mx || !isRunning(mx.id)) return 'il mixer è spento: accendi l\'impianto.';
+  return null;
+}
+// i PAR montati sugli stativi, da sinistra a destra: taglio, frontali, taglio
+function presidePars () {
+  const side = { left: 0, front: 1, right: 2 };
+  return placedOfType('par').map(p => ({ p, s: mountBase(p) })).filter(x => x.s)
+    .sort((a, b) => side[standRole(a.s)] - side[standRole(b.s)] || compCenter(a.s).gx - compCenter(b.s).gx)
+    .map(x => ({ label: compLabel(x.p.id), role: standRole(x.s) === 'front' ? 'frontale' : 'taglio' }));
+}
+function openPreside () {
+  clearTimeout(presideTimer);
+  if (presideOpen || presideDone() || !caviDone() || scaricoOpen || caviOpen) return;
+  const missing = presideReady();
+  if (missing) { showToast('Il preside aspetta dietro le quinte: ' + missing); return; }
+  presideOpen = true;
+  setSceneInput(false);
+  sceneKeyboard(false);
+  if (window.__scene) window.__scene.stopFx();
+  const f = document.createElement('iframe');
+  f.id = 'preside-frame';
+  f.className = 'minigame-frame';
+  f.title = 'Il discorso del preside';
+  f.src = 'preside.html?embed=1';
+  f.addEventListener('load', () => { try { f.contentWindow.focus(); } catch (e) { /* niente fuoco: si tocca */ } });
+  document.body.appendChild(f);
+}
+// finita la posa, o appena il microfono è pronto: il preside sale da solo
+// poco dopo (il tempo di leggere l'avviso), se nel frattempo non si è aperto altro
+function presideSoon () {
+  clearTimeout(presideTimer);
+  presideTimer = setTimeout(() => {
+    if (!scheduleOpen && !menuOpen && !rearPanelId && !openCaseName && !presideReady()) openPreside();
+  }, 3000);
+}
+// un XLR appena collegato può rendere pronto il microfono (l'avviso arriva
+// dopo il «Collegato» del pannello, che altrimenti lo coprirebbe)
+function presideMicHint () {
+  if (!gameActive || presideOpen || schedulePhaseState('preside') !== 'now' || presideReady()) return;
+  setTimeout(() => showToast('Microfono pronto sul CH ' + micChannel() + ': il preside sale sul palco!', 'ok'), 0);
+  presideSoon();
+}
+window.addEventListener('message', ev => {
+  const d = ev.data, f = el('#preside-frame');
+  if (!presideOpen || !d || !f) return;
+  if (d.type === 'preside-pronto') f.contentWindow.postMessage({ type: 'preside-dati', wired: micChannel(), left: caviLeftovers(), beers: Profile.data.beers || 0, pars: presidePars() }, '*');
+  if (d.type === 'preside-fine') finishPreside(d.result || { skipped: true });
+});
+function finishPreside (r) {
+  const f = el('#preside-frame');
+  if (f) f.remove();
+  presideOpen = false;
+  const skipped = !!r.skipped;
+  const num = (v, d) => Number.isFinite(+v) ? Math.round(+v) : d;
+  const beers = skipped ? 0 : Math.max(0, num(r.beers, 0)), drunk = skipped ? 0 : Math.max(0, num(r.drunk, 0));
+  Profile.data.preside = { skipped, grad: skipped ? 0 : num(r.grad, 0), rep: skipped ? 0 : num(r.rep, 0), beers, drunk,
+    larsens: skipped ? 0 : num(r.larsens, 0), fault: !skipped && !!r.fault };
+  Profile.data.beers = Math.max(0, (Profile.data.beers || 0) - drunk + beers);
+  const rep = skipped ? 0 : addReputation(Profile.data.preside.rep, 'Discorso del preside alla festa della scuola', 'L' + LEVEL_ID + ':preside');
+  Profile.save();
+  sceneKeyboard(true);
+  if (!scheduleOpen && !menuOpen && !rearPanelId && !openCaseName) setSceneInput(true);
+  applySettings();
+  const p = Profile.data.preside;
+  showToast(skipped ? 'Discorso saltato: il preside ha parlato lo stesso, ma la reputazione non cambia.'
+    : 'Il preside ha finito: pubblico al ' + p.grad + '%.' + (rep ? ' Reputazione ' + (rep > 0 ? '+' : '') + rep + '.' : '')
+      + (beers ? ' 🍺 +' + beers + '.' : ''), skipped || p.grad >= 40 ? 'ok' : undefined);
+  // dopo il preside tocca al DJ: il cambio palco parte dal foglio (o dalla
+  // scaletta), appena letto il messaggio del discorso
+  updateFoglio();
+  setTimeout(() => {
+    if (!cambioDj() && presideDone()) showToast('Alle 21:10 il cambio palco per il DJ: parte dal foglio in alto a sinistra o dalla scaletta 📋.', 'ok');
+  }, Math.max(3200, el('#toast').textContent.length * 60) + 300);
+}
+function presideSummary () {
+  const p = Profile.data.preside;
+  if (p.skipped) return 'Saltato: niente reputazione.';
+  const ch = (cambioDj() && cambioDj().micCh) || micChannel();
+  return 'Pubblico al ' + p.grad + '%' + (p.larsens ? ' · larsen: ' + p.larsens : ' · niente larsen')
+    + (p.beers ? ' · 🍺 +' + p.beers : '') + ' · reputazione ' + (p.rep >= 0 ? '+' : '') + p.rep + '.'
+    + (ch ? ' Il suo microfono resta sul CH ' + ch + ' per il vocalist del DJ.' : '');
+}
+
 /* ---------------- il cambio palco per il DJ (21:10) ----------------
-   Dopo la posa dei cavi il preside ha parlato (il suo spettacolo per ora è
-   un prototipo a parte) e tocca a «Notte fuori controllo». Il cambio si fa
+   Dopo il discorso del preside (anche saltato) tocca a «Notte fuori
+   controllo». Il cambio si fa
    nella vista montaggio: DJ Inestimabile porta la sua consolle (scheda DJ),
    il service ci mette la DI (scheda Regia) e i cavi. La carta del DJ dice
    cosa collegare, il foglio lo spunta mentre si lavora e intanto la
@@ -2780,7 +2878,7 @@ function cambioTick (ms) {
   if (box) box.innerHTML = patienceHtml();
 }
 function startCambioDj () {
-  if (!caviDone() || cambioDjDone()) return;
+  if (!presideDone() || cambioDjDone()) return;
   if (!cambioDj()) {
     Profile.data.cambioDj = { ms: 0, patienceMs: CAMBIO_DJ_MS, micCh: micChannel(), slow: false, done: false, fails: 0 };
     Profile.save();
@@ -2835,10 +2933,6 @@ function finishCambioDj () {
     + (rep ? 'Reputazione ' + (rep > 0 ? '+' : '') + rep + '. ' : '')
     + 'Lo spettacolo del DJ arriva presto.', 'ok');
 }
-function presideSummary () {
-  const ch = (cambioDj() && cambioDj().micCh) || micChannel();
-  return 'Il preside ha parlato' + (ch ? ': il suo microfono resta sul CH ' + ch + ' per il vocalist del DJ.' : '.');
-}
 function cambioSummary () {
   const c = cambioDj();
   return (c.slow ? 'Finito a pazienza esaurita: il pubblico ha fischiato.' : 'Finito in ' + mmss(c.ms) + ', prima dei fischi.')
@@ -2850,9 +2944,9 @@ el('#cambio-close').addEventListener('click', () => { SFX.button(); closeCambioC
 el('#schedule-btn').addEventListener('click', () => { SFX.button(); openSchedule(false); });
 el('#schedule-go').addEventListener('click', () => {
   SFX.button();
-  const cavi = scheduleCavi, cambio = scheduleCambio;
+  const next = scheduleNext;
   closeSchedule();
-  if (cavi) openCavi(); else if (cambio) startCambioDj();
+  if (next === 'cavi') openCavi(); else if (next === 'preside') openPreside(); else if (next === 'cambio-dj') startCambioDj();
 });
 el('#schedule-close').addEventListener('click', () => { SFX.button(); closeSchedule(); });
 el('#schedule-modal').addEventListener('click', ev => { if (ev.target.id === 'schedule-modal') closeSchedule(); });
@@ -4608,7 +4702,14 @@ function updateFoglio () {
     icon = '🎧 ';
     head = 'Cambio palco fatto';
     body = '<p class="fg-note">DJ Inestimabile e Musa Esistenziale sono pronti a partire. Lo spettacolo del DJ arriva presto.</p>';
-  } else if (caviDone()) {
+  } else if (caviDone() && !presideDone()) {
+    // il discorso del preside: pronto se il microfono è cablato
+    const missing = presideReady();
+    icon = '🎤 ';
+    head = 'Prossimo: discorso del preside';
+    body = '<p class="fg-note">' + escapeHtml(missing ? 'Alle 21:00 parla il preside: ' + missing : 'Microfono pronto sul CH ' + micChannel() + ': il preside aspetta dietro le quinte.') + '</p>'
+      + (missing ? '' : '<button type="button" class="fg-go" id="foglio-preside">Il preside sale sul palco</button>');
+  } else if (presideDone()) {
     icon = '🎧 ';
     head = 'Prossimo: cambio palco per il DJ';
     body = '<p class="fg-note">Il preside ha finito di parlare: alle 21:10 arriva DJ Inestimabile con la sua consolle. Appena parti, il pubblico comincia ad aspettare.</p>'
@@ -4623,6 +4724,8 @@ function updateFoglio () {
   el('#foglio-toggle').addEventListener('click', () => { foglioOpen = !foglioOpen; SFX.button(); updateFoglio(); });
   const go = el('#foglio-cambio');
   if (go) go.addEventListener('click', () => { SFX.button(); startCambioDj(); });
+  const pr = el('#foglio-preside');
+  if (pr) pr.addEventListener('click', () => { SFX.button(); openPreside(); });
 }
 
 // cambio di scheda verso una chiusa: si spiega perché
@@ -6462,6 +6565,7 @@ class StageScene extends Phaser.Scene {
     setCircuitStatus('untested');
     gameState.tested = false;
     this.pushHistory();
+    if (edge.signal === 'xlr') presideMicHint();
   }
 
   redrawEdges () {
