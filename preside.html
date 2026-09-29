@@ -2,7 +2,11 @@
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@600;700&family=Permanent+Marker&family=Inter:wght@400;500;600;700&display=swap">
 <style>
-  /* Prototipo della fase di spettacolo: stessi colori e caratteri del gioco (solo tema scuro, come il gioco). */
+  /* Il discorso del preside (21:00), la prima fase di spettacolo del livello 1
+     (docs/livello1-festa-scuola.md): stessi colori e caratteri del gioco (solo
+     tema scuro, come il gioco). Nel gioco si apre in un iframe con ?embed=1
+     dopo la posa dei cavi; aperta da sola resta il banco di prova, con la
+     scelta del guasto e dei cavi lasciati dalla posa. */
   :root{
     color-scheme: dark;
     --bg-deck:#141519; --bg-panel:#1c1d22; --bg-raised:#24252b; --hairline:#34363e;
@@ -158,6 +162,8 @@
   .sw{width:38px;height:22px;border-radius:11px;background:#3a3c44;position:relative;flex:none;transition:background .2s}
   .sw::after{content:"";position:absolute;top:3px;left:3px;width:16px;height:16px;border-radius:50%;background:#fff;transition:left .2s}
   .toggle[aria-pressed=true] .sw::after{left:19px}
+  .toggle.skip{justify-content:center;color:var(--muted)}
+  .cta:disabled{opacity:.5;cursor:default}
   .cta{background:var(--amber);color:#1a1206;border:0;border-radius:10px;padding:12px;font-family:var(--display);font-size:22px;letter-spacing:.06em}
   .results{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;text-align:center}
   .results div{background:var(--bg-raised);border-radius:10px;padding:8px 4px}
@@ -334,13 +340,13 @@
     </div>
     <p>Parla un quarto d'ora e vuole essere sentito fino al parcheggio. Nessuno capisce una parola di quello che dice, ma guai se non si sente.</p>
     <ul>
-      <li>Si parte <b>al buio</b>. Mentre sale sul palco accendi i <b>frontali</b> (PAR 2 e 3) in bianco: devono essere accesi <b>prima che arrivi al leggio</b>. Poi <b>microfono aperto</b> e <b>musica giù</b>.</li>
+      <li>Si parte <b>al buio</b>. Mentre sale sul palco accendi i <b>frontali</b> (<span id="front-names">PAR 2 e 3</span>) in bianco: devono essere accesi <b>prima che arrivi al leggio</b>. Poi <b>microfono aperto</b> e <b>musica giù</b>.</li>
       <li>Tieni la sua voce nella <b>zona verde</b>. Ogni sera è diversa: lui non parla mai uguale.</li>
       <li>Se va verso le casse il <b>larsen</b> cresce: abbassa quanto basta, senza zittirlo.</li>
       <li>Il suo microfono è collegato all'<b>ingresso MIC <span class="wired-n">1</span></b> del mixer, cioè il <b>CH <span class="wired-n">1</span></b>. Ricordatelo.</li>
       <li>Se qualcosa si guasta, <b>guarda bene il palco e il mixer</b>. Risolverlo in fretta ti fa guadagnare reputazione. Intanto un po' di <b>musica dal PC</b> fa aspettare il pubblico: quando il preside torna a sentirsi, riabbassala.</li>
     </ul>
-    <div class="pick" id="cause-pick">Guasto (per provare il prototipo)<div>
+    <div class="pick" id="cause-pick">Guasto (per provare il discorso)<div>
       <button data-c="" aria-pressed="true">A caso</button><button data-c="mic" aria-pressed="false">Microfono</button><button data-c="cavo" aria-pressed="false">Cavo</button><button data-c="ing" aria-pressed="false">Ingresso</button><button data-c="mixer" aria-pressed="false">Mixer</button>
     </div></div>
     <div class="pick" id="posa-pick">Cavi lasciati dalla posa (20:00): cosa non ha sistemato il tecnico<div>
@@ -348,6 +354,7 @@
     </div></div>
     <button class="toggle" id="hints-btn" aria-pressed="true"><span>Suggerimenti nei fumetti</span><span class="sw"></span></button>
     <button class="cta" id="start">Inizia il discorso</button>
+    <button class="toggle skip" id="skip" hidden>Salta il discorso: il preside parla lo stesso, ma niente reputazione</button>
   </div>
 </div>
 
@@ -375,6 +382,7 @@
   const rnd = (a, b) => a + Math.random() * (b - a);
   const pick = a => a[Math.floor(Math.random() * a.length)];
   const clamp = v => Math.max(0, Math.min(100, v));
+  const EMBED = new URLSearchParams(location.search).has('embed');
   const store = { get (k, d) { try { const v = localStorage.getItem(k); return v == null ? d : JSON.parse(v); } catch (e) { return d; } }, set (k, v) { try { localStorage.setItem(k, JSON.stringify(v)); } catch (e) {} } };
 
   const DURATION = 90;            // secondi reali = 15 minuti di discorso
@@ -384,7 +392,11 @@
   // entrata: il preside parte fuori scena a sinistra e cammina fino al leggio,
   // dove arriva a ARRIVE secondi; i frontali devono essere accesi entro allora
   const ENTRY_X = -70, ARRIVE = 7;
-  const FRONT = [1, 2];           // PAR 2 e 3 fanno i frontali, PAR 1 e 4 i tagli
+  // i PAR da sinistra a destra: nel gioco quelli montati davvero, col loro nome
+  // e il ruolo dello stativo; da soli i 4 del livello 1 (PAR 2 e 3 frontali,
+  // PAR 1 e 4 tagli). FRONT: gli indici dei frontali
+  let PARS = [['PAR 1', 'taglio'], ['PAR 2', 'frontale'], ['PAR 3', 'frontale'], ['PAR 4', 'taglio']].map(([label, role]) => ({ label, role }));
+  let FRONT = [1, 2];
   const COLORS = { bianco: '#f4f1ea', rosso: '#e0503f', blu: '#3f7fe0', verde: '#49b06a', ambra: '#f2a541', viola: '#b36bff' };
   // cosa dice (la voce dice solo "Tramp", i sottotitoli lo traducono)
   const LINES = [
@@ -398,22 +410,25 @@
   ];
 
   let nextWired = 1 + Math.floor(Math.random() * 4);   // l'ingresso che il tecnico ha cablato al montaggio
+  let pocket = 1;          // birre in tasca all'inizio (nel gioco quelle del tecnico)
+  let result = null;       // l'esito del discorso, per il gioco
   let hints = store.get('tramp-hints', store.get('tramp-runs', 0) === 0);
   let S;
+  const all = c => PARS.map(() => c);
   function fresh () {
     return {
-      t: 0, running: false, paused: false, grad: 60, fatigue: 30, beers: 1, drunk: 0,
+      t: 0, running: false, paused: false, grad: 60, fatigue: 30, beers: pocket, drunk: 0,
       fad: { 1: 0, 2: 0, 3: 0, 4: 0, 5: 0.7 }, mute: { 1: false, 2: false, 3: false, 4: false, 5: false },
       micCh: nextWired, wired: nextWired, micOk: true, fault: null, task: null,
-      dimmer: 0, pars: ['bianco', 'bianco', 'bianco', 'bianco'], mem: 4,    // si parte al buio
+      dimmer: 0, pars: all('bianco'), mem: 4,    // si parte al buio
       voiceK: 1, drift: 1, driftTo: 1, px: ENTRY_X, walkTo: null, ring: 0, ringCool: 0,
       jingle: false, larsens: 0, pops: 0, repDelta: 0, notes: [], events: [],
       tripAt: rnd(24, 60), tripped: false, buzzSaid: false,
       mems: {
-        1: { name: 'Bianco pieno', pars: ['bianco', 'bianco', 'bianco', 'bianco'], dimmer: 1 },
-        2: { name: 'Festa', pars: ['viola', 'blu', 'viola', 'blu'], dimmer: 0.3 },
-        3: { name: 'Caldo', pars: ['ambra', 'ambra', 'ambra', 'ambra'], dimmer: 0.8 },
-        4: { name: 'Buio', pars: ['bianco', 'bianco', 'bianco', 'bianco'], dimmer: 0 }
+        1: { name: 'Bianco pieno', pars: all('bianco'), dimmer: 1 },
+        2: { name: 'Festa', pars: PARS.map((_, i) => i % 2 ? 'blu' : 'viola'), dimmer: 0.3 },
+        3: { name: 'Caldo', pars: all('ambra'), dimmer: 0.8 },
+        4: { name: 'Buio', pars: all('bianco'), dimmer: 0 }
       }
     };
   }
@@ -433,7 +448,7 @@
   }
   const voiceOut = () => chOut(S.micCh);
   const inZone = o => o >= ZONE[0] && o <= ZONE[1];
-  const frontLit = () => FRONT.every(i => S.pars[i] === 'bianco') && S.dimmer >= 0.6;
+  const frontLit = () => !FRONT.length || FRONT.every(i => S.pars[i] === 'bianco') && S.dimmer >= 0.6;
   function hit (d, msg) { S.grad = clamp(S.grad + d); toast(msg, 'bad'); sfx.boo(); }
 
   /* ---------- copione: apertura e finale fissi, in mezzo 5 imprevisti pescati da 7, a tempi variabili ---------- */
@@ -500,7 +515,7 @@
       };
     }
     evs.push({ id: 'finale', at: 82, win: 7, target: 'preside', icon: '🎉', text: 'Ha finito il discorso', hint: 'memoria Festa e musica su', tab: 'luci',
-      ok: () => !S.pars.every(p => p === 'bianco') && S.dimmer >= 0.25 && chOut(PC) >= 0.5, hold: 0.3,
+      ok: () => (!S.pars.length || !S.pars.every(p => p === 'bianco') && S.dimmer >= 0.25) && chOut(PC) >= 0.5, hold: 0.3,
       fail: () => hit(-6, 'Finale muto e spento.') });
     return evs;
   }
@@ -672,9 +687,15 @@
 
   /* ---------- palco ---------- */
   const beams = $('#beams'), parsG = $('#pars'), crowd = $('#crowd');
-  const PAR_X = [70, 150, 250, 330];
-  const beamEls = PAR_X.map(x => mk('path', { d: `M${x - 6} 18 L${x + 6} 18 L${x + 55} 162 L${x - 55} 162 Z`, opacity: 0 }, beams));
-  const parEls = PAR_X.map(x => { mk('rect', { x: x - 8, y: 10, width: 16, height: 10, rx: 3, fill: '#222' }, parsG); return mk('circle', { cx: x, cy: 20, r: 5 }, parsG); });
+  let beamEls = [], parEls = [];
+  // i PAR appesi sopra il palco, distribuiti da sinistra a destra
+  function buildStagePars () {
+    beams.textContent = ''; parsG.textContent = '';
+    const n = PARS.length, xs = PARS.map((_, i) => n === 1 ? 200 : 70 + i * 260 / (n - 1));
+    beamEls = xs.map(x => mk('path', { d: `M${x - 6} 18 L${x + 6} 18 L${x + 55} 162 L${x - 55} 162 Z`, opacity: 0 }, beams));
+    parEls = xs.map(x => { mk('rect', { x: x - 8, y: 10, width: 16, height: 10, rx: 3, fill: '#222' }, parsG); return mk('circle', { cx: x, cy: 20, r: 5 }, parsG); });
+  }
+  buildStagePars();
   const heads = [];
   for (let r = 0; r < 4; r++) for (let i = 0; i < 16; i++) {
     const x = 12 + i * 25 + (r % 2) * 12 + rnd(-3, 3), y = 186 + r * 18;
@@ -692,7 +713,7 @@
     const pr = $('#preside');
     pr.setAttribute('transform', `translate(${S.px.toFixed(1)} ${72 + Math.sin(S.t * (S.t < ARRIVE ? 9 : 4)) * 1.2})`);
     // senza frontali il preside resta in ombra
-    const lit = FRONT.filter(i => S.pars[i] === 'bianco').length / FRONT.length * S.dimmer;
+    const lit = FRONT.length ? FRONT.filter(i => S.pars[i] === 'bianco').length / FRONT.length * S.dimmer : 1;
     pr.style.filter = `brightness(${(0.3 + 0.7 * Math.min(1, lit / 0.6)).toFixed(2)})`;
     const cause = S.fault && S.fault.nodes[S.fault.cause] !== 'fixed' ? S.fault.cause : null;
     $('#cable').setAttribute('d', cause === 'ing' ? 'M200 150 Q250 162 284 159' : 'M200 150 Q230 158 250 162');
@@ -832,7 +853,7 @@
     const pb = $('#par-btns'); pb.textContent = '';
     S.pars.forEach((_, i) => {
       const b = document.createElement('button'); b.className = 'par'; b.id = 'par-' + i;
-      b.innerHTML = `<span class="dot"></span>PAR ${i + 1}<small>${FRONT.includes(i) ? 'frontale' : 'taglio'}</small>`;
+      b.innerHTML = `<span class="dot"></span>${PARS[i].label}<small>${FRONT.includes(i) ? 'frontale' : 'taglio'}</small>`;
       b.onclick = () => { const keys = Object.keys(COLORS); S.pars[i] = keys[(keys.indexOf(S.pars[i]) + 1) % keys.length]; S.mem = null; paintLights(); };
       pb.appendChild(b);
     });
@@ -997,6 +1018,8 @@
     if (S.micCh !== S.wired) { S.repDelta -= 2; S.notes.push('Il microfono è finito su MIC ' + S.micCh + ' invece che su MIC ' + S.wired + ', dove l\'avevi cablato (−2 reputazione).'); }
     notes.push(...S.notes);
     const rep = 5 + Math.round((S.grad - 60) / 10) - S.larsens * 5 + S.repDelta;
+    result = { type: 'preside', grad: Math.round(S.grad), rep, beers, drunk: S.drunk, larsens: S.larsens, pops: S.pops,
+      fault: S.events.some(e => e.id === 'cavo' && e.started), notes: notes.map(n => n.replace(/<[^>]+>/g, '').trim()).filter(Boolean) };
     $('#outro-title').textContent = S.grad >= 70 ? 'Il miglior tecnico della storia!' : S.grad >= 40 ? 'Applausi tiepidi.' : 'Siete licenziati!';
     $('#r-grad').textContent = Math.round(S.grad) + '%';
     $('#r-beer').textContent = '+' + beers;
@@ -1014,10 +1037,17 @@
   const paintHints = () => $('#hints-btn').setAttribute('aria-pressed', hints);
   $('#hints-btn').onclick = () => { hints = !hints; store.set('tramp-hints', hints); paintHints(); };
   paintHints();
-  $('#start').onclick = start;
-  const paintWired = () => document.querySelectorAll('.wired-n').forEach(e => { e.textContent = nextWired; });
-  paintWired();
-  $('#again').onclick = () => { nextWired = 1 + Math.floor(Math.random() * 4); paintWired(); $('#outro').hidden = true; $('#intro').hidden = false; };
+  $('#start').onclick = () => { if (!$('#start').disabled) start(); };
+  const paintIntro = () => {
+    document.querySelectorAll('.wired-n').forEach(e => { e.textContent = nextWired; });
+    const f = FRONT.map(i => PARS[i].label);
+    $('#front-names').textContent = f.length > 1 ? f.slice(0, -1).join(', ') + ' e ' + f[f.length - 1] : f[0] || 'nessun PAR';
+  };
+  paintIntro();
+  $('#again').onclick = () => {
+    if (EMBED) { toGame(result); return; }
+    nextWired = 1 + Math.floor(Math.random() * 4); paintIntro(); $('#outro').hidden = true; $('#intro').hidden = false;
+  };
   document.querySelectorAll('#posa-pick button').forEach(b => b.onclick = () => {
     const p = b.dataset.p, on = !posaLeft.has(p);
     if (on) posaLeft.add(p); else posaLeft.delete(p);
@@ -1098,7 +1128,37 @@
   })();
 
   S = fresh(); buildDesk(); drawStage(); paintHeader();
-  window.__tramp = { state: () => S, posaLeft };   // per i test (tests/preside-cavi.js)
+  window.__tramp = { state: () => S, posaLeft, result: () => result };   // per i test (tests/preside-cavi.js, tests/preside-gioco.js)
+
+  /* ---------- DENTRO IL GIOCO: index.html apre il discorso in un iframe con
+     ?embed=1. La pagina chiede i dati ('preside-pronto'), il gioco manda il
+     montaggio vero ('preside-dati': l'ingresso del microfono, i PAR montati,
+     i cavi lasciati dalla posa, le birre in tasca) e alla fine riceve
+     l'esito ('preside-fine'). ---------- */
+  function configure (d) {
+    if (d.wired >= 1 && d.wired <= 4) nextWired = d.wired;
+    posaLeft.clear(); (d.left || []).forEach(k => posaLeft.add(k));
+    if (Array.isArray(d.pars)) {
+      PARS = d.pars.map(p => ({ label: String(p.label), role: p.role === 'frontale' ? 'frontale' : 'taglio' }));
+      FRONT = PARS.map((p, i) => p.role === 'frontale' ? i : -1).filter(i => i >= 0);
+    }
+    pocket = Math.max(0, Math.floor(d.beers) || 0);
+    buildStagePars(); S = fresh(); buildDesk(); drawStage(); paintHeader(); paintIntro();
+  }
+  const toGame = res => window.parent.postMessage({ type: 'preside-fine', result: res }, '*');
+  if (EMBED) {
+    $('#cause-pick').hidden = true; $('#posa-pick').hidden = true;
+    $('#skip').hidden = false; $('#start').disabled = true;
+    $('#skip').onclick = () => toGame({ type: 'preside', skipped: true });
+    $('#again').textContent = 'Torna al palco';
+    window.addEventListener('message', e => {
+      const d = e.data;
+      if (!d || d.type !== 'preside-dati') return;
+      configure(d);
+      $('#start').disabled = false;
+    });
+    window.parent.postMessage({ type: 'preside-pronto' }, '*');
+  }
   requestAnimationFrame(tick);
 })();
 </script>

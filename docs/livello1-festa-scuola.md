@@ -206,10 +206,10 @@ Il cambio palco (staccare ciò che non serve e ripatchare) fa parte del gioco.
   flight case) la porta DJ Inestimabile; compare in una scheda **DJ** che si
   apre solo col cambio. La **DI** è del service: è nella dotazione del
   montaggio (scheda Regia), dove non serve, e va tenuta per il DJ.
-- **Quando**: dopo la posa dei cavi. Lo spettacolo del preside non è ancora
-  nel gioco (è il prototipo `prototipi/spettacolo-preside.html`), quindi in
-  scaletta conta come fatto e il cambio delle 21:10 diventa «Adesso». Parte
-  dal foglio (tasto «Inizia il cambio palco») o dalla scaletta.
+- **Quando**: dopo il discorso del preside (`preside.html`, anche saltato):
+  il cambio delle 21:10 diventa «Adesso». Parte dal foglio (tasto «Inizia il
+  cambio palco») o dalla scaletta. Prima, il foglio propone il discorso («Il
+  preside sale sul palco») e dice cosa manca al microfono.
 - **La carta del DJ** (si apre all'inizio): DJ Inestimabile e Musa
   Esistenziale arrivano, la locandina, quanto aspetta il pubblico e il
   canale del microfono. Poi la stessa lista la spunta il foglio:
@@ -251,7 +251,7 @@ Personaggi storici: nessun problema di diritti. Personaggi viventi: caricatura
 disegnata e nome parodia.
 
 **Preside Tramp** (fatto, rifatto sulle foto): simbolo SVG `#tramp` in
-`prototipi/spettacolo-preside.html`. Tratti: ciuffo biondo enorme col riporto
+`preside.html`. Tratti: ciuffo biondo enorme col riporto
 sulla fronte, abbronzatura arancio con le occhiaie chiare, sopracciglia chiare
 aggrottate, occhi a fessura, bocca a cul di gallina, faccione squadrato con
 le guance cadenti; giacca blu larga e cravatta rossa lunghissima. Nessuna
@@ -290,7 +290,7 @@ ciuffi grigi ai lati, un sopracciglio più alto, occhi a fessura sornioni,
 nasone, sorriso storto; corporatura grossa nel camice blu da bidello con la
 camicia azzurra aperta. Per il ritratto si usa il ritaglio `viewBox="6 0 88 88"`
 (la testa è più alta di quella del preside). Dove compare:
-- `prototipi/spettacolo-preside.html`: quando il guasto lo trova lui, sale
+- `preside.html`: quando il guasto lo trova lui, sale
   sul palco per qualche secondo ("Tranquilli, ci penso io!") e la sua faccina
   accompagna la nota nella scheda finale;
 - `scarico.html`: visto dall'alto dietro al carrello (testa pelata con la
@@ -327,7 +327,8 @@ professionalità, non la sfortuna.
 - Ogni fase e ogni richiesta extra contano una volta sola per service: rifarle
   non aggiunge altro.
 - Nel gioco oggi ci sono il collaudo dell'impianto (+5), lo scarico, la posa
-  dei cavi e il cambio palco per il DJ. I numeri sono in `REP` in `main.js`.
+  dei cavi, il discorso del preside (vedi *Il discorso nel gioco*) e il cambio
+  palco per il DJ. I numeri sono in `REP` in `main.js`.
 
 ## Animazione di errore (proposta)
 
@@ -381,7 +382,9 @@ Giro del livello: **Montaggio → Test impianto → [cambio palco → spettacolo
 - **Header**: barra del tempo con faccia del personaggio e orologio; il
   gradimento del pubblico è la barra più grande, con la percentuale; la
   stanchezza sta nel tasto della 🍺 (la birra la fa scendere); reputazione.
-- **Palco isometrico**: resta la vista di gioco. Sopra compaiono i personaggi
+- **Palco isometrico**: resta la vista di gioco del montaggio. Il discorso
+  del preside invece ha il suo palco disegnato di fronte (vedi *Il discorso
+  nel gioco*). Per le altre fasi, da decidere: sopra compaiono i personaggi
   (preside al microfono, DJ alla consolle, Dante sullo sgabello) e il pubblico
   in platea: teste che si muovono a tempo, colore e fumetti che ne mostrano l'umore.
 - **Imprevisti**: fumetto sopra il personaggio o il dispositivo, con un anello
@@ -410,10 +413,30 @@ Giro del livello: **Montaggio → Test impianto → [cambio palco → spettacolo
 - Reputazione salvata nel browser del giocatore.
 - I numeri (gradimento, stress, pazienza) si tarano giocando.
 
-## Prototipo
+## Il discorso nel gioco
 
-`prototipi/spettacolo-preside.html`: la fase del discorso del preside, cliccabile,
-per provare il ritmo prima di portarla nel gioco.
+`preside.html`: la fase del discorso del preside. Nato come prototipo in
+`prototipi/`, ora è nel gioco: finita la posa dei cavi (anche saltata) si apre
+in un iframe sopra il palco, o dalla scaletta («Il preside sale sul palco»).
+
+- **Serve il microfono**: montato sull'asta e collegato con un XLR a un
+  ingresso MIC 1–4 del mixer acceso (`presideReady()` in `main.js`). Il Test
+  impianto non lo chiede: se manca, dopo la posa un avviso dice cosa collegare
+  e il preside sale da solo pochi secondi dopo il collegamento.
+- **Il montaggio vero entra nel discorso**: l'ingresso cablato (la risposta a
+  «in che ingresso era?» quando si guasta), i PAR montati col nome e il ruolo
+  del loro stativo (frontali e tagli, da sinistra a destra: se allo scarico
+  se n'è rotto qualcuno ce ne sono meno), i cavi lasciati dalla posa
+  (`caviLeftovers()`) e le birre in tasca.
+- **Esito**: la reputazione del discorso (5 + gradimento − larsen ± guasto e
+  richieste, vedi sotto) conta una volta sola (`L1:preside`); le birre
+  guadagnate vanno in tasca, quelle bevute si tolgono. Si può saltare dalla
+  scheda iniziale: il preside parla lo stesso, reputazione ferma. La scaletta
+  mostra il riassunto (pubblico, larsen, birre, reputazione).
+- Aperta da sola, la pagina resta il banco di prova: ingresso a caso, 4 PAR,
+  scelta del guasto e dei cavi lasciati dalla posa.
+- Test: `tests/preside-gioco.js` (dentro il gioco), `tests/preside-cavi.js`
+  (le conseguenze della posa, pagina da sola).
 
 Nella scheda iniziale, «Cavi lasciati dalla posa» prova le conseguenze della
 posa dei cavi finita col tempo (vedi `docs/minigioco-posa-cavi.md`): cavo nel
@@ -422,9 +445,9 @@ corrente (ronzio), cavo in scena (il preside inciampa).
 
 ### Dopo la prima prova
 
-- **Grafica**: quella del prototipo non è definitiva. Nel gioco vero lo
-  spettacolo si svolge sul palco isometrico che c'è già; del prototipo restano
-  l'impianto dell'interfaccia (header, fumetti, banco regia).
+- **Grafica**: il discorso resta com'è stato costruito (palco disegnato di
+  fronte, header, fumetti, banco regia), non si sposta sul palco isometrico
+  (deciso).
 - **Guasti veri, non "tocca e risolvi"**: il microfono muto va diagnosticato
   e riparato con decisioni di cablaggio (vedi *Il guasto del microfono* sotto).
 - **Lingua dei personaggi**: ognuno parla una lingua fatta solo del suo nome
@@ -485,8 +508,9 @@ Il guasto si risolve ricordando il cablaggio, non premendo un pulsante.
   - *Qualcuno ha toccato il mixer*: il canale del preside è in MUTE o col fader
     tutto giù. Si sistema dal banco.
 - **La domanda della memoria**: «in che ingresso era?». La risposta è
-  l'ingresso cablato al montaggio (la scaletta chiede il CH 1; nel prototipo
-  è estratto a caso a ogni partita e scritto solo nella scheda iniziale). Se
+  l'ingresso cablato al montaggio: va bene qualsiasi MIC 1–4, purché sia
+  cablato (deciso). Aperta da sola, la pagina lo estrae a caso a ogni partita
+  e lo scrive solo nella scheda iniziale. Se
   lo rimetti altrove nessun avviso: la voce arriva su un canale col fader giù,
   bisogna accorgersene dai meter; a fine discorso −2 reputazione.
 - **Musica di riempimento**: durante il guasto si può alzare il PC; il
