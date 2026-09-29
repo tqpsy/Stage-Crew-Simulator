@@ -71,7 +71,7 @@ const path = require('path');
   await ev(() => __dj.start(true));
   const M = await ev(() => ({ t0: __dj.mappa.t0, bpm: __dj.mappa.bpm, voce: __dj.mappa.voce, durata: __dj.mappa.durata }));
   const T = (bar, beat) => M.t0 + (bar * 4 + beat) * 60 / M.bpm;
-  const crowd = () => ev(() => [...document.querySelectorAll('#crowd > g')].map(g => +g.getAttribute('transform').match(/translate\(([-\d.]+) ([-\d.]+)\)/)[2]));
+  const crowd = () => ev(() => [...document.querySelectorAll('#crowd > g, #crowd2 > g')].map(g => +g.getAttribute('transform').match(/translate\(([-\d.]+) ([-\d.]+)\)/)[2]));
   const musa = () => ev(() => ({ singing: __dj.state().singing, ry: +document.querySelector('#mouth').getAttribute('ry'), bub: +document.querySelector('#voice-bub').getAttribute('opacity') }));
 
   // nel break (battuta 20) il pubblico non salta
@@ -155,6 +155,8 @@ const path = require('path');
   check(nf.n === nf.easy && nf.n < nf.all * 0.8, 'facile: ' + JSON.stringify(nf));
 
   // ---- a colpo d'occhio: la pagina sta nello schermo del telefono ----
+  // sul telefono tre file di pubblico stanno dietro la pista
+  check(await ev(() => document.querySelectorAll('#crowd2 > g').length === 51 && !document.querySelector('#crowd-far').hasAttribute('hidden')), 'il pubblico non scende dietro la pista');
   const fit = await ev(() => ({ w: document.documentElement.scrollWidth, pads: document.querySelector('#pads').getBoundingClientRect().bottom, h: innerHeight }));
   check(fit.w <= 390 && fit.pads <= fit.h, 'non sta in 390×844: ' + JSON.stringify(fit));
 

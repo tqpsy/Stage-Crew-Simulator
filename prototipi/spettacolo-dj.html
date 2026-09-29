@@ -54,7 +54,11 @@
 
   /* ---- la pista delle luci ---- */
   #rig{background:var(--bg-panel);border-top:1px solid var(--hairline);display:grid;grid-template-rows:1fr auto;min-height:0;padding:0 16px calc(10px + env(safe-area-inset-bottom,0px))}
-  #road{position:relative;min-height:0;overflow:hidden;perspective:520px}
+  #road{position:relative;min-height:0;overflow:hidden;perspective:520px;background:#101116}
+  /* le file di pubblico più lontane dal palco, dietro la pista e in dissolvenza (solo col palco sopra la pista) */
+  #crowd-far{position:absolute;left:0;top:0;width:100%;height:62%;opacity:.5;pointer-events:none;
+    -webkit-mask-image:linear-gradient(#000 0%,#000 30%,transparent 100%);mask-image:linear-gradient(#000 0%,#000 30%,transparent 100%)}
+  #hw{z-index:1}
   #hw{position:absolute;left:0;right:0;bottom:0;height:130%;width:100%;transform-origin:50% 100%;transform:rotateX(24deg)}
   #judge{position:absolute;left:0;right:0;bottom:24%;text-align:center;font-family:var(--display);font-size:26px;letter-spacing:.08em;pointer-events:none;opacity:0;text-shadow:0 2px 8px #000}
   #judge.show{animation:pop .45s ease-out}
@@ -323,6 +327,11 @@
 
   <section id="rig" aria-label="Consolle luci">
     <div id="road">
+      <svg id="crowd-far" viewBox="0 190 400 76" preserveAspectRatio="xMidYMin slice" aria-hidden="true" hidden>
+        <rect x="0" y="150" width="400" height="130" fill="#0d0e12"/>
+        <g id="crowd2"></g>
+        <rect id="crowd-glow2" x="0" y="150" width="400" height="130" fill="#000" opacity="0" style="mix-blend-mode:screen"/>
+      </svg>
       <canvas id="hw"></canvas>
       <div id="banner"></div>
       <div id="judge"></div>
@@ -492,6 +501,26 @@
     const phone = mk('rect', { x: x + 6, y: y - 12, width: 3, height: 5, rx: .6, fill: '#dfe8ff', opacity: 0 }, g);
     people.push({ g, h, arms, phone, x, keen: Math.random(), ph: rnd(-0.08, 0.08), sway: rnd(0, 6), row: r });
   }
+  // col palco sopra la pista (telefono in verticale) la prima fila resta sul palco
+  // e le altre tre scendono dietro la pista: il palco si vede più grande
+  let crowdUnder = null;
+  function layoutCrowd () {
+    const st = $('#stage').getBoundingClientRect(), rg = $('#rig').getBoundingClientRect();
+    const under = rg.top >= st.bottom - 2 && rg.left <= st.left + 2;
+    if (under !== crowdUnder) {
+      crowdUnder = under;
+      people.forEach(o => { if (o.row > 0) (under ? $('#crowd2') : crowdG).appendChild(o.g); });
+      $('#scene').setAttribute('viewBox', under ? '0 0 400 212' : '0 0 400 250');
+      $('#crowd-far').toggleAttribute('hidden', !under);
+    }
+    if (!under) return;
+    // stessa scala e stesso centro del palco: le file continuano quelle di sopra
+    const far = $('#crowd-far').getBoundingClientRect();
+    const k = Math.max(st.width / 400, st.height / 212);
+    const w = far.width / k, h = far.height / k;
+    const cxp = (st.left + st.width / 2 - far.left) / k;
+    $('#crowd-far').setAttribute('viewBox', `${(200 - cxp).toFixed(1)} 190 ${w.toFixed(1)} ${h.toFixed(1)}`);
+  }
 
   function drawStage () {
     const t = S.t, sec = sectionAt(t), pal = PALETTE[sec.k];
@@ -522,6 +551,8 @@
     const glow = $('#crowd-glow');
     glow.setAttribute('fill', L[0] >= L[1] ? pal[0] : pal[1]);
     glow.setAttribute('opacity', (0.22 * side + 0.25 * L[3]).toFixed(3));
+    $('#crowd-glow2').setAttribute('fill', glow.getAttribute('fill'));
+    $('#crowd-glow2').setAttribute('opacity', glow.getAttribute('opacity'));
     $('#haze-r').setAttribute('opacity', (sec.k === 'BUILD' ? 0.5 : sec.k === 'DROP' ? 0.3 : 0.12).toFixed(2));
 
     // casse e consolle a tempo
@@ -595,15 +626,15 @@
     cv.width = Math.round(W * DPR); cv.height = Math.round(H * DPR);
     cx.setTransform(DPR, 0, 0, DPR, 0, 0);
   }
-  window.addEventListener('resize', resize);
+  window.addEventListener('resize', () => { resize(); layoutCrowd(); });
   function drawRoad () {
     if (!W) resize();
     const t = S.t, hitY = H - 22, laneW = W / 4;
     const yOf = tt => hitY - (tt - t) / LOOK * (hitY - 10);
     cx.clearRect(0, 0, W, H);
-    cx.fillStyle = '#101116'; cx.fillRect(0, 0, W, H);
+    // la pista è trasparente: sotto si intravede il pubblico
     for (let l = 0; l < 4; l++) {
-      cx.fillStyle = S.down[l] ? LANE_C[l] + '22' : (l % 2 ? '#15161c' : '#121319');
+      cx.fillStyle = S.down[l] ? LANE_C[l] + '2a' : (l % 2 ? 'rgba(26,27,34,.45)' : 'rgba(16,17,22,.3)');
       cx.fillRect(l * laneW, 0, laneW, H);
     }
     cx.strokeStyle = '#2a2c33'; cx.lineWidth = 1;
@@ -922,7 +953,7 @@
   })();
 
   S = fresh(false);
-  resize(); paint();
+  resize(); layoutCrowd(); paint();
   // per i test (tests/spettacolo-dj.js): orologio finto e stato
   window.__dj = {
     state: () => S, mappa: M, start, press, release, results,
