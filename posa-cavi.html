@@ -797,7 +797,7 @@ function drawCables () {
   // maniglie del cavo in mano, e i metri che restano
   if (sel && S.pts[sel]) {
     const l = lineById(sel), pts = S.pts[sel];
-    const R = Math.max(9, cs * .5);
+    const R = touchIn ? Math.max(12, cs * .7) : Math.max(9, cs * .5);
     pts.slice(1, -1).forEach(([i, j], n) => {
       const [x, y] = center(i, j), hot = S.grab && S.grab.id === sel && S.grab.k === n + 1;
       ctx.beginPath(); ctx.arc(x, y, hot ? R * 1.25 : R, 0, 7);
@@ -871,8 +871,10 @@ function segDist (x, y, a, b) {
   return Math.hypot(x - a[0] - t * dx, y - a[1] - t * dy);
 }
 // i cavi vicini al punto, dal più vicino; seg = tratto della corda (0 = dal pezzo al primo punto)
+// col dito il bersaglio è più largo: una cella del telefono è più piccola del polpastrello
+let touchIn = false;
 function cablesAt (x, y) {
-  const reach = Math.max(14, cs * .8), out = [];
+  const reach = touchIn ? Math.max(26, cs * 1.4) : Math.max(14, cs * .8), out = [];
   S.scen.lines.forEach((l, idx) => {
     const pts = S.pts[l.id]; if (!pts) return;
     const rp = ropePoints(l, pts).map(([px, py]) => [px + laneOff(idx), py + laneOff(idx)]);
@@ -885,12 +887,17 @@ function cablesAt (x, y) {
 cv.addEventListener('pointerdown', e => {
   if (S.done) return;
   const [x, y] = pointerXY(e);
+  touchIn = e.pointerType !== 'mouse';
   S.down = { x, y, sel: S.sel };
   if (S.rampMode) return;
   let g = null;
-  if (S.sel) {   // prima le maniglie del cavo in mano
-    const pts = S.pts[S.sel], R = Math.max(18, cs * .8);
-    for (let k = 1; k < pts.length - 1; k++) { const [hx, hy] = center(...pts[k]); if (Math.hypot(x - hx, y - hy) < R) g = { id: S.sel, k }; }
+  if (S.sel) {   // prima le maniglie del cavo in mano: vince la più vicina
+    const pts = S.pts[S.sel];
+    let best = touchIn ? Math.max(30, cs * 1.6) : Math.max(18, cs * .8);
+    for (let k = 1; k < pts.length - 1; k++) {
+      const [hx, hy] = center(...pts[k]), d = Math.hypot(x - hx, y - hy);
+      if (d < best) { best = d; g = { id: S.sel, k }; }
+    }
   }
   if (!g) {
     const hits = cablesAt(x, y);
@@ -904,7 +911,7 @@ cv.addEventListener('pointerdown', e => {
 cv.addEventListener('pointermove', e => {
   const g = S.grab; if (!g) return;
   const [x, y] = pointerXY(e);
-  if (!g.moved && Math.hypot(x - g.x, y - g.y) < 8) return;
+  if (!g.moved && Math.hypot(x - g.x, y - g.y) < (touchIn ? 12 : 8)) return;
   if (!g.moved) {
     g.moved = true;
     S.sel = g.id;
@@ -933,7 +940,7 @@ cv.addEventListener('pointerup', e => {
   }
   if (S.done || !dn) return;
   const [x, y] = pointerXY(e);
-  if (Math.hypot(x - dn.x, y - dn.y) >= 8) return;
+  if (Math.hypot(x - dn.x, y - dn.y) >= (touchIn ? 12 : 8)) return;
   if (S.rampMode) { toggleRamp(...toCell(x, y)); return; }
   if (g) {   // tocco su un cavo: lo prende; ritoccando dove ce n'è più d'uno, passa al prossimo
     const k = g.hits.indexOf(dn.sel);
