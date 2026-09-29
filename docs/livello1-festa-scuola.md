@@ -232,9 +232,94 @@ Il cambio palco (staccare ciò che non serve e ripatchare) fa parte del gioco.
 - Codice: `cambioChecks`, `startCambioDj`, `finishCambioDj` e
   `runCambioTest` in `main.js`; stato in `Profile.data.cambioDj`. Test:
   `tests/cambio-dj.js`.
-- **Da fare**: lo spettacolo del DJ (vedi sotto), con i suoi guasti. La
+- **Da fare**: lo spettacolo del DJ (vedi *Lo spettacolo del DJ: Light
+  Operator Hero* qui sotto), con i suoi guasti. La
   «ciabattina del DJ» piena di roba che fa scattare una fase appartiene lì
   (tra i guasti proposti); oggi la consolle consuma poco.
+
+## Lo spettacolo del DJ: Light Operator Hero (deciso)
+
+Nel set di «Notte fuori controllo» il giocatore non fa il DJ: è l'**operatore
+luci** e fa le luci a ritmo, come un Guitar Hero delle luci. I guasti non lo
+tirano fuori dal gioco a ritmo, se non quelli grossi, e allora è lui a
+scegliere chi va a sistemarli.
+
+**La pista delle luci**
+- In basso 4 corsie, una per memoria luci: **colori**, **chase**, **strobo**,
+  **blackout**. Le note scendono a tempo di musica e si premono quando toccano
+  la linea.
+- Nota presa: le luci sul palco fanno quella scena, il pubblico salta, il
+  gradimento sale e cresce la combo. Nota mancata: luci in ritardo o ferme,
+  gradimento giù, combo azzerata.
+- Il **drop** è una nota lunga da tenere premuta: presa, boato del pubblico.
+- Livello 1: note lente, finestra larga, un guasto alla volta. La
+  **stanchezza** stringe la finestra, la birra la riallarga.
+- Il ritmo viene dalla musica: con un file audio vero (vedi sotto) servono i
+  suoi BPM e dove cadono i drop; senza, il ritmo techno generato dal codice.
+
+**I guasti, in tre modi**
+1. **Guasti che diventano note speciali**, risolti senza lasciare la pista:
+   - Musa si avvicina alle casse: nota rossa **MUTE MIC**; presa a tempo
+     evita il larsen, mancata il larsen parte;
+   - volume del DJ in rosso: nota **fader** da trascinare in giù;
+   - Musa si mangia il microfono: nota fader sul suo canale.
+2. **Guasti che rompono la pista** (le luci):
+   - un PAR perde il DMX: la sua corsia diventa grigia e quelle note non si
+     prendono più. Si tocca il PAR, si sistema cavo o indirizzo e la corsia
+     torna. Si può andare avanti con 3 corsie e sistemarlo in un momento
+     calmo.
+3. **Guasti grossi**, che portano fuori dalla pista:
+   - la ciabattina del DJ fa scattare una fase del Quadro (metà impianto
+     spento): si va al Quadro, si riarma e si sposta la spina su un'altra
+     fase;
+   - arrivano apposta nei momenti calmi del pezzo (le pause prima del drop):
+     sistemare subito o aspettare la pausa è una scelta.
+
+**Chi va a sistemare un guasto grosso**
+
+| Scelta | Cosa succede | Reputazione |
+|---|---|---|
+| **Ci vai tu** (gratis) | Il capo ti dà il cambio alle luci; tu sistemi il guasto | **+5** se in fretta, 0 se lento |
+| **Paghi una 🍺 al capo** | Ci va lui, tu resti alle luci senza perdere la combo | **0** (e una birra in meno) |
+| **Nessuno** | Dopo un po' ci pensa Gerry, il pubblico intanto patisce | **−5** (come il guasto trovato dal bidello) |
+
+- **Il capo alle luci è peggio di te**: prende le note in automatico ma ne
+  manca una su tre e la combo si azzera.
+- **Il capo si spazientisce**: se stai via troppo (proposta: 30 s) torna lui
+  alle luci e il guasto lo finisci con la pista che scorre; reputazione ridotta.
+- **La birra ha un costo vero**: è una birra in meno contro la stanchezza.
+  Senza birre in tasca la scelta non c'è: ci vai tu.
+- Il capo solo per i guasti grossi (fase che scatta, PAR senza DMX); i
+  guasti-nota restano del giocatore. Al massimo **due favori per set**.
+- Dal livello 2 il capo non c'è più (tutor solo al livello 1): al suo posto
+  un **assistente** da assumere con la reputazione, pagato a birre.
+
+**Il rewind del DJ**
+- Quando torni alle luci dopo aver sistemato un guasto grosso, DJ
+  Inestimabile fa lo **scratch** e riporta il brano **qualche battuta
+  indietro**: le note perse mentre eri via tornano e si possono riprendere.
+- Il rewind copre il tempo in cui sei stato via, **fino a 8 battute**: veloce
+  recuperi tutto, lento solo l'ultimo pezzo.
+- Il gradimento perso si recupera riprendendo quelle note, con un piccolo
+  bonus del pubblico al rewind (come nelle serate vere). La **combo riparte
+  da zero**.
+- **Solo se ci vai tu**: col capo pagato non serve (non hai perso note), con
+  Gerry niente rewind (il DJ è offeso e va avanti). **Uno per guasto.**
+- Con un file audio vero è lo scratch sul brano stesso: suono dello scratch
+  e il pezzo che riparte da qualche secondo prima.
+
+**Finale**: il set finisce, non vogliono smettere, Gerry stacca la corrente e
+li butta fuori (scena comica, il giocatore non fa niente). Gradimento, combo
+e guasti gestiti diventano birre e reputazione, una volta sola (come il
+discorso del preside).
+
+**Audio**: si potrà caricare un brano come base del set (MP3 stereo, 1–2
+minuti in loop, sotto i 3–4 MB, diritti liberi), con BPM e secondo del drop.
+Passa per la catena simulata: fader, mute, L/R, distorsione del gain in
+rosso, ronzio della DI.
+
+Un prototipo del gioco a ritmo è già in lavorazione in un'altra sessione:
+questa sezione è il riferimento per unirlo ai guasti.
 
 ## Personaggi (proposta)
 
@@ -275,7 +360,8 @@ stile e stesso ritaglio del ritratto (`viewBox="6 2 88 88"`).
   scratcha alla consolle; titolo al neon **NOTTE FUORI CONTROLLO**. Si apre
   dalla scaletta (voce delle 21:15, tasto "Guarda la locandina"; campo
   `poster` in `SCHEDULE`). Solo nomi d'arte.
-- DJ set (da fare): il lavoro è inseguire i guasti che combinano. Proposte:
+- DJ set (da fare, vedi *Lo spettacolo del DJ: Light Operator Hero*): il
+  lavoro è fare le luci a ritmo e inseguire i guasti che combinano. Proposte:
   gain del mixer DJ in rosso; Musa che si mangia il microfono (larsen); Musa
   che scende verso le casse; roba del DJ attaccata alla ciabatta sbagliata
   (scatta una fase); macchina del fumo sotto il rilevatore; cavo del
