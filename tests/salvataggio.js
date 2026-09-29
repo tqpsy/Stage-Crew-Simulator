@@ -176,7 +176,7 @@ const path = require('path');
   await ev(() => { Profile.flush = () => {}; localStorage.setItem('scs-save', JSON.stringify({ v: 1, service: 'Vecchio', settings: { volume: 0.5 }, level: null, records: {}, reputation: { total: 150, byLevel: { 1: 150 } } })); });
   await open();
   const conv = await ev(() => ({ v: Profile.data.v, rep: reputation(), once: Profile.data.reputation.earned['L1:collaudo'], vol: SFX.volume, again: (gameActive = true, addRecord()) }));
-  check(JSON.stringify(conv) === JSON.stringify({ v: 4, rep: 5, once: 5, vol: 0.5, again: 0 }), 'conversione dalla versione 1 sbagliata: ' + JSON.stringify(conv));
+  check(JSON.stringify(conv) === JSON.stringify({ v: 5, rep: 5, once: 5, vol: 0.5, again: 0 }), 'conversione dalla versione 1 sbagliata: ' + JSON.stringify(conv));
 
   // ---- salvataggio della versione 2 (giocatore titolare del service): il
   // service diventa il datore di lavoro, la reputazione resta al tecnico
@@ -184,7 +184,7 @@ const path = require('path');
   await ev(() => { Profile.flush = () => {}; localStorage.setItem('scs-save', JSON.stringify({ v: 2, service: 'Service Rossi', logo: { shape: 'scudo', icon: 'faro', bg: '#e0503f', fg: '#eee9df', style: 'tour' }, settings: { volume: 0.5 }, level: null, records: {}, reputation: { total: 12, earned: {}, log: [] } })); });
   await open();
   const conv2 = await ev(() => ({ v: Profile.data.v, rep: reputation(), service: serviceName(), player: playerName(), used: Profile.data.usedServices, bg: serviceLogo().bg }));
-  check(JSON.stringify(conv2) === JSON.stringify({ v: 4, rep: 12, service: 'Service Rossi', player: 'Tecnico', used: ['Service Rossi'], bg: '#e0503f' }), 'conversione dalla versione 2 sbagliata: ' + JSON.stringify(conv2));
+  check(JSON.stringify(conv2) === JSON.stringify({ v: 5, rep: 12, service: 'Service Rossi', player: 'Tecnico', used: ['Service Rossi'], bg: '#e0503f' }), 'conversione dalla versione 2 sbagliata: ' + JSON.stringify(conv2));
 
   // ---- salvataggio della versione 3 (prima dello scarico): una partita già
   // avviata conta lo scarico come saltato, senza partita si gioca
@@ -192,7 +192,15 @@ const path = require('path');
   await ev(() => { Profile.flush = () => {}; localStorage.setItem('scs-save', JSON.stringify({ v: 3, player: 'Anna', service: 'Service Rossi', settings: { volume: 0.5 }, level: { id: 1, placed: {}, edges: [] }, records: {}, reputation: { total: 7, earned: {}, log: [] } })); });
   await open();
   const conv3 = await ev(() => ({ v: Profile.data.v, sk: Profile.data.scarico && Profile.data.scarico.skipped, skipSet: settings().skipScarico, rep: reputation() }));
-  check(JSON.stringify(conv3) === JSON.stringify({ v: 4, sk: true, skipSet: false, rep: 7 }), 'conversione dalla versione 3 sbagliata: ' + JSON.stringify(conv3));
+  check(JSON.stringify(conv3) === JSON.stringify({ v: 5, sk: true, skipSet: false, rep: 7 }), 'conversione dalla versione 3 sbagliata: ' + JSON.stringify(conv3));
+
+  // ---- salvataggio della versione 4 (prima della stanchezza): la partita
+  // resta com'era, il tecnico riprende riposato
+  await p.waitForTimeout(400);
+  await ev(() => { Profile.flush = () => {}; localStorage.setItem('scs-save', JSON.stringify({ v: 4, player: 'Anna', service: 'Service Rossi', settings: { volume: 0.5 }, level: { id: 1, placed: {}, edges: [] }, scarico: { skipped: true, lost: {}, delay: 0, beers: 0 }, beers: 3, records: {}, reputation: { total: 9, earned: {}, log: [] } })); });
+  await open();
+  const conv4 = await ev(() => ({ v: Profile.data.v, fat: Profile.data.fatigue, beers: Profile.data.beers, rep: reputation(), player: playerName(), sk: !!Profile.data.scarico }));
+  check(JSON.stringify(conv4) === JSON.stringify({ v: 5, fat: 0, beers: 3, rep: 9, player: 'Anna', sk: true }), 'conversione dalla versione 4 sbagliata: ' + JSON.stringify(conv4));
 
   console.log('PROBLEMI:', JSON.stringify(problems, null, 1));
   console.log('ERRORI JS:', errs);

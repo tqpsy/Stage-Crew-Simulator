@@ -411,13 +411,14 @@
 
   let nextWired = 1 + Math.floor(Math.random() * 4);   // l'ingresso che il tecnico ha cablato al montaggio
   let pocket = 1;          // birre in tasca all'inizio (nel gioco quelle del tecnico)
+  let tired = 30;          // stanchezza all'inizio, 0-100 (nel gioco quella del tecnico)
   let result = null;       // l'esito del discorso, per il gioco
   let hints = store.get('tramp-hints', store.get('tramp-runs', 0) === 0);
   let S;
   const all = c => PARS.map(() => c);
   function fresh () {
     return {
-      t: 0, running: false, paused: false, grad: 60, fatigue: 30, beers: pocket, drunk: 0,
+      t: 0, running: false, paused: false, grad: 60, fatigue: tired, beers: pocket, drunk: 0,
       fad: { 1: 0, 2: 0, 3: 0, 4: 0, 5: 0.7 }, mute: { 1: false, 2: false, 3: false, 4: false, 5: false },
       micCh: nextWired, wired: nextWired, micOk: true, fault: null, task: null,
       dimmer: 0, pars: all('bianco'), mem: 4,    // si parte al buio
@@ -1018,7 +1019,7 @@
     if (S.micCh !== S.wired) { S.repDelta -= 2; S.notes.push('Il microfono è finito su MIC ' + S.micCh + ' invece che su MIC ' + S.wired + ', dove l\'avevi cablato (−2 reputazione).'); }
     notes.push(...S.notes);
     const rep = 5 + Math.round((S.grad - 60) / 10) - S.larsens * 5 + S.repDelta;
-    result = { type: 'preside', grad: Math.round(S.grad), rep, beers, drunk: S.drunk, larsens: S.larsens, pops: S.pops,
+    result = { type: 'preside', grad: Math.round(S.grad), rep, beers, drunk: S.drunk, fatigue: Math.round(S.fatigue), larsens: S.larsens, pops: S.pops,
       fault: S.events.some(e => e.id === 'cavo' && e.started), notes: notes.map(n => n.replace(/<[^>]+>/g, '').trim()).filter(Boolean) };
     $('#outro-title').textContent = S.grad >= 70 ? 'Il miglior tecnico della storia!' : S.grad >= 40 ? 'Applausi tiepidi.' : 'Siete licenziati!';
     $('#r-grad').textContent = Math.round(S.grad) + '%';
@@ -1133,8 +1134,9 @@
   /* ---------- DENTRO IL GIOCO: index.html apre il discorso in un iframe con
      ?embed=1. La pagina chiede i dati ('preside-pronto'), il gioco manda il
      montaggio vero ('preside-dati': l'ingresso del microfono, i PAR montati,
-     i cavi lasciati dalla posa, le birre in tasca) e alla fine riceve
-     l'esito ('preside-fine'). ---------- */
+     i cavi lasciati dalla posa, le birre in tasca, la stanchezza del
+     tecnico) e alla fine riceve l'esito ('preside-fine', con la stanchezza
+     a fine discorso). ---------- */
   function configure (d) {
     if (d.wired >= 1 && d.wired <= 4) nextWired = d.wired;
     posaLeft.clear(); (d.left || []).forEach(k => posaLeft.add(k));
@@ -1143,6 +1145,7 @@
       FRONT = PARS.map((p, i) => p.role === 'frontale' ? i : -1).filter(i => i >= 0);
     }
     pocket = Math.max(0, Math.floor(d.beers) || 0);
+    if (Number.isFinite(+d.fatigue)) tired = Math.max(0, Math.min(100, +d.fatigue));
     buildStagePars(); S = fresh(); buildDesk(); drawStage(); paintHeader(); paintIntro();
   }
   const toGame = res => window.parent.postMessage({ type: 'preside-fine', result: res }, '*');
