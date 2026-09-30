@@ -436,6 +436,10 @@ professionalità, non la sfortuna.
 - Nel gioco oggi ci sono il collaudo dell'impianto (+5), lo scarico, la posa
   dei cavi, il discorso del preside (vedi *Il discorso nel gioco*) e il cambio
   palco per il DJ. I numeri sono in `REP` in `main.js`.
+- La reputazione apre i livelli successivi a soglie (`LEVELS` in `main.js`,
+  proposta: livello 2 a 20, poi 60, 110, 180). Giocato bene, questo livello
+  ne vale circa 25-30: basta per aprire il 2. Le fasi di questo livello sono i
+  suoi sottolivelli nella scelta del livello e nell'elenco degli slot.
 
 ## Animazione di errore (proposta)
 
