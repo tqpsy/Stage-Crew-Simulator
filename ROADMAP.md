@@ -101,12 +101,24 @@ cambiano da una fase all'altra.
 - **Discorso del preside** (21:00): nel gioco. `preside.html` si apre dopo la
   posa dei cavi (o dalla scaletta) quando il microfono è sull'asta e in un
   ingresso MIC del mixer acceso; riceve l'ingresso cablato, i PAR montati, i
-  cavi lasciati dalla posa e le birre, e restituisce reputazione (una volta
-  sola) e birre. Design in `docs/livello1-festa-scuola.md`.
+  cavi lasciati dalla posa, le birre e la stanchezza, e restituisce
+  reputazione (una volta sola), birre e stanchezza. Design in `docs/livello1-festa-scuola.md`.
   Il discorso resta col suo palco disegnato di fronte, non va
   nell'isometrico (deciso); lo stesso vale per il DJ set e il cantante. Il microfono va bene su qualsiasi ingresso MIC,
   purché cablato.
 - Da fare: il DJ set (21:15) come fase successiva. Dopo il DJ: da decidere.
+
+## Stanchezza del tecnico
+
+- Livello 1 (fatto): un valore 0-100 nel salvataggio, nel tasto 🍺 in
+  testata; sale col tempo di gioco e con le azioni, scende con una birra
+  (che esce dal punteggio). Effetto leggero: sopra 70 il connettore a volte
+  scivola di mano. Regole in `docs/livello1-festa-scuola.md`.
+- Da fare: passarla a scarico e posa dei cavi; nello spettacolo del DJ
+  stringe la finestra delle note; nei livelli successivi effetti più forti
+  (cavo nella presa sbagliata, tocchi meno precisi) e numeri più duri.
+- Riparare col ricambio nel furgone costerà stanchezza (vedi *Guasti* in
+  `docs/livello1-festa-scuola.md`).
 
 ## Test automatici
 
@@ -124,6 +136,8 @@ cambiano da una fase all'altra.
   discorso del preside dentro il gioco, dopo collaudo e posa;
   `tests/preside-cavi.js`: i cavi lasciati dalla posa nel discorso (pagina da
   sola).
+- `tests/stanchezza.js`: la stanchezza del tecnico (tasto 🍺, tempo, azioni,
+  birra con conferma, connettore che scivola, ricarica, nuova partita).
 
 ## Partita, menù e highscore
 

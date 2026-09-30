@@ -152,6 +152,12 @@
   .reset-btn:not(:disabled):hover{ color:var(--text-main); border-color:var(--text-muted); }
   .reset-btn:disabled{ opacity:.3; cursor:not-allowed; }
   .history-btn{ font-size:13px; padding:4px 9px; }
+  /* 🍺 in testata: birre in tasca e, sotto, la stanchezza del tecnico */
+  .beer-btn{ display:flex; flex-direction:column; align-items:center; gap:2px; padding:3px 8px; }
+  .beer-btn[hidden]{ display:none; }
+  .beer-btn .fat{ display:block; width:30px; height:3px; background:var(--hairline); border-radius:2px; overflow:hidden; }
+  .beer-btn .fat i{ display:block; height:100%; width:0; background:var(--text-muted); transition:width .4s; }
+  .beer-btn .fat i.high{ background:var(--red); }
   /* telefoni stretti (360px): testata su due righe come sugli altri
      telefoni, altrimenti va su tre, la scena si abbassa e la barra dei
      livelli finisce sopra i pezzi del palco */

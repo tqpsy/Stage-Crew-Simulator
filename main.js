@@ -1664,7 +1664,7 @@ const SAVE_FILE_KIND = 'stage-crew-simulator';   // firma del file esportato
 const SHARED_KEYS = ['settings', 'records', 'usedServices'];
 
 function defaultProfile () {
-  return { v: SAVE_VERSION, player: '', service: '', serviceInfo: null, usedServices: [], settings: { volume: 0.8, reducedFx: false, skipShow: false, skipScarico: false, testMusic: true, bossTips: true, tapeMarks: true, traceSignal: true }, tutorSeen: {}, logo: null, level: null, scarico: null, cavi: null, preside: null, cambioDj: null, beers: 0, records: {}, reputation: { total: 0, earned: {}, log: [] }, levelsSeen: 1, savedAt: 0 };
+  return { v: SAVE_VERSION, player: '', service: '', serviceInfo: null, usedServices: [], settings: { volume: 0.8, reducedFx: false, skipShow: false, skipScarico: false, testMusic: true, bossTips: true, tapeMarks: true, traceSignal: true }, tutorSeen: {}, logo: null, level: null, scarico: null, cavi: null, preside: null, cambioDj: null, beers: 0, fatigue: 0, records: {}, reputation: { total: 0, earned: {}, log: [] }, levelsSeen: 1, savedAt: 0 };
 }
 // solo la partita (senza le parti comuni): è quello che va in uno slot
 function slotPart (d) {
@@ -1759,7 +1759,8 @@ function readSlotFile (text) {
   const info = slot.serviceInfo && typeof slot.serviceInfo === 'object' ? slot.serviceInfo : null;
   slot = { ...slot, player: String(slot.player || '').slice(0, NAME_MAX), service: String(slot.service || '').slice(0, SERVICE_NAME_MAX),
     logo: lg ? JSON.parse(JSON.stringify({ shape: key(lg.shape, LOGO_SHAPES), icon: key(lg.icon, LOGO_ICONS), bg: color(lg.bg), fg: color(lg.fg), style: key(lg.style, BRAND_STYLES) })) : null,
-    serviceInfo: info ? { kind: key(info.kind, SERVICE_KINDS) || null, boss: String(info.boss || '').slice(0, NAME_MAX * 2) } : null };
+    serviceInfo: info ? { kind: key(info.kind, SERVICE_KINDS) || null, boss: String(info.boss || '').slice(0, NAME_MAX * 2) } : null,
+    fatigue: Math.min(100, Math.max(0, +slot.fatigue || 0)) };
   return { slot };
 }
 
@@ -2434,16 +2435,80 @@ function addRecord () {
   return addReputation(REP.phaseDone, 'Collaudo del livello ' + LEVEL_ID, 'L' + LEVEL_ID + ':collaudo');
 }
 
-// tempo di gioco: conta solo con la pagina in vista e il menù chiuso
+/* STANCHEZZA del tecnico — il tempo della serata si sente addosso.
+   Un valore solo, da 0 (riposato) a 100, salvato nel profilo
+   (Profile.data.fatigue) e mostrato sotto il tasto 🍺 in testata:
+   - sale col tempo di gioco (FATIGUE.perMinute) e con le azioni: ogni
+     pezzo posato e ogni cavo collegato (FATIGUE.perAction);
+   - scende bevendo una birra dal tasto 🍺 (FATIGUE.beer). La birra bevuta
+     non conta più nel punteggio finale: è una scelta, per questo il tasto
+     chiede conferma;
+   - effetti leggeri, il livello 1 perdona: da FATIGUE.slipFrom in su ogni
+     tanto il connettore scivola di mano (il cavo resta in mano, si
+     riprova). Nel discorso del preside fader più tremolanti e tempo limite
+     del guasto più corto: li calcola preside.html dalla stanchezza che
+     riceve, e alla fine la restituisce.
+   Nuova partita = tecnico riposato. */
+const FATIGUE = { max: 100, perMinute: 1, perAction: 0.25, beer: 30, slipFrom: 70, slipMax: 0.15, confirmMs: 4000 };
+const fatigue = () => Profile.data.fatigue || 0;
+// quiet: senza salvare subito (il tempo che passa ogni secondo si salva con
+// la prossima azione o all'uscita dalla pagina)
+function setFatigue (v, quiet) {
+  const f = Math.round(Math.max(0, Math.min(FATIGUE.max, +v || 0)) * 100) / 100;
+  if (f === fatigue()) return;
+  Profile.data.fatigue = f;
+  if (!quiet) Profile.save();
+  paintBeerBtn();
+}
+const tireOut = (amount, quiet) => { if (gameActive) setFatigue(fatigue() + amount, quiet); };
+// probabilità che un connettore scivoli di mano: 0 fino a slipFrom, poi sale fino a slipMax
+const slipChance = () => fatigue() <= FATIGUE.slipFrom ? 0 : FATIGUE.slipMax * (fatigue() - FATIGUE.slipFrom) / (FATIGUE.max - FATIGUE.slipFrom);
+const fatigueSlip = () => Math.random() < slipChance();
+const fatigueWord = () => { const f = fatigue(); return f < 30 ? 'riposato' : f < 60 ? 'un po\' stanco' : f < 80 ? 'stanco' : 'stanchissimo'; };
+function paintBeerBtn () {
+  const b = el('#beer-btn');
+  if (!b) return;
+  b.hidden = !gameActive;
+  el('#beer-n').textContent = Profile.data.beers || 0;
+  const fill = el('#fat-fill');
+  fill.style.width = fatigue() + '%';
+  fill.classList.toggle('high', fatigue() >= FATIGUE.slipFrom);
+  b.title = 'Stanchezza ' + Math.round(fatigue()) + '% (' + fatigueWord() + ') · birre in tasca: ' + (Profile.data.beers || 0)
+    + '. Tocca per bere: stanchezza −' + FATIGUE.beer + ', una birra in meno nel punteggio.';
+}
+let beerAskAt = 0;
+function drinkBeer () {
+  if (!gameActive || minigameOpen()) return;
+  const f = Math.round(fatigue());
+  if (!Profile.data.beers) { showToast('Stanchezza ' + f + '% (' + fatigueWord() + '). Niente birre in tasca: si guadagnano lavorando bene.'); return; }
+  if (f < 1) { showToast('Sei riposato: tieni la birra per dopo.'); return; }
+  if (Date.now() - beerAskAt > FATIGUE.confirmMs) {
+    beerAskAt = Date.now();
+    showToast('Stanchezza ' + f + '% (' + fatigueWord() + '). Tocca ancora 🍺 per bere: −' + FATIGUE.beer + ' di stanchezza, ma una birra in meno nel punteggio finale.');
+    return;
+  }
+  beerAskAt = 0;
+  Profile.data.beers--;
+  setFatigue(fatigue() - FATIGUE.beer);
+  applySettings();
+  showToast('Glu glu. Stanchezza giù: ' + Math.round(fatigue()) + '%.', 'ok');
+}
+
+// tempo di gioco: conta solo con la pagina in vista e il menù chiuso. Nel
+// discorso del preside la stanchezza la tiene preside.html
 setInterval(() => {
-  if (gameActive && !menuOpen && !document.hidden) { gameState.stats.playMs += 1000; cambioTick(1000); }
+  if (gameActive && !menuOpen && !document.hidden) {
+    gameState.stats.playMs += 1000; cambioTick(1000);
+    if (!presideOpen) tireOut(FATIGUE.perMinute / 60, true);
+  }
 }, 1000);
 
 function applySettings () {
   SFX.setVolume(settings().volume);
+  paintBeerBtn();
   const tag = el('#service-tag');
   if (tag) tag.textContent = gameActive || Profile.data.service
-    ? (playerName() + ' · ' + serviceName()).toUpperCase() + ' · REPUTAZIONE ' + reputation() + (Profile.data.beers ? ' · 🍺 ' + Profile.data.beers : '')
+    ? (playerName() + ' · ' + serviceName()).toUpperCase() + ' · REPUTAZIONE ' + reputation()
     : 'STAGE CREW SIMULATOR';
   const logo = el('#service-logo');
   if (logo) logo.innerHTML = gameActive || Profile.data.service ? logoSVG(serviceLogo(), Profile.data.service, 30) : '';
@@ -2563,6 +2628,7 @@ function startNewGame (player, offer, offers) {
   Profile.data.preside = null;
   Profile.data.cambioDj = null;
   Profile.data.beers = 0;
+  Profile.data.fatigue = 0;      // la serata comincia: tecnico riposato
   Profile.data.tutorSeen = {};   // il nuovo tecnico non ha ancora sentito i consigli del capo
   whenScene(scene => {
     gameActive = true;
@@ -3068,8 +3134,9 @@ function caviSummary () {
    dopo la posa dei cavi, o dalla scaletta. Serve il microfono montato
    sull'asta e collegato a un ingresso MIC del mixer acceso: la pagina riceve
    quell'ingresso (la risposta a «in che ingresso era?» quando si guasta), i
-   PAR montati coi loro ruoli, i cavi lasciati dalla posa e le birre in
-   tasca. L'esito torna al gioco: reputazione una volta sola, birre. */
+   PAR montati coi loro ruoli, i cavi lasciati dalla posa, le birre in
+   tasca e la stanchezza del tecnico. L'esito torna al gioco: reputazione
+   una volta sola, birre, stanchezza a fine discorso. */
 let presideOpen = false, presideTimer = null;
 const presideDone = () => !!Profile.data.preside;
 const minigameOpen = () => scaricoOpen || caviOpen || presideOpen;
@@ -3124,7 +3191,7 @@ function presideMicHint () {
 window.addEventListener('message', ev => {
   const d = ev.data, f = el('#preside-frame');
   if (!presideOpen || !d || !f) return;
-  if (d.type === 'preside-pronto') f.contentWindow.postMessage({ type: 'preside-dati', wired: micChannel(), left: caviLeftovers(), beers: Profile.data.beers || 0, pars: presidePars() }, '*');
+  if (d.type === 'preside-pronto') f.contentWindow.postMessage({ type: 'preside-dati', wired: micChannel(), left: caviLeftovers(), beers: Profile.data.beers || 0, fatigue: fatigue(), pars: presidePars() }, '*');
   if (d.type === 'preside-fine') finishPreside(d.result || { skipped: true });
 });
 function finishPreside (r) {
@@ -3137,6 +3204,8 @@ function finishPreside (r) {
   Profile.data.preside = { skipped, grad: skipped ? 0 : num(r.grad, 0), rep: skipped ? 0 : num(r.rep, 0), beers, drunk,
     larsens: skipped ? 0 : num(r.larsens, 0), fault: !skipped && !!r.fault };
   Profile.data.beers = Math.max(0, (Profile.data.beers || 0) - drunk + beers);
+  // la stanchezza a fine discorso (salito col tempo, sceso con le birre bevute)
+  if (!skipped && Number.isFinite(+r.fatigue)) setFatigue(+r.fatigue);
   const rep = skipped ? 0 : addReputation(Profile.data.preside.rep, 'Discorso del preside alla festa della scuola', 'L' + LEVEL_ID + ':preside');
   Profile.save();
   sceneKeyboard(true);
@@ -3308,6 +3377,7 @@ el('#cambio-go').addEventListener('click', () => { SFX.button(); closeCambioCard
 el('#cambio-close').addEventListener('click', () => { SFX.button(); closeCambioCard(); });
 
 el('#schedule-btn').addEventListener('click', () => { SFX.button(); openSchedule(false); });
+el('#beer-btn').addEventListener('click', () => { SFX.button(); drinkBeer(); });
 el('#schedule-go').addEventListener('click', () => {
   SFX.button();
   const next = scheduleNext;
@@ -6888,6 +6958,7 @@ class StageScene extends Phaser.Scene {
     setCircuitStatus('untested');
     gameState.tested = false;
     this.pushHistory();
+    tireOut(FATIGUE.perAction);
     SFX.place();
     // la prima volta si spiega come si usa un dispositivo posato
     if (!this.gestureHintShown) {
@@ -6952,6 +7023,7 @@ class StageScene extends Phaser.Scene {
     SFX.place();
     showToast(m.done(base.id), 'ok');
     this.pushHistory();
+    tireOut(FATIGUE.perAction);
   }
 
   /* ---------------- wiring ---------------- */
@@ -7017,6 +7089,9 @@ class StageScene extends Phaser.Scene {
     };
     // il capo ferma il primo collegamento sotto carico (il cavo resta in mano)
     if (tutorOn() && wouldArc(edge, true) && tutorWarn('live')) return;
+    // tecnico stanco: ogni tanto il connettore scivola di mano (il cavo
+    // resta in mano, basta riprovare). Vedi FATIGUE.
+    if (fatigueSlip()) { showToast('Sei stanco: il connettore ti scivola di mano. Riprova (una 🍺 ti rimette in sesto).'); return; }
     gameState.edgeSeq++;
     // collegare sotto tensione fa scattare il salvavita; altrimenti il
     // dispositivo appena alimentato (se già acceso) parte davvero
@@ -7030,6 +7105,7 @@ class StageScene extends Phaser.Scene {
     setCircuitStatus('untested');
     gameState.tested = false;
     this.pushHistory();
+    tireOut(FATIGUE.perAction);
     if (edge.signal === 'xlr') presideMicHint();
   }
 
