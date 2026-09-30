@@ -150,6 +150,7 @@ const path = require('path');
   check(JSON.stringify(after.logo) === JSON.stringify(pick.logo), 'logo perso dopo la ricarica: ' + JSON.stringify(after.logo));
 
   // ---- Nuova partita: livello da capo, impostazioni e record restano
+  await ev(() => { Profile.data.assistant = { id: 'nico', favors: 1 }; });
   await p.click('#menu-btn');
   await p.click('#menu-new');
   check(await p.isVisible('#new-warning'), 'manca l\'avviso prima di ricominciare');
@@ -164,7 +165,8 @@ const path = require('path');
   await p.waitForSelector('#scarico-frame');
   await p.frameLocator('#scarico-frame').locator('#btn-skip').click();
   await p.waitForFunction(() => !document.querySelector('#scarico-frame'));
-  const fresh = await ev(() => ({ placed: Object.keys(gameState.placed), edges: gameState.edges.length, tests: gameState.stats.tests, vol: SFX.volume, recs: (Profile.data.records[LEVEL_ID] || []).length, rep: reputation() }));
+  const fresh = await ev(() => ({ placed: Object.keys(gameState.placed), edges: gameState.edges.length, tests: gameState.stats.tests, vol: SFX.volume, recs: (Profile.data.records[LEVEL_ID] || []).length, rep: reputation(), assistant: Profile.data.assistant }));
+  check(JSON.stringify(fresh.assistant) === JSON.stringify({ id: null, favors: 0 }), 'il nuovo tecnico si trova l\'assistente del vecchio: ' + JSON.stringify(fresh.assistant));
   check(fresh.placed.length === 1 && fresh.edges === 0 && fresh.tests === 0, 'Nuova partita non azzera il livello: ' + JSON.stringify(fresh));
   check(fresh.vol === 0.3 && fresh.recs === 2, 'Nuova partita perde impostazioni o record: ' + JSON.stringify(fresh));
   check(fresh.rep === 0, 'il nuovo tecnico non parte da reputazione 0');
@@ -176,7 +178,7 @@ const path = require('path');
   await ev(() => { Profile.flush = () => {}; localStorage.setItem('scs-save', JSON.stringify({ v: 1, service: 'Vecchio', settings: { volume: 0.5 }, level: null, records: {}, reputation: { total: 150, byLevel: { 1: 150 } } })); });
   await open();
   const conv = await ev(() => ({ v: Profile.data.v, rep: reputation(), once: Profile.data.reputation.earned['L1:collaudo'], vol: SFX.volume, again: (gameActive = true, addRecord()) }));
-  check(JSON.stringify(conv) === JSON.stringify({ v: 4, rep: 5, once: 5, vol: 0.5, again: 0 }), 'conversione dalla versione 1 sbagliata: ' + JSON.stringify(conv));
+  check(JSON.stringify(conv) === JSON.stringify({ v: 5, rep: 5, once: 5, vol: 0.5, again: 0 }), 'conversione dalla versione 1 sbagliata: ' + JSON.stringify(conv));
 
   // ---- salvataggio della versione 2 (giocatore titolare del service): il
   // service diventa il datore di lavoro, la reputazione resta al tecnico
@@ -184,7 +186,7 @@ const path = require('path');
   await ev(() => { Profile.flush = () => {}; localStorage.setItem('scs-save', JSON.stringify({ v: 2, service: 'Service Rossi', logo: { shape: 'scudo', icon: 'faro', bg: '#e0503f', fg: '#eee9df', style: 'tour' }, settings: { volume: 0.5 }, level: null, records: {}, reputation: { total: 12, earned: {}, log: [] } })); });
   await open();
   const conv2 = await ev(() => ({ v: Profile.data.v, rep: reputation(), service: serviceName(), player: playerName(), used: Profile.data.usedServices, bg: serviceLogo().bg }));
-  check(JSON.stringify(conv2) === JSON.stringify({ v: 4, rep: 12, service: 'Service Rossi', player: 'Tecnico', used: ['Service Rossi'], bg: '#e0503f' }), 'conversione dalla versione 2 sbagliata: ' + JSON.stringify(conv2));
+  check(JSON.stringify(conv2) === JSON.stringify({ v: 5, rep: 12, service: 'Service Rossi', player: 'Tecnico', used: ['Service Rossi'], bg: '#e0503f' }), 'conversione dalla versione 2 sbagliata: ' + JSON.stringify(conv2));
 
   // ---- salvataggio della versione 3 (prima dello scarico): una partita già
   // avviata conta lo scarico come saltato, senza partita si gioca
@@ -192,7 +194,15 @@ const path = require('path');
   await ev(() => { Profile.flush = () => {}; localStorage.setItem('scs-save', JSON.stringify({ v: 3, player: 'Anna', service: 'Service Rossi', settings: { volume: 0.5 }, level: { id: 1, placed: {}, edges: [] }, records: {}, reputation: { total: 7, earned: {}, log: [] } })); });
   await open();
   const conv3 = await ev(() => ({ v: Profile.data.v, sk: Profile.data.scarico && Profile.data.scarico.skipped, skipSet: settings().skipScarico, rep: reputation() }));
-  check(JSON.stringify(conv3) === JSON.stringify({ v: 4, sk: true, skipSet: false, rep: 7 }), 'conversione dalla versione 3 sbagliata: ' + JSON.stringify(conv3));
+  check(JSON.stringify(conv3) === JSON.stringify({ v: 5, sk: true, skipSet: false, rep: 7 }), 'conversione dalla versione 3 sbagliata: ' + JSON.stringify(conv3));
+
+  // ---- salvataggio della versione 4 (prima dell'assistente): nessuno
+  // assunto, tutto il resto (birre, reputazione, fasi giocate) resta
+  await p.waitForTimeout(400);
+  await ev(() => { Profile.flush = () => {}; localStorage.setItem('scs-save', JSON.stringify({ v: 4, player: 'Anna', service: 'Service Rossi', settings: { volume: 0.5 }, level: { id: 1, placed: {}, edges: [] }, scarico: { skipped: true, lost: {}, delay: 0, beers: 0 }, beers: 3, records: {}, reputation: { total: 22, earned: { 'L1:collaudo': 5 }, log: [] } })); });
+  await open();
+  const conv4 = await ev(() => ({ v: Profile.data.v, assistant: Profile.data.assistant, beers: Profile.data.beers, rep: reputation(), sk: Profile.data.scarico.skipped, once: Profile.data.reputation.earned['L1:collaudo'] }));
+  check(JSON.stringify(conv4) === JSON.stringify({ v: 5, assistant: { id: null, favors: 0 }, beers: 3, rep: 22, sk: true, once: 5 }), 'conversione dalla versione 4 sbagliata: ' + JSON.stringify(conv4));
 
   console.log('PROBLEMI:', JSON.stringify(problems, null, 1));
   console.log('ERRORI JS:', errs);

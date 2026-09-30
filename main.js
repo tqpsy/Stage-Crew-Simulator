@@ -1612,7 +1612,7 @@ document.querySelectorAll('.tab-btn').forEach(btn => {
    casse).
    --------------------------------------------------------------------- */
 const SAVE_KEY = 'scs-save';
-const SAVE_VERSION = 4;
+const SAVE_VERSION = 5;
 const LEVEL_ID = 1;
 const RECORDS_KEEP = 20;       // record tenuti per livello
 const NAME_MAX = 24;           // caratteri del nome del tecnico
@@ -1620,8 +1620,11 @@ const SERVICE_NAME_MAX = 28;   // caratteri del nome (inventato) di un service
 const USED_SERVICES_KEEP = 400; // nomi di service già proposti, da non riproporre
 
 function defaultProfile () {
-  return { v: SAVE_VERSION, player: '', service: '', serviceInfo: null, usedServices: [], settings: { volume: 0.8, reducedFx: false, skipShow: false, skipScarico: false, testMusic: true, bossTips: true, tapeMarks: true, traceSignal: true }, tutorSeen: {}, logo: null, level: null, scarico: null, cavi: null, preside: null, cambioDj: null, beers: 0, records: {}, reputation: { total: 0, earned: {}, log: [] } };
+  return { v: SAVE_VERSION, player: '', service: '', serviceInfo: null, usedServices: [], settings: { volume: 0.8, reducedFx: false, skipShow: false, skipScarico: false, testMusic: true, bossTips: true, tapeMarks: true, traceSignal: true }, tutorSeen: {}, logo: null, level: null, scarico: null, cavi: null, preside: null, cambioDj: null, beers: 0, assistant: defaultAssistant(), records: {}, reputation: { total: 0, earned: {}, log: [] } };
 }
+// l'assistente della serata (dal livello 2, vedi ASSISTANTS): chi è e
+// quanti favori ha già fatto nel set in corso
+function defaultAssistant () { return { id: null, favors: 0 }; }
 const Profile = (() => {
   let data = defaultProfile();
   try {
@@ -1649,7 +1652,13 @@ const Profile = (() => {
       d.scarico = d.level ? { skipped: true, lost: {}, delay: 0, beers: 0 } : null;
       d.v = 4;
     }
-    if (d && d.v === SAVE_VERSION) data = { ...defaultProfile(), ...d, settings: { ...defaultProfile().settings, ...d.settings }, reputation: { ...defaultProfile().reputation, ...d.reputation } };
+    // versione 4: l'assistente non esisteva. Nessuno assunto: nel livello 1
+    // c'è il capo, l'assistente si sceglie dal livello 2.
+    if (d && d.v === 4) {
+      d.assistant = defaultAssistant();
+      d.v = 5;
+    }
+    if (d && d.v === SAVE_VERSION) data = { ...defaultProfile(), ...d, settings: { ...defaultProfile().settings, ...d.settings }, reputation: { ...defaultProfile().reputation, ...d.reputation }, assistant: { ...defaultAssistant(), ...d.assistant } };
     else if (!raw && localStorage.getItem('scs-muted') === '1') data.settings.volume = 0;   // vecchio tasto muto
   } catch (e) { /* memoria non disponibile o salvataggio illeggibile: si parte da zero */ }
   let timer = null;
@@ -2246,6 +2255,50 @@ function addRecord () {
   return addReputation(REP.phaseDone, 'Collaudo del livello ' + LEVEL_ID, 'L' + LEVEL_ID + ':collaudo');
 }
 
+/* ASSISTENTE (dal livello 2) — dove c'è il capo tutor (TUTOR_LEVELS) il
+   favore nei guasti grossi lo fa lui; negli altri livelli si assume un
+   assistente per la serata. La reputazione è una soglia (non si spende),
+   i favori si pagano in birre. Ognuno ha il suo carattere: quante note
+   manca alle luci, quanto ci mette, quali guasti sa sistemare, quanti
+   favori per set. Design in docs/assistente.md; lo spettacolo che li usa
+   non c'è ancora. */
+const ASSISTANTS = {
+  nico:   { name: 'Nico «Cavetto»',       rep: 10, beers: 1, missEvery: 2, fixS: 25, fixes: ['fase'],        favors: 2,
+            line: 'Stagista, tanta voglia e poca pratica: alle luci ne manca una su due, il DMX non lo tocca.' },
+  sabri:  { name: 'Sabri «Nastro Nero»',  rep: 20, beers: 1, missEvery: 3, fixS: 15, fixes: ['fase', 'dmx'], favors: 2,
+            line: 'Brava quanto il capo: una nota su tre alle luci, sistema fasi e DMX.' },
+  tonino: { name: 'Tonino «Ventennale»',  rep: 35, beers: 2, missEvery: 5, fixS: 10, fixes: ['fase', 'dmx'], favors: 3,
+            line: 'Vent\'anni di palchi: ne manca una su cinque, velocissimo, ma costa due birre a favore.' }
+};
+const assistantLevel = (level = LEVEL_ID) => !TUTOR_LEVELS.has(level);
+const assistantUnlocked = id => !!ASSISTANTS[id] && reputation() >= ASSISTANTS[id].rep;
+const assistant = () => ASSISTANTS[Profile.data.assistant.id] || null;
+// assume per la serata (o con null resta da solo); vale solo nei livelli
+// senza capo e con la reputazione che basta
+function hireAssistant (id, level = LEVEL_ID) {
+  if (!assistantLevel(level) || (id !== null && !assistantUnlocked(id))) return false;
+  Profile.data.assistant = { id, favors: 0 };
+  Profile.save();
+  return true;
+}
+// nuovo set: i favori ripartono da zero, l'assistente resta
+function assistantNewSet () { Profile.data.assistant.favors = 0; Profile.save(); }
+// l'assistente può andare a sistemare questo guasto grosso ('fase', 'dmx')?
+function assistantCanFix (fault) {
+  const a = assistant();
+  return !!a && a.fixes.includes(fault) && Profile.data.assistant.favors < a.favors && (Profile.data.beers || 0) >= a.beers;
+}
+// ci va l'assistente: paga le birre e conta il favore; false se non può
+function assistantFavor (fault) {
+  if (!assistantCanFix(fault)) return false;
+  const a = assistant();
+  Profile.data.beers -= a.beers;
+  Profile.data.assistant.favors++;
+  Profile.save();
+  applySettings();
+  return true;
+}
+
 // tempo di gioco: conta solo con la pagina in vista e il menù chiuso
 setInterval(() => {
   if (gameActive && !menuOpen && !document.hidden) { gameState.stats.playMs += 1000; cambioTick(1000); }
@@ -2358,6 +2411,7 @@ function startNewGame (player, offer, offers) {
   Profile.data.preside = null;
   Profile.data.cambioDj = null;
   Profile.data.beers = 0;
+  Profile.data.assistant = defaultAssistant();   // il nuovo tecnico non ha ancora nessuno
   Profile.data.tutorSeen = {};   // il nuovo tecnico non ha ancora sentito i consigli del capo
   whenScene(scene => {
     gameActive = true;
