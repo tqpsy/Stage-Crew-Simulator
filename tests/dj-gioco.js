@@ -1,5 +1,5 @@
 /* Lo spettacolo del DJ dentro il gioco: montaggio collaudato, posa e
-   discorso finiti, cambio palco promosso. Il DJ set (dj.html) si apre da solo
+   discorso finiti, cambio palco promosso (con lo stativo luci del DJ). Il DJ set (dj.html) si apre da solo
    in un iframe dopo il cambio, con le birre in tasca, il nome del capo e i
    PAR montati. L'esito torna al gioco: reputazione una volta sola, birre
    bevute, pagate al capo e guadagnate, scaletta e foglio aggiornati, niente
@@ -103,6 +103,11 @@ const path = require('path');
     w('cee_schuko', placedOfType('quadro')[0].id, 'out_1', dj, 'power'); toggleDevicePower(dj);
     w('jack', dj, 'out_L', di, 'in_1'); w('jack', dj, 'out_R', di, 'in_2');
     w('xlr', di, 'out_1', mx, 'in_2'); w('xlr', di, 'out_2', mx, 'in_3');
+    // lo stativo luci del DJ: spina a linea spenta (niente interruttore) e DMX sull'universo 2
+    P('djluci', 3, 5);
+    const lu = placedOfType('djluci')[0].id;
+    toggleProtection('L2'); w('cee_schuko', placedOfType('quadro')[0].id, 'out_2', lu, 'power'); toggleProtection('L2');
+    w('dmx', placedOfType('controller')[0].id, 'dmx_2', lu, 'dmx_in');
     S.runCambioTest();
     return { done: cambioDjDone(), fails: window.__fails.slice() };
   });
