@@ -54,13 +54,29 @@
     <div class="modal-box menu-box">
       <div class="menu-head">
         <span class="tag">STAGE CREW SIMULATOR</span>
-        <h2>Livello 1: Festa della scuola</h2>
+        <h2 id="menu-title">Livello 1: Festa della scuola</h2>
       </div>
 
       <div class="menu-page" data-page="main">
         <button class="menu-btn primary" id="menu-resume">Continua</button>
         <button class="menu-btn" id="menu-new">Nuova partita</button>
+        <button class="menu-btn" id="menu-slots">Partite salvate</button>
+        <button class="menu-btn" id="menu-levels">Livelli</button>
         <button class="menu-btn" id="menu-settings">Impostazioni</button>
+      </div>
+
+      <div class="menu-page" data-page="slots" hidden>
+        <div class="menu-field">Partite salvate: scegli, esporta in un file o cancella. Negli slot vuoti puoi iniziare una partita nuova o importarne una da file.</div>
+        <p class="menu-note slot-msg" id="slot-msg" role="status" hidden></p>
+        <div class="slot-list" id="slot-list"></div>
+        <input type="file" id="slot-file" accept=".json,application/json" hidden>
+        <button class="menu-btn" id="slots-back" type="button">Indietro</button>
+      </div>
+
+      <div class="menu-page" data-page="levels" hidden>
+        <div class="menu-field" id="levels-intro">I livelli si aprono con la reputazione.</div>
+        <div class="level-list" id="level-list"></div>
+        <button class="menu-btn" id="levels-back" type="button">Indietro</button>
       </div>
 
       <form class="menu-page" data-page="new" id="new-form" hidden>
@@ -306,8 +322,12 @@
           <div class="swatch" style="color:#ffb3de;"><div class="stripe" style="background:#ff3fb4;"></div>CONSOLLE</div>
           <span class="count" id="count-dj">×1</span>
         </div>
+        <div class="piece" data-type="djluci">
+          <div class="swatch" style="color:#ffb3de;"><div class="stripe" style="background:#ff3fb4;"></div>LUCI DJ</div>
+          <span class="count" id="count-djluci">×1</span>
+        </div>
       </div>
-      <span class="panel-hint">La consolle l'ha portata DJ Inestimabile: posala sul palco. Ha la sua spina Schuko (da una ciabatta, o dal Quadro con l'adattatore CEE / Schuko). Le uscite MASTER L e R sono jack: vanno nei due ingressi della DI (scheda Regia), e dalla DI due XLR entrano in due ingressi MIC liberi del mixer. Il microfono resta dov'è: lo usa Musa Esistenziale.</span>
+      <span class="panel-hint">La consolle l'ha portata DJ Inestimabile: posala sul palco. Ha la sua spina Schuko (da una ciabatta, o dal Quadro con l'adattatore CEE / Schuko). Le uscite MASTER L e R sono jack: vanno nei due ingressi della DI (scheda Regia), e dalla DI due XLR entrano in due ingressi MIC liberi del mixer. Il microfono resta dov'è: lo usa Musa Esistenziale. Le luci del DJ sono uno stativo con quattro PAR LED e una strobo già montati sulla barra: posalo sul palco, dagli corrente (spina Schuko) e un solo DMX dalla consolle luci. I fari sono già indirizzati sui canali 1-14: mettili su un universo dove i PAR del service non li pestano.</span>
     </div>
 
     <div class="tab-panel" data-panel="cavi">

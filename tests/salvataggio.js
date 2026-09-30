@@ -1,16 +1,23 @@
 /* Menù di gioco e salvataggio: nuova partita col nome del tecnico e la
    scelta tra tre service dai nomi assurdi (sempre nuovi),
    salvataggio automatico, ricarica della pagina e Continua, impostazioni
-   che restano, Nuova partita che azzera il livello ma tiene impostazioni
-   e record (i dati per i futuri highscore).
+   che restano, Nuova partita in un altro slot che tiene impostazioni
+   e record (i dati per i futuri highscore). Slot: elenco con service,
+   logo, livello, reputazione e data; cambio di slot, cancellazione con
+   conferma, esporta/importa (con controllo di formato e versione), slot
+   pieni. Scelta del livello con le soglie di reputazione. Conversioni dei
+   vecchi salvataggi a slot unico (versioni 1-4): la partita diventa il
+   primo slot.
 
    Uso:  node tests/salvataggio.js
    Richiede Playwright. Senza rete, PHASER_PATH=/percorso/phaser.min.js. */
 const { chromium } = require(process.env.PLAYWRIGHT_PATH || 'playwright');
 const path = require('path');
+const fs = require('fs');
+const os = require('os');
 (async () => {
   const b = await chromium.launch();
-  const ctx = await b.newContext({ viewport: { width: 1300, height: 1000 } });
+  const ctx = await b.newContext({ viewport: { width: 1300, height: 1000 }, acceptDownloads: true });
   const p = await ctx.newPage();
   if (process.env.PHASER_PATH) await p.route('**/phaser.min.js', r => r.fulfill({ path: process.env.PHASER_PATH, contentType: 'application/javascript' }));
   await p.route(/fonts\./, r => r.abort());
@@ -149,10 +156,10 @@ const path = require('path');
   check(after.undo, 'dopo la ricarica si può annullare oltre il salvataggio');
   check(JSON.stringify(after.logo) === JSON.stringify(pick.logo), 'logo perso dopo la ricarica: ' + JSON.stringify(after.logo));
 
-  // ---- Nuova partita: livello da capo, impostazioni e record restano
+  // ---- Nuova partita: in un altro slot, livello da capo, impostazioni e record restano
   await p.click('#menu-btn');
   await p.click('#menu-new');
-  check(await p.isVisible('#new-warning'), 'manca l\'avviso prima di ricominciare');
+  check(await p.isVisible('#new-warning') && /slot 2/.test(await p.textContent('#new-warning')), 'manca l\'avviso con lo slot della nuova partita: ' + await p.textContent('#new-warning'));
   const offers2 = await ev(() => draft.offers.map(o => o.name));
   check(offers2.every(n => !offers.some(o => o.name === n)), 'la nuova partita ripropone un service già visto: ' + offers2);
   check(await p.inputValue('#player-input') === 'Marco', 'il nome del tecnico non è proposto di nuovo');
@@ -168,6 +175,103 @@ const path = require('path');
   check(fresh.placed.length === 1 && fresh.edges === 0 && fresh.tests === 0, 'Nuova partita non azzera il livello: ' + JSON.stringify(fresh));
   check(fresh.vol === 0.3 && fresh.recs === 2, 'Nuova partita perde impostazioni o record: ' + JSON.stringify(fresh));
   check(fresh.rep === 0, 'il nuovo tecnico non parte da reputazione 0');
+
+  // ---- partite salvate: ogni slot mostra service (con logo), tecnico,
+  // livello e fase raggiunti, reputazione e data dell'ultima partita
+  await p.waitForTimeout(400);
+  await p.click('#menu-btn');
+  await p.click('#menu-slots');
+  const slotCards = () => p.$$eval('#slot-list .slot-card', cs => cs.map(c => ({ empty: c.classList.contains('empty'), active: c.classList.contains('active'), text: c.textContent, logo: !!c.querySelector('.slot-logo svg') })));
+  const cards = await slotCards();
+  check(cards.length === 3, 'non ci sono tre slot: ' + cards.length);
+  check(!cards[0].empty && cards[0].text.includes(pick.name) && cards[0].text.includes('Marco') && cards[0].logo
+    && /Livello 1 · Festa della scuola: Messa in sicurezza dei cavi \(2\/5\)/.test(cards[0].text) && /★ 5/.test(cards[0].text)
+    && /Ultima partita: \d/.test(cards[0].text), 'slot 1 incompleto: ' + cards[0].text);
+  check(cards[1].active && cards[1].text.includes('Nuova Tecnica') && /in gioco/.test(cards[1].text) && /Montaggio e test impianto \(1\/5\)/.test(cards[1].text) && /★ 0/.test(cards[1].text), 'slot 2 sbagliato: ' + cards[1].text);
+  check(cards[2].empty, 'lo slot 3 non è vuoto');
+
+  // ---- scelta del livello: il livello 1 aperto con le sue fasi, gli altri
+  // bloccati con la soglia di reputazione e quanto manca
+  await p.click('#slots-back');
+  await p.click('#menu-levels');
+  const levelCards = () => p.$$eval('#level-list .level-card', cs => cs.map(c => ({ locked: c.classList.contains('locked'), text: c.textContent })));
+  const lv = await levelCards();
+  check(lv.length === 5 && !lv[0].locked && lv.slice(1).every(l => l.locked), 'livelli aperti o bloccati sbagliati: ' + JSON.stringify(lv.map(l => l.locked)));
+  check(/Si apre con ★ 20 \(ti mancano 20\)/.test(lv[1].text) && /camion/.test(lv[1].text), 'soglia del livello 2 non mostrata: ' + lv[1].text);
+  check(/✓ Arrivo e scarico/.test(lv[0].text) && /▶ Montaggio e test impianto/.test(lv[0].text), 'fasi del livello 1 sbagliate: ' + lv[0].text);
+  const thresholds = await ev(() => LEVELS.map(l => l.rep));
+  check(thresholds.every((r, i) => !i || r > thresholds[i - 1]), 'soglie non crescenti: ' + thresholds);
+  // superata la soglia si apre il livello 2 (in arrivo): puntino sul menù finché non lo si guarda
+  await ev(() => addReputation(20, 'prova della soglia'));
+  check(await p.$eval('#menu-levels', b => b.classList.contains('news')) && await p.$eval('#menu-btn', b => b.classList.contains('news')), 'nessun segnale del livello appena aperto');
+  await p.click('#levels-back');
+  await p.click('#menu-levels');
+  const lv2 = await levelCards();
+  check(!lv2[1].locked && /prossime versioni/.test(lv2[1].text) && lv2[2].locked, 'il livello 2 non si apre a reputazione 20: ' + lv2[1].text);
+  check(!(await p.$eval('#menu-btn', b => b.classList.contains('news'))), 'il puntino resta dopo aver visto i livelli');
+  await p.click('#levels-back');
+
+  // ---- esporta: un file con firma, versione e solo la partita
+  await p.click('#menu-slots');
+  const [dl] = await Promise.all([p.waitForEvent('download'), p.click('#slot-list [data-slot="0"] [data-act="export"]')]);
+  const file = path.join(os.tmpdir(), 'scs-export-' + process.pid + '.json');
+  await dl.saveAs(file);
+  const exp = JSON.parse(fs.readFileSync(file, 'utf8'));
+  check(exp.kind === 'stage-crew-simulator' && exp.v === 5 && exp.slot.service === pick.name && exp.slot.player === 'Marco' && exp.slot.level && !exp.slot.settings && !exp.slot.records, 'file esportato sbagliato: ' + JSON.stringify(exp).slice(0, 200));
+  check(/^stage-crew-.+\.json$/.test(dl.suggestedFilename()), 'nome del file esportato: ' + dl.suggestedFilename());
+
+  // ---- cancella: chiede conferma; "No" non tocca niente
+  await p.click('#slot-list [data-slot="0"] [data-act="del"]');
+  check(await p.isVisible('#slot-list [data-slot="0"] [data-act="del-yes"]') && /Non si può annullare/.test(await p.textContent('#slot-list [data-slot="0"]')), 'Cancella non chiede conferma');
+  await p.click('#slot-list [data-slot="0"] [data-act="del-no"]');
+  check(await ev(() => !!Profile.slots()[0]), '"No" ha cancellato la partita');
+  await p.click('#slot-list [data-slot="0"] [data-act="del"]');
+  await p.click('#slot-list [data-slot="0"] [data-act="del-yes"]');
+  check(await ev(() => !Profile.slots()[0] && Profile.active === 1 && gameActive && Profile.data.player === 'Nuova Tecnica'), 'cancellazione sbagliata');
+  check((await slotCards())[0].empty, 'lo slot cancellato non risulta vuoto');
+
+  // ---- importa: la partita esportata torna nello slot vuoto
+  const [fc] = await Promise.all([p.waitForEvent('filechooser'), p.click('#slot-list [data-slot="0"] [data-act="import"]')]);
+  await fc.setFiles(file);
+  await p.waitForFunction(() => !!Profile.slots()[0]);
+  fs.unlinkSync(file);
+  const imp = await ev(() => { const s = Profile.slots()[0]; return { service: s.service, player: s.player, rep: s.reputation.total, placed: Object.keys(s.level.placed).sort(), logo: s.logo, msg: el('#slot-msg').textContent }; });
+  check(imp.service === pick.name && imp.player === 'Marco' && imp.rep === 5 && JSON.stringify(imp.placed) === JSON.stringify(before.placed) && JSON.stringify(imp.logo) === JSON.stringify(pick.logo), 'importazione sbagliata: ' + JSON.stringify(imp));
+  check(/importata nello slot 1/.test(imp.msg), 'manca il messaggio dell\'importazione: ' + imp.msg);
+  // file sbagliati: non un salvataggio, versione più nuova, rovinato, slot occupato
+  const bad = await ev(() => [
+    importSlotText(2, 'ciao'),
+    importSlotText(2, JSON.stringify({ kind: 'stage-crew-simulator', v: 99, slot: { service: 'X' } })),
+    importSlotText(2, JSON.stringify({ kind: 'stage-crew-simulator', v: 5, slot: { service: 'X', level: { placed: 3 } } })),
+    importSlotText(2, JSON.stringify({ kind: 'stage-crew-simulator', v: 5, slot: { service: '' } })),
+    importSlotText(0, JSON.stringify({ kind: 'stage-crew-simulator', v: 5, slot: { service: 'X' } }))
+  ].map(r => r.error || ''));
+  check(/non è un salvataggio/.test(bad[0]) && /più nuova/.test(bad[1]) && /rovinato/.test(bad[2]) && /rovinato/.test(bad[3]) && /occupato/.test(bad[4]), 'errori di importazione sbagliati: ' + JSON.stringify(bad));
+  check(await ev(() => !Profile.slots()[2] && el('#slot-msg').classList.contains('bad')), 'un file sbagliato ha riempito lo slot o manca l\'errore');
+  // un file da fuori non porta codice nel logo: valori non ammessi tornano quelli di base
+  const evil = await ev(() => { const r = readSlotFile(JSON.stringify({ kind: 'stage-crew-simulator', v: 5, slot: { service: 'Evil', level: null, logo: { bg: '"/><script>x()</script>', fg: '#fff', icon: 'nope', shape: 'scudo' }, serviceInfo: { kind: '<b>', boss: 'Gino' } } })); return { logo: r.slot.logo, kind: r.slot.serviceInfo.kind, svg: /script/.test(logoSVG(r.slot.logo, 'Evil', 40)) }; });
+  check(JSON.stringify(evil) === JSON.stringify({ logo: { shape: 'scudo', fg: '#fff' }, kind: null, svg: false }), 'logo importato non ripulito: ' + JSON.stringify(evil));
+  // si importa anche un vecchio salvataggio a slot unico: si converte
+  await ev(() => importSlotText(2, JSON.stringify({ v: 3, player: 'Anna', service: 'Service Vecchio', settings: { volume: 0.1 }, level: { id: 1, placed: {}, edges: [] }, records: {}, reputation: { total: 7, earned: {}, log: [] } })));
+  const old = await ev(() => { const s = Profile.slots()[2]; return s && { service: s.service, sk: s.scarico && s.scarico.skipped, rep: s.reputation.total, vol: settings().volume }; });
+  check(JSON.stringify(old) === JSON.stringify({ service: 'Service Vecchio', sk: true, rep: 7, vol: 0.3 }), 'vecchio salvataggio importato male: ' + JSON.stringify(old));
+
+  // ---- slot tutti pieni: Nuova partita manda a cancellarne uno
+  await p.click('#slots-back');
+  await p.click('#menu-new');
+  check(await p.isVisible('#slot-list') && /occupati/.test(await p.textContent('#slot-msg')), 'con gli slot pieni Nuova partita non avvisa');
+
+  // ---- cambio di slot a partita in corso: la pagina si ricarica e la
+  // partita scelta riparte da sola; l'altra resta salvata
+  await Promise.all([p.waitForEvent('load'), p.click('#slot-list [data-slot="0"] [data-act="play"]')]);
+  await p.waitForFunction(() => window.__scene && gameActive, null, { timeout: 20000 });
+  const sw = await ev(() => ({ active: Profile.active, player: Profile.data.player, placed: Object.keys(gameState.placed).sort(), menu: menuOpen, other: Profile.slots()[1] && [Profile.slots()[1].player, Profile.slots()[1].reputation.total] }));
+  check(sw.active === 0 && sw.player === 'Marco' && JSON.stringify(sw.placed) === JSON.stringify(before.placed) && !sw.menu, 'cambio di slot sbagliato: ' + JSON.stringify(sw));
+  check(JSON.stringify(sw.other) === JSON.stringify(['Nuova Tecnica', 20]), 'la partita lasciata non è salvata: ' + JSON.stringify(sw.other));
+  check(/^MARCO · /.test(await p.textContent('#service-tag')), 'testata non aggiornata dopo il cambio di slot');
+  await p.waitForTimeout(400);
+  await open();
+  check((await p.textContent('#menu-resume')).startsWith('Continua · Marco'), 'alla ricarica non si continua l\'ultimo slot giocato');
 
   // ---- salvataggio della versione 1 (reputazione 100-150 per livello): si converte
   // (prima si lascia finire il salvataggio in corso e si spegne quello
@@ -194,13 +298,27 @@ const path = require('path');
   const conv3 = await ev(() => ({ v: Profile.data.v, sk: Profile.data.scarico && Profile.data.scarico.skipped, skipSet: settings().skipScarico, rep: reputation() }));
   check(JSON.stringify(conv3) === JSON.stringify({ v: 5, sk: true, skipSet: false, rep: 7 }), 'conversione dalla versione 3 sbagliata: ' + JSON.stringify(conv3));
 
-  // ---- salvataggio della versione 4 (prima della stanchezza): la partita
-  // resta com'era, il tecnico riprende riposato
+  // ---- salvataggio della versione 4 (un solo slot): la partita diventa
+  // il primo slot (il tecnico riprende riposato), impostazioni, record e service già proposti restano comuni
   await p.waitForTimeout(400);
-  await ev(() => { Profile.flush = () => {}; localStorage.setItem('scs-save', JSON.stringify({ v: 4, player: 'Anna', service: 'Service Rossi', settings: { volume: 0.5 }, level: { id: 1, placed: {}, edges: [] }, scarico: { skipped: true, lost: {}, delay: 0, beers: 0 }, beers: 3, records: {}, reputation: { total: 9, earned: {}, log: [] } })); });
+  await ev(() => { Profile.flush = () => {}; localStorage.setItem('scs-save', JSON.stringify({ v: 4, player: 'Bruno', service: 'Faro Matto', logo: { shape: 'scudo', icon: 'faro', bg: '#e0503f', fg: '#eee9df', style: 'tour' }, serviceInfo: { kind: 'feste', boss: 'Gino' }, usedServices: ['Faro Matto', 'Altro Service'], settings: { volume: 0.4 }, tutorSeen: {}, level: { id: 1, placed: {}, edges: [] }, scarico: { skipped: true, lost: {}, delay: 0, beers: 0 }, cavi: null, preside: null, cambioDj: null, beers: 2, records: { 1: [{ at: 1, player: 'Bruno', service: 'Faro Matto', playMs: 1000, tests: 1, failedTests: 0, trips: 0, rcdTrips: 0, pops: 0 }] }, reputation: { total: 9, earned: { 'L1:collaudo': 5 }, log: [] } })); });
   await open();
-  const conv4 = await ev(() => ({ v: Profile.data.v, fat: Profile.data.fatigue, beers: Profile.data.beers, rep: reputation(), player: playerName(), sk: !!Profile.data.scarico }));
-  check(JSON.stringify(conv4) === JSON.stringify({ v: 5, fat: 0, beers: 3, rep: 9, player: 'Anna', sk: true }), 'conversione dalla versione 4 sbagliata: ' + JSON.stringify(conv4));
+  const conv4 = await ev(() => { Profile.flush(); const saved = JSON.parse(localStorage.getItem('scs-save')); return { v: Profile.data.v, active: Profile.active, slots: Profile.slots().map(s => s && s.player), rep: reputation(), beers: Profile.data.beers, fat: Profile.data.fatigue, recs: Profile.data.records[1].length, vol: settings().volume, used: Profile.data.usedServices.length, savedV: saved.v, savedSlot: Object.keys(saved.slots[0]).includes('settings'), savedVol: saved.settings.volume, savedRecs: saved.records[1].length }; });
+  check(JSON.stringify(conv4) === JSON.stringify({ v: 5, active: 0, slots: ['Bruno', null, null], rep: 9, beers: 2, fat: 0, recs: 1, vol: 0.4, used: 2, savedV: 5, savedSlot: false, savedVol: 0.4, savedRecs: 1 }), 'conversione dalla versione 4 sbagliata: ' + JSON.stringify(conv4));
+  check((await p.textContent('#menu-resume')) === 'Continua · Bruno · Faro Matto · ★ 9', 'dopo la conversione manca Continua: ' + await p.textContent('#menu-resume'));
+
+  // ---- sul telefono (360 px): la schermata degli slot entra senza scorrere di lato
+  await p.setViewportSize({ width: 360, height: 640 });
+  await p.click('#menu-slots');
+  const fit = await ev(() => {
+    const box = document.querySelector('.menu-box').getBoundingClientRect();
+    const over = [...document.querySelectorAll('#slot-list .slot-card, #slot-list .menu-btn')].filter(e => { const r = e.getBoundingClientRect(); return r.right > box.right + 0.5 || r.left < box.left - 0.5 || e.scrollWidth > e.clientWidth + 1; }).length;
+    return { box: box.right <= innerWidth && box.left >= 0, over, text: document.querySelector('#slot-list .slot-card').textContent };
+  });
+  check(fit.box && fit.over === 0 && /Faro Matto/.test(fit.text) && /★ 9/.test(fit.text) && /Messa in sicurezza dei cavi/.test(fit.text), 'slot che non entrano a 360 px: ' + JSON.stringify(fit));
+  await p.click('#slots-back');
+  await p.click('#menu-levels');
+  check(await ev(() => document.querySelector('#level-list').scrollWidth <= document.querySelector('#level-list').clientWidth + 1), 'i livelli escono di lato a 360 px');
 
   console.log('PROBLEMI:', JSON.stringify(problems, null, 1));
   console.log('ERRORI JS:', errs);
