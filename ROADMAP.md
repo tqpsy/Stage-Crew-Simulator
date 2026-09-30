@@ -108,6 +108,15 @@ cambiano da una fase all'altra.
   purché cablato.
 - Da fare: il DJ set (21:15) come fase successiva. Dopo il DJ: da decidere.
 
+## Show del DJ set
+
+- **Light Operator Hero** (21:15 in scaletta): fatto, `dj.html` dopo il
+  cambio palco. Luci a ritmo su tre memorie, sempre più difficile, guasti-nota, PAR senza DMX,
+  fase del Quadro con la scelta tu / capo / Gerry e il rewind del DJ, finale
+  di Gerry. Mappa del brano da `strumenti/mappa-dj.py`. Da fare: l'audio
+  nella catena simulata, il brano caricato dal giocatore, guasti a caso,
+  l'assistente al posto del capo dal livello 2. Vedi `docs/spettacolo-dj.md`.
+
 ## Stanchezza del tecnico
 
 - Livello 1 (fatto): un valore 0-100 nel salvataggio, nel tasto 🍺 in

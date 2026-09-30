@@ -281,8 +281,8 @@ Il cambio palco (staccare ciò che non serve e ripatchare) fa parte del gioco.
   `runCambioTest` in `main.js`; stato in `Profile.data.cambioDj`. Le luci
   del DJ: tipo `djluci`, `DJ_LUCI_DMX` e `djLuciClashes`. Test:
   `tests/cambio-dj.js`.
-- **Da fare**: lo spettacolo del DJ (vedi *Lo spettacolo del DJ: Light
-  Operator Hero* qui sotto), con i suoi guasti. La
+- **Fatto**: lo spettacolo del DJ (vedi *Lo spettacolo del DJ: Light
+  Operator Hero* qui sotto e `docs/spettacolo-dj.md`), con i suoi guasti. La
   «ciabattina del DJ» piena di roba che fa scattare una fase appartiene lì
   (tra i guasti proposti); oggi la consolle consuma poco.
 
@@ -373,8 +373,14 @@ minuti in loop, sotto i 3–4 MB, diritti liberi), con BPM e secondo del drop.
 Passa per la catena simulata: fader, mute, L/R, distorsione del gain in
 rosso, ronzio della DI.
 
-Un prototipo del gioco a ritmo è già in lavorazione in un'altra sessione:
-questa sezione è il riferimento per unirlo ai guasti.
+**Cambiato giocando**: tre corsie (niente BLACKOUT: il battito prima del
+drop è una pausa), il set si fa via via più difficile, e il finale è Gerry
+che, arrabbiato per il casino e le parolacce, stacca la corrente di botto
+poco prima della fine del brano.
+
+**Fatto** (`dj.html`, dopo il cambio palco): com'è stato costruito, coi
+numeri, è in `docs/spettacolo-dj.md`. Dell'audio restano da fare la catena
+simulata e il brano caricato dal giocatore.
 
 ## Personaggi (proposta)
 
