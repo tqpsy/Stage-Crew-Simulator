@@ -76,11 +76,25 @@ const path = require('path');
   const solo = await ev(() => ({ hire: hireAssistant(null, 2), a: assistant(), can: assistantCanFix('fase') }));
   check(JSON.stringify(solo) === JSON.stringify({ hire: true, a: null, can: false }), 'senza assistente qualcuno fa i favori: ' + JSON.stringify(solo));
 
-  // ---- l'assistente resta nel salvataggio
-  await ev(() => { hireAssistant('sabri', 2); Profile.data.assistant.favors = 1; Profile.flush(); });
+  // ---- l'assistente resta nel salvataggio (nello slot della partita)
+  await ev(() => { Profile.data.service = 'Service Prova'; hireAssistant('sabri', 2); Profile.data.assistant.favors = 1; Profile.flush(); });
   await open();
   const saved = await ev(() => ({ a: Profile.data.assistant, name: assistant() && assistant().name }));
   check(JSON.stringify(saved) === JSON.stringify({ a: { id: 'sabri', favors: 1 }, name: 'Sabri «Nastro Nero»' }), 'assistente perso nel salvataggio: ' + JSON.stringify(saved));
+
+  // ---- partita salvata prima dell'assistente (slot senza assistant): nessuno assunto
+  await ev(() => { Profile.flush = () => {}; const r = JSON.parse(localStorage.getItem('scs-save')); delete r.slots[r.active].assistant; localStorage.setItem('scs-save', JSON.stringify(r)); });
+  await open();
+  const old = await ev(() => ({ a: Profile.data.assistant, who: assistant(), beers: Profile.data.beers }));
+  check(JSON.stringify(old) === JSON.stringify({ a: { id: null, favors: 0 }, who: null, beers: 1 }), 'partita vecchia senza assistente letta male: ' + JSON.stringify(old));
+
+  // ---- un id strano (per esempio da un file) non diventa un assistente
+  const strano = await ev(() => ['constructor', '__proto__', 'toString'].map(id => { Profile.data.assistant = { id, favors: 0 }; Profile.data.reputation.total = 99; return [assistant(), assistantCanFix('fase'), assistantUnlocked(id), hireAssistant(id, 2)]; }));
+  check(JSON.stringify(strano) === JSON.stringify([[null, false, false, false], [null, false, false, false], [null, false, false, false]]), 'id strano preso per assistente: ' + JSON.stringify(strano));
+
+  // ---- file importato con un assistente rovinato: ripulito
+  const file = await ev(() => readSlotFile(JSON.stringify({ kind: 'stage-crew-simulator', v: SAVE_VERSION, slot: { service: 'X', assistant: { id: { a: 1 }, favors: 'tanti' } } })).slot.assistant);
+  check(JSON.stringify(file) === JSON.stringify({ id: null, favors: 0 }), 'assistente del file non ripulito: ' + JSON.stringify(file));
 
   console.log('PROBLEMI:', JSON.stringify(problems, null, 1));
   console.log('ERRORI JS:', errs);

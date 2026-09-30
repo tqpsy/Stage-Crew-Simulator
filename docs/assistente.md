@@ -143,8 +143,10 @@ In `main.js`, dopo `addRecord`:
   paga le birre e conta il favore;
 - `assistantNewSet()`: i favori ripartono da zero a ogni set.
 
-Nel salvataggio `scs-save` (versione 5) c'è `assistant: { id, favors }`; la
-versione 4 si converte con nessuno assunto. Nuova partita = nessun assistente.
+Nel salvataggio `scs-save` ogni slot ha `assistant: { id, favors }`. Non serve
+una nuova versione: una partita salvata prima dell'assistente si legge con
+nessuno assunto (`fillSlot`), e un file importato con un assistente rovinato
+viene ripulito (`readSlotFile`). Nuova partita = nessun assistente.
 Test: `tests/assistente.js` e la conversione in `tests/salvataggio.js`.
 
 Nel livello 1 niente di tutto questo si vede: resta il capo.
