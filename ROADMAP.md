@@ -14,10 +14,16 @@ Idee e richieste già decise, da sviluppare nei prossimi livelli.
 - **Puntamento a mano dei PAR** (pan/tilt, zona da illuminare): nel
   livello 1 il PAR sullo stativo si punta da solo in base al ruolo
   (frontale dal Pit, taglio dai lati); il puntamento manuale arriverà
-  coi livelli del light designer.
-- Più avanti: americane (truss) oltre agli stativi, controluce, teste mobili.
+  coi livelli del light designer. Deciso: nel livello 1 i PAR restano
+  puntati da soli, come ora.
+- Nei livelli successivi (deciso): americane (truss) oltre agli stativi,
+  teste mobili; più avanti controluce.
+- Banco regia completo (mixer e consolle luci con memorie per ogni fase):
+  nei livelli successivi (deciso).
 
 ## Audio
+
+Tutto questo arriva nei livelli successivi (deciso).
 
 - **Monitor di palco**: le mandate AUX del mixer del livello 1 sono jack.
   Per i monitor aggiungere nel baule SEGNALE il cavo **Jack/XLR** (jack
@@ -98,7 +104,7 @@ cambiano da una fase all'altra.
   cavi lasciati dalla posa e le birre, e restituisce reputazione (una volta
   sola) e birre. Design in `docs/livello1-festa-scuola.md`.
   Il discorso resta col suo palco disegnato di fronte, non va
-  nell'isometrico (deciso). Il microfono va bene su qualsiasi ingresso MIC,
+  nell'isometrico (deciso); lo stesso vale per il DJ set e il cantante. Il microfono va bene su qualsiasi ingresso MIC,
   purché cablato.
 - Da fare: il DJ set (21:15) come fase successiva. Dopo il DJ: da decidere.
 
@@ -175,11 +181,14 @@ cambiano da una fase all'altra.
 - **Highscore**: per ogni collaudo riuscito `Profile.data.records[livello]`
   tiene già i dati grezzi (tempo di gioco, test fatti e falliti, scatti del
   magnetotermico e del salvavita, colpi nelle casse, nome del service,
-  data), i migliori 20. Resta da decidere la formula del punteggio (per
-  esempio stelle per livello) e la schermata della classifica, da aprire
-  dal menù e alla fine dello show.
-- Logo: più avanti anche sui flight case, sulle magliette della crew e
-  sui mezzi più grandi; eventualmente un logo caricato come immagine.
+  data), i migliori 20. Deciso: la classifica è quella **delle proprie
+  partite** (niente classifica online), da aprire dal menù e alla fine
+  dello show. Resta da definire la formula del punteggio (per esempio
+  stelle per livello).
+- Logo (deciso, tutto): anche sui flight case, sulle magliette della crew
+  e sui mezzi più grandi, e un logo caricato come immagine.
 - Da decidere: se i record (e la futura classifica) restano comuni a
   tutti gli slot, come oggi, o si mostrano anche per partita; se il file
   esportato deve poter contenere tutti gli slot insieme.
+- Stanchezza del tecnico e assistente da assumere dal livello 2: in
+  lavorazione in sessioni a parte.

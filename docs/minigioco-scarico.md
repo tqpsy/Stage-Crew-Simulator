@@ -221,7 +221,7 @@ primo colpo, cassa con la griglia ammaccata che vibra. Ognuno si sistema
 con il tocco lungo; più avanti potrà diventare un guasto vero da gestire
 durante lo show.
 
-### Reputazione e birre (proposta)
+### Reputazione e birre (deciso)
 
 Nel livello 1 la regola è che "l'apparecchio rotto non conta, non è colpa
 del giocatore". Allo scarico invece è colpa della crew, quindi propongo:
@@ -232,7 +232,8 @@ del giocatore". Allo scarico invece è colpa della crew, quindi propongo:
   service, come le altre fasi).
 - **−2 reputazione** per ogni apparecchio Rotto allo scarico.
 
-*Da decidere*: se il −2 va bene o se lo scarico deve pesare solo in birre.
+Deciso: i pezzi rotti pesano in reputazione, −2 per ogni apparecchio
+Rotto (`REP.scaricoBroken`, già nel gioco).
 
 ## Livelli e variabili ambientali
 
@@ -463,12 +464,15 @@ non toccano la scena di Phaser.
   muovere". Lo scarico è l'unico momento con un personaggio da guidare,
   ed è voluto: è la parte fisica del mestiere.
 
+## Decisi
+
+- Pezzi rotti allo scarico: −2 di reputazione ciascuno.
+- La durata: 30 minuti di gioco in 5 minuti reali (con 3 minuti era
+  troppo difficile finire in tempo).
+
 ## Da decidere
 
-- Il −2 di reputazione per ogni pezzo rotto allo scarico, o solo birre.
 - Il nome e il carattere del collega (proposta: Tonino).
-- La durata: nel prototipo 30 minuti di gioco in 5 minuti reali (con 3
-  minuti era troppo difficile finire in tempo).
 - Il carico all'uscita (a fine serata, smontaggio): stesso minigioco al
   contrario, con il "tetris" del mezzo da riempire. Può essere il motivo
   per cui le **cinghie** contano.

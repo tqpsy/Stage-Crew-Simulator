@@ -7620,13 +7620,25 @@ class StageScene extends Phaser.Scene {
     const toPlace = cat => result.toPlaceCats.has(cat);
 
     gameState.stats.tests++;
+    /* indizi a scalare, come nelle prove dei giri: al primo test andato male
+       solo l'indizio vago; dal secondo di fila il pezzo colpevole in rosso;
+       dal terzo il capo legge la voce del foglio che manca. La voce è il
+       primo collegamento che manca dell'impianto che ha fallito, se no la
+       prima voce che non va nel suo giro (quadro armato, accesi, stereo…). */
     const fail = (kind, hint) => {
       gameState.stats.failedTests++;
+      const n = gameState.giroFails[GIRO_COLLAUDO] = (gameState.giroFails[GIRO_COLLAUDO] || 0) + 1;
+      const giro = { power: 0, audio: 1, lights: 2 }[kind];
+      const miss = result.overPhase || result.overBudget ? null
+        : buildExpectedConnections().find(x => !x.ok && x.cat === kind) || giroChecks(giro).find(x => !x.ok);
       saveLevel();
       setCircuitStatus('error');
-      if (kind === 'power') { showToast('Scintille! ' + hint, 'bad'); this.fxSparks(); }
-      else if (kind === 'audio') { showToast('L\'impianto gracchia: ' + hint, 'bad'); this.fxCrackle(); }
-      else { showToast('Le luci vanno in tilt: ' + hint, 'bad'); this.fxLightsTilt(); }
+      const exact = miss && n >= 3 ? ' ' + bossName() + ' ti indica il foglio: «' + miss.what + '».' : '';
+      if (kind === 'power') { showToast('Scintille! ' + hint + exact, 'bad'); this.fxSparks(); }
+      else if (kind === 'audio') { showToast('L\'impianto gracchia: ' + hint + exact, 'bad'); this.fxCrackle(); }
+      else { showToast('Le luci vanno in tilt: ' + hint + exact, 'bad'); this.fxLightsTilt(); }
+      // dopo gli effetti, così il rosso non viene spento da chi li ferma
+      if (miss && n >= 2) miss.ids.forEach(id => { const v = this.compVisuals[id]; if (v) this.setGlow(v, true); });
     };
 
     // corrente
@@ -7645,6 +7657,7 @@ class StageScene extends Phaser.Scene {
     if (dmxOverlaps().length) return fail('lights', 'due PAR si pestano i piedi sull\'indirizzo.');
 
     setCircuitStatus('ok');
+    gameState.giroFails[GIRO_COLLAUDO] = 0;
     // la procedura conta: un solo suggerimento, il primo inciampo
     const pops = (gameState.procErrors || []).filter(x => x === 'pop').length;
     const tip = gameState.trips ? 'la prossima volta accendi i pesanti uno alla volta.'
