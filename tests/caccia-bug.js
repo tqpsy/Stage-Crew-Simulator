@@ -119,6 +119,7 @@ const SEED0 = parseInt(process.argv[4] || '1', 10);
       const rng = () => { st = (st + 0x6D2B79F5) >>> 0; let x = st; x = Math.imul(x ^ x >>> 15, x | 1); x ^= x + Math.imul(x ^ x >>> 7, x | 61); return ((x ^ x >>> 14) >>> 0) / 4294967296; };
       const pick = a => a[Math.floor(rng() * a.length)];
       S.resetLevel(true);
+      setFatigue(0);   // ogni partita da riposati: il connettore che scivola è in tests/stanchezza.js
       out.games++;
       const placedIds = () => Object.keys(gameState.placed).filter(id => gameState.placed[id].type !== 'allaccio');
       const cell = () => gridToScreen(Math.floor(rng() * VENUE_W) + .5, Math.floor(rng() * VENUE_H) + .5);

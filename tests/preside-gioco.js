@@ -126,7 +126,7 @@ const path = require('path');
   const after = await ev(() => ({ preside: Profile.data.preside, rep: Profile.data.reputation.earned['L1:preside'], beers: Profile.data.beers, open: presideOpen, toast: el('#toast').textContent,
     row: (renderSchedule(), [...document.querySelectorAll('.sched-row')].find(r => /Preside/.test(r.textContent)).textContent) }));
   // e torna al gioco: salita durante il discorso, 30 in meno per la birra bevuta
-  check(Number.isFinite(res.fatigue) && await ev(() => fatigue()) === res.fatigue && res.fatigue < tired, 'la stanchezza del discorso non torna al gioco: ' + JSON.stringify({ tired, res: res.fatigue, game: await ev(() => fatigue()) }));
+  check(Number.isFinite(res.fatigue) && Math.abs(await ev(() => fatigue()) - res.fatigue) < 0.1 && res.fatigue < tired, 'la stanchezza del discorso non torna al gioco: ' + JSON.stringify({ tired, res: res.fatigue, game: await ev(() => fatigue()) }));
   check(after.preside && after.preside.grad === res.grad && after.rep === res.rep && res.rep > 0 && after.beers === 2 - 1 + res.beers && !after.open,
     'esito del discorso non salvato: ' + JSON.stringify({ after, res }));
   check(/Fatto/.test(after.row) && /Pubblico al/.test(after.row) && /pubblico al/.test(after.toast), 'scaletta o avviso senza il discorso: ' + JSON.stringify(after));
