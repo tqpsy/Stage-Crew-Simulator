@@ -134,8 +134,13 @@ corti) e in FOH va solo il mixer.
 
 Test: `tests/aiuti.js`.
 
-**Da fare:** punto 5 (indizi a scalare anche nel Test impianto finale: oggi
-sono nelle prove dei giri).
+- **indizi a scalare nel Test impianto** (punto 5, fatto): come nelle prove
+  dei giri. Al primo test andato male solo l'indizio vago con l'effetto
+  (scintille, casse che gracchiano, luci in tilt); dal secondo di fila il
+  pezzo colpevole in rosso; dal terzo il capo legge la voce del foglio che
+  manca. Il colpevole è il primo collegamento che manca dell'impianto che
+  ha fallito, se no la prima voce del suo giro che non va. Un collaudo
+  riuscito azzera il conto (`giroFails[GIRO_COLLAUDO]`).
 
 ## Scheda obiettivi
 
@@ -172,11 +177,40 @@ berne una la toglie dal punteggio finale, quindi c'è una scelta da fare.
   reputazione** (non è colpa del giocatore): la reputazione scende solo se il
   guasto è gestito male (vedi sotto).
 
-## Stanchezza — da sviluppare
+## Stanchezza (fatta, prima versione)
 
 Il tempo passa come stanchezza del tecnico. Più è stanco, più rischia di fare
-errori (proposta: cavi che a volte si attaccano alla presa sbagliata, tocchi
-meno precisi). Si recupera bevendo una birra.
+errori. Si recupera bevendo una birra.
+
+- **Un valore solo**, da 0 (riposato) a 100, salvato nella partita
+  (`Profile.data.fatigue`, dentro lo slot della partita: ogni slot ha la
+  sua). I salvataggi vecchi e i file importati senza stanchezza riprendono
+  col tecnico riposato. Nuova partita: 0.
+- **Dove si vede**: nel tasto 🍺 in testata, con le birre in tasca sopra e
+  la barra della stanchezza sotto (rossa da 70 in su). Il numero esatto e
+  la parola (riposato, un po' stanco, stanco, stanchissimo) sono nel
+  suggerimento del tasto e nel messaggio quando lo si tocca.
+- **Sale** di 1 per ogni minuto di gioco (conta come il tempo di gioco: non
+  col menù aperto) e di 0,25 per ogni pezzo posato e ogni cavo collegato.
+- **Scende** di 30 bevendo una birra dal tasto 🍺. Serve un secondo tocco
+  di conferma: la birra bevuta esce dal punteggio finale. Senza birre, o da
+  riposati, non si beve.
+- **Effetti nel montaggio (livello 1, leggeri)**: sopra 70 ogni tanto il
+  connettore scivola di mano (fino a 1 volta su 7 a stanchezza 100). Il
+  cavo resta in mano e basta riprovare: nessun collegamento sbagliato.
+- **Nel discorso del preside** la stanchezza del tecnico entra nella pagina
+  (`preside-dati`, campo `fatigue`) e ne esce a fine discorso
+  (`preside-fine`, campo `fatigue`): durante il discorso sale col tempo, la
+  birra la fa scendere, e rende i fader più tremolanti, le finestre di
+  reazione e il tempo limite del guasto più corti (vedi *Tempi del guasto*).
+  Saltato il discorso, la stanchezza non cambia.
+- Codice: `FATIGUE`, `setFatigue`, `tireOut`, `drinkBeer`, `slipChance` in
+  `main.js`. Test: `tests/stanchezza.js`, e `tests/preside-gioco.js` per il
+  passaggio al discorso.
+- **Da fare**: scarico e posa dei cavi non la ricevono ancora (lì conta solo
+  il tempo di gioco); nello spettacolo del DJ stringerà la finestra delle
+  note. Nei livelli successivi, effetti più forti (il cavo nella presa
+  sbagliata, tocchi meno precisi).
 
 ## Consolle luci
 
@@ -415,7 +449,8 @@ camicia azzurra aperta. Per il ritratto si usa il ritaglio `viewBox="6 0 88 88"`
 - Cambi palco (fasi 1-3): barra di **pazienza del pubblico**. Se si svuota non
   si perde, ma si perde reputazione e il pubblico fischia. Fatto per il
   cambio Preside → DJ (vedi sopra).
-- La **stanchezza** sale con il tempo e con le azioni; la birra la abbassa.
+- La **stanchezza** sale con il tempo e con le azioni; la birra la abbassa
+  (fatto, vedi *Stanchezza*).
 
 ## Guasti (proposta)
 
@@ -442,6 +477,10 @@ professionalità, non la sfortuna.
 - Nel gioco oggi ci sono il collaudo dell'impianto (+5), lo scarico, la posa
   dei cavi, il discorso del preside (vedi *Il discorso nel gioco*) e il cambio
   palco per il DJ. I numeri sono in `REP` in `main.js`.
+- La reputazione apre i livelli successivi a soglie (`LEVELS` in `main.js`,
+  proposta: livello 2 a 20, poi 60, 110, 180). Giocato bene, questo livello
+  ne vale circa 25-30: basta per aprire il 2. Le fasi di questo livello sono i
+  suoi sottolivelli nella scelta del livello e nell'elenco degli slot.
 
 ## Animazione di errore (proposta)
 
@@ -497,14 +536,16 @@ Giro del livello: **Montaggio → Test impianto → [cambio palco → spettacolo
   stanchezza sta nel tasto della 🍺 (la birra la fa scendere); reputazione.
 - **Palco isometrico**: resta la vista di gioco del montaggio. Il discorso
   del preside invece ha il suo palco disegnato di fronte (vedi *Il discorso
-  nel gioco*). Per le altre fasi, da decidere: sopra compaiono i personaggi
-  (preside al microfono, DJ alla consolle, Dante sullo sgabello) e il pubblico
-  in platea: teste che si muovono a tempo, colore e fumetti che ne mostrano l'umore.
+  nel gioco*). **Deciso: anche le altre fasi di spettacolo (DJ, cantante)
+  non vanno nell'isometrico**: come il preside, ognuna ha il suo palco
+  disegnato di fronte, con i personaggi e il pubblico in platea (teste che
+  si muovono a tempo, colore e fumetti che ne mostrano l'umore).
 - **Imprevisti**: fumetto sopra il personaggio o il dispositivo, con un anello
   che si svuota (giallo → rosso). Toccare il fumetto apre direttamente il comando
   giusto (fader, memoria, pannello), per giocare al volo anche sul telefono.
   Esito: spunta verde e +gradimento, oppure suono del guaio e −gradimento.
-- **Banco regia**: la barra in basso del montaggio diventa un cassetto con due
+- **Banco regia** (deciso: **nei livelli successivi**, non nel livello 1):
+  la barra in basso del montaggio diventa un cassetto con due
   schede, MIXER e LUCI (sul telefono occupa metà schermo sotto il palco; su
   computer sta di lato).
   - MIXER: una striscia per canale con fader verticale, meter con zona verde,
@@ -525,6 +566,10 @@ Giro del livello: **Montaggio → Test impianto → [cambio palco → spettacolo
 - Caricature: vettoriali disegnate nel codice, come i dispositivi.
 - Reputazione salvata nel browser del giocatore.
 - I numeri (gradimento, stress, pazienza) si tarano giocando.
+- Fasi di spettacolo fuori dall'isometrico: ognuna col suo palco di fronte.
+- Banco regia completo (mixer e consolle luci con memorie): nei livelli
+  successivi.
+- PAR: nel livello 1 si puntano da soli in base al ruolo, come ora.
 
 ## Il discorso nel gioco
 
@@ -540,10 +585,12 @@ in un iframe sopra il palco, o dalla scaletta («Il preside sale sul palco»).
   «in che ingresso era?» quando si guasta), i PAR montati col nome e il ruolo
   del loro stativo (frontali e tagli, da sinistra a destra: se allo scarico
   se n'è rotto qualcuno ce ne sono meno), i cavi lasciati dalla posa
-  (`caviLeftovers()`) e le birre in tasca.
+  (`caviLeftovers()`), le birre in tasca e la stanchezza del tecnico (vedi
+  *Stanchezza*).
 - **Esito**: la reputazione del discorso (5 + gradimento − larsen ± guasto e
   richieste, vedi sotto) conta una volta sola (`L1:preside`); le birre
-  guadagnate vanno in tasca, quelle bevute si tolgono. Si può saltare dalla
+  guadagnate vanno in tasca, quelle bevute si tolgono; la stanchezza a fine
+  discorso torna al tecnico. Si può saltare dalla
   scheda iniziale: il preside parla lo stesso, reputazione ferma. La scaletta
   mostra il riassunto (pubblico, larsen, birre, reputazione).
 - Aperta da sola, la pagina resta il banco di prova: ingresso a caso, 4 PAR,
@@ -653,4 +700,7 @@ limite:
 | Cavo | 17 s | 32 s |
 
 Il tempo limite si accorcia con la stanchezza, come le altre finestre di
-reazione. Il prossimo imprevisto arriva solo dopo il tempo limite del guasto.
+reazione: tempo limite × (1 − stanchezza / 250), quindi fino a −40% a
+stanchezza 100; ogni controllo e riparazione dura (1 + stanchezza / 100)
+volte di più. Nel gioco la stanchezza di partenza è quella del tecnico;
+aperta da sola la pagina parte da 30. Il prossimo imprevisto arriva solo dopo il tempo limite del guasto.

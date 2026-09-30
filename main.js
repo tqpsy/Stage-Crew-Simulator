@@ -1638,8 +1638,9 @@ document.querySelectorAll('.tab-btn').forEach(btn => {
    tre offerte; salvataggio automatico, impostazioni e
    record. Tutto sta in un solo oggetto nella memoria del browser, con un
    numero di versione: se un giorno il formato cambia si converte, invece
-   di perdere la partita. "Nuova partita" azzera il livello ma tiene
-   impostazioni e record.
+   di perdere la partita. Le partite stanno in SLOT_COUNT slot: "Nuova
+   partita" ne occupa uno vuoto; impostazioni e record sono comuni a tutti.
+   Ogni partita si può esportare in un file e reimportare.
    Il valore principale del tecnico è la REPUTAZIONE (vedi addReputation):
    è sua, non del service. Parte da 0, sale con le fasi completate, i
    guasti gestiti bene e le birre rifiutate, scende se un guasto è gestito
@@ -1649,21 +1650,38 @@ document.querySelectorAll('.tab-btn').forEach(btn => {
    casse).
    --------------------------------------------------------------------- */
 const SAVE_KEY = 'scs-save';
-const SAVE_VERSION = 4;
+const SAVE_VERSION = 5;
 const LEVEL_ID = 1;
 const RECORDS_KEEP = 20;       // record tenuti per livello
 const NAME_MAX = 24;           // caratteri del nome del tecnico
 const SERVICE_NAME_MAX = 28;   // caratteri del nome (inventato) di un service
 const USED_SERVICES_KEEP = 400; // nomi di service già proposti, da non riproporre
 
+const SLOT_COUNT = 3;           // partite salvate (slot)
+const SAVE_FILE_KIND = 'stage-crew-simulator';   // firma del file esportato
+// cosa è comune a tutti gli slot: impostazioni, record (la classifica
+// delle proprie partite) e nomi di service già proposti
+const SHARED_KEYS = ['settings', 'records', 'usedServices'];
+
 function defaultProfile () {
-  return { v: SAVE_VERSION, player: '', service: '', serviceInfo: null, usedServices: [], settings: { volume: 0.8, reducedFx: false, skipShow: false, skipScarico: false, testMusic: true, bossTips: true, tapeMarks: true, traceSignal: true }, tutorSeen: {}, logo: null, level: null, scarico: null, cavi: null, preside: null, cambioDj: null, dj: null, beers: 0, records: {}, reputation: { total: 0, earned: {}, log: [] } };
+  return { v: SAVE_VERSION, player: '', service: '', serviceInfo: null, usedServices: [], settings: { volume: 0.8, reducedFx: false, skipShow: false, skipScarico: false, testMusic: true, bossTips: true, tapeMarks: true, traceSignal: true }, tutorSeen: {}, logo: null, level: null, scarico: null, cavi: null, preside: null, cambioDj: null, dj: null, beers: 0, fatigue: 0, records: {}, reputation: { total: 0, earned: {}, log: [] }, levelsSeen: 1, savedAt: 0 };
 }
-const Profile = (() => {
-  let data = defaultProfile();
+// solo la partita (senza le parti comuni): è quello che va in uno slot
+function slotPart (d) {
+  const s = { ...d };
+  SHARED_KEYS.concat('v').forEach(k => delete s[k]);
+  return s;
+}
+// uno slot contiene una partita se c'è un service o un livello avviato
+const slotUsed = s => !!(s && (s.service || s.level));
+
+/* conversioni dei salvataggi a un solo slot (versioni 1-4): tutte portano
+   alla versione 4, l'ultima a slot unico. Restituisce null se non sa
+   leggere l'oggetto. */
+function upgradeSingle (d) {
+  if (!d || typeof d !== 'object' || !Number.isInteger(d.v)) return null;
+  d = JSON.parse(JSON.stringify(d));
   try {
-    const raw = localStorage.getItem(SAVE_KEY);
-    const d = raw ? JSON.parse(raw) : null;
     // versione 1: la reputazione era 100-150 per livello collaudato; ora
     // un collaudo è una fase completata e vale REP.phaseDone
     if (d && d.v === 1) {
@@ -1686,19 +1704,125 @@ const Profile = (() => {
       d.scarico = d.level ? { skipped: true, lost: {}, delay: 0, beers: 0 } : null;
       d.v = 4;
     }
-    if (d && d.v === SAVE_VERSION) data = { ...defaultProfile(), ...d, settings: { ...defaultProfile().settings, ...d.settings }, reputation: { ...defaultProfile().reputation, ...d.reputation } };
-    else if (!raw && localStorage.getItem('scs-muted') === '1') data.settings.volume = 0;   // vecchio tasto muto
+  } catch (e) { return null; }
+  return d.v === 4 ? d : null;
+}
+
+/* versione 5: più slot. Le parti comuni (impostazioni, record, service già
+   proposti) stanno fuori dagli slot; la partita a slot unico diventa il
+   primo slot, niente si perde. */
+function upgradeSave (d) {
+  if (d && d.v >= 1 && d.v <= 4) {
+    const one = upgradeSingle(d);
+    if (!one) return null;
+    const root = { v: 5, active: 0, settings: one.settings || {}, records: one.records || {}, usedServices: one.usedServices || [], slots: Array(SLOT_COUNT).fill(null) };
+    if (slotUsed(one)) root.slots[0] = slotPart(one);
+    return root;
+  }
+  return d && d.v === SAVE_VERSION ? d : null;
+}
+
+// una partita letta dalla memoria o da un file: campi mancanti dai valori
+// di partenza, parti comuni dal salvataggio
+function fillSlot (s, root) {
+  const def = defaultProfile();
+  return { ...def, ...(s || {}), v: SAVE_VERSION,
+    settings: { ...def.settings, ...root.settings },
+    records: root.records || {}, usedServices: root.usedServices || [],
+    reputation: { ...def.reputation, ...((s && s.reputation) || {}) } };
+}
+
+/* file esportato: una partita (uno slot) con firma e versione. Si legge
+   anche un vecchio salvataggio a slot unico (versioni 1-4, per esempio
+   copiato a mano dalla memoria del browser). Restituisce la partita o un
+   errore da mostrare al giocatore. */
+function exportSlotFile (slot) {
+  return JSON.stringify({ kind: SAVE_FILE_KIND, v: SAVE_VERSION, exportedAt: Date.now(), slot: slotPart(slot) }, null, 1);
+}
+function readSlotFile (text) {
+  let d;
+  try { d = JSON.parse(text); } catch (e) { return { error: 'Il file non è un salvataggio di Stage Crew Simulator.' }; }
+  if (!d || typeof d !== 'object' || !Number.isInteger(d.v)) return { error: 'Il file non è un salvataggio di Stage Crew Simulator.' };
+  if (d.v > SAVE_VERSION) return { error: 'Il salvataggio viene da una versione più nuova del gioco: aggiorna la pagina e riprova.' };
+  let slot;
+  if (d.kind === SAVE_FILE_KIND && d.v === SAVE_VERSION) slot = d.slot;
+  else if (d.v >= 1 && d.v <= 4 && !d.kind) { const one = upgradeSingle(d); slot = one && slotPart(one); }
+  const ok = slot && typeof slot === 'object' && typeof (slot.service || '') === 'string' && typeof (slot.player || '') === 'string'
+    && (!slot.reputation || typeof slot.reputation.total === 'number')
+    && (!slot.level || (typeof slot.level === 'object' && typeof slot.level.placed === 'object' && Array.isArray(slot.level.edges)));
+  if (!ok || !slotUsed(slot)) return { error: 'Il file è rovinato o non contiene una partita.' };
+  // il file può venire da chiunque: logo e service solo con valori ammessi
+  // (i colori del logo finiscono dentro l'SVG)
+  const lg = slot.logo && typeof slot.logo === 'object' ? slot.logo : null;
+  const color = c => typeof c === 'string' && /^#[0-9a-f]{3,8}$/i.test(c) ? c : undefined;
+  const key = (k, set) => typeof k === 'string' && (k === 'iniziali' || k in set) ? k : undefined;
+  const info = slot.serviceInfo && typeof slot.serviceInfo === 'object' ? slot.serviceInfo : null;
+  slot = { ...slot, player: String(slot.player || '').slice(0, NAME_MAX), service: String(slot.service || '').slice(0, SERVICE_NAME_MAX),
+    logo: lg ? JSON.parse(JSON.stringify({ shape: key(lg.shape, LOGO_SHAPES), icon: key(lg.icon, LOGO_ICONS), bg: color(lg.bg), fg: color(lg.fg), style: key(lg.style, BRAND_STYLES) })) : null,
+    serviceInfo: info ? { kind: key(info.kind, SERVICE_KINDS) || null, boss: String(info.boss || '').slice(0, NAME_MAX * 2) } : null,
+    fatigue: Math.min(100, Math.max(0, +slot.fatigue || 0)) };
+  return { slot };
+}
+
+const Profile = (() => {
+  let root = { v: SAVE_VERSION, active: 0, settings: {}, records: {}, usedServices: [], slots: Array(SLOT_COUNT).fill(null) };
+  let data = null;
+  try {
+    const raw = localStorage.getItem(SAVE_KEY);
+    const d = upgradeSave(raw ? JSON.parse(raw) : null);
+    if (d) {
+      root = { ...root, ...d };
+      root.slots = Array.from({ length: SLOT_COUNT }, (_, i) => (d.slots && slotUsed(d.slots[i])) ? d.slots[i] : null);
+      if (!(root.active >= 0 && root.active < SLOT_COUNT)) root.active = 0;
+    } else if (!raw && localStorage.getItem('scs-muted') === '1') root.settings = { volume: 0 };   // vecchio tasto muto
   } catch (e) { /* memoria non disponibile o salvataggio illeggibile: si parte da zero */ }
+  data = fillSlot(root.slots[root.active], root);
   let timer = null;
-  const flush = () => {
-    clearTimeout(timer); timer = null;
-    try { localStorage.setItem(SAVE_KEY, JSON.stringify(data)); } catch (e) { /* memoria piena o non disponibile: si gioca senza salvare */ }
+  // riporta la partita in gioco nel suo slot (solo se è una partita vera)
+  const sync = () => {
+    SHARED_KEYS.forEach(k => { root[k] = data[k]; });
+    if (slotUsed(data)) {
+      if (gameActive || !data.savedAt) data.savedAt = Date.now();   // data dell'ultima partita giocata
+      root.slots[root.active] = slotPart(data);
+    }
   };
+  const write = () => {
+    try { localStorage.setItem(SAVE_KEY, JSON.stringify(root)); } catch (e) { /* memoria piena o non disponibile: si gioca senza salvare */ }
+  };
+  const flush = () => { clearTimeout(timer); timer = null; sync(); write(); };
   return {
     get data () { return data; },
+    get active () { return root.active; },
     // salvataggio a raffica ma scritto una volta sola, poco dopo l'ultima azione
-    save () { clearTimeout(timer); timer = setTimeout(flush, 250); },
-    flush
+    save () { clearTimeout(timer); timer = setTimeout(() => Profile.flush(), 250); },
+    flush,
+    // le partite negli slot (null = vuoto); quella in gioco è aggiornata
+    slots () { if (slotUsed(data)) root.slots[root.active] = slotPart(data); return root.slots.slice(); },
+    firstFree () { return this.slots().findIndex(s => !s); },
+    // passa a un altro slot (vuoto: una partita nuova ancora da iniziare)
+    select (i) {
+      if (i === root.active) return;
+      clearTimeout(timer); timer = null; sync();
+      root.active = i;
+      data = fillSlot(root.slots[i], root);
+      write();
+    },
+    remove (i) {
+      root.slots[i] = null;
+      if (i === root.active) { clearTimeout(timer); timer = null; SHARED_KEYS.forEach(k => { root[k] = data[k]; }); data = fillSlot(null, root); }
+      write();
+    },
+    exportSlot (i) { const s = this.slots()[i]; return s ? exportSlotFile(s) : null; },
+    // mette una partita letta da file in uno slot vuoto
+    importSlot (i, text) {
+      if (this.slots()[i]) return { error: 'Lo slot è occupato: cancella prima la partita che c\'è.' };
+      const r = readSlotFile(text);
+      if (r.error) return r;
+      root.slots[i] = r.slot;
+      if (i === root.active) data = fillSlot(r.slot, root);
+      write();
+      return r;
+    }
   };
 })();
 window.addEventListener('pagehide', () => Profile.flush());
@@ -2249,6 +2373,35 @@ const REP = {
 };
 const REP_LOG_KEEP = 50;
 const reputation = () => Profile.data.reputation.total;
+
+/* LIVELLI — si aprono a soglie di reputazione (con mezzi, materiale e
+   venue più grandi). Oggi si gioca solo il livello 1 (ready): gli altri
+   si vedono nella scelta del livello, bloccati con la loro soglia, e
+   seguono i cinque scenari di docs/minigioco-scarico.md. Il livello 1
+   vale circa 25-30 di reputazione giocato bene: la soglia del 2 si
+   raggiunge finendo bene il primo. Le soglie sono una proposta. */
+const LEVELS = [
+  { id: 1, name: 'Festa della scuola', venue: 'Palestra della scuola', vehicle: 'furgone', rep: 0, ready: true,
+    // i sottolivelli (le fasi della serata già nel gioco), da una partita salvata
+    phases: [
+      { title: 'Arrivo e scarico', done: s => !!s.scarico },
+      { title: 'Montaggio e test impianto', done: s => ('L1:collaudo') in ((s.reputation && s.reputation.earned) || {}) },
+      { title: 'Messa in sicurezza dei cavi', done: s => !!s.cavi },
+      { title: 'Discorso del preside', done: s => !!s.preside },
+      { title: 'Cambio palco per il DJ', done: s => !!(s.cambioDj && s.cambioDj.done) },
+      { title: 'DJ set', done: s => !!s.dj }
+    ] },
+  { id: 2, name: 'Sagra in piazza', venue: 'Piazza con i sampietrini', vehicle: 'camion', rep: 20 },
+  { id: 3, name: 'Matrimonio in villa', venue: 'Giardino di una villa, sotto la pioggia', vehicle: 'camion', rep: 60 },
+  { id: 4, name: 'Teatro comunale', venue: 'Teatro con la sponda idraulica guasta', vehicle: 'camion', rep: 110 },
+  { id: 5, name: 'Concerto al palazzetto', venue: 'Palazzetto dello sport', vehicle: 'bilico', rep: 180 }
+];
+const VEHICLE_NAMES = { furgone: 'furgone', camion: 'camion', bilico: 'bilico' };
+const levelInfo = id => LEVELS.find(l => l.id === id) || LEVELS[0];
+const levelUnlocked = (lv, rep) => rep >= lv.rep;
+// quanti livelli sono aperti con questa reputazione
+const unlockedCount = rep => LEVELS.filter(l => levelUnlocked(l, rep)).length;
+
 // aggiunge (o toglie) reputazione e dice di quanto è cambiata davvero;
 // con onceKey un evento conta una volta sola (es. 'L1:collaudo')
 function addReputation (amount, reason, onceKey) {
@@ -2283,19 +2436,86 @@ function addRecord () {
   return addReputation(REP.phaseDone, 'Collaudo del livello ' + LEVEL_ID, 'L' + LEVEL_ID + ':collaudo');
 }
 
-// tempo di gioco: conta solo con la pagina in vista e il menù chiuso
+/* STANCHEZZA del tecnico — il tempo della serata si sente addosso.
+   Un valore solo, da 0 (riposato) a 100, salvato nel profilo
+   (Profile.data.fatigue) e mostrato sotto il tasto 🍺 in testata:
+   - sale col tempo di gioco (FATIGUE.perMinute) e con le azioni: ogni
+     pezzo posato e ogni cavo collegato (FATIGUE.perAction);
+   - scende bevendo una birra dal tasto 🍺 (FATIGUE.beer). La birra bevuta
+     non conta più nel punteggio finale: è una scelta, per questo il tasto
+     chiede conferma;
+   - effetti leggeri, il livello 1 perdona: da FATIGUE.slipFrom in su ogni
+     tanto il connettore scivola di mano (il cavo resta in mano, si
+     riprova). Nel discorso del preside fader più tremolanti e tempo limite
+     del guasto più corto: li calcola preside.html dalla stanchezza che
+     riceve, e alla fine la restituisce.
+   Nuova partita = tecnico riposato. */
+const FATIGUE = { max: 100, perMinute: 1, perAction: 0.25, beer: 30, slipFrom: 70, slipMax: 0.15, confirmMs: 4000 };
+const fatigue = () => Profile.data.fatigue || 0;
+// quiet: senza salvare subito (il tempo che passa ogni secondo si salva con
+// la prossima azione o all'uscita dalla pagina)
+function setFatigue (v, quiet) {
+  const f = Math.round(Math.max(0, Math.min(FATIGUE.max, +v || 0)) * 100) / 100;
+  if (f === fatigue()) return;
+  Profile.data.fatigue = f;
+  if (!quiet) Profile.save();
+  paintBeerBtn();
+}
+const tireOut = (amount, quiet) => { if (gameActive) setFatigue(fatigue() + amount, quiet); };
+// probabilità che un connettore scivoli di mano: 0 fino a slipFrom, poi sale fino a slipMax
+const slipChance = () => fatigue() <= FATIGUE.slipFrom ? 0 : FATIGUE.slipMax * (fatigue() - FATIGUE.slipFrom) / (FATIGUE.max - FATIGUE.slipFrom);
+const fatigueSlip = () => Math.random() < slipChance();
+const fatigueWord = () => { const f = fatigue(); return f < 30 ? 'riposato' : f < 60 ? 'un po\' stanco' : f < 80 ? 'stanco' : 'stanchissimo'; };
+function paintBeerBtn () {
+  const b = el('#beer-btn');
+  if (!b) return;
+  b.hidden = !gameActive;
+  el('#beer-n').textContent = Profile.data.beers || 0;
+  const fill = el('#fat-fill');
+  fill.style.width = fatigue() + '%';
+  fill.classList.toggle('high', fatigue() >= FATIGUE.slipFrom);
+  b.title = 'Stanchezza ' + Math.round(fatigue()) + '% (' + fatigueWord() + ') · birre in tasca: ' + (Profile.data.beers || 0)
+    + '. Tocca per bere: stanchezza −' + FATIGUE.beer + ', una birra in meno nel punteggio.';
+}
+let beerAskAt = 0;
+function drinkBeer () {
+  if (!gameActive || minigameOpen()) return;
+  const f = Math.round(fatigue());
+  if (!Profile.data.beers) { showToast('Stanchezza ' + f + '% (' + fatigueWord() + '). Niente birre in tasca: si guadagnano lavorando bene.'); return; }
+  if (f < 1) { showToast('Sei riposato: tieni la birra per dopo.'); return; }
+  if (Date.now() - beerAskAt > FATIGUE.confirmMs) {
+    beerAskAt = Date.now();
+    showToast('Stanchezza ' + f + '% (' + fatigueWord() + '). Tocca ancora 🍺 per bere: −' + FATIGUE.beer + ' di stanchezza, ma una birra in meno nel punteggio finale.');
+    return;
+  }
+  beerAskAt = 0;
+  Profile.data.beers--;
+  setFatigue(fatigue() - FATIGUE.beer);
+  applySettings();
+  showToast('Glu glu. Stanchezza giù: ' + Math.round(fatigue()) + '%.', 'ok');
+}
+
+// tempo di gioco: conta solo con la pagina in vista e il menù chiuso. Nel
+// discorso del preside la stanchezza la tiene preside.html
 setInterval(() => {
-  if (gameActive && !menuOpen && !document.hidden) { gameState.stats.playMs += 1000; cambioTick(1000); }
+  if (gameActive && !menuOpen && !document.hidden) {
+    gameState.stats.playMs += 1000; cambioTick(1000);
+    if (!presideOpen) tireOut(FATIGUE.perMinute / 60, true);
+  }
 }, 1000);
 
 function applySettings () {
   SFX.setVolume(settings().volume);
+  paintBeerBtn();
   const tag = el('#service-tag');
   if (tag) tag.textContent = gameActive || Profile.data.service
-    ? (playerName() + ' · ' + serviceName()).toUpperCase() + ' · REPUTAZIONE ' + reputation() + (Profile.data.beers ? ' · 🍺 ' + Profile.data.beers : '')
+    ? (playerName() + ' · ' + serviceName()).toUpperCase() + ' · REPUTAZIONE ' + reputation()
     : 'STAGE CREW SIMULATOR';
   const logo = el('#service-logo');
   if (logo) logo.innerHTML = gameActive || Profile.data.service ? logoSVG(serviceLogo(), Profile.data.service, 30) : '';
+  // la reputazione ha aperto un livello non ancora visto: puntino sul menù
+  const news = slotUsed(Profile.data) && unlockedCount(reputation()) > (Profile.data.levelsSeen || 1);
+  ['#menu-btn', '#menu-levels'].forEach(s => { const b = el(s); if (b) b.classList.toggle('news', news); });
   if (window.__scene) window.__scene.paintServiceName();
 }
 
@@ -2323,9 +2543,19 @@ function showMenuPage (page, keep) {
   el('#menu-resume').hidden = !canResume;
   el('#menu-resume').textContent = gameActive ? 'Riprendi' : 'Continua · ' + playerName() + ' · ' + serviceName() + ' · ★ ' + reputation();
   el('#menu-new').classList.toggle('primary', !canResume);
-  el('#new-warning').hidden = !Profile.data.level;
+  const lv = levelInfo((Profile.data.level && Profile.data.level.id) || LEVEL_ID);
+  el('#menu-title').textContent = 'Livello ' + lv.id + ': ' + lv.name;
   el('#set-player-row').hidden = !gameActive;
+  if (page !== 'slots') { slotConfirm = null; if (!keep) slotMsg(''); }
+  if (page === 'slots') renderSlots();
+  if (page === 'levels') renderLevels();
   if (page === 'new' && !keep) {
+    if (newSlot == null || Profile.slots()[newSlot]) newSlot = Profile.firstFree();
+    // le altre partite restano: la nuova va in uno slot vuoto
+    const others = Profile.slots().filter(Boolean).length;
+    el('#new-warning').hidden = !others;
+    el('#new-warning').textContent = 'La nuova partita va nello slot ' + (newSlot + 1) + ' e il nuovo tecnico parte da reputazione 0. '
+      + (others === 1 ? 'L\'altra partita resta salvata' : 'Le altre partite restano salvate') + '; impostazioni e record sono comuni a tutte.';
     draft = { player: Profile.data.player, offers: serviceOffers(Profile.data.usedServices), pick: null };
     const i = el('#player-input');
     i.value = draft.player; setTimeout(() => i.focus(), 30);
@@ -2384,6 +2614,10 @@ const cleanName = s => String(s || '').replace(/\s+/g, ' ').trim().slice(0, NAME
 // nuovo tecnico: reputazione da costruire, al lavoro per il service scelto;
 // i nomi delle tre offerte non verranno più proposti
 function startNewGame (player, offer, offers) {
+  // nello slot scelto (vuoto): la partita in corso resta salvata nel suo
+  const slot = newSlot != null && !Profile.slots()[newSlot] ? newSlot : Profile.firstFree();
+  if (slot >= 0 && slot !== Profile.active) { saveLevel(); Profile.select(slot); }
+  newSlot = null;
   Profile.data.player = cleanName(player);
   Profile.data.service = offer.name;
   Profile.data.logo = { ...offer.logo };
@@ -2400,6 +2634,7 @@ function startNewGame (player, offer, offers) {
   if (el('#dj-frame')) el('#dj-frame').remove();
   djOpen = false;
   Profile.data.beers = 0;
+  Profile.data.fatigue = 0;      // la serata comincia: tecnico riposato
   Profile.data.tutorSeen = {};   // il nuovo tecnico non ha ancora sentito i consigli del capo
   whenScene(scene => {
     gameActive = true;
@@ -2418,6 +2653,158 @@ function continueGame () {
     closeMenu();
     if (!scaricoDone()) openSchedule(true);   // la partita si era fermata allo scarico
   });
+}
+
+/* ---------------- partite salvate (slot) ----------------
+   Ogni slot mostra il service (nome e logo), il tecnico, il livello e la
+   fase raggiunti, la reputazione e la data dell'ultima partita. Da qui si
+   gioca, si esporta in un file, si cancella (con conferma); negli slot
+   vuoti si inizia una partita nuova o se ne importa una da file. */
+let newSlot = null;        // slot della nuova partita in preparazione
+let slotConfirm = null;    // slot di cui si sta chiedendo la conferma per cancellare
+let importSlot = null;     // slot vuoto in cui importare il file scelto
+const CONTINUE_FLAG = 'scs-continue';   // dopo il cambio di slot a partita in corso
+
+// a che punto è una partita: livello e prima fase non ancora fatta
+function slotProgress (s) {
+  const lv = levelInfo((s.level && s.level.id) || LEVEL_ID);
+  const phases = lv.phases || [];
+  const next = phases.find(p => !p.done(s));
+  return { level: lv, phase: next ? next.title : 'Serata finita', done: phases.filter(p => p.done(s)).length, of: phases.length };
+}
+const fmtDate = t => t ? new Date(t).toLocaleString('it-IT', { day: 'numeric', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' }) : '—';
+
+function slotMsg (text, kind) {
+  const m = el('#slot-msg');
+  m.textContent = text || ''; m.hidden = !text;
+  m.classList.toggle('bad', kind === 'bad'); m.classList.toggle('ok', kind === 'ok');
+}
+function renderSlots () {
+  const list = el('#slot-list');
+  list.innerHTML = '';
+  const act = (a, label, cls) => '<button type="button" class="menu-btn' + (cls ? ' ' + cls : '') + '" data-act="' + a + '">' + label + '</button>';
+  Profile.slots().forEach((s, i) => {
+    const card = document.createElement('div');
+    card.className = 'slot-card' + (s ? '' : ' empty') + (s && i === Profile.active ? ' active' : '');
+    card.dataset.slot = i;
+    const num = '<span class="slot-num">Slot ' + (i + 1) + (s && i === Profile.active && gameActive ? ' · in gioco' : '') + '</span>';
+    if (!s) {
+      card.innerHTML = '<div class="slot-top"><span class="slot-logo none">＋</span><span class="slot-text">' + num
+        + '<span class="slot-service">Vuoto</span></span></div>'
+        + '<div class="slot-actions">' + act('new', 'Nuova partita') + act('import', 'Importa file') + '</div>';
+    } else {
+      const pr = slotProgress(s);
+      const rep = (s.reputation && s.reputation.total) || 0;
+      const text = '<span class="slot-text">' + num
+        + '<span class="slot-service">' + escapeHtml(s.service || 'Il service') + '</span>'
+        + '<span class="slot-line">Tecnico: <b>' + escapeHtml(s.player || 'Tecnico') + '</b></span>'
+        + '<span class="slot-line">Livello <b>' + pr.level.id + ' · ' + escapeHtml(pr.level.name) + '</b>: ' + escapeHtml(pr.phase) + ' (' + pr.done + '/' + pr.of + ')</span>'
+        + '<span class="slot-line">Reputazione <b>★ ' + rep + '</b>' + (s.beers ? ' · 🍺 ' + s.beers : '') + '</span>'
+        + '<span class="slot-line">Ultima partita: ' + fmtDate(s.savedAt) + '</span></span>';
+      card.innerHTML = '<div class="slot-top"><span class="slot-logo">' + (s.logo ? logoSVG(s.logo, s.service, 40) : '') + '</span>' + text + '</div>'
+        + (slotConfirm === i
+          ? '<p class="slot-confirm">Cancellare la partita di ' + escapeHtml(s.player || 'Tecnico') + '? Non si può annullare.</p>'
+            + '<div class="slot-actions">' + act('del-yes', 'Sì, cancella', 'danger primary') + act('del-no', 'No') + '</div>'
+          : '<div class="slot-actions">' + act('play', i === Profile.active && gameActive ? 'Riprendi' : 'Gioca', 'primary') + act('export', 'Esporta') + act('del', 'Cancella', 'danger') + '</div>');
+      if (!s.logo) card.querySelector('.slot-logo').classList.add('none');
+    }
+    list.appendChild(card);
+  });
+}
+
+// gioca la partita di uno slot; a partita in corso si ricarica la pagina,
+// così la scena riparte pulita, e la partita scelta si apre da sola
+function playSlot (i) {
+  if (i === Profile.active) { continueGame(); return; }
+  if (gameActive) {
+    gameActive = false;            // da qui niente scrive il livello in gioco nello slot nuovo
+    Profile.select(i);
+    try { sessionStorage.setItem(CONTINUE_FLAG, '1'); } catch (e) { /* senza: si sceglie Continua a mano */ }
+    location.reload();
+    return;
+  }
+  Profile.select(i);
+  applySettings();
+  continueGame();
+}
+function deleteSlot (i) {
+  const wasPlaying = i === Profile.active && gameActive;
+  Profile.remove(i);
+  slotConfirm = null;
+  if (wasPlaying) { gameActive = false; location.reload(); return; }
+  applySettings();
+  slotMsg('Partita cancellata: lo slot ' + (i + 1) + ' è libero.', 'ok');
+  showMenuPage('slots', true);
+}
+const fileSlug = s => String(s || 'partita').normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '') || 'partita';
+function exportSlot (i) {
+  const text = Profile.exportSlot(i);
+  if (!text) return;
+  const s = Profile.slots()[i];
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(new Blob([text], { type: 'application/json' }));
+  a.download = 'stage-crew-' + fileSlug(s.service) + '-' + new Date().toISOString().slice(0, 10) + '.json';
+  document.body.appendChild(a);
+  a.click();
+  setTimeout(() => { URL.revokeObjectURL(a.href); a.remove(); }, 1000);
+  slotMsg('Salvataggio esportato: tienilo da parte e ricaricalo con «Importa file» in uno slot vuoto.', 'ok');
+}
+function importSlotText (i, text) {
+  const r = Profile.importSlot(i, text);
+  if (r.error) slotMsg(r.error, 'bad');
+  else slotMsg('Partita di ' + (r.slot.player || 'Tecnico') + ' (' + r.slot.service + ') importata nello slot ' + (i + 1) + '.', 'ok');
+  showMenuPage('slots', true);
+  return r;
+}
+// Nuova partita: nel primo slot vuoto; se sono tutti pieni se ne cancella uno
+function goNewGame (slot) {
+  const free = slot != null ? slot : Profile.firstFree();
+  if (free < 0) {
+    slotMsg('Tutti e ' + SLOT_COUNT + ' gli slot sono occupati: cancella una partita (magari dopo averla esportata) per iniziarne una nuova.', 'bad');
+    showMenuPage('slots', true);
+    return;
+  }
+  newSlot = free;
+  showMenuPage('new');
+}
+
+/* ---------------- scelta del livello ----------------
+   I livelli si aprono a soglie di reputazione (LEVELS). Quelli bloccati
+   mostrano la soglia e quanto manca; il livello 1 mostra le sue fasi. */
+function renderLevels () {
+  const game = slotUsed(Profile.data);
+  const rep = game ? reputation() : 0;
+  el('#levels-intro').textContent = game
+    ? 'Reputazione di ' + playerName() + ': ★ ' + rep + '. Con più reputazione si aprono livelli con mezzi, materiale e venue più grandi.'
+    : 'Inizia una partita: i livelli si aprono con la reputazione del tecnico.';
+  const list = el('#level-list');
+  list.innerHTML = '';
+  const cur = (Profile.data.level && Profile.data.level.id) || LEVEL_ID;
+  LEVELS.forEach(l => {
+    const open = levelUnlocked(l, rep);
+    const card = document.createElement('div');
+    card.className = 'level-card' + (open ? '' : ' locked') + (game && open && l.id === cur ? ' current' : '');
+    card.dataset.level = l.id;
+    let html = '<span class="slot-num">Livello ' + l.id + (open ? '' : ' · bloccato') + '</span>'
+      + '<span class="level-name">' + (open ? '' : '🔒 ') + escapeHtml(l.name) + '</span>'
+      + '<span class="slot-line">' + escapeHtml(l.venue) + ' · mezzo: ' + VEHICLE_NAMES[l.vehicle] + '</span>';
+    if (!open) {
+      html += '<span class="level-lock">Si apre con ★ ' + l.rep + (game ? ' (ti mancano ' + (l.rep - rep) + ')' : '') + '</span>'
+        + '<span class="level-bar"><i style="width:' + Math.round(100 * Math.min(1, rep / l.rep)) + '%"></i></span>';
+    } else if (!l.ready) {
+      html += '<span class="level-lock">Aperto: arriva nelle prossime versioni del gioco.</span>';
+    } else {
+      if (l.phases) html += '<ul class="level-phases">' + l.phases.map((p, k) => {
+        const st = !game ? '' : p.done(Profile.data) ? 'done' : l.phases.findIndex(q => !q.done(Profile.data)) === k ? 'now' : '';
+        return '<li class="' + st + '">' + (st === 'done' ? '✓ ' : st === 'now' ? '▶ ' : '· ') + escapeHtml(p.title) + '</li>';
+      }).join('') + '</ul>';
+      html += '<div class="slot-actions"><button type="button" class="menu-btn primary" data-act="play-level">' + (game ? (gameActive ? 'Riprendi' : 'Continua') : 'Nuova partita') + '</button></div>';
+    }
+    card.innerHTML = html;
+    list.appendChild(card);
+  });
+  // i livelli nuovi ora sono stati visti: via il puntino dal menù
+  if (game && unlockedCount(rep) !== Profile.data.levelsSeen) { Profile.data.levelsSeen = unlockedCount(rep); Profile.save(); applySettings(); }
 }
 
 /* ---------------- scaletta della serata ----------------
@@ -2755,8 +3142,9 @@ function caviSummary () {
    dopo la posa dei cavi, o dalla scaletta. Serve il microfono montato
    sull'asta e collegato a un ingresso MIC del mixer acceso: la pagina riceve
    quell'ingresso (la risposta a «in che ingresso era?» quando si guasta), i
-   PAR montati coi loro ruoli, i cavi lasciati dalla posa e le birre in
-   tasca. L'esito torna al gioco: reputazione una volta sola, birre. */
+   PAR montati coi loro ruoli, i cavi lasciati dalla posa, le birre in
+   tasca e la stanchezza del tecnico. L'esito torna al gioco: reputazione
+   una volta sola, birre, stanchezza a fine discorso. */
 let presideOpen = false, presideTimer = null;
 let djOpen = false;              // lo spettacolo del DJ (openDj, più sotto)
 const presideDone = () => !!Profile.data.preside;
@@ -2812,7 +3200,7 @@ function presideMicHint () {
 window.addEventListener('message', ev => {
   const d = ev.data, f = el('#preside-frame');
   if (!presideOpen || !d || !f) return;
-  if (d.type === 'preside-pronto') f.contentWindow.postMessage({ type: 'preside-dati', wired: micChannel(), left: caviLeftovers(), beers: Profile.data.beers || 0, pars: presidePars() }, '*');
+  if (d.type === 'preside-pronto') f.contentWindow.postMessage({ type: 'preside-dati', wired: micChannel(), left: caviLeftovers(), beers: Profile.data.beers || 0, fatigue: fatigue(), pars: presidePars() }, '*');
   if (d.type === 'preside-fine') finishPreside(d.result || { skipped: true });
 });
 function finishPreside (r) {
@@ -2825,6 +3213,8 @@ function finishPreside (r) {
   Profile.data.preside = { skipped, grad: skipped ? 0 : num(r.grad, 0), rep: skipped ? 0 : num(r.rep, 0), beers, drunk,
     larsens: skipped ? 0 : num(r.larsens, 0), fault: !skipped && !!r.fault };
   Profile.data.beers = Math.max(0, (Profile.data.beers || 0) - drunk + beers);
+  // la stanchezza a fine discorso (salito col tempo, sceso con le birre bevute)
+  if (!skipped && Number.isFinite(+r.fatigue)) setFatigue(+r.fatigue);
   const rep = skipped ? 0 : addReputation(Profile.data.preside.rep, 'Discorso del preside alla festa della scuola', 'L' + LEVEL_ID + ':preside');
   Profile.save();
   sceneKeyboard(true);
@@ -3068,6 +3458,7 @@ el('#cambio-go').addEventListener('click', () => { SFX.button(); closeCambioCard
 el('#cambio-close').addEventListener('click', () => { SFX.button(); closeCambioCard(); });
 
 el('#schedule-btn').addEventListener('click', () => { SFX.button(); openSchedule(false); });
+el('#beer-btn').addEventListener('click', () => { SFX.button(); drinkBeer(); });
 el('#schedule-go').addEventListener('click', () => {
   SFX.button();
   const next = scheduleNext;
@@ -3088,7 +3479,36 @@ el('#poster-modal').addEventListener('click', () => { SFX.button(); el('#poster-
 
 el('#menu-btn').addEventListener('click', () => { SFX.button(); openMenu('main'); });
 el('#menu-resume').addEventListener('click', () => { SFX.button(); continueGame(); });
-el('#menu-new').addEventListener('click', () => { SFX.button(); showMenuPage('new'); });
+el('#menu-new').addEventListener('click', () => { SFX.button(); goNewGame(); });
+el('#menu-slots').addEventListener('click', () => { SFX.button(); showMenuPage('slots'); });
+el('#menu-levels').addEventListener('click', () => { SFX.button(); showMenuPage('levels'); });
+el('#slots-back').addEventListener('click', () => { SFX.button(); showMenuPage('main'); });
+el('#levels-back').addEventListener('click', () => { SFX.button(); showMenuPage('main'); });
+el('#slot-list').addEventListener('click', ev => {
+  const b = ev.target.closest('button[data-act]');
+  if (!b) return;
+  SFX.button();
+  const i = +b.closest('.slot-card').dataset.slot, a = b.dataset.act;
+  if (a === 'play') playSlot(i);
+  else if (a === 'new') goNewGame(i);
+  else if (a === 'export') exportSlot(i);
+  else if (a === 'import') { importSlot = i; el('#slot-file').value = ''; el('#slot-file').click(); }
+  else if (a === 'del') { slotConfirm = i; slotMsg(''); renderSlots(); }
+  else if (a === 'del-no') { slotConfirm = null; renderSlots(); }
+  else if (a === 'del-yes') deleteSlot(i);
+});
+el('#slot-file').addEventListener('change', ev => {
+  const f = ev.target.files && ev.target.files[0];
+  if (!f || importSlot == null) return;
+  const i = importSlot;
+  if (f.size > 5e6) { slotMsg('Il file è troppo grande per essere un salvataggio.', 'bad'); return; }
+  f.text().then(t => importSlotText(i, t), () => slotMsg('Non riesco a leggere il file.', 'bad'));
+});
+el('#level-list').addEventListener('click', ev => {
+  if (!ev.target.closest('button[data-act="play-level"]')) return;
+  SFX.button();
+  if (slotUsed(Profile.data)) continueGame(); else goNewGame();
+});
 el('#menu-settings').addEventListener('click', () => { SFX.button(); showMenuPage('settings'); });
 el('#new-cancel').addEventListener('click', () => { SFX.button(); showMenuPage('main'); });
 el('#new-form').addEventListener('submit', ev => {
@@ -3114,7 +3534,17 @@ el('#set-player').addEventListener('change', ev => {
   applySettings(); Profile.save();
 });
 applySettings();
-openMenu(Profile.data.level ? 'main' : 'new');
+// all'avvio: la partita dell'ultimo slot usato; senza, le partite salvate
+// (se ce ne sono) o direttamente una nuova. Dopo un cambio di slot a
+// partita in corso la partita scelta riparte da sola.
+{
+  let resume = false;
+  try { resume = sessionStorage.getItem(CONTINUE_FLAG) === '1'; sessionStorage.removeItem(CONTINUE_FLAG); } catch (e) { /* niente sessione */ }
+  if (Profile.data.level) openMenu('main');
+  else if (Profile.slots().some(Boolean)) openMenu('slots');
+  else { newSlot = Profile.firstFree(); openMenu('new'); }
+  if (resume && slotUsed(Profile.data)) continueGame();
+}
 
 /* Reset */
 el('#reset-btn').addEventListener('click', () => {
@@ -6617,6 +7047,7 @@ class StageScene extends Phaser.Scene {
     setCircuitStatus('untested');
     gameState.tested = false;
     this.pushHistory();
+    tireOut(FATIGUE.perAction);
     SFX.place();
     // la prima volta si spiega come si usa un dispositivo posato
     if (!this.gestureHintShown) {
@@ -6681,6 +7112,7 @@ class StageScene extends Phaser.Scene {
     SFX.place();
     showToast(m.done(base.id), 'ok');
     this.pushHistory();
+    tireOut(FATIGUE.perAction);
   }
 
   /* ---------------- wiring ---------------- */
@@ -6746,6 +7178,9 @@ class StageScene extends Phaser.Scene {
     };
     // il capo ferma il primo collegamento sotto carico (il cavo resta in mano)
     if (tutorOn() && wouldArc(edge, true) && tutorWarn('live')) return;
+    // tecnico stanco: ogni tanto il connettore scivola di mano (il cavo
+    // resta in mano, basta riprovare). Vedi FATIGUE.
+    if (fatigueSlip()) { showToast('Sei stanco: il connettore ti scivola di mano. Riprova (una 🍺 ti rimette in sesto).'); return; }
     gameState.edgeSeq++;
     // collegare sotto tensione fa scattare il salvavita; altrimenti il
     // dispositivo appena alimentato (se già acceso) parte davvero
@@ -6759,6 +7194,7 @@ class StageScene extends Phaser.Scene {
     setCircuitStatus('untested');
     gameState.tested = false;
     this.pushHistory();
+    tireOut(FATIGUE.perAction);
     if (edge.signal === 'xlr') presideMicHint();
   }
 
@@ -7349,13 +7785,25 @@ class StageScene extends Phaser.Scene {
     const toPlace = cat => result.toPlaceCats.has(cat);
 
     gameState.stats.tests++;
+    /* indizi a scalare, come nelle prove dei giri: al primo test andato male
+       solo l'indizio vago; dal secondo di fila il pezzo colpevole in rosso;
+       dal terzo il capo legge la voce del foglio che manca. La voce è il
+       primo collegamento che manca dell'impianto che ha fallito, se no la
+       prima voce che non va nel suo giro (quadro armato, accesi, stereo…). */
     const fail = (kind, hint) => {
       gameState.stats.failedTests++;
+      const n = gameState.giroFails[GIRO_COLLAUDO] = (gameState.giroFails[GIRO_COLLAUDO] || 0) + 1;
+      const giro = { power: 0, audio: 1, lights: 2 }[kind];
+      const miss = result.overPhase || result.overBudget ? null
+        : buildExpectedConnections().find(x => !x.ok && x.cat === kind) || giroChecks(giro).find(x => !x.ok);
       saveLevel();
       setCircuitStatus('error');
-      if (kind === 'power') { showToast('Scintille! ' + hint, 'bad'); this.fxSparks(); }
-      else if (kind === 'audio') { showToast('L\'impianto gracchia: ' + hint, 'bad'); this.fxCrackle(); }
-      else { showToast('Le luci vanno in tilt: ' + hint, 'bad'); this.fxLightsTilt(); }
+      const exact = miss && n >= 3 ? ' ' + bossName() + ' ti indica il foglio: «' + miss.what + '».' : '';
+      if (kind === 'power') { showToast('Scintille! ' + hint + exact, 'bad'); this.fxSparks(); }
+      else if (kind === 'audio') { showToast('L\'impianto gracchia: ' + hint + exact, 'bad'); this.fxCrackle(); }
+      else { showToast('Le luci vanno in tilt: ' + hint + exact, 'bad'); this.fxLightsTilt(); }
+      // dopo gli effetti, così il rosso non viene spento da chi li ferma
+      if (miss && n >= 2) miss.ids.forEach(id => { const v = this.compVisuals[id]; if (v) this.setGlow(v, true); });
     };
 
     // corrente
@@ -7374,6 +7822,7 @@ class StageScene extends Phaser.Scene {
     if (dmxOverlaps().length) return fail('lights', 'due PAR si pestano i piedi sull\'indirizzo.');
 
     setCircuitStatus('ok');
+    gameState.giroFails[GIRO_COLLAUDO] = 0;
     // la procedura conta: un solo suggerimento, il primo inciampo
     const pops = (gameState.procErrors || []).filter(x => x === 'pop').length;
     const tip = gameState.trips ? 'la prossima volta accendi i pesanti uno alla volta.'
