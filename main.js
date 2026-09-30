@@ -1714,7 +1714,15 @@ function readSlotFile (text) {
     && (!slot.reputation || typeof slot.reputation.total === 'number')
     && (!slot.level || (typeof slot.level === 'object' && typeof slot.level.placed === 'object' && Array.isArray(slot.level.edges)));
   if (!ok || !slotUsed(slot)) return { error: 'Il file è rovinato o non contiene una partita.' };
-  slot = { ...slot, player: String(slot.player || '').slice(0, NAME_MAX), service: String(slot.service || '').slice(0, SERVICE_NAME_MAX) };
+  // il file può venire da chiunque: logo e service solo con valori ammessi
+  // (i colori del logo finiscono dentro l'SVG)
+  const lg = slot.logo && typeof slot.logo === 'object' ? slot.logo : null;
+  const color = c => typeof c === 'string' && /^#[0-9a-f]{3,8}$/i.test(c) ? c : undefined;
+  const key = (k, set) => typeof k === 'string' && (k === 'iniziali' || k in set) ? k : undefined;
+  const info = slot.serviceInfo && typeof slot.serviceInfo === 'object' ? slot.serviceInfo : null;
+  slot = { ...slot, player: String(slot.player || '').slice(0, NAME_MAX), service: String(slot.service || '').slice(0, SERVICE_NAME_MAX),
+    logo: lg ? JSON.parse(JSON.stringify({ shape: key(lg.shape, LOGO_SHAPES), icon: key(lg.icon, LOGO_ICONS), bg: color(lg.bg), fg: color(lg.fg), style: key(lg.style, BRAND_STYLES) })) : null,
+    serviceInfo: info ? { kind: key(info.kind, SERVICE_KINDS) || null, boss: String(info.boss || '').slice(0, NAME_MAX * 2) } : null };
   return { slot };
 }
 

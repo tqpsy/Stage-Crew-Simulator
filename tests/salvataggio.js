@@ -248,6 +248,9 @@ const os = require('os');
   ].map(r => r.error || ''));
   check(/non è un salvataggio/.test(bad[0]) && /più nuova/.test(bad[1]) && /rovinato/.test(bad[2]) && /rovinato/.test(bad[3]) && /occupato/.test(bad[4]), 'errori di importazione sbagliati: ' + JSON.stringify(bad));
   check(await ev(() => !Profile.slots()[2] && el('#slot-msg').classList.contains('bad')), 'un file sbagliato ha riempito lo slot o manca l\'errore');
+  // un file da fuori non porta codice nel logo: valori non ammessi tornano quelli di base
+  const evil = await ev(() => { const r = readSlotFile(JSON.stringify({ kind: 'stage-crew-simulator', v: 5, slot: { service: 'Evil', level: null, logo: { bg: '"/><script>x()</script>', fg: '#fff', icon: 'nope', shape: 'scudo' }, serviceInfo: { kind: '<b>', boss: 'Gino' } } })); return { logo: r.slot.logo, kind: r.slot.serviceInfo.kind, svg: /script/.test(logoSVG(r.slot.logo, 'Evil', 40)) }; });
+  check(JSON.stringify(evil) === JSON.stringify({ logo: { shape: 'scudo', fg: '#fff' }, kind: null, svg: false }), 'logo importato non ripulito: ' + JSON.stringify(evil));
   // si importa anche un vecchio salvataggio a slot unico: si converte
   await ev(() => importSlotText(2, JSON.stringify({ v: 3, player: 'Anna', service: 'Service Vecchio', settings: { volume: 0.1 }, level: { id: 1, placed: {}, edges: [] }, records: {}, reputation: { total: 7, earned: {}, log: [] } })));
   const old = await ev(() => { const s = Profile.slots()[2]; return s && { service: s.service, sk: s.scarico && s.scarico.skipped, rep: s.reputation.total, vol: settings().volume }; });
