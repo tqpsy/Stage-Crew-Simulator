@@ -124,21 +124,54 @@ cambiano da una fase all'altra.
 - Già fatto: menù di gioco (☰), nome e logo del service (testata,
   livrea dipinta sulla fiancata del furgone, scritta finale; logo pronto o
   creato con forma, simbolo e due colori; la scritta del nome in 6 stili
-  da service: Tour, Neon, Stencil, LED wall, Gaffer, Fasci di luce), salvataggio automatico in un solo slot,
+  da service: Tour, Neon, Stencil, LED wall, Gaffer, Fasci di luce), salvataggio automatico,
   impostazioni (volume, effetti ridotti, salta lo show), scaletta della
   serata all'inizio della partita (tasto 📋 per riaprirla).
 - Il salvataggio è un oggetto `scs-save` con `v` (versione): se il formato
   cambia, scrivere una conversione dalla versione vecchia invece di
-  azzerare la partita.
+  azzerare la partita. Oggi è la versione 5.
+- **Slot di salvataggio** (fatto): 3 partite (`SLOT_COUNT`). Dal menù
+  «Partite salvate»: ogni slot mostra nome e logo del service, tecnico,
+  livello e fase raggiunti (es. «Livello 1 · Festa della scuola: Messa in
+  sicurezza dei cavi (2/5)»), reputazione, birre e data dell'ultima
+  partita. Da lì si gioca, si esporta, si cancella (chiede conferma); negli
+  slot vuoti si inizia una nuova partita o se ne importa una. «Nuova
+  partita» usa il primo slot vuoto; con gli slot pieni manda a
+  cancellarne uno. Cambiare slot a partita in corso ricarica la pagina e
+  la partita scelta riparte da sola. Impostazioni, record e service già
+  proposti sono comuni a tutti gli slot; il resto (tecnico, service,
+  reputazione, livello, fasi, birre) è della partita.
+  Formato: `{ v: 5, active, settings, records, usedServices, slots: [partita | null ×3] }`.
+  I salvataggi a slot unico (versioni 1-4) si convertono: la partita
+  diventa lo slot 1.
+- **Esporta/importa** (fatto): «Esporta» scarica un file
+  `stage-crew-<service>-<data>.json` con `{ kind: 'stage-crew-simulator',
+  v, exportedAt, slot }` (solo la partita, niente impostazioni né
+  record). «Importa file» lo rimette in uno slot vuoto dopo aver
+  controllato firma, versione (una versione più nuova del gioco viene
+  rifiutata) e contenuto; accetta anche un vecchio `scs-save` a slot unico
+  (versioni 1-4), che viene convertito.
+- **Livelli a soglie di reputazione** (struttura fatta): `LEVELS` in
+  `main.js`, i cinque scenari di `docs/minigioco-scarico.md` con venue e
+  mezzo. Soglie (proposta): livello 2 a ★ 20, 3 a ★ 60, 4 a ★ 110, 5 a
+  ★ 180; il livello 1 giocato bene vale circa 25-30. Dal menù «Livelli»: il
+  livello 1 con le sue fasi (fatte ✓, adesso ▶), gli altri bloccati 🔒
+  con la soglia, quanto manca e una barra; aperti ma non ancora fatti
+  dicono «arriva nelle prossime versioni». Quando la reputazione apre un
+  livello nuovo compare un puntino sul ☰ e su «Livelli» finché non lo si
+  guarda. Da fare con il livello 2: giocarlo davvero (scelta del livello
+  che cambia scena, `LEVEL_VEHICLE`, dotazione) e decidere se si possono
+  rigiocare i livelli già finiti.
 - **Reputazione** (il valore principale del service): regole in
   `docs/livello1-festa-scuola.md`. Parte da 0, sale con fasi completate,
   guasti gestiti bene e birre rifiutate, scende con i guasti gestiti male;
   l'apparecchio rotto non conta. Ogni fase conta una volta sola. Oggi c'è
   il collaudo (+5); `addReputation` è pronta per guasti e richieste extra.
-  Nuova partita = nuovo service, da 0.
-  Da sviluppare: livelli (e mezzi, materiale, venue più grandi) che si
-  aprono a soglie di reputazione; reputazione anche dagli obiettivi dopo
-  il test (soundcheck, richieste del light designer).
+  Nuova partita = nuovo service, da 0 (in un altro slot: la partita
+  vecchia resta).
+  I livelli (e mezzi, materiale, venue più grandi) si aprono a soglie di
+  reputazione: vedi sopra. Da sviluppare: reputazione anche dagli
+  obiettivi dopo il test (soundcheck, richieste del light designer).
 - **Highscore**: per ogni collaudo riuscito `Profile.data.records[livello]`
   tiene già i dati grezzi (tempo di gioco, test fatti e falliti, scatti del
   magnetotermico e del salvavita, colpi nelle casse, nome del service,
@@ -147,5 +180,6 @@ cambiano da una fase all'altra.
   dal menù e alla fine dello show.
 - Logo: più avanti anche sui flight case, sulle magliette della crew e
   sui mezzi più grandi; eventualmente un logo caricato come immagine.
-- Più avanti, con più livelli: più slot di salvataggio, scelta del livello
-  e livelli sbloccati, esporta/importa il salvataggio.
+- Da decidere: se i record (e la futura classifica) restano comuni a
+  tutti gli slot, come oggi, o si mostrano anche per partita; se il file
+  esportato deve poter contenere tutti gli slot insieme.

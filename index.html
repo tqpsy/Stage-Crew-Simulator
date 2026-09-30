@@ -53,13 +53,29 @@
     <div class="modal-box menu-box">
       <div class="menu-head">
         <span class="tag">STAGE CREW SIMULATOR</span>
-        <h2>Livello 1: Festa della scuola</h2>
+        <h2 id="menu-title">Livello 1: Festa della scuola</h2>
       </div>
 
       <div class="menu-page" data-page="main">
         <button class="menu-btn primary" id="menu-resume">Continua</button>
         <button class="menu-btn" id="menu-new">Nuova partita</button>
+        <button class="menu-btn" id="menu-slots">Partite salvate</button>
+        <button class="menu-btn" id="menu-levels">Livelli</button>
         <button class="menu-btn" id="menu-settings">Impostazioni</button>
+      </div>
+
+      <div class="menu-page" data-page="slots" hidden>
+        <div class="menu-field">Partite salvate: scegli, esporta in un file o cancella. Negli slot vuoti puoi iniziare una partita nuova o importarne una da file.</div>
+        <p class="menu-note slot-msg" id="slot-msg" role="status" hidden></p>
+        <div class="slot-list" id="slot-list"></div>
+        <input type="file" id="slot-file" accept=".json,application/json" hidden>
+        <button class="menu-btn" id="slots-back" type="button">Indietro</button>
+      </div>
+
+      <div class="menu-page" data-page="levels" hidden>
+        <div class="menu-field" id="levels-intro">I livelli si aprono con la reputazione.</div>
+        <div class="level-list" id="level-list"></div>
+        <button class="menu-btn" id="levels-back" type="button">Indietro</button>
       </div>
 
       <form class="menu-page" data-page="new" id="new-form" hidden>
