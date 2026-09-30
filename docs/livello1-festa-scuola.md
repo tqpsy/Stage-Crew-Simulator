@@ -209,8 +209,19 @@ Il cambio palco (staccare ciò che non serve e ripatchare) fa parte del gioco.
   palco è rimettere mano all'impianto montato dal giocatore.
 - **Chi porta cosa**: la **consolle** (due lettori e mixer DJ su un banco in
   flight case) la porta DJ Inestimabile; compare in una scheda **DJ** che si
-  apre solo col cambio. La **DI** è del service: è nella dotazione del
+  apre solo col cambio. Nella stessa scheda c'è il suo **stativo luci**
+  («LUCI DJ»): un treppiede con la barra orizzontale e sopra, già montati,
+  **quattro PAR LED cinesi e una strobo LED in mezzo**. I fari sono già
+  collegati tra loro sulla barra: si danno solo **una spina Schuko** e **un
+  DMX**. La **DI** è del service: è nella dotazione del
   montaggio (scheda Regia), dove non serve, e va tenuta per il DJ.
+- **Le luci del DJ**: le ha indirizzate lui e non si toccano: 4 PAR da 3
+  canali (RGB) dall'indirizzo 1 e la strobo (dimmer e velocità), **canali
+  1-14**. Il DMX parte dalla consolle luci: sull'universo 1 in coda ai PAR
+  del service i canali si pestano (le luci impazziscono insieme), quindi va
+  sull'**universo 2**, libero (oppure si spostano gli indirizzi dei PAR).
+  La barra non ha interruttore, come i PAR: attaccarla sotto tensione fa
+  scattare il salvavita, prima si abbassa la sua fase. Consuma 220 W.
 - **Quando**: dopo il discorso del preside (`preside.html`, anche saltato):
   il cambio delle 21:10 diventa «Adesso». Parte dal foglio (tasto «Inizia il
   cambio palco») o dalla scaletta. Prima, il foglio propone il discorso («Il
@@ -224,8 +235,11 @@ Il cambio palco (staccare ciò che non serve e ripatchare) fa parte del gioco.
   3. una DI (sul palco accanto alla consolle, in Off Stage o in FOH);
   4. MASTER L e R della consolle nei due ingressi della DI (jack);
   5. dalla DI due XLR in due ingressi MIC liberi del mixer;
-  6. il microfono resta collegato: ora è di Musa Esistenziale;
-  7. l'impianto del collaudo è ancora tutto a posto.
+  6. stativo luci del DJ sul palco (4 PAR e strobo);
+  7. corrente alle luci del DJ (spina Schuko);
+  8. DMX dalla consolle luci alle luci del DJ, senza pestare i PAR;
+  9. il microfono resta collegato: ora è di Musa Esistenziale;
+  10. l'impianto del collaudo è ancora tutto a posto.
 - **Pazienza del pubblico**: 4 minuti di gioco, barra sul foglio (visibile
   anche chiuso). Non scende con la carta o la scaletta aperte. Se finisce:
   fischi, −5 reputazione (`REP.slowChange`), e il cambio si finisce lo stesso.
@@ -235,7 +249,8 @@ Il cambio palco (staccare ciò che non serve e ripatchare) fa parte del gioco.
   la pazienza non è finita (`REP.changeDone`), −2 se il microfono è stato
   spostato su un altro canale (`REP.wrongInput`), una volta sola.
 - Codice: `cambioChecks`, `startCambioDj`, `finishCambioDj` e
-  `runCambioTest` in `main.js`; stato in `Profile.data.cambioDj`. Test:
+  `runCambioTest` in `main.js`; stato in `Profile.data.cambioDj`. Le luci
+  del DJ: tipo `djluci`, `DJ_LUCI_DMX` e `djLuciClashes`. Test:
   `tests/cambio-dj.js`.
 - **Da fare**: lo spettacolo del DJ (vedi *Lo spettacolo del DJ: Light
   Operator Hero* qui sotto), con i suoi guasti. La
@@ -253,6 +268,10 @@ scegliere chi va a sistemarli.
 - In basso 4 corsie, una per memoria luci: **colori**, **chase**, **strobo**,
   **blackout**. Le note scendono a tempo di musica e si premono quando toccano
   la linea.
+- Le corsie comandano **lo stativo luci del DJ** collegato nel cambio palco
+  (oltre ai PAR del service): **colori** e **chase** muovono i suoi quattro
+  PAR, **strobo** la strobo LED in mezzo alla barra, **blackout** spegne
+  tutto. Se la barra non ha corrente o DMX, quelle corsie non fanno niente.
 - Nota presa: le luci sul palco fanno quella scena, il pubblico salta, il
   gradimento sale e cresce la combo. Nota mancata: luci in ritardo o ferme,
   gradimento giù, combo azzerata.
@@ -272,7 +291,9 @@ scegliere chi va a sistemarli.
    - un PAR perde il DMX: la sua corsia diventa grigia e quelle note non si
      prendono più. Si tocca il PAR, si sistema cavo o indirizzo e la corsia
      torna. Si può andare avanti con 3 corsie e sistemarlo in un momento
-     calmo.
+     calmo;
+   - la barra del DJ perde il DMX (cavo tirato da Musa che balla): i suoi
+     quattro PAR e la strobo si fermano insieme, perché hanno un solo DMX.
 3. **Guasti grossi**, che portano fuori dalla pista:
    - la ciabattina del DJ fa scattare una fase del Quadro (metà impianto
      spento): si va al Quadro, si riarma e si sposta la spina su un'altra
@@ -420,6 +441,10 @@ professionalità, non la sfortuna.
 - Nel gioco oggi ci sono il collaudo dell'impianto (+5), lo scarico, la posa
   dei cavi, il discorso del preside (vedi *Il discorso nel gioco*) e il cambio
   palco per il DJ. I numeri sono in `REP` in `main.js`.
+- La reputazione apre i livelli successivi a soglie (`LEVELS` in `main.js`,
+  proposta: livello 2 a 20, poi 60, 110, 180). Giocato bene, questo livello
+  ne vale circa 25-30: basta per aprire il 2. Le fasi di questo livello sono i
+  suoi sottolivelli nella scelta del livello e nell'elenco degli slot.
 
 ## Animazione di errore (proposta)
 

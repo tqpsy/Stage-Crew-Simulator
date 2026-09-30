@@ -176,6 +176,16 @@ const INTF_ISO  = isoFrame(46, 30, 12);   // scheda audio USB da tavolo
 // consolle del DJ: flight case a banco largo lungo b (fronte a=0 verso il
 // pubblico, il DJ sta dietro, sul lato +a), sopra due lettori e il mixer DJ
 const DJ_ISO    = isoFrame(46, 96, 30);
+/* stativo luci del DJ (lo porta lui, già montato): treppiede, asta più alta
+   di quella del service e una barra orizzontale lunga (lungo b) con sopra
+   quattro PAR LED cinesi e una strobo LED in mezzo, rivolti al pubblico
+   (-a). I fari sono già cablati tra loro sulla barra: si danno una spina
+   Schuko e un solo DMX. */
+const DJLUCI_ISO  = isoFrame(40, 40, 3);
+const DJLUCI_POLE = 80;                     // px: asta fino alla barra
+const DJLUCI_HEADS = [-36, -21, 21, 36];    // b dei 4 PAR rispetto al centro della barra
+// centro della lente di un faro della barra (db: spostamento lungo la barra)
+function djLuciLens (db) { return DJLUCI_ISO(DJLUCI_ISO.A / 2 - 4, DJLUCI_ISO.B / 2 + db, DJLUCI_POLE + 7); }
 
 // la testa sta sul sub: il fondo del suo palo tocca il centro del piano del sub
 function isoDepth (screenY) { return 10 + screenY / 10000; }
@@ -445,6 +455,18 @@ const COMPONENT_TYPES = {
       { id: 'out_R', signal: 'jack',   dir: 'out', ...isoPort(DJ_ISO, 20, 96, 20) }
     ]
   },
+  // stativo luci del DJ: 4 PAR LED e la strobo sulla barra, già montati,
+  // indirizzati e collegati tra loro (corrente e DMX in catena sulla barra).
+  // Dal fondo dell'asta escono la spina Schuko e l'unico DMX IN.
+  djluci: {
+    label: 'LUCI DJ', category: 'dj', powerW: 220, zone: 'stage', shape: 'djluci',
+    body: { w: 60, h: 40, fill: 0x17181c, accent: 0xff3fb4 },
+    ledPos: DJLUCI_ISO(20, 20, 30),
+    ports: [
+      { id: 'power',  signal: 'schuko', dir: 'in', lead: true, ...isoPort(DJLUCI_ISO, 20, 26, 8) },
+      { id: 'dmx_in', signal: 'dmx',    dir: 'in', ...isoPort(DJLUCI_ISO, 20, 14, 8) }
+    ]
+  },
   // ciabatta con spina CEE 230V blu già attaccata (va in una presa del
   // Quadro) e 4 prese Schuko. Anche qui il cavo fa parte della ciabatta.
   ciabatta_cee: {
@@ -465,7 +487,8 @@ const COMPONENT_TYPES = {
 // la DI non serve al montaggio (il PC entra nel mixer dalla scheda audio):
 // la usa il DJ al cambio palco. La consolle DJ non è del service, la porta
 // il DJ: si vede nella scheda DJ solo da quando parte il cambio palco.
-const AVAILABLE_STOCK = { sub: 2, top: 2, mixer: 1, asta: 1, mic: 1, stativo: 4, par: 4, controller: 1, ampli: 1, quadro: 1, ciabatta: 1, ciabatta_cee: 1, pc: 1, scheda: 1, di: 1, tavolo: 1, dj: 1 };
+// Anche il suo stativo luci (4 PAR e la strobo sulla barra) è suo.
+const AVAILABLE_STOCK = { sub: 2, top: 2, mixer: 1, asta: 1, mic: 1, stativo: 4, par: 4, controller: 1, ampli: 1, quadro: 1, ciabatta: 1, ciabatta_cee: 1, pc: 1, scheda: 1, di: 1, tavolo: 1, dj: 1, djluci: 1 };
 
 const POWER_LIMIT_KW = 3.0;
 const TOP_ATTACH_RADIUS = 300; // px: quanto lontano può essere trascinata una Testa da un Sub libero
@@ -1390,6 +1413,20 @@ function dmxOverlaps () {
   }
   return clashes;
 }
+/* le luci del DJ sono già indirizzate da lui e non si toccano: 4 PAR da 3
+   canali (RGB) dall'indirizzo 1 e la strobo (dimmer e velocità) in fondo,
+   canali 1-14. Vanno su un universo dove nessun PAR del service li pesta:
+   di solito il secondo, libero. */
+const DJ_LUCI_DMX = { from: 1, to: 14 };
+// PAR del service che si accavallano con la barra del DJ (stesso universo)
+function djLuciClashes (bar) {
+  const u = bar && dmxUniverse(bar.id);
+  if (u == null) return [];
+  return placedOfType('par').filter(c => {
+    const d = parDmx(c), n = parseInt(PAR_MODES[d.mode].id, 10);
+    return dmxUniverse(c.id) === u && d.addr <= DJ_LUCI_DMX.to && DJ_LUCI_DMX.from <= d.addr + n - 1;
+  });
+}
 
 /* Un cavo appena creato collegherebbe fromId (lato OUT) -> toId (lato IN).
    Se da toId, seguendo i cavi già esistenti (sempre in verso OUT->IN), si può
@@ -1601,8 +1638,9 @@ document.querySelectorAll('.tab-btn').forEach(btn => {
    tre offerte; salvataggio automatico, impostazioni e
    record. Tutto sta in un solo oggetto nella memoria del browser, con un
    numero di versione: se un giorno il formato cambia si converte, invece
-   di perdere la partita. "Nuova partita" azzera il livello ma tiene
-   impostazioni e record.
+   di perdere la partita. Le partite stanno in SLOT_COUNT slot: "Nuova
+   partita" ne occupa uno vuoto; impostazioni e record sono comuni a tutti.
+   Ogni partita si può esportare in un file e reimportare.
    Il valore principale del tecnico è la REPUTAZIONE (vedi addReputation):
    è sua, non del service. Parte da 0, sale con le fasi completate, i
    guasti gestiti bene e le birre rifiutate, scende se un guasto è gestito
@@ -1612,21 +1650,38 @@ document.querySelectorAll('.tab-btn').forEach(btn => {
    casse).
    --------------------------------------------------------------------- */
 const SAVE_KEY = 'scs-save';
-const SAVE_VERSION = 4;
+const SAVE_VERSION = 5;
 const LEVEL_ID = 1;
 const RECORDS_KEEP = 20;       // record tenuti per livello
 const NAME_MAX = 24;           // caratteri del nome del tecnico
 const SERVICE_NAME_MAX = 28;   // caratteri del nome (inventato) di un service
 const USED_SERVICES_KEEP = 400; // nomi di service già proposti, da non riproporre
 
+const SLOT_COUNT = 3;           // partite salvate (slot)
+const SAVE_FILE_KIND = 'stage-crew-simulator';   // firma del file esportato
+// cosa è comune a tutti gli slot: impostazioni, record (la classifica
+// delle proprie partite) e nomi di service già proposti
+const SHARED_KEYS = ['settings', 'records', 'usedServices'];
+
 function defaultProfile () {
-  return { v: SAVE_VERSION, player: '', service: '', serviceInfo: null, usedServices: [], settings: { volume: 0.8, reducedFx: false, skipShow: false, skipScarico: false, testMusic: true, bossTips: true, tapeMarks: true, traceSignal: true }, tutorSeen: {}, logo: null, level: null, scarico: null, cavi: null, preside: null, cambioDj: null, beers: 0, records: {}, reputation: { total: 0, earned: {}, log: [] } };
+  return { v: SAVE_VERSION, player: '', service: '', serviceInfo: null, usedServices: [], settings: { volume: 0.8, reducedFx: false, skipShow: false, skipScarico: false, testMusic: true, bossTips: true, tapeMarks: true, traceSignal: true }, tutorSeen: {}, logo: null, level: null, scarico: null, cavi: null, preside: null, cambioDj: null, beers: 0, records: {}, reputation: { total: 0, earned: {}, log: [] }, levelsSeen: 1, savedAt: 0 };
 }
-const Profile = (() => {
-  let data = defaultProfile();
+// solo la partita (senza le parti comuni): è quello che va in uno slot
+function slotPart (d) {
+  const s = { ...d };
+  SHARED_KEYS.concat('v').forEach(k => delete s[k]);
+  return s;
+}
+// uno slot contiene una partita se c'è un service o un livello avviato
+const slotUsed = s => !!(s && (s.service || s.level));
+
+/* conversioni dei salvataggi a un solo slot (versioni 1-4): tutte portano
+   alla versione 4, l'ultima a slot unico. Restituisce null se non sa
+   leggere l'oggetto. */
+function upgradeSingle (d) {
+  if (!d || typeof d !== 'object' || !Number.isInteger(d.v)) return null;
+  d = JSON.parse(JSON.stringify(d));
   try {
-    const raw = localStorage.getItem(SAVE_KEY);
-    const d = raw ? JSON.parse(raw) : null;
     // versione 1: la reputazione era 100-150 per livello collaudato; ora
     // un collaudo è una fase completata e vale REP.phaseDone
     if (d && d.v === 1) {
@@ -1649,19 +1704,124 @@ const Profile = (() => {
       d.scarico = d.level ? { skipped: true, lost: {}, delay: 0, beers: 0 } : null;
       d.v = 4;
     }
-    if (d && d.v === SAVE_VERSION) data = { ...defaultProfile(), ...d, settings: { ...defaultProfile().settings, ...d.settings }, reputation: { ...defaultProfile().reputation, ...d.reputation } };
-    else if (!raw && localStorage.getItem('scs-muted') === '1') data.settings.volume = 0;   // vecchio tasto muto
+  } catch (e) { return null; }
+  return d.v === 4 ? d : null;
+}
+
+/* versione 5: più slot. Le parti comuni (impostazioni, record, service già
+   proposti) stanno fuori dagli slot; la partita a slot unico diventa il
+   primo slot, niente si perde. */
+function upgradeSave (d) {
+  if (d && d.v >= 1 && d.v <= 4) {
+    const one = upgradeSingle(d);
+    if (!one) return null;
+    const root = { v: 5, active: 0, settings: one.settings || {}, records: one.records || {}, usedServices: one.usedServices || [], slots: Array(SLOT_COUNT).fill(null) };
+    if (slotUsed(one)) root.slots[0] = slotPart(one);
+    return root;
+  }
+  return d && d.v === SAVE_VERSION ? d : null;
+}
+
+// una partita letta dalla memoria o da un file: campi mancanti dai valori
+// di partenza, parti comuni dal salvataggio
+function fillSlot (s, root) {
+  const def = defaultProfile();
+  return { ...def, ...(s || {}), v: SAVE_VERSION,
+    settings: { ...def.settings, ...root.settings },
+    records: root.records || {}, usedServices: root.usedServices || [],
+    reputation: { ...def.reputation, ...((s && s.reputation) || {}) } };
+}
+
+/* file esportato: una partita (uno slot) con firma e versione. Si legge
+   anche un vecchio salvataggio a slot unico (versioni 1-4, per esempio
+   copiato a mano dalla memoria del browser). Restituisce la partita o un
+   errore da mostrare al giocatore. */
+function exportSlotFile (slot) {
+  return JSON.stringify({ kind: SAVE_FILE_KIND, v: SAVE_VERSION, exportedAt: Date.now(), slot: slotPart(slot) }, null, 1);
+}
+function readSlotFile (text) {
+  let d;
+  try { d = JSON.parse(text); } catch (e) { return { error: 'Il file non è un salvataggio di Stage Crew Simulator.' }; }
+  if (!d || typeof d !== 'object' || !Number.isInteger(d.v)) return { error: 'Il file non è un salvataggio di Stage Crew Simulator.' };
+  if (d.v > SAVE_VERSION) return { error: 'Il salvataggio viene da una versione più nuova del gioco: aggiorna la pagina e riprova.' };
+  let slot;
+  if (d.kind === SAVE_FILE_KIND && d.v === SAVE_VERSION) slot = d.slot;
+  else if (d.v >= 1 && d.v <= 4 && !d.kind) { const one = upgradeSingle(d); slot = one && slotPart(one); }
+  const ok = slot && typeof slot === 'object' && typeof (slot.service || '') === 'string' && typeof (slot.player || '') === 'string'
+    && (!slot.reputation || typeof slot.reputation.total === 'number')
+    && (!slot.level || (typeof slot.level === 'object' && typeof slot.level.placed === 'object' && Array.isArray(slot.level.edges)));
+  if (!ok || !slotUsed(slot)) return { error: 'Il file è rovinato o non contiene una partita.' };
+  // il file può venire da chiunque: logo e service solo con valori ammessi
+  // (i colori del logo finiscono dentro l'SVG)
+  const lg = slot.logo && typeof slot.logo === 'object' ? slot.logo : null;
+  const color = c => typeof c === 'string' && /^#[0-9a-f]{3,8}$/i.test(c) ? c : undefined;
+  const key = (k, set) => typeof k === 'string' && (k === 'iniziali' || k in set) ? k : undefined;
+  const info = slot.serviceInfo && typeof slot.serviceInfo === 'object' ? slot.serviceInfo : null;
+  slot = { ...slot, player: String(slot.player || '').slice(0, NAME_MAX), service: String(slot.service || '').slice(0, SERVICE_NAME_MAX),
+    logo: lg ? JSON.parse(JSON.stringify({ shape: key(lg.shape, LOGO_SHAPES), icon: key(lg.icon, LOGO_ICONS), bg: color(lg.bg), fg: color(lg.fg), style: key(lg.style, BRAND_STYLES) })) : null,
+    serviceInfo: info ? { kind: key(info.kind, SERVICE_KINDS) || null, boss: String(info.boss || '').slice(0, NAME_MAX * 2) } : null };
+  return { slot };
+}
+
+const Profile = (() => {
+  let root = { v: SAVE_VERSION, active: 0, settings: {}, records: {}, usedServices: [], slots: Array(SLOT_COUNT).fill(null) };
+  let data = null;
+  try {
+    const raw = localStorage.getItem(SAVE_KEY);
+    const d = upgradeSave(raw ? JSON.parse(raw) : null);
+    if (d) {
+      root = { ...root, ...d };
+      root.slots = Array.from({ length: SLOT_COUNT }, (_, i) => (d.slots && slotUsed(d.slots[i])) ? d.slots[i] : null);
+      if (!(root.active >= 0 && root.active < SLOT_COUNT)) root.active = 0;
+    } else if (!raw && localStorage.getItem('scs-muted') === '1') root.settings = { volume: 0 };   // vecchio tasto muto
   } catch (e) { /* memoria non disponibile o salvataggio illeggibile: si parte da zero */ }
+  data = fillSlot(root.slots[root.active], root);
   let timer = null;
-  const flush = () => {
-    clearTimeout(timer); timer = null;
-    try { localStorage.setItem(SAVE_KEY, JSON.stringify(data)); } catch (e) { /* memoria piena o non disponibile: si gioca senza salvare */ }
+  // riporta la partita in gioco nel suo slot (solo se è una partita vera)
+  const sync = () => {
+    SHARED_KEYS.forEach(k => { root[k] = data[k]; });
+    if (slotUsed(data)) {
+      if (gameActive || !data.savedAt) data.savedAt = Date.now();   // data dell'ultima partita giocata
+      root.slots[root.active] = slotPart(data);
+    }
   };
+  const write = () => {
+    try { localStorage.setItem(SAVE_KEY, JSON.stringify(root)); } catch (e) { /* memoria piena o non disponibile: si gioca senza salvare */ }
+  };
+  const flush = () => { clearTimeout(timer); timer = null; sync(); write(); };
   return {
     get data () { return data; },
+    get active () { return root.active; },
     // salvataggio a raffica ma scritto una volta sola, poco dopo l'ultima azione
-    save () { clearTimeout(timer); timer = setTimeout(flush, 250); },
-    flush
+    save () { clearTimeout(timer); timer = setTimeout(() => Profile.flush(), 250); },
+    flush,
+    // le partite negli slot (null = vuoto); quella in gioco è aggiornata
+    slots () { if (slotUsed(data)) root.slots[root.active] = slotPart(data); return root.slots.slice(); },
+    firstFree () { return this.slots().findIndex(s => !s); },
+    // passa a un altro slot (vuoto: una partita nuova ancora da iniziare)
+    select (i) {
+      if (i === root.active) return;
+      clearTimeout(timer); timer = null; sync();
+      root.active = i;
+      data = fillSlot(root.slots[i], root);
+      write();
+    },
+    remove (i) {
+      root.slots[i] = null;
+      if (i === root.active) { clearTimeout(timer); timer = null; SHARED_KEYS.forEach(k => { root[k] = data[k]; }); data = fillSlot(null, root); }
+      write();
+    },
+    exportSlot (i) { const s = this.slots()[i]; return s ? exportSlotFile(s) : null; },
+    // mette una partita letta da file in uno slot vuoto
+    importSlot (i, text) {
+      if (this.slots()[i]) return { error: 'Lo slot è occupato: cancella prima la partita che c\'è.' };
+      const r = readSlotFile(text);
+      if (r.error) return r;
+      root.slots[i] = r.slot;
+      if (i === root.active) data = fillSlot(r.slot, root);
+      write();
+      return r;
+    }
   };
 })();
 window.addEventListener('pagehide', () => Profile.flush());
@@ -2212,6 +2372,34 @@ const REP = {
 };
 const REP_LOG_KEEP = 50;
 const reputation = () => Profile.data.reputation.total;
+
+/* LIVELLI — si aprono a soglie di reputazione (con mezzi, materiale e
+   venue più grandi). Oggi si gioca solo il livello 1 (ready): gli altri
+   si vedono nella scelta del livello, bloccati con la loro soglia, e
+   seguono i cinque scenari di docs/minigioco-scarico.md. Il livello 1
+   vale circa 25-30 di reputazione giocato bene: la soglia del 2 si
+   raggiunge finendo bene il primo. Le soglie sono una proposta. */
+const LEVELS = [
+  { id: 1, name: 'Festa della scuola', venue: 'Palestra della scuola', vehicle: 'furgone', rep: 0, ready: true,
+    // i sottolivelli (le fasi della serata già nel gioco), da una partita salvata
+    phases: [
+      { title: 'Arrivo e scarico', done: s => !!s.scarico },
+      { title: 'Montaggio e test impianto', done: s => ('L1:collaudo') in ((s.reputation && s.reputation.earned) || {}) },
+      { title: 'Messa in sicurezza dei cavi', done: s => !!s.cavi },
+      { title: 'Discorso del preside', done: s => !!s.preside },
+      { title: 'Cambio palco per il DJ', done: s => !!(s.cambioDj && s.cambioDj.done) }
+    ] },
+  { id: 2, name: 'Sagra in piazza', venue: 'Piazza con i sampietrini', vehicle: 'camion', rep: 20 },
+  { id: 3, name: 'Matrimonio in villa', venue: 'Giardino di una villa, sotto la pioggia', vehicle: 'camion', rep: 60 },
+  { id: 4, name: 'Teatro comunale', venue: 'Teatro con la sponda idraulica guasta', vehicle: 'camion', rep: 110 },
+  { id: 5, name: 'Concerto al palazzetto', venue: 'Palazzetto dello sport', vehicle: 'bilico', rep: 180 }
+];
+const VEHICLE_NAMES = { furgone: 'furgone', camion: 'camion', bilico: 'bilico' };
+const levelInfo = id => LEVELS.find(l => l.id === id) || LEVELS[0];
+const levelUnlocked = (lv, rep) => rep >= lv.rep;
+// quanti livelli sono aperti con questa reputazione
+const unlockedCount = rep => LEVELS.filter(l => levelUnlocked(l, rep)).length;
+
 // aggiunge (o toglie) reputazione e dice di quanto è cambiata davvero;
 // con onceKey un evento conta una volta sola (es. 'L1:collaudo')
 function addReputation (amount, reason, onceKey) {
@@ -2259,6 +2447,9 @@ function applySettings () {
     : 'STAGE CREW SIMULATOR';
   const logo = el('#service-logo');
   if (logo) logo.innerHTML = gameActive || Profile.data.service ? logoSVG(serviceLogo(), Profile.data.service, 30) : '';
+  // la reputazione ha aperto un livello non ancora visto: puntino sul menù
+  const news = slotUsed(Profile.data) && unlockedCount(reputation()) > (Profile.data.levelsSeen || 1);
+  ['#menu-btn', '#menu-levels'].forEach(s => { const b = el(s); if (b) b.classList.toggle('news', news); });
   if (window.__scene) window.__scene.paintServiceName();
 }
 
@@ -2286,9 +2477,19 @@ function showMenuPage (page, keep) {
   el('#menu-resume').hidden = !canResume;
   el('#menu-resume').textContent = gameActive ? 'Riprendi' : 'Continua · ' + playerName() + ' · ' + serviceName() + ' · ★ ' + reputation();
   el('#menu-new').classList.toggle('primary', !canResume);
-  el('#new-warning').hidden = !Profile.data.level;
+  const lv = levelInfo((Profile.data.level && Profile.data.level.id) || LEVEL_ID);
+  el('#menu-title').textContent = 'Livello ' + lv.id + ': ' + lv.name;
   el('#set-player-row').hidden = !gameActive;
+  if (page !== 'slots') { slotConfirm = null; if (!keep) slotMsg(''); }
+  if (page === 'slots') renderSlots();
+  if (page === 'levels') renderLevels();
   if (page === 'new' && !keep) {
+    if (newSlot == null || Profile.slots()[newSlot]) newSlot = Profile.firstFree();
+    // le altre partite restano: la nuova va in uno slot vuoto
+    const others = Profile.slots().filter(Boolean).length;
+    el('#new-warning').hidden = !others;
+    el('#new-warning').textContent = 'La nuova partita va nello slot ' + (newSlot + 1) + ' e il nuovo tecnico parte da reputazione 0. '
+      + (others === 1 ? 'L\'altra partita resta salvata' : 'Le altre partite restano salvate') + '; impostazioni e record sono comuni a tutte.';
     draft = { player: Profile.data.player, offers: serviceOffers(Profile.data.usedServices), pick: null };
     const i = el('#player-input');
     i.value = draft.player; setTimeout(() => i.focus(), 30);
@@ -2347,6 +2548,10 @@ const cleanName = s => String(s || '').replace(/\s+/g, ' ').trim().slice(0, NAME
 // nuovo tecnico: reputazione da costruire, al lavoro per il service scelto;
 // i nomi delle tre offerte non verranno più proposti
 function startNewGame (player, offer, offers) {
+  // nello slot scelto (vuoto): la partita in corso resta salvata nel suo
+  const slot = newSlot != null && !Profile.slots()[newSlot] ? newSlot : Profile.firstFree();
+  if (slot >= 0 && slot !== Profile.active) { saveLevel(); Profile.select(slot); }
+  newSlot = null;
   Profile.data.player = cleanName(player);
   Profile.data.service = offer.name;
   Profile.data.logo = { ...offer.logo };
@@ -2376,6 +2581,158 @@ function continueGame () {
     closeMenu();
     if (!scaricoDone()) openSchedule(true);   // la partita si era fermata allo scarico
   });
+}
+
+/* ---------------- partite salvate (slot) ----------------
+   Ogni slot mostra il service (nome e logo), il tecnico, il livello e la
+   fase raggiunti, la reputazione e la data dell'ultima partita. Da qui si
+   gioca, si esporta in un file, si cancella (con conferma); negli slot
+   vuoti si inizia una partita nuova o se ne importa una da file. */
+let newSlot = null;        // slot della nuova partita in preparazione
+let slotConfirm = null;    // slot di cui si sta chiedendo la conferma per cancellare
+let importSlot = null;     // slot vuoto in cui importare il file scelto
+const CONTINUE_FLAG = 'scs-continue';   // dopo il cambio di slot a partita in corso
+
+// a che punto è una partita: livello e prima fase non ancora fatta
+function slotProgress (s) {
+  const lv = levelInfo((s.level && s.level.id) || LEVEL_ID);
+  const phases = lv.phases || [];
+  const next = phases.find(p => !p.done(s));
+  return { level: lv, phase: next ? next.title : 'Serata finita', done: phases.filter(p => p.done(s)).length, of: phases.length };
+}
+const fmtDate = t => t ? new Date(t).toLocaleString('it-IT', { day: 'numeric', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' }) : '—';
+
+function slotMsg (text, kind) {
+  const m = el('#slot-msg');
+  m.textContent = text || ''; m.hidden = !text;
+  m.classList.toggle('bad', kind === 'bad'); m.classList.toggle('ok', kind === 'ok');
+}
+function renderSlots () {
+  const list = el('#slot-list');
+  list.innerHTML = '';
+  const act = (a, label, cls) => '<button type="button" class="menu-btn' + (cls ? ' ' + cls : '') + '" data-act="' + a + '">' + label + '</button>';
+  Profile.slots().forEach((s, i) => {
+    const card = document.createElement('div');
+    card.className = 'slot-card' + (s ? '' : ' empty') + (s && i === Profile.active ? ' active' : '');
+    card.dataset.slot = i;
+    const num = '<span class="slot-num">Slot ' + (i + 1) + (s && i === Profile.active && gameActive ? ' · in gioco' : '') + '</span>';
+    if (!s) {
+      card.innerHTML = '<div class="slot-top"><span class="slot-logo none">＋</span><span class="slot-text">' + num
+        + '<span class="slot-service">Vuoto</span></span></div>'
+        + '<div class="slot-actions">' + act('new', 'Nuova partita') + act('import', 'Importa file') + '</div>';
+    } else {
+      const pr = slotProgress(s);
+      const rep = (s.reputation && s.reputation.total) || 0;
+      const text = '<span class="slot-text">' + num
+        + '<span class="slot-service">' + escapeHtml(s.service || 'Il service') + '</span>'
+        + '<span class="slot-line">Tecnico: <b>' + escapeHtml(s.player || 'Tecnico') + '</b></span>'
+        + '<span class="slot-line">Livello <b>' + pr.level.id + ' · ' + escapeHtml(pr.level.name) + '</b>: ' + escapeHtml(pr.phase) + ' (' + pr.done + '/' + pr.of + ')</span>'
+        + '<span class="slot-line">Reputazione <b>★ ' + rep + '</b>' + (s.beers ? ' · 🍺 ' + s.beers : '') + '</span>'
+        + '<span class="slot-line">Ultima partita: ' + fmtDate(s.savedAt) + '</span></span>';
+      card.innerHTML = '<div class="slot-top"><span class="slot-logo">' + (s.logo ? logoSVG(s.logo, s.service, 40) : '') + '</span>' + text + '</div>'
+        + (slotConfirm === i
+          ? '<p class="slot-confirm">Cancellare la partita di ' + escapeHtml(s.player || 'Tecnico') + '? Non si può annullare.</p>'
+            + '<div class="slot-actions">' + act('del-yes', 'Sì, cancella', 'danger primary') + act('del-no', 'No') + '</div>'
+          : '<div class="slot-actions">' + act('play', i === Profile.active && gameActive ? 'Riprendi' : 'Gioca', 'primary') + act('export', 'Esporta') + act('del', 'Cancella', 'danger') + '</div>');
+      if (!s.logo) card.querySelector('.slot-logo').classList.add('none');
+    }
+    list.appendChild(card);
+  });
+}
+
+// gioca la partita di uno slot; a partita in corso si ricarica la pagina,
+// così la scena riparte pulita, e la partita scelta si apre da sola
+function playSlot (i) {
+  if (i === Profile.active) { continueGame(); return; }
+  if (gameActive) {
+    gameActive = false;            // da qui niente scrive il livello in gioco nello slot nuovo
+    Profile.select(i);
+    try { sessionStorage.setItem(CONTINUE_FLAG, '1'); } catch (e) { /* senza: si sceglie Continua a mano */ }
+    location.reload();
+    return;
+  }
+  Profile.select(i);
+  applySettings();
+  continueGame();
+}
+function deleteSlot (i) {
+  const wasPlaying = i === Profile.active && gameActive;
+  Profile.remove(i);
+  slotConfirm = null;
+  if (wasPlaying) { gameActive = false; location.reload(); return; }
+  applySettings();
+  slotMsg('Partita cancellata: lo slot ' + (i + 1) + ' è libero.', 'ok');
+  showMenuPage('slots', true);
+}
+const fileSlug = s => String(s || 'partita').normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '') || 'partita';
+function exportSlot (i) {
+  const text = Profile.exportSlot(i);
+  if (!text) return;
+  const s = Profile.slots()[i];
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(new Blob([text], { type: 'application/json' }));
+  a.download = 'stage-crew-' + fileSlug(s.service) + '-' + new Date().toISOString().slice(0, 10) + '.json';
+  document.body.appendChild(a);
+  a.click();
+  setTimeout(() => { URL.revokeObjectURL(a.href); a.remove(); }, 1000);
+  slotMsg('Salvataggio esportato: tienilo da parte e ricaricalo con «Importa file» in uno slot vuoto.', 'ok');
+}
+function importSlotText (i, text) {
+  const r = Profile.importSlot(i, text);
+  if (r.error) slotMsg(r.error, 'bad');
+  else slotMsg('Partita di ' + (r.slot.player || 'Tecnico') + ' (' + r.slot.service + ') importata nello slot ' + (i + 1) + '.', 'ok');
+  showMenuPage('slots', true);
+  return r;
+}
+// Nuova partita: nel primo slot vuoto; se sono tutti pieni se ne cancella uno
+function goNewGame (slot) {
+  const free = slot != null ? slot : Profile.firstFree();
+  if (free < 0) {
+    slotMsg('Tutti e ' + SLOT_COUNT + ' gli slot sono occupati: cancella una partita (magari dopo averla esportata) per iniziarne una nuova.', 'bad');
+    showMenuPage('slots', true);
+    return;
+  }
+  newSlot = free;
+  showMenuPage('new');
+}
+
+/* ---------------- scelta del livello ----------------
+   I livelli si aprono a soglie di reputazione (LEVELS). Quelli bloccati
+   mostrano la soglia e quanto manca; il livello 1 mostra le sue fasi. */
+function renderLevels () {
+  const game = slotUsed(Profile.data);
+  const rep = game ? reputation() : 0;
+  el('#levels-intro').textContent = game
+    ? 'Reputazione di ' + playerName() + ': ★ ' + rep + '. Con più reputazione si aprono livelli con mezzi, materiale e venue più grandi.'
+    : 'Inizia una partita: i livelli si aprono con la reputazione del tecnico.';
+  const list = el('#level-list');
+  list.innerHTML = '';
+  const cur = (Profile.data.level && Profile.data.level.id) || LEVEL_ID;
+  LEVELS.forEach(l => {
+    const open = levelUnlocked(l, rep);
+    const card = document.createElement('div');
+    card.className = 'level-card' + (open ? '' : ' locked') + (game && open && l.id === cur ? ' current' : '');
+    card.dataset.level = l.id;
+    let html = '<span class="slot-num">Livello ' + l.id + (open ? '' : ' · bloccato') + '</span>'
+      + '<span class="level-name">' + (open ? '' : '🔒 ') + escapeHtml(l.name) + '</span>'
+      + '<span class="slot-line">' + escapeHtml(l.venue) + ' · mezzo: ' + VEHICLE_NAMES[l.vehicle] + '</span>';
+    if (!open) {
+      html += '<span class="level-lock">Si apre con ★ ' + l.rep + (game ? ' (ti mancano ' + (l.rep - rep) + ')' : '') + '</span>'
+        + '<span class="level-bar"><i style="width:' + Math.round(100 * Math.min(1, rep / l.rep)) + '%"></i></span>';
+    } else if (!l.ready) {
+      html += '<span class="level-lock">Aperto: arriva nelle prossime versioni del gioco.</span>';
+    } else {
+      if (l.phases) html += '<ul class="level-phases">' + l.phases.map((p, k) => {
+        const st = !game ? '' : p.done(Profile.data) ? 'done' : l.phases.findIndex(q => !q.done(Profile.data)) === k ? 'now' : '';
+        return '<li class="' + st + '">' + (st === 'done' ? '✓ ' : st === 'now' ? '▶ ' : '· ') + escapeHtml(p.title) + '</li>';
+      }).join('') + '</ul>';
+      html += '<div class="slot-actions"><button type="button" class="menu-btn primary" data-act="play-level">' + (game ? (gameActive ? 'Riprendi' : 'Continua') : 'Nuova partita') + '</button></div>';
+    }
+    card.innerHTML = html;
+    list.appendChild(card);
+  });
+  // i livelli nuovi ora sono stati visti: via il puntino dal menù
+  if (game && unlockedCount(rep) !== Profile.data.levelsSeen) { Profile.data.levelsSeen = unlockedCount(rep); Profile.save(); applySettings(); }
 }
 
 /* ---------------- scaletta della serata ----------------
@@ -2838,12 +3195,19 @@ function cambioChecks () {
   const L = djRoute(dj, 'L'), R = djRoute(dj, 'R');
   const fed = !!(dj && wiredToQuadro(dj.id));
   const mic = micChannel();
+  // le luci del DJ: stativo con 4 PAR e la strobo, una spina e un DMX
+  const bar = placedOfType('djluci')[0], ctrl = placedOfType('controller')[0];
+  const barFed = !!(bar && wiredToQuadro(bar.id)), u = bar ? dmxUniverse(bar.id) : null, clash = djLuciClashes(bar);
   const list = [
     { ok: !!dj, what: 'Consolle del DJ sul palco', ids: [], kind: 'place' },
     { ok: fed && isRunning(dj.id), what: 'Corrente alla consolle, accesa', ids: ids([dj]), kind: fed ? 'on' : 'power' },
     { ok: dis.length > 0, what: 'Una DI accanto alla consolle', ids: [], kind: 'place' },
     { ok: !!(L.di && R.di), what: 'MASTER L e R della consolle nella DI (jack)', ids: ids([dj, ...dis]), kind: 'wire' },
     { ok: !!(L.ch && R.ch), what: 'Dalla DI due XLR nel mixer' + (L.ch && R.ch ? ' (CH ' + L.ch + ' e CH ' + R.ch + ')' : ', negli ingressi MIC liberi'), ids: ids([...dis, mixer]), kind: 'wire' },
+    { ok: !!bar, what: 'Stativo luci del DJ sul palco (4 PAR e strobo)', ids: [], kind: 'place' },
+    { ok: barFed && isRunning(bar.id), what: 'Corrente alle luci del DJ', ids: ids([bar]), kind: 'lpower' },
+    { ok: u != null && !clash.length, what: 'DMX dalla consolle luci alle luci del DJ' + (u != null ? ' (universo ' + u + ')' : ''),
+      ids: ids([bar, u != null ? null : ctrl, ...clash]), kind: clash.length ? 'laddr' : 'ldmx' },
     { ok: !!mic, what: 'Microfono per Musa Esistenziale' + (mic ? ' (CH ' + mic + ')' : ' collegato al mixer'), ids: ids(placedOfType('mic')), kind: 'mic' }
   ];
   // nel cambio non si deve rompere quello che il collaudo ha promosso
@@ -2888,7 +3252,7 @@ function startCambioDj () {
 function openCambioCard () {
   const c = cambioDj();
   cambioCardOpen = true;
-  el('#cambio-text').innerHTML = '<p><span class="who">DJ Inestimabile</span> arriva con la consolle sotto il braccio, dietro di lui <span class="who">Musa Esistenziale</span>, già a petto nudo. «Dove la metto? Voglio la corrente e il mio suono nell\'impianto, subito!»</p>'
+  el('#cambio-text').innerHTML = '<p><span class="who">DJ Inestimabile</span> arriva con la consolle sotto il braccio, dietro di lui <span class="who">Musa Esistenziale</span>, già a petto nudo, con in spalla lo stativo delle luci del DJ: quattro PAR e una strobo già montati sulla barra. «Dove la metto? Voglio la corrente, il mio suono nell\'impianto e le mie luci sul DMX, subito!»</p>'
     + '<p>Hai ' + Math.round(c.patienceMs / 60000) + ' minuti prima che il pubblico perda la pazienza. '
     + (c.micCh ? 'Il microfono del preside resta sul CH ' + c.micCh + ': ora è di Musa.' : 'Il microfono va collegato al mixer: serve a Musa.') + '</p>';
   el('#cambio-list').innerHTML = [
@@ -2897,6 +3261,8 @@ function openCambioCard () {
     'Una DI accanto alla consolle (scheda Regia)',
     'MASTER L e R nei due ingressi della DI, con due jack',
     'Dalla DI due XLR in due ingressi MIC liberi del mixer',
+    'Il suo stativo luci sul palco (4 PAR e la strobo già sulla barra): una spina Schuko',
+    'Un DMX dalla consolle luci alla barra: è indirizzata dal ' + DJ_LUCI_DMX.from + ' al ' + DJ_LUCI_DMX.to + ', non pestare i PAR',
     'Accendi la consolle e premi PRONTI'
   ].map(t => '<li>' + escapeHtml(t) + '</li>').join('');
   el('#cambio-modal').classList.add('show');
@@ -2962,7 +3328,36 @@ el('#poster-modal').addEventListener('click', () => { SFX.button(); el('#poster-
 
 el('#menu-btn').addEventListener('click', () => { SFX.button(); openMenu('main'); });
 el('#menu-resume').addEventListener('click', () => { SFX.button(); continueGame(); });
-el('#menu-new').addEventListener('click', () => { SFX.button(); showMenuPage('new'); });
+el('#menu-new').addEventListener('click', () => { SFX.button(); goNewGame(); });
+el('#menu-slots').addEventListener('click', () => { SFX.button(); showMenuPage('slots'); });
+el('#menu-levels').addEventListener('click', () => { SFX.button(); showMenuPage('levels'); });
+el('#slots-back').addEventListener('click', () => { SFX.button(); showMenuPage('main'); });
+el('#levels-back').addEventListener('click', () => { SFX.button(); showMenuPage('main'); });
+el('#slot-list').addEventListener('click', ev => {
+  const b = ev.target.closest('button[data-act]');
+  if (!b) return;
+  SFX.button();
+  const i = +b.closest('.slot-card').dataset.slot, a = b.dataset.act;
+  if (a === 'play') playSlot(i);
+  else if (a === 'new') goNewGame(i);
+  else if (a === 'export') exportSlot(i);
+  else if (a === 'import') { importSlot = i; el('#slot-file').value = ''; el('#slot-file').click(); }
+  else if (a === 'del') { slotConfirm = i; slotMsg(''); renderSlots(); }
+  else if (a === 'del-no') { slotConfirm = null; renderSlots(); }
+  else if (a === 'del-yes') deleteSlot(i);
+});
+el('#slot-file').addEventListener('change', ev => {
+  const f = ev.target.files && ev.target.files[0];
+  if (!f || importSlot == null) return;
+  const i = importSlot;
+  if (f.size > 5e6) { slotMsg('Il file è troppo grande per essere un salvataggio.', 'bad'); return; }
+  f.text().then(t => importSlotText(i, t), () => slotMsg('Non riesco a leggere il file.', 'bad'));
+});
+el('#level-list').addEventListener('click', ev => {
+  if (!ev.target.closest('button[data-act="play-level"]')) return;
+  SFX.button();
+  if (slotUsed(Profile.data)) continueGame(); else goNewGame();
+});
 el('#menu-settings').addEventListener('click', () => { SFX.button(); showMenuPage('settings'); });
 el('#new-cancel').addEventListener('click', () => { SFX.button(); showMenuPage('main'); });
 el('#new-form').addEventListener('submit', ev => {
@@ -2988,7 +3383,17 @@ el('#set-player').addEventListener('change', ev => {
   applySettings(); Profile.save();
 });
 applySettings();
-openMenu(Profile.data.level ? 'main' : 'new');
+// all'avvio: la partita dell'ultimo slot usato; senza, le partite salvate
+// (se ce ne sono) o direttamente una nuova. Dopo un cambio di slot a
+// partita in corso la partita scelta riparte da sola.
+{
+  let resume = false;
+  try { resume = sessionStorage.getItem(CONTINUE_FLAG) === '1'; sessionStorage.removeItem(CONTINUE_FLAG); } catch (e) { /* niente sessione */ }
+  if (Profile.data.level) openMenu('main');
+  else if (Profile.slots().some(Boolean)) openMenu('slots');
+  else { newSlot = Profile.firstFree(); openMenu('new'); }
+  if (resume && slotUsed(Profile.data)) continueGame();
+}
 
 /* Reset */
 el('#reset-btn').addEventListener('click', () => {
@@ -3275,7 +3680,10 @@ const REAR_PANELS = {
     sections: [['INPUT', [['in_1', 'CH1 IN'], ['in_2', 'CH2 IN']]], ['OUTPUT', [['out_1', 'CH1 OUT'], ['out_2', 'CH2 OUT']]]] },
   // retro del mixer DJ: uscite master e la spina della ciabattina del DJ
   dj: { style: 'desk', accent: true, power: true, serial: 'DJ MIXER 2 CANALI + 2 LETTORI  ·  «NOTTE FUORI CONTROLLO»',
-    sections: [['MASTER OUT', [['out_L', 'MASTER L'], ['out_R', 'MASTER R']]], ['ALIMENTAZIONE', [['power', 'SPINA']]]] }
+    sections: [['MASTER OUT', [['out_L', 'MASTER L'], ['out_R', 'MASTER R']]], ['ALIMENTAZIONE', [['power', 'SPINA']]]] },
+  // piede dello stativo luci del DJ: la spina e il DMX del primo faro della barra
+  djluci: { style: 'desk', accent: true, serial: 'T-BAR  ·  4 × LED PAR 18 × 3 W RGB + STROBO LED  ·  DMX ' + DJ_LUCI_DMX.from + '–' + DJ_LUCI_DMX.to,
+    sections: [['ALIMENTAZIONE', [['power', 'SPINA']]], ['DMX 512', [['dmx_in', 'DMX IN']]]] }
 };
 // tutte le sezioni di un pannello, qualunque sia la disposizione
 function panelSections (panel) { return panel.rows ? panel.rows.flat() : panel.sections; }
@@ -4034,6 +4442,19 @@ function traceChain (compId) {
     }
     return { title: 'DJ', steps };
   }
+  // le luci del DJ: corrente alla barra, poi il DMX dalla consolle luci
+  if (comp.type === 'djluci') {
+    const ct = placedOfType('controller')[0];
+    if (add([comp.id], compLabel(comp.id), isRunning(comp.id), whyDown(comp))) {
+      if (!ct) add([], typeLabel('controller'), false, 'da posare');
+      else if (add([ct.id], compLabel(ct.id), isRunning(ct.id), whyDown(ct))) {
+        const clash = djLuciClashes(comp);
+        if (add([comp.id], 'DMX', dmxUniverse(comp.id) != null, 'la barra non sente la consolle luci'))
+          add(clash.map(c => c.id), 'Indirizzi', !clash.length, 'canali ' + DJ_LUCI_DMX.from + '-' + DJ_LUCI_DMX.to + ' già usati dai PAR su questo universo');
+      }
+    }
+    return { title: 'Luci DJ', steps };
+  }
   // corrente: dal dispositivo si risale fino all'allaccio
   const up = [];
   for (let c = comp, n = 0; c && n < 10; n++) {
@@ -4480,7 +4901,8 @@ const PIECE_INFO = {
   par: ['Faro PAR a LED: prende corrente (PowerCON) e comandi (DMX) e li passa al faro dopo, in catena.', 'Si monta su uno stativo.'],
   controller: ['Consolle luci DMX: comanda i PAR col cavo DMX, su due universi.', 'Va sul tavolo regia.'],
   di: ['DI box passiva a 2 canali: trasforma due uscite jack (sbilanciate) in due XLR bilanciati per gli ingressi MIC del mixer. Al montaggio non serve: la usa il DJ.', 'Sul palco accanto a chi suona, in Off Stage o in FOH.'],
-  dj: ['La consolle di DJ Inestimabile: due lettori e il mixer DJ. Ha la sua spina Schuko; le uscite MASTER L e R (jack) vanno in una DI, e dalla DI due XLR al mixer di sala.', 'Va sul palco.']
+  dj: ['La consolle di DJ Inestimabile: due lettori e il mixer DJ. Ha la sua spina Schuko; le uscite MASTER L e R (jack) vanno in una DI, e dalla DI due XLR al mixer di sala.', 'Va sul palco.'],
+  djluci: ['Lo stativo luci del DJ: quattro PAR LED cinesi e una strobo LED in mezzo, già montati sulla barra e collegati tra loro. Servono una spina Schuko e un solo DMX dalla consolle luci; i fari sono già indirizzati (canali ' + DJ_LUCI_DMX.from + '-' + DJ_LUCI_DMX.to + ').', 'Va sul palco, dietro la consolle.']
 };
 function showPieceInfo (type, pieceEl) {
   const info = PIECE_INFO[type];
@@ -4826,7 +5248,7 @@ function screenToCell (px, py) {
    scambia. I pezzi montati (testa, PAR) non occupano celle. */
 const FOOTPRINT = {
   sub: [1, 1], mixer: [1, 2], ampli: [1, 2], tavolo: [2, 6], controller: [1, 1], quadro: [1, 2],
-  ciabatta: [1, 2], ciabatta_cee: [1, 3], pc: [1, 1], scheda: [1, 1], di: [1, 1], stativo: [1, 1], asta: [1, 1], dj: [2, 1]
+  ciabatta: [1, 2], ciabatta_cee: [1, 3], pc: [1, 1], scheda: [1, 1], di: [1, 1], stativo: [1, 1], asta: [1, 1], dj: [2, 1], djluci: [1, 1]
 };
 function footprint (type, rot) {
   const f = FOOTPRINT[type] || [1, 1];
@@ -4898,6 +5320,8 @@ const ZONE_PREDICATES = {
   di: (cx, cy) => isStageCell(cx, cy) || isFohCell(cx, cy),
   // la consolle del DJ sta sulla pedana, dove suona
   dj: isStageCoreCell,
+  // anche il suo stativo luci, alle spalle della consolle
+  djluci: isStageCoreCell,
   // la scheda audio sta sul tavolo accanto al PC
   scheda: (cx, cy) => isFohCell(cx, cy) || isOffStageCell(cx, cy)
 };
@@ -5931,6 +6355,47 @@ class StageScene extends Phaser.Scene {
         });
         k.quadZ(Z + 4, 8, 9, 42, 54, 0x0c0d10);
         k.quadZ(Z + 4, 7.5, 9.5, 47, 49, 0xdcdfe4);                      // crossfader
+        break;
+      }
+      case 'djluci': {
+        // stativo luci del DJ: treppiede, asta alta e barra lunga con sopra
+        // quattro PAR LED (scatolette nere con la lente) e la strobo in mezzo,
+        // tutti verso il pubblico (faccia a=0). I cavi scendono lungo l'asta.
+        const P = DJLUCI_ISO, k = this.isoKit(g, P);
+        const A = P.A / 2, B = P.B / 2, H = DJLUCI_POLE;
+        const c0 = P(A, B, 0);
+        k.discZ(0, A, B, 20, 0x000000, 0.25);                                     // ombra
+        g.lineStyle(3, 0x1c1d22, 1);
+        [[A, 0], [0, P.B], [P.A, P.B]].forEach(([a, b]) => {
+          const f = P(a, b, 0);
+          g.lineBetween(c0.x, c0.y - 14, f.x, f.y);                               // gambe
+          g.fillStyle(0x0c0d10, 1); g.fillCircle(f.x, f.y, 2.2);
+        });
+        g.fillStyle(0x2a2c32, 1); g.fillRect(c0.x - 2.5, c0.y - H, 5, H - 12);   // asta
+        g.fillStyle(0x55585f, 1); g.fillRect(c0.x - 2.5, c0.y - H, 1.4, H - 12);
+        g.fillStyle(0x3a3d45, 1); g.fillRect(c0.x - 4, c0.y - 32, 8, 5);          // serraggio
+        g.lineStyle(1.4, 0x0c0d10, 0.9); g.lineBetween(c0.x + 2.5, c0.y - H + 2, c0.x + 3.5, c0.y - 10); // cavi lungo l'asta
+        const b0 = P(A, B - 44, H), b1 = P(A, B + 44, H);                         // barra
+        g.lineStyle(4, 0x1c1d22, 1); g.lineBetween(b0.x, b0.y, b1.x, b1.y);
+        g.lineStyle(1, 0x6a6e78, 1); g.lineBetween(b0.x, b0.y - 1.5, b1.x, b1.y - 1.5);
+        // i fari: prima quelli lontani (b piccolo), così i vicini li coprono
+        DJLUCI_HEADS.forEach(db => {
+          const bc = B + db;
+          k.box(A - 4, A + 5, bc - 1, bc + 1, H, H + 3, ISO_GREY);                // staffa
+          k.box(A - 4, A + 6, bc - 5.5, bc + 5.5, H + 1.5, H + 12.5, ISO_BLACK);
+          k.discA(A - 4, bc, H + 7, 4.6, 0x0c0d10);                               // ghiera
+          k.discA(A - 4, bc, H + 7, 3.6, 0x3b3423);                               // lente coi LED
+          [[0, 0], [1.8, 1], [-1.8, 1], [0, -1.9]].forEach(([x, z]) => {
+            const q = P(A - 4, bc + x, H + 7 + z);
+            g.fillStyle(0xf6e7a8, 0.9); g.fillCircle(q.x, q.y, 0.7);
+          });
+        });
+        // strobo LED: scatola larga e bassa, pannello bianco lattiginoso
+        k.box(A - 3, A + 5, B - 9, B + 9, H + 1.5, H + 9, ISO_BLACK);
+        k.quadA(A - 3, B - 8, B + 8, H + 2.5, H + 8, 0xd8dbe0);
+        g.lineStyle(0.6, 0x9aa0aa, 0.8);
+        [-4, 0, 4].forEach(x => { const q0 = P(A - 3, B + x, H + 2.5), q1 = P(A - 3, B + x, H + 8); g.lineBetween(q0.x, q0.y, q1.x, q1.y); });
+        k.quadA(A - 3, B + 5, B + 8, H + 9, H + 9.8, def.body.accent);           // marchio sul bordo
         break;
       }
       case 'di': {
@@ -7106,6 +7571,9 @@ class StageScene extends Phaser.Scene {
       power: 'la consolle non ha corrente.',
       on: 'la consolle è spenta: accendila dal suo pannello.',
       wire: 'la sua musica non arriva al mixer: segui i cavi dalla consolle alla DI e dalla DI al mixer.',
+      lpower: 'le sue luci sono spente: la barra non ha corrente.',
+      ldmx: 'le sue luci non sentono la consolle luci: manca il DMX alla barra.',
+      laddr: 'le sue luci impazziscono insieme ai PAR: sono sullo stesso universo e negli stessi canali.',
       mic: 'Musa Esistenziale non ha un microfono collegato al mixer.',
       rig: 'nel cambio si è perso qualcosa dell\'impianto' + (miss.lost ? ': ' + miss.lost + '.' : '.')
     }[miss.kind];
@@ -7115,7 +7583,8 @@ class StageScene extends Phaser.Scene {
     saveLevel();
     showToast('DJ Inestimabile non può attaccare: ' + hint + exact, 'bad');
     if (miss.kind === 'wire' || miss.kind === 'mic') this.fxCrackle();
-    else if (miss.kind === 'power') this.fxSparks();
+    else if (miss.kind === 'power' || miss.kind === 'lpower') this.fxSparks();
+    else if (miss.kind === 'laddr') this.fxLightsTilt();
   }
 
   /* ---------------- TEST IMPIANTO: collaudo tecnico (potenza + segnale + PC di
@@ -7331,6 +7800,16 @@ class StageScene extends Phaser.Scene {
     if (this.fx) return;
     this.parBeamGeometry(placedOfType('par').filter(c => isRunning(c.id) && this.compVisuals[c.id]))
       .forEach(b => this.drawParBeam(g, b, 0xffe9c4, 0.5));
+    // luci del DJ con corrente e DMX: i quattro PAR accesi coi loro colori
+    // (la strobo resta ferma finché non la comanda l'operatore luci)
+    placedOfType('djluci').filter(c => isRunning(c.id) && dmxUniverse(c.id) != null && this.compVisuals[c.id]).forEach(c => {
+      const v = this.compVisuals[c.id].container;
+      [0xff3fb4, 0x3b8bff, 0x3bffb0, 0xffb13b].forEach((col, i) => {
+        const q = djLuciLens(DJLUCI_HEADS[i]);
+        g.fillStyle(col, 0.25); g.fillCircle(v.x + q.x, v.y + q.y, 8);
+        g.fillStyle(col, 0.7); g.fillCircle(v.x + q.x, v.y + q.y, 3.4);
+      });
+    });
   }
   /* fascio di un PAR LED: è un wash, luce ampia e morbida. Cono largo che
      sfuma verso i bordi (strati sovrapposti, niente contorni netti) e una
