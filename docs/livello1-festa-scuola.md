@@ -134,8 +134,13 @@ corti) e in FOH va solo il mixer.
 
 Test: `tests/aiuti.js`.
 
-**Da fare:** punto 5 (indizi a scalare anche nel Test impianto finale: oggi
-sono nelle prove dei giri).
+- **indizi a scalare nel Test impianto** (punto 5, fatto): come nelle prove
+  dei giri. Al primo test andato male solo l'indizio vago con l'effetto
+  (scintille, casse che gracchiano, luci in tilt); dal secondo di fila il
+  pezzo colpevole in rosso; dal terzo il capo legge la voce del foglio che
+  manca. Il colpevole è il primo collegamento che manca dell'impianto che
+  ha fallito, se no la prima voce del suo giro che non va. Un collaudo
+  riuscito azzera il conto (`giroFails[GIRO_COLLAUDO]`).
 
 ## Scheda obiettivi
 

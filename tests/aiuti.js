@@ -82,6 +82,18 @@ const path = require('path');
     toggleProtection('L2');
     check(broken('par_1') === 'PAR 1 non collegato alla corrente', 'PAR scollegato: ' + broken('par_1'));
 
+    // ---- indizi a scalare nel Test impianto: vago, poi il pezzo in rosso, poi il capo legge il foglio
+    P('sub', 1, 8); P('sub', 7, 8);           // posati ma senza corrente: il colpevole è un pezzo che si vede
+    gameState.giro = GIRO_COLLAUDO; gameState.giroFails[GIRO_COLLAUDO] = 0;
+    const glowing = () => Object.keys(S.compVisuals).filter(id => S.compVisuals[id].glow.alpha > 0);
+    const sysTest = () => { S.runSystemTest(); return { red: glowing(), msg: el('#toast').textContent }; };
+    const t1 = sysTest(), t2 = sysTest(), t3 = sysTest();
+    check(!t1.red.length && !/ti indica il foglio/.test(t1.msg), 'collaudo, primo tentativo: indizio troppo preciso: ' + t1.msg + ' ' + t1.red);
+    check(t2.red.join() === 'sub_1' && !/ti indica il foglio/.test(t2.msg), 'collaudo, secondo tentativo: in rosso ' + t2.red + ' invece di sub_1: ' + t2.msg);
+    check(/ti indica il foglio: «.+»/.test(t3.msg), 'collaudo, terzo tentativo: il capo non legge il foglio: ' + t3.msg);
+    check(gameState.giroFails[GIRO_COLLAUDO] === 3, 'tentativi del collaudo non contati');
+    S.stopFx();
+
     // ---- scheda "cos'è": ogni pezzo della barra ne ha una, e la pressione lunga non arma il pezzo
     document.querySelectorAll('.piece').forEach(pc => check(PIECE_INFO[pc.dataset.type], 'manca la scheda cos\'è di ' + pc.dataset.type));
     document.querySelector('.tab-btn[data-tab="corrente"]').click();
