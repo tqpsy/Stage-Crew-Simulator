@@ -50,6 +50,23 @@ Invece di livelli più facili, strumenti veri che semplificano il lavoro:
 tester per cavi, sequencer di accensione, cavi già etichettati, multicore,
 ciabatte con interruttore generale, rack precablati.
 
+## Assistente (dal livello 2)
+
+Dal livello 2 il capo tutor non c'è più: al suo posto un **assistente** da
+assumere a inizio serata. La reputazione è una soglia (non si spende), i
+favori nei guasti grossi si pagano a birre. Tre caratteri (proposta): Nico
+«Cavetto» (rep. 10, stagista), Sabri «Nastro Nero» (rep. 20, come il capo),
+Tonino «Ventennale» (rep. 35, il più bravo, due birre a favore). Design in
+`docs/assistente.md`.
+- Già fatto: i dati (`ASSISTANTS` in `main.js`), assunzione e favori
+  (`hireAssistant`, `assistantFavor`), `assistant` nel salvataggio
+  (in ogni slot, le partite vecchie senza assistente si leggono con nessuno
+  assunto). Nel livello 1 non si assume nessuno.
+- Da fare col livello 2: la scheda «Assistente» nella scaletta, il ritratto
+  in testata, la scelta «Chi ci va?» nello spettacolo, i ritratti in
+  `img/personaggi.svg`. Più avanti: aiuto allo scarico e alla posa,
+  esperienza, due assistenti nei palchi grandi.
+
 ## Guasti nei livelli successivi (proposta)
 
 Il guasto del microfono del preside (vedi `docs/livello1-festa-scuola.md`) è il
@@ -117,6 +134,9 @@ cambiano da una fase all'altra.
 - Il capo squadra tutor vale solo per il livello 1 (`TUTOR_LEVELS`):
   `tests/capo.js` controlla che fermi ogni errore una volta sola. I test che
   provocano errori apposta spengono i consigli (`settings().bossTips`).
+- L'assistente vale dove il capo non c'è: `tests/assistente.js` controlla
+  che nel livello 1 non si assuma nessuno, soglie, birre, guasti e favori
+  per set. Col livello 2 va esteso alla scelta «Chi ci va?» nello spettacolo.
 - `tests/scarico.js`: lo scarico dentro il gioco e le sue conseguenze sul
   montaggio. Senza rete servono `PHASER_PATH` e `MATTER_PATH`.
 - `tests/posa-cavi.js` (la pagina da sola) e `tests/posa-cavi-gioco.js` (la
