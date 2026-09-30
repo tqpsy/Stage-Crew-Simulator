@@ -71,9 +71,13 @@ cura sbagliata del PAR costa un secondo e mezzo.
 Dalla battuta 80 Gerry sale sul palco arrabbiato (fronte rossa, bocca che
 urla, trema): troppo casino, e le parolacce davanti ai bambini. Alla battuta
 82, terzo battito, poco prima della fine del brano, **stacca la corrente di
-botto**: via la musica e tutte le luci, il pubblico fa «Ohhhh», e al buio
-Gerry litiga con Musa e il DJ, poi li butta fuori. Dopo il taglio non ci sono
-più note (`taglio` nella mappa). Poi la scheda finale.
+botto**. Prima va via la musica: il clac del magnetotermico, un ronzio che
+scende e il disco che rallenta e si ferma. Subito dopo le luci sfarfallano e
+si spengono. Il pubblico fa «Ohhhh», poi rumoreggia contro il bidello (buuu,
+urla, fischi, pugni alzati) mentre Gerry litiga con Musa e il DJ e li butta
+fuori. Dopo il taglio non ci sono più note (`taglio` nella mappa). In fondo,
+sul palco e nella scheda finale (e nel gioco): «Il bidello ha cacciato via i
+musicisti. Ora si può ripristinare il palco per l'ultima band.»
 
 - Reputazione: 5 + (gradimento − 60) / 10 + guasti: +1 per ogni nota speciale
   presa in tempo, +3 per il PAR sistemato entro 12 s, la scelta del Quadro

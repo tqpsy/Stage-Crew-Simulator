@@ -59,6 +59,8 @@
   #toast.show{opacity:1}#toast.ok{border-color:var(--green)}#toast.bad{border-color:var(--red)}
   .chip{position:absolute;left:8px;top:8px;z-index:3;background:#4a1c17;border:2px solid var(--red);color:#fff;border-radius:999px;padding:5px 12px;font-size:13px;font-weight:700;animation:blink 1s steps(2) infinite}
   @keyframes blink{50%{background:var(--red)}}
+  .stage-msg{position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);z-index:4;width:min(320px,calc(100% - 32px));background:rgba(20,21,25,.94);border:2px solid var(--amber);border-radius:12px;padding:12px 14px;text-align:center;font-size:15px;font-weight:600;line-height:1.4;box-shadow:0 8px 24px rgba(0,0,0,.6)}
+  .outro-msg{margin:0;background:var(--bg-raised);border-left:3px solid var(--amber);border-radius:8px;padding:8px 10px;font-size:14px;line-height:1.4}
   /* comandi dei guasti, sopra il palco: fader da tirare giù, mute del microfono, il PAR da sistemare */
   #pops{position:absolute;right:8px;top:8px;bottom:8px;z-index:3;display:flex;gap:8px;align-items:stretch;pointer-events:none}
   .pop{pointer-events:auto;background:rgba(20,21,25,.94);border:2px solid var(--amber);border-radius:12px;padding:8px;display:grid;gap:6px;align-content:start;box-shadow:0 6px 20px rgba(0,0,0,.5)}
@@ -454,6 +456,7 @@
       </div>
     </div>
     <div id="toast"></div>
+    <div class="stage-msg" id="stage-msg" hidden>Il bidello ha cacciato via i musicisti. Ora si può ripristinare il palco per l'ultima band.</div>
     <div id="pausa" hidden>PAUSA</div>
   </div>
 
@@ -532,6 +535,7 @@
       </div>
       <div><div class="tag">Obiettivo 3 · fine</div><h2 id="outro-title">Che notte!</h2></div>
     </div>
+    <p class="outro-msg" id="outro-msg">Il bidello ha cacciato via i musicisti. Ora si può ripristinare il palco per l'ultima band.</p>
     <div class="stars" id="r-stars"></div>
     <div class="results">
       <div><b id="r-grad">0%</b><span>Pubblico</span></div>
@@ -715,7 +719,7 @@
 
   // la luce di ogni PAR adesso: [intensità, colore]
   function parLight (i, pal) {
-    if (S.phaseDown || S.finale) return [0, '#000'];
+    if (S.phaseDown || (S.finale && !finaleLit())) return [0, '#000'];
     if (i === 3 && S.dmxDead) return [0, '#000'];
     let v = 0, c = pal[0];
     if (i === 1 || i === 2) { v = 0.28; c = '#fff6e0'; }           // i frontali tengono Musa in luce
@@ -727,8 +731,8 @@
   function drawStage () {
     const t = S.t, sec = sectionAt(t), pal = PALETTE[sec.k];
     const b = beatAt(t), bf = ((b % 1) + 1) % 1;
-    const off = !!S.finale;
-    const onMusic = t >= 0 && !off && (t < M.durata || S.finale);
+    const off = !!S.finale && !finaleLit();
+    const onMusic = t >= 0 && !S.finale && t < M.durata;
     let side = 0, washC = pal[0];
     for (let i = 0; i < 4; i++) {
       const [v, c] = parLight(i, pal);
@@ -820,7 +824,11 @@
     const lastBuildBeat = sec.k === 'BUILD' && b >= (sec.b + 1) * 4 - 1;
     people.forEach(o => {
       let dy = 0, dx = 0, armsOn = 0, phone = 0;
-      if (S.finale) dy = 2;
+      if (S.finale) {
+        const F = S.finale;
+        dy = 2;
+        if (F.f >= BOO_AT && F.f < BOO_END && o.keen < 0.7) { armsOn = 1; dy = -Math.abs(Math.sin(F.f * 9 + o.sway)) * 3; dx = Math.sin(F.f * 13 + o.sway) * 1.2; }
+      }
       else if (onMusic && !S.paused) {
         const pf = (((b + o.ph) % 1) + 1) % 1;
         if (sec.k === 'DROP') {
@@ -986,7 +994,7 @@
   }
   function paintPads () {
     const dead = deadLanes();
-    document.querySelectorAll('.pad').forEach(p => { const l = +p.dataset.l; p.classList.toggle('down', S.down[l]); p.classList.toggle('dead', dead[l]); });
+    document.querySelectorAll('.pad').forEach(p => { const l = +p.dataset.l; p.classList.toggle('down', S.down[l]); p.classList.toggle('dead', dead[l] || !!S.finale); });
   }
 
   document.querySelectorAll('.pad').forEach(p => {
@@ -1385,35 +1393,59 @@
   }
 
   /* ---------- finale: Gerry stacca la corrente di botto ----------
-     Poco prima della fine del brano: va via tutto, musica e luci, il pubblico
-     fa «Ohhhh» e Gerry litiga coi musicisti, poi li butta fuori. */
+     Poco prima della fine del brano. Prima va via la musica (il clac del
+     magnetotermico, il disco che rallenta e si ferma), subito dopo le luci
+     (sfarfallano e si spengono). Il pubblico fa «Ohhhh», poi rumoreggia contro
+     il bidello: buuu, urla e fischi. Gerry litiga coi musicisti e li butta
+     fuori; alla fine il messaggio per il prossimo cambio palco. */
+  const LIGHTS_OFF = 0.55, OOH_AT = 0.7, BOO_AT = 1.8, BOO_END = 6.2, MSG_AT = 7.4, FINE_AT = 10;
   const TALK = [
-    [0.7, 'musa', 'Ehi! Eravamo sul più bello!'],
-    [2.3, 'gerry', 'Qui è una scuola! Basta parolacce!'],
-    [3.9, 'dj', 'Io sono INESTIMABILE!'],
-    [5.3, 'gerry', 'Fuori! Tutti e due!']
+    [1.3, 'musa', 'Ehi! Eravamo sul più bello!'],
+    [2.8, 'gerry', 'Qui è una scuola! Basta parolacce!'],
+    [4.3, 'dj', 'Io sono INESTIMABILE!'],
+    [5.7, 'gerry', 'Fuori! Tutti e due!']
   ];
+  // le luci restano accese un attimo dopo la musica, e prima di spegnersi sfarfallano
+  const finaleLit = () => {
+    const f = S.finale ? S.finale.f : 0;
+    if (f >= LIGHTS_OFF) return false;
+    return f < LIGHTS_OFF - 0.25 || Math.floor(f * 30) % 3 !== 0;
+  };
   function startFinale () {
     if (S.away) { S.away = null; S.capo = false; }
     for (let l = 0; l < NL; l++) { S.down[l] = false; S.holding[l] = null; }
     ['pop-par', 'pop-mute', 'pop-fader', 'choice', 'dmx-chip', 'quadro'].forEach(id => { $('#' + id).hidden = true; });
-    S.capo = false; paintPads();
+    S.capo = false;
     S.notes = S.notes.filter(n => n.state !== 'wait' || n.t < CUT);
-    S.finale = { f: 0, push: 0 };
-    S.colori = S.chase = S.strobe = 0; S.singing = false;
-    song.pause(); sfx.clack(); sfx.ooh();
+    S.finale = { f: 0, push: 0, cues: {} };
+    paintPads();
+    S.singing = false;
+    // la musica va via subito: il disco rallenta e si ferma
+    sfx.clack(); sfx.powerDown();
+    if (!clock.virtual) { try { song.preservesPitch = false; song.mozPreservesPitch = false; song.webkitPreservesPitch = false; } catch (e) {} }
     $('#toast').className = '';
     banner('Gerry ha staccato la corrente!');
   }
   function stepFinale (dt) {
     const F = S.finale;
     F.f += dt;
+    const once = (k, at, fn) => { if (F.f >= at && !F.cues[k]) { F.cues[k] = true; fn(); } };
+    // il disco rallenta per mezzo secondo, poi silenzio
+    if (!F.cues.stop) {
+      if (F.f < 0.5) { if (!clock.virtual) try { song.playbackRate = Math.max(0.25, 1 - F.f * 1.5); } catch (e) {} }
+      else { F.cues.stop = true; song.pause(); try { song.playbackRate = 1; } catch (e) {} }
+    }
+    once('lights', LIGHTS_OFF, () => { S.colori = S.chase = S.strobe = 0; sfx.clack(); });
+    once('ooh', OOH_AT, () => sfx.ooh());
+    once('boo', BOO_AT, () => sfx.boo(BOO_END - BOO_AT));
+    [2.1, 2.6, 3.4, 3.9, 4.8, 5.4].forEach((at, i) => once('w' + i, at, () => sfx.whistle()));
     const line = TALK.filter(l => F.f >= l[0]).pop();
     S.gerrySay = line && line[1] === 'gerry' ? line[2] : '';
     S.talk = line && line[1] !== 'gerry' ? { who: line[1], text: line[2] } : null;
-    if (F.f >= 5.3) F.push = Math.min(260, F.push + dt * 110);
+    if (F.f >= 5.7) F.push = Math.min(260, F.push + dt * 110);
+    if (F.f >= MSG_AT) { S.gerrySay = ''; S.talk = null; $('#stage-msg').hidden = false; }
     S.gerryX += (172 - S.gerryX) * Math.min(1, dt * 2.5);
-    if (F.f >= 8 && !S.over) finish();
+    if (F.f >= FINE_AT && !S.over) finish();
   }
 
   let bannerT;
@@ -1475,7 +1507,7 @@
     S.repParts.forEach(([what, v]) => notes.push(what + (v ? ` (${v > 0 ? '+' : ''}${v})` : '') + '.'));
     const rep = REPS.set + Math.round((R.grad - 60) / 10) + S.repParts.reduce((a, p) => a + p[1], 0);
     result = { type: 'dj', grad: R.grad, rep, beers, drunk: S.drunk, larsens: S.larsens, stars: R.stars, acc: Math.round(R.acc * 100),
-      maxCombo: R.maxCombo, score: R.score, favours: S.favours, fase: S.big ? S.big.who || 'gerry' : null, rewinds: S.rewinds, notes };
+      msg: 'Il bidello ha cacciato via i musicisti. Ora si può ripristinare il palco per l\'ultima band.', maxCombo: R.maxCombo, score: R.score, favours: S.favours, fase: S.big ? S.big.who || 'gerry' : null, rewinds: S.rewinds, notes };
     $('#outro-title').textContent = S.auto ? 'Così fa il capo.' : R.grad >= 75 ? 'La palestra è venuta giù!' : R.grad >= 45 ? 'Si è ballato.' : 'Il pubblico è andato al bar.';
     $('#r-stars').innerHTML = '★'.repeat(R.stars) + '<i>' + '★'.repeat(5 - R.stars) + '</i>';
     $('#r-grad').textContent = R.grad + '%';
@@ -1489,7 +1521,8 @@
   function start (auto) {
     S = fresh(auto);
     resize();
-    ['intro', 'outro', 'pausa', 'choice', 'quadro', 'pop-par', 'pop-mute', 'pop-fader', 'dmx-chip'].forEach(id => { $('#' + id).hidden = true; });
+    try { song.playbackRate = 1; } catch (e) {}
+    ['intro', 'outro', 'pausa', 'choice', 'quadro', 'pop-par', 'pop-mute', 'pop-fader', 'dmx-chip', 'stage-msg'].forEach(id => { $('#' + id).hidden = true; });
     $('#quadro').classList.remove('mini'); $('#rig').appendChild($('#quadro'));
     $('#pause-btn').textContent = '⏸';
     sfx.init();
@@ -1542,6 +1575,48 @@
       cheer () { noise(1.6, 0.12, 2200); },
       beer () { noise(0.5, 0.08, 3000); },
       ok () { tone(660, 0.1, 'triangle', 0.08); setTimeout(() => tone(990, 0.15, 'triangle', 0.08), 90); },
+      // la corrente che va via: un ronzio che scende e si spegne
+      powerDown () {
+        if (!ac) return;
+        const t0 = ac.currentTime;
+        [[110, 'sawtooth', 0.12], [55, 'sine', 0.25]].forEach(([f0, type, vol]) => {
+          const o = ac.createOscillator(), g = ac.createGain();
+          o.type = type; o.frequency.setValueAtTime(f0, t0); o.frequency.exponentialRampToValueAtTime(f0 * 0.25, t0 + 0.7);
+          o.connect(g).connect(ac.destination);
+          g.gain.setValueAtTime(vol, t0); g.gain.exponentialRampToValueAtTime(0.0001, t0 + 0.8);
+          o.start(t0); o.stop(t0 + 0.85);
+        });
+      },
+      // il pubblico che rumoreggia: «buuu» di tante voci e il brusio che sale e scende
+      boo (dur) {
+        if (!ac) return;
+        const t0 = ac.currentTime, f = ac.createBiquadFilter(), g = ac.createGain();
+        f.type = 'bandpass'; f.frequency.value = 380; f.Q.value = 2.5;
+        f.connect(g).connect(ac.destination);
+        g.gain.setValueAtTime(0.0001, t0); g.gain.exponentialRampToValueAtTime(0.16, t0 + 0.5);
+        g.gain.setValueAtTime(0.16, t0 + dur - 1); g.gain.exponentialRampToValueAtTime(0.0001, t0 + dur);
+        for (let i = 0; i < 10; i++) {
+          const o = ac.createOscillator(); o.type = 'sawtooth';
+          const f0 = 105 + Math.random() * 70, st = t0 + Math.random() * 0.4;
+          o.frequency.setValueAtTime(f0, st);
+          // ogni «buuu» scende un po' e riparte
+          for (let k = 0.9; k < dur; k += 0.9 + Math.random() * 0.4) { o.frequency.linearRampToValueAtTime(f0 * 0.85, t0 + k - 0.1); o.frequency.setValueAtTime(f0, t0 + k); }
+          o.connect(f); o.start(st); o.stop(t0 + dur + 0.1);
+        }
+        const n = noise(dur, 0.06, 900);
+        if (n) n.Q.value = 0.6;
+      },
+      // un fischio con le dita: sale, trema e scende
+      whistle () {
+        if (!ac) return;
+        const t0 = ac.currentTime, o = ac.createOscillator(), g = ac.createGain(), lfo = ac.createOscillator(), lg = ac.createGain();
+        const f0 = 2200 + Math.random() * 700;
+        o.frequency.setValueAtTime(f0 * 0.8, t0); o.frequency.linearRampToValueAtTime(f0 * 1.15, t0 + 0.15); o.frequency.linearRampToValueAtTime(f0, t0 + 0.45); o.frequency.linearRampToValueAtTime(f0 * 0.7, t0 + 0.7);
+        lfo.frequency.value = 9; lg.gain.value = 40; lfo.connect(lg).connect(o.frequency);
+        o.connect(g).connect(ac.destination);
+        g.gain.setValueAtTime(0.0001, t0); g.gain.exponentialRampToValueAtTime(0.07, t0 + 0.05); g.gain.setValueAtTime(0.07, t0 + 0.5); g.gain.exponentialRampToValueAtTime(0.0001, t0 + 0.75);
+        o.start(t0); lfo.start(t0); o.stop(t0 + 0.8); lfo.stop(t0 + 0.8);
+      },
       // il pubblico che fa «Ohhhh»: tante voci che scendono, filtrate come una vocale
       ooh () {
         if (!ac) return;

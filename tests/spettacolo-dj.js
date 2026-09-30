@@ -108,14 +108,25 @@ const path = require('path');
   check(cut < M.durata - 2, 'Gerry stacca troppo tardi: ' + cut);
   await goTo(cut - 0.05);
   check(!(await ev(() => __dj.state().finale)), 'la corrente va via prima del taglio');
-  await ev(() => __dj.advance(0.2));
-  st = await ev(() => ({ fin: !!__dj.state().finale, dark: +document.querySelector('#dark').getAttribute('opacity'), beams: [...document.querySelectorAll('#beams path')].map(b => +b.getAttribute('opacity')), pads: [...document.querySelectorAll('.pad')].length }));
-  check(st.fin && st.dark > 0.4 && st.beams.every(o => o === 0), 'al taglio non va via tutto: ' + JSON.stringify(st));
+  // prima va via la musica, le luci restano un attimo; poi si spengono anche loro
+  const lights = () => ev(() => ({ fin: !!__dj.state().finale, f: __dj.state().finale && __dj.state().finale.f, dark: +document.querySelector('#dark').getAttribute('opacity'), beams: [...document.querySelectorAll('#beams path')].map(b => +b.getAttribute('opacity')), pads: [...document.querySelectorAll('.pad')].length }));
+  await ev(() => __dj.advance(0.15));
+  st = await lights();
+  check(st.fin && st.dark === 0 && st.beams.some(o => o > 0), 'al taglio le luci vanno via insieme alla musica: ' + JSON.stringify(st));
   check(st.pads === 3 && !(await p.$('.pad[data-l="3"]')), 'c\'è ancora un quarto tasto (BLACKOUT)');
-  await ev(() => __dj.advance(3));
-  st = await ev(() => ({ talk: __dj.state().talk, say: __dj.state().gerrySay }));
+  await ev(() => __dj.advance(0.8));
+  st = await lights();
+  check(st.dark > 0.4 && st.beams.every(o => o === 0), 'dopo la musica le luci non si spengono: ' + JSON.stringify(st));
+  // il pubblico rumoreggia contro il bidello: pugni alzati; e intanto si litiga
+  await ev(() => __dj.advance(1.8));
+  st = await ev(() => ({ arms: [...document.querySelectorAll('#crowd > g > path, #crowd2 > g > path')].filter(a => +a.getAttribute('opacity') === 1).length, talk: __dj.state().talk, say: __dj.state().gerrySay }));
+  check(st.arms > 30, 'il pubblico non rumoreggia contro il bidello: ' + st.arms + ' pugni alzati');
   check(st.talk || st.say, 'dopo il taglio nessuno litiga: ' + JSON.stringify(st));
-  await ev(() => __dj.advance(6));
+  // in fondo il messaggio per il prossimo cambio palco, sul palco e nella scheda finale
+  await ev(() => __dj.advance(4.9));
+  st = await ev(() => ({ msg: !document.querySelector('#stage-msg').hidden && document.querySelector('#stage-msg').textContent, over: __dj.state().over }));
+  check(st.msg && /cacciato via i musicisti.*ultima band/.test(st.msg) && !st.over, 'manca il messaggio finale sul palco: ' + JSON.stringify(st));
+  await ev(() => __dj.advance(3));
   let R = await ev(() => ({ r: __dj.result(), s: (({ miss, stray, perfect, lost, dropHeld, drops, holdsBroken, over, rewinds, larsens }) => ({ miss, stray, perfect, lost, dropHeld, drops, holdsBroken, over, rewinds, larsens }))(__dj.state()) }));
   check(R.s.over && R.r, 'la demo non finisce');
   check(R.s.miss === 0 && R.s.stray === 0 && R.s.holdsBroken === 0, 'la demo sbaglia: ' + JSON.stringify(R.s));
@@ -125,6 +136,7 @@ const path = require('path');
   check(R.s.larsens === 0 && R.r.beers === 2, 'la demo: larsen o birre sbagliati ' + JSON.stringify(R.r));
   check(R.r.rep === 5 + 4 + 1 + 5 + 3 + 1 + 1, 'reputazione della demo: ' + R.r.rep);
   await p.waitForSelector('#outro:not([hidden])', { timeout: 3000 }).catch(() => problems.push('niente scheda finale'));
+  check(/cacciato via i musicisti/.test(await p.textContent('#outro-msg')) && /ultima band/.test(R.r.msg || ''), 'la scheda finale non dice che si ripristina il palco');
 
   // ---- guasti a mano: fader DJ a tempo, poi il guasto grosso: ci vai tu ----
   await open();

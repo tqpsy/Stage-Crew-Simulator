@@ -144,7 +144,7 @@ const path = require('path');
   check(g.dj && g.dj.grad === res.grad && g.dj.stars === res.stars && g.dj.fase === 'tu', 'esito non salvato: ' + JSON.stringify(g.dj));
   check(g.rep === rep0 + res.rep && g.earned.length === 1, 'reputazione dello show: ' + rep0 + ' -> ' + g.rep + ' (esito ' + res.rep + ')');
   check(g.beers === 3 - res.drunk + res.beers, 'birre dopo lo show: ' + g.beers + ' (esito ' + JSON.stringify({ drunk: res.drunk, beers: res.beers }) + ')');
-  check(!g.open && /Gerry ha staccato la corrente/.test(g.toast), 'dopo lo show: ' + JSON.stringify({ open: g.open, toast: g.toast }));
+  check(!g.open && /cacciato via i musicisti.*ultima band/.test(g.toast), 'dopo lo show: ' + JSON.stringify({ open: g.open, toast: g.toast }));
   const sched2 = await ev(() => { renderSchedule(); return el('#schedule-list').textContent; });
   check(/done/.test(await ev(() => document.querySelectorAll('#schedule-list .sched-row')[7].className)) && /★/.test(sched2), 'la scaletta non segna il DJ set fatto: ' + sched2);
   check(await ev(() => /DJ set finito/.test(el('#foglio .fg-head').textContent)), 'il foglio non dice DJ set finito');

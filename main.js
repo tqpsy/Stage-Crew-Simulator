@@ -3006,7 +3006,7 @@ function finishDj (r) {
   applySettings();
   const p = Profile.data.dj;
   showToast(skipped ? 'DJ set saltato: la musica c\'è stata lo stesso, ma la reputazione non cambia.'
-    : 'Gerry ha staccato la corrente: il DJ set è finito. Pubblico al ' + p.grad + '%.' + (rep ? ' Reputazione ' + (rep > 0 ? '+' : '') + rep + '.' : '')
+    : 'Il bidello ha cacciato via i musicisti. Ora si può ripristinare il palco per l\'ultima band. Pubblico al ' + p.grad + '%.' + (rep ? ' Reputazione ' + (rep > 0 ? '+' : '') + rep + '.' : '')
       + (beers ? ' 🍺 +' + beers + '.' : ''), skipped || p.grad >= 40 ? 'ok' : undefined);
   updateFoglio();
 }
@@ -4786,7 +4786,8 @@ function updateFoglio () {
   } else if (djDone()) {
     icon = '🎧 ';
     head = 'DJ set finito';
-    body = '<p class="fg-note">' + escapeHtml(djSummary()) + ' Alle 22:00 Dante unplugged arriva presto.</p>';
+    body = '<p class="fg-note">Il bidello ha cacciato via i musicisti. Ora si può ripristinare il palco per l\'ultima band (Dante unplugged, alle 22:00: arriva presto).</p>'
+      + '<p class="fg-note">' + escapeHtml(djSummary()) + '</p>';
   } else if (caviDone() && !presideDone()) {
     // il discorso del preside: pronto se il microfono è cablato
     const missing = presideReady();
