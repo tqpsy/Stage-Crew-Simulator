@@ -176,6 +176,16 @@ const INTF_ISO  = isoFrame(46, 30, 12);   // scheda audio USB da tavolo
 // consolle del DJ: flight case a banco largo lungo b (fronte a=0 verso il
 // pubblico, il DJ sta dietro, sul lato +a), sopra due lettori e il mixer DJ
 const DJ_ISO    = isoFrame(46, 96, 30);
+/* stativo luci del DJ (lo porta lui, già montato): treppiede, asta più alta
+   di quella del service e una barra orizzontale lunga (lungo b) con sopra
+   quattro PAR LED cinesi e una strobo LED in mezzo, rivolti al pubblico
+   (-a). I fari sono già cablati tra loro sulla barra: si danno una spina
+   Schuko e un solo DMX. */
+const DJLUCI_ISO  = isoFrame(40, 40, 3);
+const DJLUCI_POLE = 80;                     // px: asta fino alla barra
+const DJLUCI_HEADS = [-36, -21, 21, 36];    // b dei 4 PAR rispetto al centro della barra
+// centro della lente di un faro della barra (db: spostamento lungo la barra)
+function djLuciLens (db) { return DJLUCI_ISO(DJLUCI_ISO.A / 2 - 4, DJLUCI_ISO.B / 2 + db, DJLUCI_POLE + 7); }
 
 // la testa sta sul sub: il fondo del suo palo tocca il centro del piano del sub
 function isoDepth (screenY) { return 10 + screenY / 10000; }
@@ -445,6 +455,18 @@ const COMPONENT_TYPES = {
       { id: 'out_R', signal: 'jack',   dir: 'out', ...isoPort(DJ_ISO, 20, 96, 20) }
     ]
   },
+  // stativo luci del DJ: 4 PAR LED e la strobo sulla barra, già montati,
+  // indirizzati e collegati tra loro (corrente e DMX in catena sulla barra).
+  // Dal fondo dell'asta escono la spina Schuko e l'unico DMX IN.
+  djluci: {
+    label: 'LUCI DJ', category: 'dj', powerW: 220, zone: 'stage', shape: 'djluci',
+    body: { w: 60, h: 40, fill: 0x17181c, accent: 0xff3fb4 },
+    ledPos: DJLUCI_ISO(20, 20, 30),
+    ports: [
+      { id: 'power',  signal: 'schuko', dir: 'in', lead: true, ...isoPort(DJLUCI_ISO, 20, 26, 8) },
+      { id: 'dmx_in', signal: 'dmx',    dir: 'in', ...isoPort(DJLUCI_ISO, 20, 14, 8) }
+    ]
+  },
   // ciabatta con spina CEE 230V blu già attaccata (va in una presa del
   // Quadro) e 4 prese Schuko. Anche qui il cavo fa parte della ciabatta.
   ciabatta_cee: {
@@ -465,7 +487,8 @@ const COMPONENT_TYPES = {
 // la DI non serve al montaggio (il PC entra nel mixer dalla scheda audio):
 // la usa il DJ al cambio palco. La consolle DJ non è del service, la porta
 // il DJ: si vede nella scheda DJ solo da quando parte il cambio palco.
-const AVAILABLE_STOCK = { sub: 2, top: 2, mixer: 1, asta: 1, mic: 1, stativo: 4, par: 4, controller: 1, ampli: 1, quadro: 1, ciabatta: 1, ciabatta_cee: 1, pc: 1, scheda: 1, di: 1, tavolo: 1, dj: 1 };
+// Anche il suo stativo luci (4 PAR e la strobo sulla barra) è suo.
+const AVAILABLE_STOCK = { sub: 2, top: 2, mixer: 1, asta: 1, mic: 1, stativo: 4, par: 4, controller: 1, ampli: 1, quadro: 1, ciabatta: 1, ciabatta_cee: 1, pc: 1, scheda: 1, di: 1, tavolo: 1, dj: 1, djluci: 1 };
 
 const POWER_LIMIT_KW = 3.0;
 const TOP_ATTACH_RADIUS = 300; // px: quanto lontano può essere trascinata una Testa da un Sub libero
@@ -1389,6 +1412,20 @@ function dmxOverlaps () {
     }
   }
   return clashes;
+}
+/* le luci del DJ sono già indirizzate da lui e non si toccano: 4 PAR da 3
+   canali (RGB) dall'indirizzo 1 e la strobo (dimmer e velocità) in fondo,
+   canali 1-14. Vanno su un universo dove nessun PAR del service li pesta:
+   di solito il secondo, libero. */
+const DJ_LUCI_DMX = { from: 1, to: 14 };
+// PAR del service che si accavallano con la barra del DJ (stesso universo)
+function djLuciClashes (bar) {
+  const u = bar && dmxUniverse(bar.id);
+  if (u == null) return [];
+  return placedOfType('par').filter(c => {
+    const d = parDmx(c), n = parseInt(PAR_MODES[d.mode].id, 10);
+    return dmxUniverse(c.id) === u && d.addr <= DJ_LUCI_DMX.to && DJ_LUCI_DMX.from <= d.addr + n - 1;
+  });
 }
 
 /* Un cavo appena creato collegherebbe fromId (lato OUT) -> toId (lato IN).
@@ -2838,12 +2875,19 @@ function cambioChecks () {
   const L = djRoute(dj, 'L'), R = djRoute(dj, 'R');
   const fed = !!(dj && wiredToQuadro(dj.id));
   const mic = micChannel();
+  // le luci del DJ: stativo con 4 PAR e la strobo, una spina e un DMX
+  const bar = placedOfType('djluci')[0], ctrl = placedOfType('controller')[0];
+  const barFed = !!(bar && wiredToQuadro(bar.id)), u = bar ? dmxUniverse(bar.id) : null, clash = djLuciClashes(bar);
   const list = [
     { ok: !!dj, what: 'Consolle del DJ sul palco', ids: [], kind: 'place' },
     { ok: fed && isRunning(dj.id), what: 'Corrente alla consolle, accesa', ids: ids([dj]), kind: fed ? 'on' : 'power' },
     { ok: dis.length > 0, what: 'Una DI accanto alla consolle', ids: [], kind: 'place' },
     { ok: !!(L.di && R.di), what: 'MASTER L e R della consolle nella DI (jack)', ids: ids([dj, ...dis]), kind: 'wire' },
     { ok: !!(L.ch && R.ch), what: 'Dalla DI due XLR nel mixer' + (L.ch && R.ch ? ' (CH ' + L.ch + ' e CH ' + R.ch + ')' : ', negli ingressi MIC liberi'), ids: ids([...dis, mixer]), kind: 'wire' },
+    { ok: !!bar, what: 'Stativo luci del DJ sul palco (4 PAR e strobo)', ids: [], kind: 'place' },
+    { ok: barFed && isRunning(bar.id), what: 'Corrente alle luci del DJ', ids: ids([bar]), kind: 'lpower' },
+    { ok: u != null && !clash.length, what: 'DMX dalla consolle luci alle luci del DJ' + (u != null ? ' (universo ' + u + ')' : ''),
+      ids: ids([bar, u != null ? null : ctrl, ...clash]), kind: clash.length ? 'laddr' : 'ldmx' },
     { ok: !!mic, what: 'Microfono per Musa Esistenziale' + (mic ? ' (CH ' + mic + ')' : ' collegato al mixer'), ids: ids(placedOfType('mic')), kind: 'mic' }
   ];
   // nel cambio non si deve rompere quello che il collaudo ha promosso
@@ -2888,7 +2932,7 @@ function startCambioDj () {
 function openCambioCard () {
   const c = cambioDj();
   cambioCardOpen = true;
-  el('#cambio-text').innerHTML = '<p><span class="who">DJ Inestimabile</span> arriva con la consolle sotto il braccio, dietro di lui <span class="who">Musa Esistenziale</span>, già a petto nudo. «Dove la metto? Voglio la corrente e il mio suono nell\'impianto, subito!»</p>'
+  el('#cambio-text').innerHTML = '<p><span class="who">DJ Inestimabile</span> arriva con la consolle sotto il braccio, dietro di lui <span class="who">Musa Esistenziale</span>, già a petto nudo, con in spalla lo stativo delle luci del DJ: quattro PAR e una strobo già montati sulla barra. «Dove la metto? Voglio la corrente, il mio suono nell\'impianto e le mie luci sul DMX, subito!»</p>'
     + '<p>Hai ' + Math.round(c.patienceMs / 60000) + ' minuti prima che il pubblico perda la pazienza. '
     + (c.micCh ? 'Il microfono del preside resta sul CH ' + c.micCh + ': ora è di Musa.' : 'Il microfono va collegato al mixer: serve a Musa.') + '</p>';
   el('#cambio-list').innerHTML = [
@@ -2897,6 +2941,8 @@ function openCambioCard () {
     'Una DI accanto alla consolle (scheda Regia)',
     'MASTER L e R nei due ingressi della DI, con due jack',
     'Dalla DI due XLR in due ingressi MIC liberi del mixer',
+    'Il suo stativo luci sul palco (4 PAR e la strobo già sulla barra): una spina Schuko',
+    'Un DMX dalla consolle luci alla barra: è indirizzata dal ' + DJ_LUCI_DMX.from + ' al ' + DJ_LUCI_DMX.to + ', non pestare i PAR',
     'Accendi la consolle e premi PRONTI'
   ].map(t => '<li>' + escapeHtml(t) + '</li>').join('');
   el('#cambio-modal').classList.add('show');
@@ -3275,7 +3321,10 @@ const REAR_PANELS = {
     sections: [['INPUT', [['in_1', 'CH1 IN'], ['in_2', 'CH2 IN']]], ['OUTPUT', [['out_1', 'CH1 OUT'], ['out_2', 'CH2 OUT']]]] },
   // retro del mixer DJ: uscite master e la spina della ciabattina del DJ
   dj: { style: 'desk', accent: true, power: true, serial: 'DJ MIXER 2 CANALI + 2 LETTORI  ·  «NOTTE FUORI CONTROLLO»',
-    sections: [['MASTER OUT', [['out_L', 'MASTER L'], ['out_R', 'MASTER R']]], ['ALIMENTAZIONE', [['power', 'SPINA']]]] }
+    sections: [['MASTER OUT', [['out_L', 'MASTER L'], ['out_R', 'MASTER R']]], ['ALIMENTAZIONE', [['power', 'SPINA']]]] },
+  // piede dello stativo luci del DJ: la spina e il DMX del primo faro della barra
+  djluci: { style: 'desk', accent: true, serial: 'T-BAR  ·  4 × LED PAR 18 × 3 W RGB + STROBO LED  ·  DMX ' + DJ_LUCI_DMX.from + '–' + DJ_LUCI_DMX.to,
+    sections: [['ALIMENTAZIONE', [['power', 'SPINA']]], ['DMX 512', [['dmx_in', 'DMX IN']]]] }
 };
 // tutte le sezioni di un pannello, qualunque sia la disposizione
 function panelSections (panel) { return panel.rows ? panel.rows.flat() : panel.sections; }
@@ -4034,6 +4083,19 @@ function traceChain (compId) {
     }
     return { title: 'DJ', steps };
   }
+  // le luci del DJ: corrente alla barra, poi il DMX dalla consolle luci
+  if (comp.type === 'djluci') {
+    const ct = placedOfType('controller')[0];
+    if (add([comp.id], compLabel(comp.id), isRunning(comp.id), whyDown(comp))) {
+      if (!ct) add([], typeLabel('controller'), false, 'da posare');
+      else if (add([ct.id], compLabel(ct.id), isRunning(ct.id), whyDown(ct))) {
+        const clash = djLuciClashes(comp);
+        if (add([comp.id], 'DMX', dmxUniverse(comp.id) != null, 'la barra non sente la consolle luci'))
+          add(clash.map(c => c.id), 'Indirizzi', !clash.length, 'canali ' + DJ_LUCI_DMX.from + '-' + DJ_LUCI_DMX.to + ' già usati dai PAR su questo universo');
+      }
+    }
+    return { title: 'Luci DJ', steps };
+  }
   // corrente: dal dispositivo si risale fino all'allaccio
   const up = [];
   for (let c = comp, n = 0; c && n < 10; n++) {
@@ -4480,7 +4542,8 @@ const PIECE_INFO = {
   par: ['Faro PAR a LED: prende corrente (PowerCON) e comandi (DMX) e li passa al faro dopo, in catena.', 'Si monta su uno stativo.'],
   controller: ['Consolle luci DMX: comanda i PAR col cavo DMX, su due universi.', 'Va sul tavolo regia.'],
   di: ['DI box passiva a 2 canali: trasforma due uscite jack (sbilanciate) in due XLR bilanciati per gli ingressi MIC del mixer. Al montaggio non serve: la usa il DJ.', 'Sul palco accanto a chi suona, in Off Stage o in FOH.'],
-  dj: ['La consolle di DJ Inestimabile: due lettori e il mixer DJ. Ha la sua spina Schuko; le uscite MASTER L e R (jack) vanno in una DI, e dalla DI due XLR al mixer di sala.', 'Va sul palco.']
+  dj: ['La consolle di DJ Inestimabile: due lettori e il mixer DJ. Ha la sua spina Schuko; le uscite MASTER L e R (jack) vanno in una DI, e dalla DI due XLR al mixer di sala.', 'Va sul palco.'],
+  djluci: ['Lo stativo luci del DJ: quattro PAR LED cinesi e una strobo LED in mezzo, già montati sulla barra e collegati tra loro. Servono una spina Schuko e un solo DMX dalla consolle luci; i fari sono già indirizzati (canali ' + DJ_LUCI_DMX.from + '-' + DJ_LUCI_DMX.to + ').', 'Va sul palco, dietro la consolle.']
 };
 function showPieceInfo (type, pieceEl) {
   const info = PIECE_INFO[type];
@@ -4826,7 +4889,7 @@ function screenToCell (px, py) {
    scambia. I pezzi montati (testa, PAR) non occupano celle. */
 const FOOTPRINT = {
   sub: [1, 1], mixer: [1, 2], ampli: [1, 2], tavolo: [2, 6], controller: [1, 1], quadro: [1, 2],
-  ciabatta: [1, 2], ciabatta_cee: [1, 3], pc: [1, 1], scheda: [1, 1], di: [1, 1], stativo: [1, 1], asta: [1, 1], dj: [2, 1]
+  ciabatta: [1, 2], ciabatta_cee: [1, 3], pc: [1, 1], scheda: [1, 1], di: [1, 1], stativo: [1, 1], asta: [1, 1], dj: [2, 1], djluci: [1, 1]
 };
 function footprint (type, rot) {
   const f = FOOTPRINT[type] || [1, 1];
@@ -4898,6 +4961,8 @@ const ZONE_PREDICATES = {
   di: (cx, cy) => isStageCell(cx, cy) || isFohCell(cx, cy),
   // la consolle del DJ sta sulla pedana, dove suona
   dj: isStageCoreCell,
+  // anche il suo stativo luci, alle spalle della consolle
+  djluci: isStageCoreCell,
   // la scheda audio sta sul tavolo accanto al PC
   scheda: (cx, cy) => isFohCell(cx, cy) || isOffStageCell(cx, cy)
 };
@@ -5931,6 +5996,47 @@ class StageScene extends Phaser.Scene {
         });
         k.quadZ(Z + 4, 8, 9, 42, 54, 0x0c0d10);
         k.quadZ(Z + 4, 7.5, 9.5, 47, 49, 0xdcdfe4);                      // crossfader
+        break;
+      }
+      case 'djluci': {
+        // stativo luci del DJ: treppiede, asta alta e barra lunga con sopra
+        // quattro PAR LED (scatolette nere con la lente) e la strobo in mezzo,
+        // tutti verso il pubblico (faccia a=0). I cavi scendono lungo l'asta.
+        const P = DJLUCI_ISO, k = this.isoKit(g, P);
+        const A = P.A / 2, B = P.B / 2, H = DJLUCI_POLE;
+        const c0 = P(A, B, 0);
+        k.discZ(0, A, B, 20, 0x000000, 0.25);                                     // ombra
+        g.lineStyle(3, 0x1c1d22, 1);
+        [[A, 0], [0, P.B], [P.A, P.B]].forEach(([a, b]) => {
+          const f = P(a, b, 0);
+          g.lineBetween(c0.x, c0.y - 14, f.x, f.y);                               // gambe
+          g.fillStyle(0x0c0d10, 1); g.fillCircle(f.x, f.y, 2.2);
+        });
+        g.fillStyle(0x2a2c32, 1); g.fillRect(c0.x - 2.5, c0.y - H, 5, H - 12);   // asta
+        g.fillStyle(0x55585f, 1); g.fillRect(c0.x - 2.5, c0.y - H, 1.4, H - 12);
+        g.fillStyle(0x3a3d45, 1); g.fillRect(c0.x - 4, c0.y - 32, 8, 5);          // serraggio
+        g.lineStyle(1.4, 0x0c0d10, 0.9); g.lineBetween(c0.x + 2.5, c0.y - H + 2, c0.x + 3.5, c0.y - 10); // cavi lungo l'asta
+        const b0 = P(A, B - 44, H), b1 = P(A, B + 44, H);                         // barra
+        g.lineStyle(4, 0x1c1d22, 1); g.lineBetween(b0.x, b0.y, b1.x, b1.y);
+        g.lineStyle(1, 0x6a6e78, 1); g.lineBetween(b0.x, b0.y - 1.5, b1.x, b1.y - 1.5);
+        // i fari: prima quelli lontani (b piccolo), così i vicini li coprono
+        DJLUCI_HEADS.forEach(db => {
+          const bc = B + db;
+          k.box(A - 4, A + 5, bc - 1, bc + 1, H, H + 3, ISO_GREY);                // staffa
+          k.box(A - 4, A + 6, bc - 5.5, bc + 5.5, H + 1.5, H + 12.5, ISO_BLACK);
+          k.discA(A - 4, bc, H + 7, 4.6, 0x0c0d10);                               // ghiera
+          k.discA(A - 4, bc, H + 7, 3.6, 0x3b3423);                               // lente coi LED
+          [[0, 0], [1.8, 1], [-1.8, 1], [0, -1.9]].forEach(([x, z]) => {
+            const q = P(A - 4, bc + x, H + 7 + z);
+            g.fillStyle(0xf6e7a8, 0.9); g.fillCircle(q.x, q.y, 0.7);
+          });
+        });
+        // strobo LED: scatola larga e bassa, pannello bianco lattiginoso
+        k.box(A - 3, A + 5, B - 9, B + 9, H + 1.5, H + 9, ISO_BLACK);
+        k.quadA(A - 3, B - 8, B + 8, H + 2.5, H + 8, 0xd8dbe0);
+        g.lineStyle(0.6, 0x9aa0aa, 0.8);
+        [-4, 0, 4].forEach(x => { const q0 = P(A - 3, B + x, H + 2.5), q1 = P(A - 3, B + x, H + 8); g.lineBetween(q0.x, q0.y, q1.x, q1.y); });
+        k.quadA(A - 3, B + 5, B + 8, H + 9, H + 9.8, def.body.accent);           // marchio sul bordo
         break;
       }
       case 'di': {
@@ -7106,6 +7212,9 @@ class StageScene extends Phaser.Scene {
       power: 'la consolle non ha corrente.',
       on: 'la consolle è spenta: accendila dal suo pannello.',
       wire: 'la sua musica non arriva al mixer: segui i cavi dalla consolle alla DI e dalla DI al mixer.',
+      lpower: 'le sue luci sono spente: la barra non ha corrente.',
+      ldmx: 'le sue luci non sentono la consolle luci: manca il DMX alla barra.',
+      laddr: 'le sue luci impazziscono insieme ai PAR: sono sullo stesso universo e negli stessi canali.',
       mic: 'Musa Esistenziale non ha un microfono collegato al mixer.',
       rig: 'nel cambio si è perso qualcosa dell\'impianto' + (miss.lost ? ': ' + miss.lost + '.' : '.')
     }[miss.kind];
@@ -7115,7 +7224,8 @@ class StageScene extends Phaser.Scene {
     saveLevel();
     showToast('DJ Inestimabile non può attaccare: ' + hint + exact, 'bad');
     if (miss.kind === 'wire' || miss.kind === 'mic') this.fxCrackle();
-    else if (miss.kind === 'power') this.fxSparks();
+    else if (miss.kind === 'power' || miss.kind === 'lpower') this.fxSparks();
+    else if (miss.kind === 'laddr') this.fxLightsTilt();
   }
 
   /* ---------------- TEST IMPIANTO: collaudo tecnico (potenza + segnale + PC di
@@ -7318,6 +7428,16 @@ class StageScene extends Phaser.Scene {
     if (this.fx) return;
     this.parBeamGeometry(placedOfType('par').filter(c => isRunning(c.id) && this.compVisuals[c.id]))
       .forEach(b => this.drawParBeam(g, b, 0xffe9c4, 0.5));
+    // luci del DJ con corrente e DMX: i quattro PAR accesi coi loro colori
+    // (la strobo resta ferma finché non la comanda l'operatore luci)
+    placedOfType('djluci').filter(c => isRunning(c.id) && dmxUniverse(c.id) != null && this.compVisuals[c.id]).forEach(c => {
+      const v = this.compVisuals[c.id].container;
+      [0xff3fb4, 0x3b8bff, 0x3bffb0, 0xffb13b].forEach((col, i) => {
+        const q = djLuciLens(DJLUCI_HEADS[i]);
+        g.fillStyle(col, 0.25); g.fillCircle(v.x + q.x, v.y + q.y, 8);
+        g.fillStyle(col, 0.7); g.fillCircle(v.x + q.x, v.y + q.y, 3.4);
+      });
+    });
   }
   /* fascio di un PAR LED: è un wash, luce ampia e morbida. Cono largo che
      sfuma verso i bordi (strati sovrapposti, niente contorni netti) e una
