@@ -5755,6 +5755,9 @@ class StageScene extends Phaser.Scene {
     g.setInteractive(new Phaser.Geom.Rectangle(0, 0, GAME_W, GAME_H), Phaser.Geom.Rectangle.Contains);
     g.on('pointerdown', pointer => {
       if (pointer.rightButtonDown()) return;
+      // Phaser sente anche i tocchi sui pulsanti sopra la scena (zoom, ⤢):
+      // non sono tocchi sul pavimento e non devono far cadere il cavo in mano
+      if (pointer.downElement && pointer.downElement !== this.game.canvas) return;
       this.floorDown = { x: pointer.x, y: pointer.y, moved: false };
     });
     g.on('pointerup', pointer => {
