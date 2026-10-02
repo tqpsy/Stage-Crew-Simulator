@@ -174,7 +174,8 @@
         <li>Fino a 25 kg il case si porta in mano. Quelli più pesanti si spingono: partono piano e si fermano piano.</li>
         <li>I bauli con le ruote sulla rampa scappano. Se li lasci andare, vanno da soli.</li>
         <li>Sopra ogni case c'è la barra del suo stato. Se il case si accende di rosso stai andando troppo forte per quanto è fragile: un urto adesso lo danneggia. Rallenta (Shift, o joystick poco inclinato).</li>
-        <li>Tonino, se non lo chiami, porta da solo i case leggeri, ma non la valigetta del PC e i PAR: quelli sono tuoi. Rack regia e baule CORRENTE si spingono in due: premi <b>AIUTO</b> e arriva. Ti segue con un attimo di ritardo, quindi curva largo.</li>
+        <li>Tonino, se non lo chiami, porta da solo i case leggeri, ma non la valigetta del PC e i PAR: quelli sono tuoi. Rack regia e baule CORRENTE si spingono in due: premi <b>AIUTO</b> e arriva. Ti segue con un attimo di ritardo, quindi curva largo. Da solo vai piano e il case sbanda.</li>
+        <li>Un case lasciato fermo nella sua zona resta frenato: urtandolo non si sposta. Per spostarlo di nuovo, riprendilo.</li>
         <li>Quando spingi un case contro il gradino della palestra, Tonino conta «uno, due, ISSA!»: premi <b>OH-ISSA</b> sull'ISSA e il case passa.</li>
       </ul>
       <div class="legend" id="start-legend"></div>
@@ -227,6 +228,7 @@ const CAT = { WALL: 1, CASE: 2, WORKER: 4, STEP: 8, NPC: 16, DOLLY: 32 };
 const DOOR_X = 400;                    // portellone del furgone
 const RAMP = { x: 400, y: 445, w: 120, h: 110 };
 const GYM_X = 1160;                    // muro della palestra (porta con gradino)
+const SHOVE_VMAX = 0.45;               // a mani vuote contro un case: si sposta appena
 const STEP_BAND = { y1: 450, y2: 550 };
 const WORLD = { x1: -170, y1: 60, x2: 1900, y2: 940 };
 
@@ -495,6 +497,8 @@ function grab (w, ce) {
   if (ce.tipped) { if (w === G.player) toast('È ribaltato: OH-ISSA per tirarlo su (in due se pesa più di 45 kg).', 'warn'); return false; }
   if (ce.stuck) { if (w === G.player) toast('Il cavo è incastrato nella ruota: tieni premuto PRENDI per liberarlo.', 'warn'); return false; }
   if (ce.carrier) return false;
+  if (carriable(ce) && ce.grabbers.length) return false;
+  unpark(ce);
   if (carriable(ce)) {
     if (ce.grabbers.length) return false;
     const dir = norm(sub(ce.body.position, w.body.position));
@@ -514,6 +518,22 @@ function grab (w, ce) {
   }
   refreshFilter(ce);
   return true;
+}
+/* Un case lasciato fermo nella SUA zona si «parcheggia»: freni tirati, non
+   lo sposta più nessuno urtandolo (prima bastava sfiorarlo per far partire
+   un effetto flipper fra Pit, Palco e Backstage, che sono attaccati).
+   Riprendendolo con PRENDI si sblocca. */
+function park (ce) {
+  if (ce.parked || !Body) return;
+  ce.parked = true;
+  Body.setVelocity(ce.body, { x: 0, y: 0 }); Body.setAngularVelocity(ce.body, 0);
+  Body.setStatic(ce.body, true);
+}
+function unpark (ce) {
+  if (!ce.parked) return;
+  ce.parked = false;
+  Body.setStatic(ce.body, false);
+  Body.setMass(ce.body, ce.def.kg);
 }
 function release (w, why) {
   const ce = w.grab; if (!ce) return;
@@ -582,6 +602,7 @@ function kidHit (k) {
   toast('Hai preso un bambino con un case: −1 reputazione.', 'bad');
 }
 function tip (ce) {
+  unpark(ce);
   ce.tipped = true;
   for (const w of [...ce.grabbers]) release(w);
   damage(ce, 18 * FRAG[ce.def.frag].mult, 'ribaltato');
@@ -868,6 +889,17 @@ function updatePlayer (dt) {
   if (P.mode === 'carry') vmax *= clamp(1 - P.grab.def.kg / 90, 0.6, 1);
   if (P.mode === 'carry' && P.grab.def.frag === 'altissima') vmax = Math.min(vmax, 2.0);
   if (inp.slow) vmax *= 0.5;
+  // a mani vuote contro un case: lo sposti appena, a spallate non conviene
+  if (!P.grab) {
+    const ce = nearestCase(P, 4);
+    if (ce && !ce.parked && !ce.carrier && !ce.grabbers.length && len(dir) > 0.1) {
+      const to = norm(sub(ce.body.position, P.body.position));
+      if (to.x * dir.x + to.y * dir.y > 0.3) {
+        vmax = Math.min(vmax, SHOVE_VMAX * clamp(30 / ce.def.kg, 0.35, 1));
+        if (!G.shoveHint && G.mode === 'play') { G.shoveHint = true; toast('A spallate non si sposta: prendilo con PRENDI.'); }
+      }
+    }
+  }
   drive(P, dir, vmax);
   if (len(dir) > 0.1 && P.mode !== 'push') turnTo(P, Math.atan2(dir.y, dir.x), P.mode === 'carry' ? 0.075 : 0.35);
   if (P.mode === 'push' && P.con) { const a = add(P.grab.body.position, P.con.pointB); P.facing = Math.atan2(a.y - P.body.position.y, a.x - P.body.position.x); }
@@ -905,6 +937,19 @@ function updateCase (ce, dt) {
     Body.setAngularVelocity(b, angDiff(w.facing + w.carry.rel, b.angle) * 0.3);
     return;
   }
+  if (ce.parked) return;
+  // un case da due spinto da solo non va dritto: ogni tanto sbanda di lato
+  if (ce.def.heavy2 && ce.grabbers.length === 1 && speedOf(b) > 0.3 && G.mode === 'play') {
+    ce.soloT = (ce.soloT || 0) + dt;
+    if (ce.soloT > 2.2) {
+      ce.soloT = -rand(0, 1.2);
+      const v = norm(b.velocity), side = Math.random() < 0.5 ? -1 : 1;
+      Body.setVelocity(b, add(b.velocity, mul({ x: -v.y, y: v.x }, side * 2.2)));
+      Body.setAngularVelocity(b, side * 0.04);
+      bubble(ce, 'Sbanda!', 1.2); AU.thud(2);
+      if (!G.soloHint) { G.soloHint = true; toast('Da solo non lo tieni dritto: chiama Tonino con AIUTO.', 'warn'); }
+    }
+  } else if (ce.soloT > 0) ce.soloT = 0;
   // attrito del pavimento, diverso per tipo di ruote
   const W = WHEEL[ce.wheel];
   let kf = W.f, ks = W.s, ka = W.a;
@@ -1041,6 +1086,7 @@ function stepSim () {
     if (!held && speedOf(ce.body) < 1.2) {
       const z = zoneAt(p);
       if (z !== ce.zone) { ce.zone = z; if (z === ce.def.zone && G.mode === 'play') { AU.ding(); bubble(ce, '✓ ' + ZONES[z].name, 1.2); ring(p.x, p.y, ZONES[z].color); } }
+      if (z === ce.def.zone && !ce.tipped && !ce.stuck && speedOf(ce.body) < 0.3 && G.mode === 'play') park(ce);
     } else if (held) ce.zone = null;
   });
 
