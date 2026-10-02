@@ -39,12 +39,14 @@ const OUT = process.env.SHOTS || null;
   // un giocatore
   const w2p0 = (wx, wy) => p.evaluate(([wx, wy]) => { const s = window.__scene, cam = s.cameras.main, r = s.game.canvas.getBoundingClientRect();
     const x = r.left + (wx - cam.worldView.x) * cam.zoom * r.width / GAME_W, y = r.top + (wy - cam.worldView.y) * cam.zoom * r.height / GAME_H;
-    return { x, y, out: x < r.left + 12 || x > r.right - 12 || y < r.top + 12 || y > r.bottom - 12 }; }, [wx, wy]);
+    const e = document.elementFromPoint(x, y);   // fuori schermo, o sotto una barra sopra la scena
+    return { x, y, out: x < r.left + 12 || x > r.right - 12 || y < r.top + 12 || y > r.bottom - 12 || (e && e.tagName !== 'CANVAS') }; }, [wx, wy]);
   const w2p = async (wx, wy) => {
     await p.waitForFunction(() => { const c = window.__scene.cameras.main; return !c.panEffect.isRunning && !c.zoomEffect.isRunning; });
     { const f = await p.evaluate(() => window.__scene.game.loop.frame); await p.waitForFunction(f => window.__scene.game.loop.frame > f + 1, f); }
     let pt = await w2p0(wx, wy);
-    if (pt.out) {
+    // con un pannello aperto il pulsante è coperto: il tocco va comunque al pannello
+    if (pt.out && !(await p.evaluate(() => document.querySelector('.modal-overlay.show')))) {
       zoomResets++; taps++; await p.locator('#zoom-reset').tap();
       // worldView si aggiorna solo al disegno: si aspettano due fotogrammi
       const f = await p.evaluate(() => window.__scene.game.loop.frame);
