@@ -42,8 +42,15 @@ const OUT = process.env.SHOTS || null;
     return { x, y, out: x < r.left + 12 || x > r.right - 12 || y < r.top + 12 || y > r.bottom - 12 }; }, [wx, wy]);
   const w2p = async (wx, wy) => {
     await p.waitForFunction(() => { const c = window.__scene.cameras.main; return !c.panEffect.isRunning && !c.zoomEffect.isRunning; });
+    { const f = await p.evaluate(() => window.__scene.game.loop.frame); await p.waitForFunction(f => window.__scene.game.loop.frame > f + 1, f); }
     let pt = await w2p0(wx, wy);
-    if (pt.out) { zoomResets++; taps++; await p.locator('#zoom-reset').tap(); await p.waitForTimeout(120); pt = await w2p0(wx, wy); }
+    if (pt.out) {
+      zoomResets++; taps++; await p.locator('#zoom-reset').tap();
+      // worldView si aggiorna solo al disegno: si aspettano due fotogrammi
+      const f = await p.evaluate(() => window.__scene.game.loop.frame);
+      await p.waitForFunction(f => window.__scene.game.loop.frame > f + 1, f);
+      pt = await w2p0(wx, wy);
+    }
     return pt;
   };
   const tapAt = async pt => { taps++; await p.touchscreen.tap(pt.x, pt.y); await p.waitForTimeout(120); };
