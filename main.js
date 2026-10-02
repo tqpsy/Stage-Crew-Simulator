@@ -4637,6 +4637,17 @@ function selectCable (cableId) {
   updateCableHand();
 }
 
+/* Spina o cavo di corrente in mano e nessuna presa adatta libera in giro:
+   non manca niente, le prese del Quadro accettano più cavi. Si dice come
+   arrivarci (chi resta senza ciabatte pensava di dover rubare corrente). */
+function noFreeSocketHint (signal) {
+  if ((signal !== 'schuko' && signal !== 'powercon') || !window.__scene || window.__scene.compatibleTargets().length) return '';
+  const adapter = signal === 'schuko' ? 'cee_schuko' : 'cee_powercon';
+  return 'Nessuna presa ' + SIGNAL_LABEL[signal] + ' libera? Non manca niente: le prese del Quadro accettano più cavi. ' +
+    'Prendi l\'adattatore ' + cableName(adapter) + ' dal baule (scheda Cavi) e collegalo al Quadro' +
+    (signal === 'powercon' ? ', oppure usa il passante PowerCON di un PAR.' : '.');
+}
+const CIABATTE_FINITE = 'Ciabatte finite: non ne servono altre. Le prese del Quadro accettano più cavi, e con gli adattatori del baule (CEE / Schuko, CEE / PowerCON) ci colleghi qualunque spina.';
 function onRearPortClick (compId, portId) {
   const scene = window.__scene;
   if (!scene) return;
@@ -4707,7 +4718,9 @@ function onRearPortClick (compId, portId) {
   if (connected || picked) {
     // cavo collegato, o primo capo scelto: si torna alla scena
     closeRearPanel();
-    if (picked && p.lead) showToast('Spina in mano: tocca il dispositivo con la presa ' + SIGNAL_LABEL[p.signal] + ' dove infilarla (quelli in verde hanno una presa adatta libera).', 'ok');
+    const noSocket = picked && noFreeSocketHint(p.signal);
+    if (noSocket) showToast(noSocket);
+    else if (picked && p.lead) showToast('Spina in mano: tocca il dispositivo con la presa ' + SIGNAL_LABEL[p.signal] + ' dove infilarla (quelli in verde hanno una presa adatta libera).', 'ok');
     else if (picked) showToast('Cavo in mano: ora tocca il dispositivo da collegare (quelli in verde hanno una presa adatta libera).', 'ok');
     else if (!arced) showToast('Collegato: ' + compLabel(compId) + ' · ' + portLabel(compId, portId) + '.', 'ok');
     return;
@@ -5143,7 +5156,7 @@ document.addEventListener('pointerup', ev => {
     if (window.__scene) { window.__scene.clearDropPreview(); window.__scene.showZoneHint(gameState.selectedPieceType); }
     const { over } = stagePointFromClient(ev.clientX, ev.clientY);
     if (over && window.__scene) {
-      if (gameState.stock[type] <= 0) showToast('Esaurito in questo livello: ' + COMPONENT_TYPES[type].label + '.');
+      if (gameState.stock[type] <= 0) showToast(/^ciabatta/.test(type) ? CIABATTE_FINITE : 'Esaurito in questo livello: ' + COMPONENT_TYPES[type].label + '.');
       else window.__scene.handleExternalDrop(type, ev.clientX, ev.clientY);
     }
     window.__draggedType = null;
@@ -5353,6 +5366,9 @@ const ORIGIN_Y = Math.round((GAME_H - (VENUE_W + VENUE_H) * TILE_H / 2) / 2);
 
 const ZOOM_MIN = 0.5, ZOOM_MAX = 4;
 const DEFAULT_ZOOM = 1.05;
+// pixel di schermo per unità di mondo a cui si avvicina la scena quando un
+// tocco cade in mezzo a più dispositivi (su telefono a zoom base è ≈ 0,3)
+const CROWD_SCALE = 0.6;
 const SHOW_ZOOM = 2;         // zoom dello show finale: palco e Pit a tutto schermo
 const PLATFORM_HEIGHT = 26; // px: altezza visiva della pedana rialzata
 
@@ -5609,8 +5625,9 @@ class StageScene extends Phaser.Scene {
   /* ---------------- movimento: zoom (rotellina/pizzico/pulsanti),
      pan (tasto destro o trascinamento sul vuoto), frecce/WASD ---------------- */
   setupCameraControls () {
+    // la rotella ingrandisce dove sta il puntatore
     this.input.on('wheel', (pointer, gameObjects, deltaX, deltaY) => {
-      this.adjustZoom(deltaY > 0 ? -0.12 : 0.12);
+      this.adjustZoom(deltaY > 0 ? -0.12 : 0.12, pointer.x, pointer.y);
     });
 
     this.game.canvas.addEventListener('contextmenu', e => e.preventDefault());
@@ -5648,8 +5665,9 @@ class StageScene extends Phaser.Scene {
 
       const p1 = this.input.pointer1, p2 = this.input.pointer2;
       if (p1 && p2 && p1.isDown && p2.isDown) {
+        // il pizzico ingrandisce fra le due dita, non al centro dello schermo
         const dist = Phaser.Math.Distance.Between(p1.x, p1.y, p2.x, p2.y);
-        if (this.lastPinchDist) this.adjustZoom((dist - this.lastPinchDist) * 0.004);
+        if (this.lastPinchDist) this.adjustZoom((dist - this.lastPinchDist) * 0.004, (p1.x + p2.x) / 2, (p1.y + p2.y) / 2);
         this.lastPinchDist = dist;
       } else {
         this.lastPinchDist = null;
@@ -5676,6 +5694,7 @@ class StageScene extends Phaser.Scene {
     if (pendKey !== this.pendingKey) { this.pendingKey = pendKey; updateCableBanner(); this.highlightTargets(); }
     // le note della musica di prova seguono il loro dispositivo
     if (this.signalFx) Object.values(this.signalFx).forEach(f => { if (f.note) this.placeSignalNote(f); });
+    const speed = (420 * (delta / 1000)) / cam.zoom;
     let dx = 0, dy = 0;
     if (this.cursors.left.isDown || this.wasd.left.isDown) dx -= speed;
     if (this.cursors.right.isDown || this.wasd.right.isDown) dx += speed;
@@ -5684,9 +5703,25 @@ class StageScene extends Phaser.Scene {
     if (dx || dy) { cam.scrollX += dx; cam.scrollY += dy; }
   }
 
-  adjustZoom (delta) {
-    const cam = this.cameras.main;
-    cam.setZoom(Phaser.Math.Clamp(cam.zoom + delta, ZOOM_MIN, ZOOM_MAX));
+  /* zoom; con un punto (in pixel del gioco) quel punto resta fermo sotto
+     il dito o il puntatore, come nelle mappe */
+  adjustZoom (delta, ax, ay) {
+    const cam = this.cameras.main, z0 = cam.zoom;
+    const z1 = Phaser.Math.Clamp(z0 + delta, ZOOM_MIN, ZOOM_MAX);
+    cam.setZoom(z1);
+    if (ax == null || z1 === z0) return;
+    cam.scrollX += (ax - cam.width / 2) * (1 / z0 - 1 / z1);
+    cam.scrollY += (ay - cam.height / 2) * (1 / z0 - 1 / z1);
+  }
+  /* tocco su più dispositivi vicini con la scena piccola (telefono):
+     oltre al menu "Quale?" la scena si avvicina lì, così il tocco dopo
+     prende quello giusto senza dover zoomare a mano */
+  zoomToCrowd (wx, wy) {
+    const cam = this.cameras.main, rc = this.game.canvas.getBoundingClientRect();
+    const k = cam.zoom * (rc.width / GAME_W);
+    if (k >= CROWD_SCALE) return;
+    cam.zoomTo(Math.min(ZOOM_MAX, CROWD_SCALE * GAME_W / rc.width), 250, 'Sine.easeOut');
+    cam.pan(wx, wy, 250, 'Sine.easeOut');
   }
 
   resetView () {
@@ -7015,7 +7050,7 @@ class StageScene extends Phaser.Scene {
   /* piazza un componente in una posizione di mondo: usata sia dal trascinamento
      (via handleExternalDrop) sia dal tocco-e-tocco (via placeArmedPieceAt) */
   placeComponentAt (type, worldX, worldY) {
-    if (gameState.stock[type] <= 0) { showToast(type.toUpperCase() + ' esaurito per questo livello.'); return; }
+    if (gameState.stock[type] <= 0) { showToast(/^ciabatta/.test(type) ? CIABATTE_FINITE : type.toUpperCase() + ' esaurito per questo livello.'); return; }
 
     if (MOUNTS[type]) { this.attachToNearestBase(type, { x: worldX, y: worldY }); return; }
 
@@ -7435,6 +7470,7 @@ class StageScene extends Phaser.Scene {
       first.edge > 0 ? x.edge - first.edge < 6 : (x.edge === 0 && x.center < first.center * 1.35 + 4)));
     if (!close.length) { openRearPanel(first.id); return true; }
     this.showPickMenu([first, ...close].slice(0, 4).map(x => x.id), wx, wy);
+    this.zoomToCrowd(wx, wy);
     return true;
   }
   showPickMenu (ids, wx, wy) {

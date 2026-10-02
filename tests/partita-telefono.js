@@ -20,7 +20,7 @@ const OUT = process.env.SHOTS || null;
   await p.goto('file://' + path.join(__dirname, '..', 'index.html'));
   await p.waitForFunction(() => window.__scene, null, { timeout: 20000 });
   await p.waitForTimeout(300);
-  let taps = 0, menus = 0; const log = []; const problems = [];
+  let taps = 0, menus = 0, zoomResets = 0; const log = []; const problems = [];
   // menù iniziale: nome del tecnico, un service tra i tre e via
   await p.locator('#player-input').fill('Tecnico Telefono');
   taps++; await p.locator('#service-offers .offer-card').first().tap();
@@ -34,8 +34,18 @@ const OUT = process.env.SHOTS || null;
   const toast = () => p.evaluate(() => el('#toast').textContent);
   const shot = n => OUT ? p.screenshot({ path: path.join(OUT, 'telefono-' + n + '.png') }) : null;
   // mondo -> pagina
-  const w2p = (wx, wy) => p.evaluate(([wx, wy]) => { const s = window.__scene, cam = s.cameras.main, r = s.game.canvas.getBoundingClientRect();
-    return { x: r.left + (wx - cam.worldView.x) * cam.zoom * r.width / GAME_W, y: r.top + (wy - cam.worldView.y) * cam.zoom * r.height / GAME_H }; }, [wx, wy]);
+  // un tocco affollato avvicina la scena (zoomToCrowd): se il punto è finito
+  // fuori dallo schermo si torna alla vista intera col pulsante, come farebbe
+  // un giocatore
+  const w2p0 = (wx, wy) => p.evaluate(([wx, wy]) => { const s = window.__scene, cam = s.cameras.main, r = s.game.canvas.getBoundingClientRect();
+    const x = r.left + (wx - cam.worldView.x) * cam.zoom * r.width / GAME_W, y = r.top + (wy - cam.worldView.y) * cam.zoom * r.height / GAME_H;
+    return { x, y, out: x < r.left + 12 || x > r.right - 12 || y < r.top + 12 || y > r.bottom - 12 }; }, [wx, wy]);
+  const w2p = async (wx, wy) => {
+    await p.waitForFunction(() => { const c = window.__scene.cameras.main; return !c.panEffect.isRunning && !c.zoomEffect.isRunning; });
+    let pt = await w2p0(wx, wy);
+    if (pt.out) { zoomResets++; taps++; await p.locator('#zoom-reset').tap(); await p.waitForTimeout(120); pt = await w2p0(wx, wy); }
+    return pt;
+  };
   const tapAt = async pt => { taps++; await p.touchscreen.tap(pt.x, pt.y); await p.waitForTimeout(120); };
   const tapSel = async sel => { taps++; await p.locator(sel).first().tap(); await p.waitForTimeout(120); };
   const tab = async t => { if (!(await p.evaluate(t => document.querySelector('.tab-btn[data-tab="' + t + '"]').classList.contains('active'), t))) await tapSel('.tab-btn[data-tab="' + t + '"]'); };
@@ -157,7 +167,7 @@ const OUT = process.env.SHOTS || null;
   const rep = await p.evaluate(() => reputation());
   log.push('reputazione: ' + rep);
   if (rep !== 5 || !/Reputazione \+5\./.test(await toast())) problems.push('reputazione del collaudo sbagliata: ' + rep);
-  log.push('TOTALE tocchi: ' + taps + ' (menu Quale?: ' + menus + ')');
+  log.push('TOTALE tocchi: ' + taps + ' (menu Quale?: ' + menus + ', ritorni alla vista intera: ' + zoomResets + ')');
   await shot('fine');
   console.log(log.join('\n')); console.log('PROBLEMI:', JSON.stringify(problems, null, 1)); console.log('ERRORI JS:', errs);
   await b.close();
