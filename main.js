@@ -2626,6 +2626,7 @@ function startNewGame (player, offer, offers) {
   Profile.data.reputation = defaultProfile().reputation;
   Profile.data.scarico = null;
   Profile.data.cavi = null;
+  Profile.data.caviGiri = 0;
   Profile.data.preside = null;
   Profile.data.dj = null;
   Profile.data.cambioDj = null;
@@ -2817,7 +2818,7 @@ const SCHEDULE = [
   { time: '16:00', title: 'Arrivo e scarico', text: 'Il furgone accosta al cortile: tu e Tonino portate i case nella palestra prima delle 16:30.', phase: 'scarico' },
   { time: '16:30', title: 'Montaggio impianto', text: 'Corrente dal Quadro, PC → scheda → mixer → finale → casse, i PAR in DMX dalla consolle.', phase: 'montaggio' },
   { time: '19:30', title: 'Test impianto', text: 'Il collaudo: tutto acceso senza scatti né colpi nelle casse, audio e luci a posto.', phase: 'collaudo', rep: REP.phaseDone },
-  { time: '20:00', title: 'Messa in sicurezza dei cavi', text: 'I cavi stesi per terra come si deve: via di fuga libera, passacavi nei passaggi, nastro dove si cammina. Gerry, il bidello, controlla prima di aprire.', phase: 'cavi' },
+  { time: '20:00', title: 'Messa in sicurezza dei cavi', text: 'I cavi stesi al montaggio come si deve: via di fuga libera, passaggi attraversati dritti, niente cavi in mezzo alla scena, segnale lontano dalla corrente. Gerry, il bidello, controlla prima di aprire.', phase: 'cavi' },
   { time: '20:30', title: 'Apertura porte', text: 'Entrano famiglie e studenti; musica di sottofondo dal PC.', phase: 'porte' },
   { time: '21:00', title: 'Discorso del Preside Tramp', text: 'Microfono su asta sul palco, cablato a un ingresso MIC del mixer: ricordati quale. Vuole essere sentito fino al parcheggio.', phase: 'preside' },
   { time: '21:10', title: 'Cambio palco: arriva il DJ', text: 'DJ Inestimabile porta la sua consolle: corrente, uscite nella DI e dalla DI al mixer. Il microfono resta dov\'è, per Musa Esistenziale. Il pubblico aspetta: non metterci troppo.', phase: 'cambio-dj', rep: REP.changeDone },
@@ -2876,7 +2877,7 @@ function openSchedule (first) {
   // del preside, poi al cambio palco per il DJ
   scheduleNext = first ? null : schedulePhaseState('cavi') === 'now' ? 'cavi' : schedulePhaseState('preside') === 'now' ? 'preside'
     : schedulePhaseState('cambio-dj') === 'now' && !cambioDj() ? 'cambio-dj' : schedulePhaseState('dj') === 'now' ? 'dj' : null;
-  el('#schedule-go').textContent = first ? 'Al lavoro!' : { cavi: 'Stendi i cavi', preside: 'Il preside sale sul palco', 'cambio-dj': 'Inizia il cambio palco', dj: 'Via al DJ set' }[scheduleNext] || 'Torna al palco';
+  el('#schedule-go').textContent = first ? 'Al lavoro!' : { cavi: 'Chiama Gerry', preside: 'Il preside sale sul palco', 'cambio-dj': 'Inizia il cambio palco', dj: 'Via al DJ set' }[scheduleNext] || 'Torna al palco';
   el('#schedule-modal').classList.add('show');
   setSceneInput(false);
 }
@@ -2981,7 +2982,6 @@ function scaricoSummary () {
    la regia sul tavolo) e i cavi collegati al montaggio tra basi diverse,
    uniti quando fanno la stessa strada (DMX e PowerCON dei PAR). Gli errori
    li trova solo Gerry; le stelle diventano reputazione, una volta sola. */
-let caviOpen = false;
 const caviDone = () => !!Profile.data.cavi;
 const CAVI_LOOK = { sub: 'sub', stativo: 'par', asta: 'asta', tavolo: 'tavolo', quadro: 'quadro', allaccio: 'allaccio' };
 // la base di un pezzo montato (PAR → stativo, regia → tavolo, mic → asta)
@@ -3043,29 +3043,163 @@ function posaLayout () {
   caviLines = lines;
   return { title: 'Festa della scuola', sub: 'La tua regia · Gerry controlla alle 20:30', devices, lines };
 }
-function openCavi () {
-  if (caviOpen || caviDone()) return;
-  caviOpen = true;
-  setSceneInput(false);
-  sceneKeyboard(false);
-  const f = document.createElement('iframe');
-  f.id = 'cavi-frame';
-  f.className = 'minigame-frame';
-  f.title = 'La posa dei cavi';
-  f.src = 'posa-cavi.html?embed=1';
-  f.addEventListener('load', () => { try { f.contentWindow.focus(); } catch (e) { /* niente fuoco: si tocca */ } });
-  document.body.appendChild(f);
+/* GERRY AL MONTAGGIO — i cavi si stendono già al montaggio (StageScene.
+   startLay); alle 20:00 Gerry, il bidello, passa e li controlla con le
+   regole della posa (docs/minigioco-posa-cavi.md). Celle da 50 cm come la
+   posa: i = gx / CELL, j = gy / CELL. Passacavi e nastro li mette la crew
+   da sola: si guarda solo da dove passano i cavi. */
+const GERRY_PASSAGES = [
+  { id: 'artisti', label: 'passaggio degli artisti', r: [13, 4, 2, 4] },
+  { id: 'corridoio', label: 'corridoio del pubblico', r: [9, 20, 2, 12] }
+];
+const GERRY_EXITS = [{ id: 'fuga', label: 'via di fuga', r: [0, 22, 3, 3] }];
+const gInRect = (r, i, j) => i >= r[0] && i < r[0] + r[2] && j >= r[1] && j < r[1] + r[3];
+// in mezzo alla pedana (il bordo largo 50 cm resta per i cavi)
+const gInterior = (i, j) => i >= 5 && i <= 10 && j >= 9 && j <= 14;
+// passaggi e via di fuga, senza quelli dove è già stato posato un pezzo
+function gerryZones () {
+  const busy = new Set();
+  Object.values(gameState.placed).forEach(c => (c.cells || []).forEach(k => busy.add(k)));
+  const clear = z => { for (let i = z.r[0]; i < z.r[0] + z.r[2]; i++) for (let j = z.r[1]; j < z.r[1] + z.r[3]; j++) if (busy.has(i + ',' + j)) return false; return true; };
+  return { passages: GERRY_PASSAGES.filter(clear), exits: GERRY_EXITS.filter(clear) };
 }
-window.addEventListener('message', ev => {
-  const d = ev.data, f = el('#cavi-frame');
-  if (!caviOpen || !d || !f) return;
-  if (d.type === 'posa-cavi-pronta') f.contentWindow.postMessage({ type: 'posa-cavi-pianta', layout: posaLayout() }, '*');
-  if (d.type === 'posa-cavi-fine') finishCavi(d.result || { skipped: true });
+const GERRY_SENSITIVE = new Set(['xlr', 'jack']);
+function gerryCableName (e) {
+  const it = cableItem(e.signal);
+  return (it ? it.name : cableName(e.signal)) + ' ' + compLabel(e.a) + ' → ' + compLabel(e.b);
+}
+// le celle che un cavo tocca per terra, con la direzione (h: lungo gx, v: lungo gy)
+function gerryCells (e, scene) {
+  const f = scene.edgeFloor(e);
+  if (!f) return null;
+  const P = gameState.placed, own = new Set();
+  [posaBase(P[e.a]), posaBase(P[e.b])].forEach(b => (b && b.cells || []).forEach(k => own.add(k)));
+  const out = [], seen = new Set();
+  for (let s = 0; s < f.pts.length - 1; s++) {
+    const a = f.pts[s], b = f.pts[s + 1], L = Math.abs(b.gx - a.gx) + Math.abs(b.gy - a.gy);
+    const dir = Math.abs(b.gx - a.gx) > Math.abs(b.gy - a.gy) ? 'h' : 'v';
+    for (let t = CELL / 4; t < L; t += CELL / 2) {
+      const x = a.gx + (b.gx - a.gx) * t / L, y = a.gy + (b.gy - a.gy) * t / L;
+      const i = Math.floor(x / CELL), j = Math.floor(y / CELL), k = i + ',' + j;
+      if (own.has(k) || seen.has(k + dir)) continue;
+      seen.add(k + dir);
+      out.push({ i, j, dir });
+    }
+  }
+  return { cells: out, base: [posaBase(P[e.a]), posaBase(P[e.b])] };
+}
+function gerryIssues () {
+  const scene = window.__scene;
+  if (!scene) return [];
+  const { passages, exits } = gerryZones();
+  const issues = [];
+  const add = (type, ids, cells, text) => issues.push({ type, ids, cells, text });
+  const use = new Map();
+  const nearInterior = b => (b && b.cells || []).some(k => { const [i, j] = k.split(',').map(Number); return [-1, 0, 1].some(di => [-1, 0, 1].some(dj => gInterior(i + di, j + dj))); });
+  gameState.edges.forEach(e => {
+    const g = gerryCells(e, scene);
+    if (!g) return;
+    const name = gerryCableName(e);
+    const mic = g.base.some(b => b && b.type === 'asta') || g.base.some(nearInterior);
+    const fuga = [], open = [], along = [], scena = [];
+    g.cells.forEach(c => {
+      const k = c.i + ',' + c.j;
+      if (!use.has(k)) use.set(k, []);
+      use.get(k).push({ e, dir: c.dir });
+      if (exits.some(z => gInRect(z.r, c.i, c.j))) fuga.push(c);
+      const ps = passages.find(z => gInRect(z.r, c.i, c.j));
+      if (ps && c.dir === 'v') along.push(Object.assign({ ps }, c));
+      if (!mic && gInterior(c.i, c.j)) scena.push(c);
+    });
+    if (fuga.length) add('fuga', [e.id], fuga, name + ' passa sulla via di fuga: lì per terra non ci deve essere niente.');
+    if (along.length) add('lungo', [e.id], along, name + ' corre lungo il ' + along[0].ps.label + ': i passaggi si attraversano dritti, di traverso.');
+    if (scena.length) add('scena', [e.id], scena, name + ' passa in mezzo alla scena: il preside ci inciampa. Sul palco solo il microfono, gli altri lungo i bordi.');
+  });
+  // ronzio: segnale debole affiancato alla corrente per almeno 1 m
+  const pairs = new Map();
+  use.forEach((list, k) => {
+    list.filter(u => GERRY_SENSITIVE.has(u.e.signal)).forEach(s => list.filter(u => POWER_CABLE_IDS.has(u.e.signal)).forEach(pw => {
+      if (s.dir !== pw.dir) return;
+      const pk = s.e.id + '|' + pw.e.id;
+      if (!pairs.has(pk)) pairs.set(pk, { s: s.e, pw: pw.e, cells: [] });
+      pairs.get(pk).cells.push({ i: +k.split(',')[0], j: +k.split(',')[1] });
+    }));
+  });
+  pairs.forEach(({ s, pw, cells }) => {
+    if (cells.length < 2) return;
+    add('ronzio', [s.id], cells, gerryCableName(s) + ' corre accanto a ' + gerryCableName(pw) + ' per ' + fmtM(cells.length * CELL) + ': ronzio nelle casse. Il segnale incrocia la corrente, non ci va affiancato.');
+  });
+  return issues;
+}
+// metri di cavo per terra, nastro (palco, Pit e platea, non lungo i muri) e passacavi
+function gerryStats () {
+  const scene = window.__scene, { passages } = gerryZones();
+  let cableM = 0;
+  const tape = new Set(), ramps = new Set();
+  gameState.edges.forEach(e => {
+    const f = scene && scene.edgeFloor(e);
+    if (!f) return;
+    cableM += layLength(f.pts);
+    gerryCells(e, scene).cells.forEach(c => {
+      const ps = passages.find(z => gInRect(z.r, c.i, c.j));
+      if (ps) { ramps.add(ps.id + ':' + c.j); return; }
+      const gx = c.i * CELL, gy = c.j * CELL;
+      if ((isStageCoreCell(gx, gy) || isPitCell(gx, gy) || isPlateaCell(gx, gy)) && c.i > 0 && c.i < VENUE_W / CELL - 1) tape.add(c.i + ',' + c.j);
+    });
+  });
+  return { cableM, tapeM: tape.size * CELL, ramps: ramps.size };
+}
+let gerryOpen = false;
+// alle 20:00 (o dalla scaletta) Gerry fa il suo giro
+function openCavi () {
+  if (gerryOpen || caviDone()) return;
+  if (window.__scene) window.__scene.endLay(true);
+  Profile.data.caviGiri = (Profile.data.caviGiri || 0) + 1;
+  Profile.save();
+  const issues = gerryIssues();
+  gerryOpen = true;
+  setSceneInput(false);
+  const giro = Profile.data.caviGiri;
+  const box = el('#gerry-text'), list = el('#gerry-list');
+  if (!issues.length) {
+    const stars = Math.max(1, 4 - giro);
+    el('#gerry-title').textContent = 'Cavi a posto';
+    box.innerHTML = '<p>' + { 3: 'Perfetto al primo giro. Neanche io l\'avrei fatto meglio, e io i cavi li scavalco da trent\'anni!', 2: 'Adesso sì. Si può aprire!', 1: 'Finalmente. Apro le porte, ma la prossima volta pensaci prima.' }[stars] + '</p>'
+      + '<p class="gerry-stars">' + '★'.repeat(stars) + '<span>' + '★'.repeat(3 - stars) + '</span></p>';
+    list.innerHTML = '';
+    el('#gerry-fix').hidden = true;
+    el('#gerry-go').textContent = 'Apri le porte';
+    el('#gerry-go').onclick = () => { SFX.button(); finishCavi(Object.assign({ stars, inspections: giro }, gerryStats())); };
+  } else {
+    el('#gerry-title').textContent = ['Fermi tutti!', 'Ancora no, ragazzi.', 'Ci siamo quasi…'][Math.min(2, giro - 1)];
+    box.innerHTML = '<p>Prima di aprire le porte qui va sistemato (i punti sono segnati in rosso sul pavimento):</p>';
+    list.innerHTML = issues.slice(0, 5).map(i => '<li>' + escapeHtml(i.text) + '</li>').join('')
+      + (issues.length > 5 ? '<li class="more">…e altre ' + (issues.length - 5) + ' cose.</li>' : '');
+    el('#gerry-fix').hidden = false;
+    el('#gerry-go').textContent = 'Apri così';
+    el('#gerry-go').onclick = () => {
+      SFX.button();
+      finishCavi(Object.assign({ late: true, inspections: giro, left: issues.map(i => ({ type: i.type })) }, gerryStats()));
+    };
+  }
+  if (window.__scene) window.__scene.gerryMarks = issues;
+  if (window.__scene) window.__scene.redrawEdges();
+  el('#gerry-modal').classList.add('show');
+}
+function closeGerry () {
+  if (!gerryOpen) return;
+  gerryOpen = false;
+  el('#gerry-modal').classList.remove('show');
+  setTimeout(() => { if (!scheduleOpen && !menuOpen && !rearPanelId && !openCaseName) setSceneInput(true); }, 0);
+}
+el('#gerry-fix').addEventListener('click', () => {
+  SFX.button();
+  closeGerry();
+  showToast('Sistema i cavi segnati in rosso (tocca un cavo per prenderlo), poi richiama Gerry dalla scaletta.');
 });
 function finishCavi (r) {
-  const f = el('#cavi-frame');
-  if (f) f.remove();
-  caviOpen = false;
+  closeGerry();
+  if (window.__scene) window.__scene.gerryMarks = null;
   // late: alle 20:30 Gerry ha aperto con i cavi ancora in giro (nessuna stella)
   const late = !r.skipped && !!r.late;
   const stars = r.skipped || late ? 0 : Math.max(1, Math.min(3, r.stars || 1));
@@ -3079,7 +3213,7 @@ function finishCavi (r) {
   whenScene(scene => scene.redrawEdges());   // i cavi seguono le pieghe della posa
   const missing = presideReady();
   showToast((r.skipped ? 'Posa dei cavi saltata: Gerry apre le porte, ma la reputazione non cambia.'
-    : late ? 'Sono le 20:30: Gerry apre le porte con i cavi ancora in giro. La reputazione non cambia.'
+    : late ? 'Gerry apre le porte con i cavi ancora in giro. La reputazione non cambia.'
     : 'Cavi a posto, Gerry apre le porte! ' + '★'.repeat(stars) + (rep ? ' Reputazione +' + rep + '.' : ''))
     + (missing ? ' Alle 21:00 parla il preside: ' + missing : ' Alle 21:00 il preside sale sul palco.'), 'ok');
   updateFoglio();
@@ -3131,7 +3265,7 @@ function caviSummary () {
   if (c.skipped) return 'Saltata: niente reputazione.';
   if (c.late) {
     const left = caviLeftovers().map(k => CAVI_LEFT_TEXT[k]);
-    return 'Finita col tempo: alle 20:30 porte aperte con i cavi in giro, niente reputazione.' + (left.length ? ' Durante lo show ' + left.join(', ') + '.' : '');
+    return 'Porte aperte con i cavi in giro: niente reputazione.' + (left.length ? ' Durante lo show ' + left.join(', ') + '.' : '');
   }
   return '★'.repeat(c.stars) + '☆'.repeat(3 - c.stars) + ' · ' + (c.inspections === 1 ? 'promossa al primo giro di Gerry' : c.inspections + ' giri di Gerry')
     + ' · ' + String(Math.round(c.tapeM * 10) / 10).replace('.', ',') + ' m di nastro.';
@@ -3148,7 +3282,7 @@ function caviSummary () {
 let presideOpen = false, presideTimer = null;
 let djOpen = false;              // lo spettacolo del DJ (openDj, più sotto)
 const presideDone = () => !!Profile.data.preside;
-const minigameOpen = () => scaricoOpen || caviOpen || presideOpen || djOpen;
+const minigameOpen = () => scaricoOpen || gerryOpen || presideOpen || djOpen;
 // cosa manca perché il preside possa parlare (null se è tutto pronto)
 function presideReady () {
   const asta = placedOfType('asta')[0], mic = placedOfType('mic').find(m => mountBase(m));
@@ -3167,7 +3301,7 @@ function presidePars () {
 }
 function openPreside () {
   clearTimeout(presideTimer);
-  if (presideOpen || presideDone() || !caviDone() || scaricoOpen || caviOpen) return;
+  if (presideOpen || presideDone() || !caviDone() || scaricoOpen || gerryOpen) return;
   const missing = presideReady();
   if (missing) { showToast('Il preside aspetta dietro le quinte: ' + missing); return; }
   presideOpen = true;
@@ -7419,6 +7553,7 @@ class StageScene extends Phaser.Scene {
       if (!isSelected) this.drawFlowArrow(pts, color, alpha);
     });
     this.refreshEdgeDeleteButton();
+    this.drawGerryFloor();
     if (this.lay || this.layGraphics) this.drawLay();
     this.updateConnectionBadges();
     this.refreshLive();
@@ -7686,7 +7821,65 @@ class StageScene extends Phaser.Scene {
     const name = (cableItem(e.signal) || {}).name || cableName(e.signal);
     const over = max && len > max + 1e-6;
     el('#lay-text').innerHTML = `<b>${escapeHtml(name)}</b> · <span class="${over || this.lay.taut ? 'lay-over' : ''}">${fmtM(len)}${max ? ' / ' + max + ' m' : ''}</span>`
-      + `<small>${this.lay.taut ? 'Il cavo è teso: non arriva più in là.' : over ? 'Troppo corto: cerca una strada più breve.' : 'Trascina il cavo: scatta sulla griglia.'}</small>`;
+      + (this.layIssue && !this.lay.taut ? `<small class="lay-over">${escapeHtml(this.layIssue.text)}</small>`
+        : `<small>${this.lay.taut ? 'Il cavo è teso: non arriva più in là.' : over ? 'Troppo corto: cerca una strada più breve.' : 'Trascina il cavo: scatta sulla griglia.'}</small>`);
+  }
+
+  /* via di fuga e passaggi sul pavimento (le regole di Gerry), e i punti
+     dei cavi che Gerry boccerebbe: quelli del cavo in mano mentre lo si
+     stende, tutti dopo un giro di Gerry finché non apre le porte */
+  drawGerryFloor () {
+    if (!this.gerryGraphics) {
+      this.gerryGraphics = this.add.graphics().setDepth(1.6);
+      this.gerryMarkGraphics = this.add.graphics().setDepth(5.8);
+      this.gerryLabels = {};
+    }
+    const g = this.gerryGraphics, mg = this.gerryMarkGraphics;
+    g.clear(); mg.clear();
+    const { passages, exits } = gerryZones();
+    const quad = (x0, y0, x1, y1) => [gridToScreen(x0, y0), gridToScreen(x1, y0), gridToScreen(x1, y1), gridToScreen(x0, y1)];
+    const fillQuad = (q, color, alpha) => { g.fillStyle(color, alpha); g.fillPoints(q, true); };
+    const label = (id, text, q, color) => {
+      let t = this.gerryLabels[id];
+      if (!t) t = this.gerryLabels[id] = this.add.text(0, 0, text, { fontFamily: 'Inter, sans-serif', fontSize: '10px', fontStyle: 'bold', color }).setOrigin(0.5).setDepth(1.7);
+      t.setPosition((q[0].x + q[2].x) / 2, (q[0].y + q[2].y) / 2).setVisible(true);
+    };
+    Object.values(this.gerryLabels).forEach(t => t.setVisible(false));
+    exits.forEach(z => {
+      const [i, j, w, h] = z.r, q = quad(i * CELL, j * CELL, (i + w) * CELL, (j + h) * CELL);
+      fillQuad(q, 0xe0503f, 0.22);
+      // strisce rosse in diagonale, come il nastro a terra
+      for (let k = 0; k < w + h; k++) {
+        const a = gridToScreen(Math.min(i + k, i + w) * CELL, (j + Math.max(0, k - w)) * CELL);
+        const b = gridToScreen(Math.max(i, i + k - h) * CELL, (j + Math.min(k, h)) * CELL);
+        g.lineStyle(2, 0xe0503f, 0.7); g.lineBetween(a.x, a.y, b.x, b.y);
+      }
+      g.lineStyle(2, 0xe0503f, 0.9); g.strokePoints(q, true);
+      label(z.id, 'VIA DI FUGA', q, '#ff8b7d');
+    });
+    passages.forEach(z => {
+      const [i, j, w, h] = z.r;
+      // strisce pedonali: si attraversa dritti (lungo gx)
+      for (let k = 0; k < h; k++) if (k % 2 === 0) fillQuad(quad(i * CELL, (j + k) * CELL, (i + w) * CELL, (j + k + 1) * CELL), 0xf2c53d, 0.2);
+      const q = quad(i * CELL, j * CELL, (i + w) * CELL, (j + h) * CELL);
+      g.lineStyle(1.5, 0xf2c53d, 0.6); g.strokePoints(q, true);
+      label(z.id, 'PASSAGGIO', q, '#f2c53d');
+    });
+    // i punti da sistemare
+    let issues = [];
+    if (this.gerryMarks || this.lay) {
+      issues = gerryIssues();
+      if (!this.gerryMarks) issues = issues.filter(x => x.ids.includes(this.lay.id));
+    }
+    issues.forEach(is => is.cells.forEach(c => {
+      const q = [[0, 0], [1, 0], [1, 1], [0, 1]].map(([di, dj]) => {
+        const x = (c.i + di) * CELL, y = (c.j + dj) * CELL, p = gridToScreen(x, y);
+        return isStageCell(c.i * CELL, c.j * CELL) ? { x: p.x, y: p.y - PLATFORM_HEIGHT } : p;
+      });
+      mg.fillStyle(0xe0503f, 0.35); mg.fillPoints(q, true);
+      mg.lineStyle(1.5, 0xe0503f, 0.95); mg.strokePoints(q, true);
+    }));
+    this.layIssue = this.lay ? (issues.find(x => x.ids.includes(this.lay.id)) || null) : null;
   }
 
   // pallini sui tratti del cavo in mano e il cavo che avanza, arrotolato
