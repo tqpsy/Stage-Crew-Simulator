@@ -5745,7 +5745,13 @@ class StageScene extends Phaser.Scene {
 
     // cortile di carico, fuori dalla palestra: di notte si vede solo dai
     // finestroni della parete di fondo, quindi resta quasi nero
-    quad(0, 0, VENUE_W, CARICO_ROWS, 0x17181c);
+    // (tagliato in diagonale a destra, così non sporge oltre la parete)
+    g.fillStyle(0x202226, 1);
+    g.fillPoints([gridToScreen(0, 0), gridToScreen(VENUE_W - CARICO_ROWS, 0), gridToScreen(VENUE_W, CARICO_ROWS), gridToScreen(0, CARICO_ROWS)], true);
+    for (let i = 0; i < 160; i++) {
+      const x = rnd() * (VENUE_W - CARICO_ROWS), y = rnd() * CARICO_ROWS, q = gridToScreen(x, y);
+      g.fillStyle(rnd() < 0.5 ? 0x2a2c31 : 0x18191c, 0.9); g.fillCircle(q.x, q.y, 1 + rnd() * 1.2);
+    }
 
     // backstage: cemento a lastre
     quad(0, CARICO_ROWS, VENUE_W, STAGE_ORIGIN_Y, 0x3a3c42);
@@ -5778,16 +5784,17 @@ class StageScene extends Phaser.Scene {
 
     // griglia di posa appena accennata (un metro), per orientarsi
     for (let x = 1; x < VENUE_W; x += 1) {
-      const a = gridToScreen(x, 0), b = gridToScreen(x, VENUE_H);
+      const a = gridToScreen(x, CARICO_ROWS), b = gridToScreen(x, VENUE_H);
       g.lineStyle(1, 0xffffff, 0.045); g.lineBetween(a.x, a.y, b.x, b.y);
     }
-    for (let y = 1; y < VENUE_H; y += 1) {
+    for (let y = CARICO_ROWS + 1; y < VENUE_H; y += 1) {
       const a = gridToScreen(0, y), b = gridToScreen(VENUE_W, y);
       g.lineStyle(1, 0xffffff, 0.045); g.lineBetween(a.x, a.y, b.x, b.y);
     }
     g.lineStyle(2, 0x0c0d10, 0.9);
-    g.strokePoints([p0, p1, p2, p3], true);
+    g.strokePoints([gridToScreen(0, CARICO_ROWS), gridToScreen(VENUE_W, CARICO_ROWS), p2, p3], true);
     this.drawGymWalls();
+    this.drawGymDetails();
     this.drawWorkLights();
 
     g.setInteractive(new Phaser.Geom.Rectangle(0, 0, GAME_W, GAME_H), Phaser.Geom.Rectangle.Contains);
@@ -5880,6 +5887,63 @@ class StageScene extends Phaser.Scene {
       .setOrigin(0.5).setAngle(ang).setDepth(0.55);
   }
 
+  /* rifiniture della palestra: ombre morbide ai piedi dei muri, spessore
+     in cima alle pareti, luce della luna dalle finestre, canestro e
+     tabellone. Solo scenografia: nessuna cella occupata. */
+  drawGymDetails () {
+    const H = 190, y0 = CARICO_ROWS;
+    const g = this.add.graphics().setDepth(0.45);
+    const floorQuad = (x0, ya, x1, yb, color, alpha) => {
+      g.fillStyle(color, alpha);
+      g.fillPoints([gridToScreen(x0, ya), gridToScreen(x1, ya), gridToScreen(x1, yb), gridToScreen(x0, yb)], true);
+    };
+    // ombra morbida lungo i due muri (si allarga e sfuma verso la sala)
+    [[0.45, 0.9, 0.1], [0.9, 1.5, 0.05]].forEach(([a, b, al]) => {
+      floorQuad(a, y0, b, VENUE_H, 0x000000, al);
+      floorQuad(0, y0 + a, VENUE_W, y0 + b, 0x000000, al);
+    });
+    // luna dalle finestre della parete laterale: chiazze fredde sul parquet
+    const moon = this.add.graphics().setDepth(0.46).setBlendMode(Phaser.BlendModes.ADD);
+    for (let y = y0 + 4.3; y < VENUE_H - 1; y += 2.1) {
+      if (y + 1.5 < STAGE_ORIGIN_Y + STAGE_H + 0.5 || y + 3 > VENUE_H) continue;   // palco già illuminato; non fuori sala
+      moon.fillStyle(0x7f9ccc, 0.07);
+      moon.fillPoints([gridToScreen(0.7, y + 0.9), gridToScreen(2.1, y + 1.5), gridToScreen(2.1, y + 3.0), gridToScreen(0.7, y + 2.4)], true);
+    }
+
+    const w = this.add.graphics().setDepth(1.16);
+    // spessore in cima alle pareti: si capisce che sono muri veri
+    const top = (pts, color) => { w.fillStyle(color, 1); w.fillPoints(pts.map(([x, y]) => { const q = gridToScreen(x, y); return { x: q.x, y: q.y - H }; }), true); };
+    top([[-0.22, y0 - 0.22], [0, y0], [0, VENUE_H], [-0.22, VENUE_H]], 0x767c89);
+    top([[-0.22, y0 - 0.22], [VENUE_W, y0 - 0.22], [VENUE_W, y0], [0, y0]], 0x767c89);
+    { const a = gridToScreen(VENUE_W, y0 - 0.22), b = gridToScreen(VENUE_W, y0); w.fillStyle(0x3a3e47, 1);
+      w.fillPoints([{ x: a.x, y: a.y - H }, { x: b.x, y: b.y - H }, { x: b.x, y: b.y }, { x: a.x, y: a.y }], true); }
+    { const a = gridToScreen(0, VENUE_H), b = gridToScreen(-0.22, VENUE_H); w.fillStyle(0x3a3e47, 1);
+      w.fillPoints([{ x: a.x, y: a.y - H }, { x: b.x, y: b.y - H }, { x: b.x, y: b.y }, { x: a.x, y: a.y }], true); }
+
+    // tabellone segnapunti sulla parete di fondo, sopra la porta del carico
+    const bp = (gx, h) => { const q = gridToScreen(gx, y0); return { x: q.x, y: q.y - h }; };
+    const bface = (xa, xb, ha, hb, color) => { w.fillStyle(color, 1); w.fillPoints([bp(xa, ha), bp(xb, ha), bp(xb, hb), bp(xa, hb)], true); };
+    bface(3.05, 4.15, 112, 158, 0x0d0e11);
+    bface(3.05, 4.15, 112, 114, 0x5d636f);
+    const ang = Phaser.Math.RadToDeg(Math.atan2(TILE_H / 2, TILE_W / 2));
+    const sc = bp(3.6, 144), sl = bp(3.28, 124), sr = bp(3.92, 124);
+    const digit = { fontFamily: 'Barlow Condensed, sans-serif', fontStyle: 'bold', color: '#ff5a3c' };
+    this.add.text(sc.x, sc.y, '20:30', { ...digit, fontSize: '13px', color: '#ffb23c' }).setOrigin(0.5).setAngle(ang).setDepth(1.17);
+    this.add.text(sl.x, sl.y, 'CASA 12', { ...digit, fontSize: '7px' }).setOrigin(0.5).setAngle(ang).setDepth(1.17);
+    this.add.text(sr.x, sr.y, 'OSPITI 9', { ...digit, fontSize: '7px' }).setOrigin(0.5).setAngle(ang).setDepth(1.17);
+
+    // canestro laterale sulla parete sinistra, sopra l'angolo dei case
+    const lp = (gy, h, gx = 0) => { const q = gridToScreen(gx, gy); return { x: q.x, y: q.y - h }; };
+    const c = this.add.graphics().setDepth(0.55);
+    c.fillStyle(0x9aa0ab, 1); c.fillPoints([lp(14.95, 120), lp(15.25, 120), lp(15.25, 128, 0.35), lp(14.95, 128, 0.35)], true);
+    c.fillStyle(0xf4f2ec, 1); c.fillPoints([lp(14.45, 128, 0.35), lp(15.75, 128, 0.35), lp(15.75, 178, 0.35), lp(14.45, 178, 0.35)], true);
+    c.lineStyle(2, 0xd6392f, 1); c.strokePoints([lp(14.8, 132, 0.35), lp(15.4, 132, 0.35), lp(15.4, 152, 0.35), lp(14.8, 152, 0.35)], true);
+    const rim = lp(15.1, 132, 0.75);
+    c.lineStyle(2.5, 0xf06a1f, 1); c.strokeEllipse(rim.x, rim.y, 30, 14);
+    for (let i = -2; i <= 2; i++) { c.lineStyle(1, 0xe9e4d6, 0.6); c.lineBetween(rim.x + i * 6, rim.y + 3, rim.x + i * 3.5, rim.y + 20); }
+    c.lineStyle(1, 0xe9e4d6, 0.5); c.strokeEllipse(rim.x, rim.y + 12, 18, 7);
+  }
+
   /* parete dietro al palco (gy = CARICO_ROWS): chiude la palestra. Dai
      finestroni alti si intravede il cortile di notte col furgone del service.
      Sta sopra il cortile e sotto tutto ciò che è dentro. */
@@ -5935,7 +5999,8 @@ class StageScene extends Phaser.Scene {
       this.add.image(q.x, q.y, 'pool').setScale(sx, sx * 0.62).setTint(color).setAlpha(alpha)
         .setBlendMode(Phaser.BlendModes.ADD).setDepth(0.9);
     };
-    pool(1.8, 0.6, 2.2, 0xffd28a, 0.35);   // lampione del cortile, si vede dai finestroni
+    pool(1.8, 0.6, 2.2, 0xffd28a, 0.35);
+    pool(0.6, 3.05, 0.5, 0x2fa35a, 0.35);  // luce verde dell'uscita   // lampione del cortile, si vede dai finestroni
     pool(STAGE_ORIGIN_X + 2, STAGE_ORIGIN_Y + 2, 2.6, 0xffc98a, 0.22);
     pool(7.5, 6, 1.6, 0xffe2b8, 0.16);
     pool(5, 2.6, 2.4, 0xbfd4ff, 0.12);
