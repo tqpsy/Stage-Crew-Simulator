@@ -5858,6 +5858,7 @@ class StageScene extends Phaser.Scene {
     g.fillPoints([gridToScreen(0, gy0), gridToScreen(0, gy1), gridToScreen(0.45, gy1), gridToScreen(0.45, gy0)], true);
     // finestre alte
     for (let y = gy0 + 4.3; y < gy1 - 1; y += 2.1) {
+      if (y < 12.5 && y + 1.5 > 11) continue;   // lì c'è la seconda uscita
       face(y, y + 1.5, 112, 170, 0x1a2738);
       face(y, y + 1.5, 112, 116, 0x6b7180);
       g.lineStyle(1.5, 0x6d8fb3, 0.35);
@@ -5865,14 +5866,19 @@ class StageScene extends Phaser.Scene {
       const m0 = wp(y + 0.75, 112), m1 = wp(y + 0.75, 170); g.lineStyle(2, 0x6b7180, 1); g.lineBetween(m0.x, m0.y, m1.x, m1.y);
     }
     // spalliere
-    for (let y = 11.2; y <= 14.2; y += 0.5) { const a = wp(y, 0), b = wp(y, 150); g.lineStyle(3, 0x8a6a45, 1); g.lineBetween(a.x, a.y, b.x, b.y); }
-    for (let h = 10; h <= 150; h += 14) { const a = wp(11.2, h), b = wp(14.2, h); g.lineStyle(2, 0x9c7a50, 0.9); g.lineBetween(a.x, a.y, b.x, b.y); }
+    for (let y = 12.9; y <= 14.3; y += 0.35) { const a = wp(y, 0), b = wp(y, 150); g.lineStyle(3, 0x8a6a45, 1); g.lineBetween(a.x, a.y, b.x, b.y); }
+    for (let h = 10; h <= 150; h += 14) { const a = wp(12.9, h), b = wp(14.3, h); g.lineStyle(2, 0x9c7a50, 0.9); g.lineBetween(a.x, a.y, b.x, b.y); }
     // spigolo del muro verso il cortile
     { const a = wp(gy0, 0), b = wp(gy0, H); g.lineStyle(3, 0x6b7180, 1); g.lineBetween(a.x, a.y, b.x, b.y); }
     // uscita di sicurezza verso il backstage
     face(2.5, 3.6, 0, 105, 0x1b1d21);
     face(2.5, 3.6, 105, 109, 0x6b7180);
     face(2.75, 3.35, 116, 134, 0x2fa35a);
+    // seconda uscita di sicurezza, in fondo alla via di fuga della sala
+    face(11.2, 12.3, 0, 105, 0x1b1d21);
+    face(11.7, 11.72, 0, 105, 0x0f1013);
+    face(11.2, 12.3, 105, 109, 0x6b7180);
+    face(11.45, 12.05, 116, 134, 0x2fa35a);
     // striscione della festa
     face(5.2, 9.6, 118, 150, 0xe9e4d6);
     face(5.2, 9.6, 118, 123, 0xd6392f);
@@ -5883,8 +5889,8 @@ class StageScene extends Phaser.Scene {
       .setOrigin(0.5).setAngle(ang).setDepth(0.55);
     this.drawBackWall(H);
     const ex = wp(3.05, 125);
-    this.add.text(ex.x, ex.y, 'USCITA', { fontFamily: 'Inter, sans-serif', fontStyle: 'bold', fontSize: '8px', color: '#ffffff' })
-      .setOrigin(0.5).setAngle(ang).setDepth(0.55);
+    [ex, wp(11.75, 125)].forEach(q => this.add.text(q.x, q.y, 'USCITA', { fontFamily: 'Inter, sans-serif', fontStyle: 'bold', fontSize: '8px', color: '#ffffff' })
+      .setOrigin(0.5).setAngle(ang).setDepth(0.55));
   }
 
   /* rifiniture della palestra: ombre morbide ai piedi dei muri, spessore
@@ -6000,7 +6006,8 @@ class StageScene extends Phaser.Scene {
         .setBlendMode(Phaser.BlendModes.ADD).setDepth(0.9);
     };
     pool(1.8, 0.6, 2.2, 0xffd28a, 0.35);
-    pool(0.6, 3.05, 0.5, 0x2fa35a, 0.35);  // luce verde dell'uscita   // lampione del cortile, si vede dai finestroni
+    pool(0.6, 3.05, 0.5, 0x2fa35a, 0.35);  // luce verde delle uscite
+    pool(0.6, 11.75, 0.5, 0x2fa35a, 0.35);   // lampione del cortile, si vede dai finestroni
     pool(STAGE_ORIGIN_X + 2, STAGE_ORIGIN_Y + 2, 2.6, 0xffc98a, 0.22);
     pool(7.5, 6, 1.6, 0xffe2b8, 0.16);
     pool(5, 2.6, 2.4, 0xbfd4ff, 0.12);
