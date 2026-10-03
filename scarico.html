@@ -238,11 +238,13 @@ const ZONES = {
   pit:   { name: 'Pit',       color: '#4fb7ff', x: 1470, y: 320, w: 150, h: 360 },
   foh:   { name: 'Regia FOH', color: '#49e07a', x: 1190, y: 660, w: 200, h: 180 }
 };
+// i flight case sono fatti per prendere colpi: si rovina qualcosa solo con
+// un urto vero (correre contro un muro, far cadere, lanciare un case)
 const FRAG = {
-  bassa:     { thr: 3.6, mult: 0.6 },
-  media:     { thr: 2.3, mult: 1.0 },
-  alta:      { thr: 1.9, mult: 1.4 },
-  altissima: { thr: 1.3, mult: 1.5 }
+  bassa:     { thr: 4.6, mult: 0.5 },
+  media:     { thr: 3.4, mult: 0.8 },
+  alta:      { thr: 2.9, mult: 1.0 },
+  altissima: { thr: 2.4, mult: 1.1 }
 };
 // smorzamento al secondo: f = in avanti, s = di lato, a = rotazione
 const WHEEL = {
@@ -266,7 +268,7 @@ const CASES = [
     dif: 'il quadro scatta alla prima accensione: +10 min' },
   { id: 'sub2', name: 'Sub 2', short: 'SUB', what: 'cassa sub', kg: 40, w: 70, h: 70, wheel: 'fixed', frag: 'media', zone: 'pit', unique: true, x: 185, y: 568,
     dif: 'la cassa vibra: +10 min per controllarla' },
-  { id: 'stativi', name: 'Borsa stativi', short: 'STATIVI', what: '4 stativi + asta mic', kg: 22, w: 150, h: 26, wheel: 'hand', frag: 'bassa', zone: 'palco', x: 315, y: 407,
+  { id: 'stativi', name: 'Borsa stativi', short: 'STATIVI', what: '4 stativi + asta mic', kg: 22, w: 90, h: 34, wheel: 'hand', frag: 'bassa', zone: 'palco', x: 300, y: 407,
     dif: 'uno stativo duro da aprire: +10 min' },
   { id: 'top1', name: 'Top 1', short: 'TOP', what: 'cassa top', kg: 20, w: 44, h: 44, wheel: 'hand', frag: 'media', zone: 'pit', unique: true, x: 262, y: 452,
     dif: 'il tweeter gracchia: +10 min' },
@@ -558,7 +560,8 @@ function damage (ce, amt, cause) {
   ce.flash = 0.5;
   if (amt >= 5) puff(ce.body.position.x, ce.body.position.y, 6, 'rgba(242,164,61,', 1.6);
   if (ce.def.id === 'par') { // un PAR si rompe ogni 25 punti di danno accumulati
-    const left = Math.max(0, 4 - Math.floor((100 - ce.integrity) / 25));
+    // al massimo un PAR per colpo: il case li tiene separati
+    const left = Math.max(ce.pars - 1, 4 - Math.floor((100 - ce.integrity) / 25));
     if (left < ce.pars) { ce.pars = left; AU.crack(); bubble(ce, 'Crack! Un PAR rotto (' + ce.pars + '/4)', 2); }
   }
   const after = stateOf(ce.integrity);
@@ -584,10 +587,15 @@ function hitCase (ce, other, rel, otherBody) {
   if (other && other.kind === 'kid') { if (rel > 1.3) kidHit(other); return; }
   if (rel > 1.4) AU.thud(rel);
   if (rel > 1.8) puff(ce.body.position.x, ce.body.position.y, Math.min(10, Math.round(rel * 2)), 'rgba(190,190,196,', 1 + rel / 3);
+  // in mano il case viene «tirato» verso chi lo porta: quella spinta non è
+  // un urto, conta solo quanto andava davvero chi lo porta (anche quando è
+  // il case in mano a urtarne un altro)
+  if (ce.carrier) rel = Math.min(rel, speedOf(ce.carrier.body) + 0.3);
+  if (other && other.carrier) rel = Math.min(rel, speedOf(other.carrier.body) + 0.3);
   const f = FRAG[ce.def.frag];
-  if (rel <= f.thr || G.t - ce.lastHit < 0.25) return;
+  if (rel <= f.thr || G.t - ce.lastHit < 0.5) return;
   ce.lastHit = G.t;
-  let dmg = (rel - f.thr) * 12 * f.mult;
+  let dmg = (rel - f.thr) * 10 * f.mult;
   if (other && other.kind === 'case') dmg *= clamp(other.def.kg / ce.def.kg, 0.5, 1.6);
   // Tonino è lento ma sicuro: quello che porta lui si fa poco male
   if (ce.carrier === G.tonino || (other && other.carrier === G.tonino)) dmg *= 0.15;
@@ -931,7 +939,10 @@ function updateCase (ce, dt) {
     const w = ce.carrier, f = { x: Math.cos(w.facing), y: Math.sin(w.facing) };
     const target = add(w.body.position, mul(f, w.carry.dist));
     const err = sub(target, b.position);
-    if (len(err) > 38) { const who = w; release(w, 'slip'); if (who === G.player) toast('Ti è sfuggito di mano!', 'bad'); else bubble(who, 'Oops!', 1); return; }
+    // case bloccato (contro un muro o un altro case): chi lo porta si ferma,
+    // non gli sfugge di mano; sfugge solo se viene proprio strappato via
+    if (len(err) > 38) Body.setVelocity(w.body, mul(w.body.velocity, 0.2));
+    if (len(err) > 70) { const who = w; release(w, 'slip'); if (who === G.player) toast('Ti è sfuggito di mano!', 'bad'); else bubble(who, 'Oops!', 1); return; }
     let v = mul(err, 0.35); if (len(v) > 6) v = mul(norm(v), 6);
     Body.setVelocity(b, add(mul(w.body.velocity, 0.9), v));
     Body.setAngularVelocity(b, angDiff(w.facing + w.carry.rel, b.angle) * 0.3);
@@ -1343,7 +1354,7 @@ function drawCase (ce) {
     const r = seeded(ce.seed); ctx.strokeStyle = 'rgba(210,214,222,.45)'; ctx.lineWidth = 1.2;
     for (let i = 0; i < n; i++) { const x = (r() - 0.5) * (w - 8), y = (r() - 0.5) * (h - 8), l = 6 + r() * 12, a = r() * Math.PI; ctx.beginPath(); ctx.moveTo(x, y); ctx.lineTo(x + Math.cos(a) * l, y + Math.sin(a) * l); ctx.stroke(); }
   }
-  if (!ce.tipped && ce.carrier !== G.tonino && speedOf(b) > FRAG[d.frag].thr * 0.92 && speedOf(b) > 0.8) {
+  if (!ce.tipped && ce.carrier !== G.tonino && (ce.carrier ? speedOf(ce.carrier.body) + 0.3 : speedOf(b)) > FRAG[d.frag].thr * 0.92 && speedOf(b) > 0.8) {
     ctx.strokeStyle = 'rgba(224,80,63,' + (0.65 + 0.35 * Math.sin(performance.now() / 70)) + ')'; ctx.lineWidth = 4;
     rr(-w / 2 - 4, -h / 2 - 4, w + 8, h + 8, 6); ctx.stroke();
   }
