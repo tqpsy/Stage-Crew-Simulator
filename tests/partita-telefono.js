@@ -20,7 +20,7 @@ const OUT = process.env.SHOTS || null;
   await p.goto('file://' + path.join(__dirname, '..', 'index.html'));
   await p.waitForFunction(() => window.__scene, null, { timeout: 20000 });
   await p.waitForTimeout(300);
-  let taps = 0, menus = 0, zoomResets = 0; const log = []; const problems = [];
+  let taps = 0, menus = 0, zoomResets = 0, lays = 0; const log = []; const problems = [];
   // menù iniziale: nome del tecnico, un service tra i tre e via
   await p.locator('#player-input').fill('Tecnico Telefono');
   taps++; await p.locator('#service-offers .offer-card').first().tap();
@@ -93,6 +93,8 @@ const OUT = process.env.SHOTS || null;
     if (cable) await take(cable);
     await port(a, ap); await port(bb, bp);
     const n2 = await p.evaluate(() => gameState.edges.length);
+    // il cavo collegato resta in mano da stendere: qui va bene com'è
+    if (await p.evaluate(() => el('#lay-bar').classList.contains('show'))) { lays++; await tapSel('#lay-done'); }
     if (await p.evaluate(() => el('#rear-modal').classList.contains('show'))) { problems.push('pannello rimasto aperto dopo ' + a + '->' + bb); await p.evaluate(() => closeRearPanel()); }
     if (n2 !== n + 1) { problems.push('cavo ' + cable + ' ' + a + '.' + ap + ' -> ' + bb + '.' + bp + ' NON collegato: ' + await toast()); await shot('fail-' + a + '-' + bb); }
   };
@@ -176,7 +178,7 @@ const OUT = process.env.SHOTS || null;
   const rep = await p.evaluate(() => reputation());
   log.push('reputazione: ' + rep);
   if (rep !== 5 || !/Reputazione \+5\./.test(await toast())) problems.push('reputazione del collaudo sbagliata: ' + rep);
-  log.push('TOTALE tocchi: ' + taps + ' (menu Quale?: ' + menus + ', ritorni alla vista intera: ' + zoomResets + ')');
+  log.push('TOTALE tocchi: ' + taps + ' (menu Quale?: ' + menus + ', ritorni alla vista intera: ' + zoomResets + ', cavi stesi con Fatto: ' + lays + ')');
   await shot('fine');
   console.log(log.join('\n')); console.log('PROBLEMI:', JSON.stringify(problems, null, 1)); console.log('ERRORI JS:', errs);
   await b.close();

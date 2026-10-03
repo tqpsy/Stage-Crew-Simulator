@@ -83,10 +83,10 @@ const path = require('path');
   check(test.status === 'IMPIANTO OK' && /Monta l'asta|collegalo con un XLR/.test(test.msg), 'Test impianto non superato: ' + JSON.stringify(test));
   // fine dello show senza aspettare i timer di Phaser (come tests/posa-cavi-gioco.js)
   await ev(() => { const s = window.__scene; s.stopFx(); s.afterShow(); });
-  await p.waitForSelector('#cavi-frame', { timeout: 10000 });
+  await p.waitForSelector('#gerry-modal.show', { timeout: 10000 });
   check(await ev(() => schedulePhaseState('preside')) === 'next', 'il discorso è già "Adesso" prima della posa');
-  await p.frameLocator('#cavi-frame').locator('#btn-skip').click();
-  await p.waitForFunction(() => !document.querySelector('#cavi-frame'));
+  await p.click('#gerry-go');
+  await p.waitForFunction(() => !gerryOpen);
   // microfono staccato: il preside aspetta e l'avviso dice cosa fare
   const wait = await ev(() => ({ toast: el('#toast').textContent, state: schedulePhaseState('preside'), porte: schedulePhaseState('porte') }));
   check(/parla il preside: collega il microfono/.test(wait.toast) && wait.state === 'now' && wait.porte === 'done', 'dopo la posa, senza microfono: ' + JSON.stringify(wait));
