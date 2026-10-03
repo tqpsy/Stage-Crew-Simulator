@@ -5576,7 +5576,7 @@ class StageScene extends Phaser.Scene {
   create () {
     window.__scene = this;
 
-    this.occupied = {};
+    this.occupied = {}; this.blockSceneryCells();
     this.compVisuals = {};
     this.moveSelected = null;
     this.selectedEdgeId = null;
@@ -5743,13 +5743,9 @@ class StageScene extends Phaser.Scene {
     let seed = 7;
     const rnd = () => { seed = (seed * 16807) % 2147483647; return seed / 2147483647; };
 
-    // cortile di carico: asfalto con la linea gialla della banchina
-    quad(0, 0, VENUE_W, CARICO_ROWS, 0x2a2c30);
-    for (let i = 0; i < 260; i++) {
-      const x = rnd() * VENUE_W, y = rnd() * CARICO_ROWS, q = gridToScreen(x, y);
-      g.fillStyle(rnd() < 0.5 ? 0x34363b : 0x222428, 0.9); g.fillCircle(q.x, q.y, 1 + rnd() * 1.5);
-    }
-    quad(0, CARICO_ROWS - 0.12, VENUE_W, CARICO_ROWS - 0.04, 0xf2c53d, 0.75);
+    // cortile di carico, fuori dalla palestra: di notte si vede solo dai
+    // finestroni della parete di fondo, quindi resta quasi nero
+    quad(0, 0, VENUE_W, CARICO_ROWS, 0x17181c);
 
     // backstage: cemento a lastre
     quad(0, CARICO_ROWS, VENUE_W, STAGE_ORIGIN_Y, 0x3a3c42);
@@ -5831,6 +5827,12 @@ class StageScene extends Phaser.Scene {
     this.floorGraphics = g;
   }
 
+  // celle dove sta la scenografia (i case nel backstage): lì non si posa niente
+  blockSceneryCells () {
+    for (let cx = 0; cx < 2; cx += CELL) for (let cy = VENUE_H - 1; cy < VENUE_H; cy += CELL) this.occupied[cellKey(cx, cy)] = 'scenografia';
+    for (let cx = 0; cx < 1; cx += CELL) for (let cy = VENUE_H - 2; cy < VENUE_H - 1; cy += CELL) this.occupied[cellKey(cx, cy)] = 'scenografia';
+  }
+
   /* parete di fondo della palestra, lungo il lato sinistro (gx = 0): finestre
      alte, spalliere, l'uscita di sicurezza e lo striscione della festa.
      Sta dietro a tutto, quindi non copre mai i dispositivi. */
@@ -5860,9 +5862,6 @@ class StageScene extends Phaser.Scene {
     for (let h = 10; h <= 150; h += 14) { const a = wp(11.2, h), b = wp(14.2, h); g.lineStyle(2, 0x9c7a50, 0.9); g.lineBetween(a.x, a.y, b.x, b.y); }
     // spigolo del muro verso il cortile
     { const a = wp(gy0, 0), b = wp(gy0, H); g.lineStyle(3, 0x6b7180, 1); g.lineBetween(a.x, a.y, b.x, b.y); }
-    // recinzione bassa del cortile, sul lato della strada
-    for (let x = 0; x <= VENUE_W; x += 0.5) { const q = gridToScreen(x, 0); g.lineStyle(2, 0x5b5f68, 1); g.lineBetween(q.x, q.y, q.x, q.y - 28); }
-    { const a = gridToScreen(0, 0), b = gridToScreen(VENUE_W, 0); g.lineStyle(3, 0x6b7180, 1); g.lineBetween(a.x, a.y - 28, b.x, b.y - 28); g.lineStyle(2, 0x5b5f68, 1); g.lineBetween(a.x, a.y - 14, b.x, b.y - 14); }
     // uscita di sicurezza verso il backstage
     face(2.5, 3.6, 0, 105, 0x1b1d21);
     face(2.5, 3.6, 105, 109, 0x6b7180);
@@ -5875,9 +5874,52 @@ class StageScene extends Phaser.Scene {
     const ang = Phaser.Math.RadToDeg(Math.atan2(TILE_H / 2, -TILE_W / 2)) + 180;
     this.add.text(c.x, c.y, 'FESTA DI FINE ANNO', { fontFamily: FONT_MARKER, fontSize: '15px', color: '#2b5fb0' })
       .setOrigin(0.5).setAngle(ang).setDepth(0.55);
+    this.drawBackWall(H);
     const ex = wp(3.05, 125);
     this.add.text(ex.x, ex.y, 'USCITA', { fontFamily: 'Inter, sans-serif', fontStyle: 'bold', fontSize: '8px', color: '#ffffff' })
       .setOrigin(0.5).setAngle(ang).setDepth(0.55);
+  }
+
+  /* parete dietro al palco (gy = CARICO_ROWS): chiude la palestra. Dai
+     finestroni alti si intravede il cortile di notte col furgone del service.
+     Sta sopra il cortile e sotto tutto ciò che è dentro. */
+  drawBackWall (H) {
+    const g = this.add.graphics().setDepth(1.15);
+    const y = CARICO_ROWS;
+    const wp = (gx, h) => { const q = gridToScreen(gx, y); return { x: q.x, y: q.y - h }; };
+    const face = (xa, xb, ha, hb, color, alpha = 1) => { g.fillStyle(color, alpha); g.fillPoints([wp(xa, ha), wp(xb, ha), wp(xb, hb), wp(xa, hb)], true); };
+    const W0 = 66, W1 = 172;                     // davanzale e architrave dei finestroni
+    const wins = [[0.35, 2.85], [5.7, 7.6], [7.9, 9.7]];
+    // muro pieno sotto, sopra e fra i finestroni (i vetri restano aperti sul cortile)
+    face(0, VENUE_W, 0, W0, 0x464b56);
+    face(0, VENUE_W, W1, H, 0x464b56);
+    let x = 0;
+    wins.forEach(([a, b]) => { face(x, a, W0, W1, 0x464b56); x = b; });
+    face(x, VENUE_W, W0, W1, 0x464b56);
+    face(0, VENUE_W, 0, 56, 0x2f4356);
+    face(0, VENUE_W, 56, 60, 0xf2a541, 0.55);
+    face(0, VENUE_W, H - 6, H, 0x5d636f);
+    // vetri: notte fuori, riflessi e montanti
+    wins.forEach(([a, b]) => {
+      face(a, b, W0, W1, 0x0e1622, 0.35);
+      face(a, b, W0 - 4, W0, 0x6b7180);
+      face(a, b, W1, W1 + 4, 0x6b7180);
+      for (let m = a; m <= b + 0.001; m += (b - a) / Math.max(2, Math.round((b - a) / 0.8))) {
+        const p0 = wp(m, W0), p1 = wp(m, W1); g.lineStyle(3, 0x6b7180, 1); g.lineBetween(p0.x, p0.y, p1.x, p1.y);
+      }
+      const h0 = wp(a, (W0 + W1) / 2), h1 = wp(b, (W0 + W1) / 2); g.lineStyle(2, 0x6b7180, 1); g.lineBetween(h0.x, h0.y, h1.x, h1.y);
+      g.lineStyle(2, 0x9fb6d3, 0.22);
+      const r0 = wp(a + 0.2, W0 + 8), r1 = wp(a + 0.6, W1 - 6); g.lineBetween(r0.x, r0.y, r1.x, r1.y);
+    });
+    // porta del carico, da dove sono entrati i case
+    face(4.3, 5.4, 0, 100, 0x2a2d33);
+    face(4.85, 4.87, 0, 100, 0x14161a);
+    face(4.3, 5.4, 100, 104, 0x6b7180);
+    // ombra del muro sul pavimento del backstage
+    g.fillStyle(0x000000, 0.25);
+    g.fillPoints([gridToScreen(0, y), gridToScreen(VENUE_W, y), gridToScreen(VENUE_W, y + 0.4), gridToScreen(0, y + 0.4)], true);
+    // spigolo con la parete laterale
+    { const a = wp(0, 0), b = wp(0, H); g.lineStyle(3, 0x5d636f, 1); g.lineBetween(a.x, a.y, b.x, b.y); }
   }
 
   /* luci di servizio: pozze calde sul palco e in regia, buio ai bordi */
@@ -5893,6 +5935,7 @@ class StageScene extends Phaser.Scene {
       this.add.image(q.x, q.y, 'pool').setScale(sx, sx * 0.62).setTint(color).setAlpha(alpha)
         .setBlendMode(Phaser.BlendModes.ADD).setDepth(0.9);
     };
+    pool(1.8, 0.6, 2.2, 0xffd28a, 0.35);   // lampione del cortile, si vede dai finestroni
     pool(STAGE_ORIGIN_X + 2, STAGE_ORIGIN_Y + 2, 2.6, 0xffc98a, 0.22);
     pool(7.5, 6, 1.6, 0xffe2b8, 0.16);
     pool(5, 2.6, 2.4, 0xbfd4ff, 0.12);
@@ -5925,7 +5968,7 @@ class StageScene extends Phaser.Scene {
     const pitStart = STAGE_ORIGIN_Y + STAGE_H;
     const plateaStart = pitStart + PIT_ROWS;
     const fohStart = plateaStart + PLATEA_ROWS;
-    this.drawZoneOutline([[0, 0], [VENUE_W, 0], [VENUE_W, CARICO_ROWS], [0, CARICO_ROWS]], 'CORTILE · SCARICO', [3.3, 1.55]);
+    this.drawZoneOutline([[0, 0], [VENUE_W, 0], [VENUE_W, CARICO_ROWS], [0, CARICO_ROWS]], null);
     this.drawZoneOutline([[0, CARICO_ROWS], [VENUE_W, CARICO_ROWS], [VENUE_W, STAGE_ORIGIN_Y], [0, STAGE_ORIGIN_Y]], 'BACKSTAGE', [1.2, 3.1]);
     this.drawZoneOutline([[0, pitStart], [VENUE_W, pitStart], [VENUE_W, plateaStart], [0, plateaStart]], 'PIT', [4.6, pitStart + 1.1]);
     this.drawZoneOutline([[0, plateaStart], [VENUE_W, plateaStart], [VENUE_W, fohStart], [0, fohStart]], 'PLATEA', [4.6, plateaStart + 2]);
@@ -5942,11 +5985,12 @@ class StageScene extends Phaser.Scene {
     const vg = this.add.graphics().setDepth(1).setPosition(vp.x, vp.y);
     this.van = { vp, v, ...this.drawVehicle(vg, v) };
 
-    // i due bauli dei cavi e un case di ricambio, in fila lungo la banchina
-    const caseSpots = [[5.9, 0.9, 'segnale'], [7.2, 0.9, 'corrente'], [8.5, 0.9, null]];
+    // i due bauli dei cavi e un case di ricambio, dentro la palestra:
+    // nell'angolo dietro la regia FOH, contro la parete (celle occupate)
+    const caseSpots = [[0.55, 15.45, 'segnale'], [1.55, 15.45, 'corrente'], [0.55, 14.5, null]];
     caseSpots.forEach(([gx, gy, caseName], i) => {
       const p = gridToScreen(gx, gy);
-      const cg = this.add.graphics().setDepth(1.1 + gy / 100).setPosition(p.x, p.y);
+      const cg = this.add.graphics().setDepth(isoDepth(p.y) - 0.0005).setPosition(p.x, p.y);
       const tape = caseName === 'segnale' ? 0xeaff2b : caseName === 'corrente' ? 0xff4fb4 : null;
       this.drawFlightCase(cg, CASE_ISO, tape);
       if (!caseName) return;
@@ -5954,8 +5998,8 @@ class StageScene extends Phaser.Scene {
       this.casePos[caseName] = p;
       this.add.text(p.x, p.y - 34, CABLE_CASES[caseName].title, {
         fontFamily: 'Barlow Condensed, sans-serif', fontSize: '11px', fontStyle: 'bold', color: '#e6e8eb'
-      }).setOrigin(0.5).setDepth(2);
-      const hit = this.add.rectangle(p.x, p.y - 6, 58, 58, 0xffffff, 0.001).setDepth(2)
+      }).setOrigin(0.5).setDepth(isoDepth(p.y));
+      const hit = this.add.rectangle(p.x, p.y - 6, 58, 58, 0xffffff, 0.001).setDepth(isoDepth(p.y) + 0.0001)
         .setInteractive({ useHandCursor: true });
       hit.on('pointerdown', (pointer, lx, ly, event) => {
         if (event && event.stopPropagation) event.stopPropagation();
@@ -6243,7 +6287,8 @@ class StageScene extends Phaser.Scene {
   }
 
   drawAllaccio () {
-    const pos = gridToScreen(8.5, CARICO_ROWS + 0.5);
+    // il quadro della palestra è appeso alla parete dietro al palco
+    const pos = gridToScreen(3.3, CARICO_ROWS + 0.25);
     const def = COMPONENT_TYPES.allaccio;
     const visual = this.buildComponentVisual('allaccio', def, pos.x, pos.y);
     this.compVisuals['allaccio'] = visual;
@@ -8553,7 +8598,7 @@ class StageScene extends Phaser.Scene {
 
     Object.values(this.compVisuals).forEach(v => v.container.destroy());
     this.compVisuals = {};
-    this.occupied = {};
+    this.occupied = {}; this.blockSceneryCells();
     this.edgeGraphics.clear();
 
     gameState.placed = {};
@@ -8622,7 +8667,7 @@ class StageScene extends Phaser.Scene {
 
     Object.values(this.compVisuals).forEach(v => v.container.destroy());
     this.compVisuals = {};
-    this.occupied = {};
+    this.occupied = {}; this.blockSceneryCells();
 
     gameState.placed = JSON.parse(JSON.stringify(snap.placed));
     gameState.edges = JSON.parse(JSON.stringify(snap.edges));
