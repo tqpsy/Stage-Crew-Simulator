@@ -128,6 +128,29 @@ nastro basti con margine (≤ 85% del rotolo) ma non sia infinito (≥ 45%).
 - Passaggi e via di fuga anche al montaggio (posa guidata), così non si
   perdono sotto un pezzo.
 
+## Posa al montaggio
+
+Dal 3 ottobre 2026 i cavi si stendono già al montaggio (`main.js`,
+*POSA AL MONTAGGIO* e `StageScene.startLay`):
+
+- Ogni cavo per terra è fatto di **tratti dritti paralleli ai muri**, dal
+  centro della base di un pezzo a quello dell'altro. Senza posa il gioco
+  sceglie il percorso più corto a Z o a L che gira intorno alla pedana.
+- Appena collegato (o toccandolo) il cavo **resta in mano**: gli altri si
+  spengono e **i dispositivi non rispondono ai tocchi**. Si prende un tratto
+  col dito (o col mouse) e lo si sposta di lato: scatta sui centri delle
+  celle da 50 cm. Prendendo il primo o l'ultimo tratto nasce un tratto corto
+  che scende dal pezzo. I tratti a lunghezza zero spariscono da soli.
+- La barra in basso dice i metri usati sulla lunghezza del cavo del baule:
+  oltre non si tira (il cavo è teso), quello che avanza si arrotola accanto
+  al pezzo. Pulsanti: **Com'era** (percorso automatico), **Togli**, **Fatto**
+  (anche un tocco sul pavimento, Invio). Sul telefono la vista si avvicina
+  al cavo e poi torna com'era.
+- Il percorso si salva sul cavo (`e.route`, con la posizione delle due basi):
+  se una base si sposta, il cavo torna al percorso automatico. Annulla e
+  Ripeti lo comprendono.
+- La posa delle 20:00 per ora resta com'è e parte da questi percorsi.
+
 ## Decisi dopo la prova
 
 - **Niente prolunghe**: ogni cavo ha la sua lunghezza e basta. Se una strada
