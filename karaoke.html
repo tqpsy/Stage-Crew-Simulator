@@ -11,7 +11,7 @@
      voce di Macio nella zona verde (quando si gasa e urla si abbassa e canta il
      pubblico, quando va verso le casse c'è il larsen). Stessi colori e
      caratteri del gioco. Nel gioco si apre in un iframe con ?embed=1. */
-  :root{
+  :root{--teal:#3fc1b0;
     color-scheme: dark;
     --bg-deck:#141519; --bg-panel:#1c1d22; --bg-raised:#24252b; --hairline:#34363e;
     --text:#eee9df; --muted:#8b8e98; --amber:#f2a541; --green:#49b06a; --red:#e0503f; --yellow:#f2c53d;
@@ -89,6 +89,22 @@
   .pad small{font-size:11px;color:var(--muted);letter-spacing:.03em;line-height:1.1}
   .pad.down{background:color-mix(in srgb,var(--amber) 60%,#15161a);box-shadow:0 0 20px color-mix(in srgb,var(--amber) 70%,transparent)}
   .pad.down b{color:#111}.pad.down small{color:#222}
+  .pads{display:grid;grid-template-columns:2fr 1fr;gap:8px}
+  .pad.coro{border-color:var(--teal);background:color-mix(in srgb,var(--teal) 14%,#15161a)}
+  .pad.coro.down{background:color-mix(in srgb,var(--teal) 60%,#15161a);box-shadow:0 0 20px color-mix(in srgb,var(--teal) 70%,transparent)}
+  .pad.coro.call{animation:call .5s ease-in-out infinite alternate}
+  @keyframes call{to{box-shadow:0 0 18px color-mix(in srgb,var(--teal) 80%,transparent)}}
+  /* le parole da scegliere quando Macio non si ricorda il verso */
+  #choices{position:absolute;left:16px;right:16px;bottom:10px;display:grid;gap:6px;padding:8px;background:rgba(16,17,22,.94);border:1px solid var(--amber);border-radius:12px;z-index:3}
+  #choices p{margin:0;font-family:var(--marker);font-size:15px;color:var(--amber);text-align:center;line-height:1.1}
+  #choices div{display:grid;grid-template-columns:repeat(3,1fr);gap:6px;min-height:0}
+  #choices button{border:2px solid var(--amber);background:var(--bg-raised);border-radius:10px;font-family:var(--display);font-size:20px;letter-spacing:.03em;line-height:1.05;padding:2px 4px;min-height:44px}
+  #choices button kbd{display:block}
+  #choices[hidden]{display:none}
+  /* Gerry stacca la spina: il bottone grosso sul palco */
+  #spina{position:absolute;left:50%;top:44%;transform:translate(-50%,-50%);z-index:4;border:2px solid var(--red);background:#2a1513;color:var(--text);border-radius:14px;padding:10px 16px;font-size:16px;font-weight:700;line-height:1.3;text-align:center;box-shadow:0 0 24px rgba(224,80,63,.5);min-width:220px;max-width:calc(100% - 32px)}
+  #spina b{display:block;font-family:var(--display);font-size:22px;letter-spacing:.05em;color:var(--red)}
+  #spina[hidden]{display:none}
   kbd{font:600 10px var(--ui);color:var(--muted)}
   @media (hover:none){kbd{display:none}}
 
@@ -233,6 +249,8 @@
     </svg>
     <div id="lyrics" aria-live="off"><div class="cur" id="ly-cur"></div><div class="nxt" id="ly-nxt"></div></div>
     <div id="toast"></div>
+    <div id="choices" hidden><p>Macio non si ricorda la parola: scegli!</p><div></div></div>
+    <button id="spina" hidden><b>🔌 SPINA STACCATA!</b>Gerry ha tirato il cavo. Riattaccala: <span id="spina-n">3</span> tocchi<kbd> · R</kbd></button>
     <div id="pausa" hidden>PAUSA</div>
   </div>
 
@@ -246,7 +264,10 @@
     </div>
     <div class="side">
       <div id="road"><canvas id="hw"></canvas><div id="judge"></div><div id="banner"></div></div>
-      <button class="pad" id="pad"><b>AVANTI ▸</b><small>la sillaba sulla riga<kbd> · Spazio</kbd></small></button>
+      <div class="pads">
+        <button class="pad" id="pad"><b>AVANTI ▸</b><small>la sillaba sulla riga<kbd> · Spazio</kbd></small></button>
+        <button class="pad coro" id="coro"><b>CORO</b><small>«OH!»<kbd> · C</kbd></small></button>
+      </div>
     </div>
   </section>
 </div>
@@ -260,9 +281,12 @@
     <p>Gerry ha cacciato il DJ e la palestra fischia. Macio, il collega dello scarico, prende il microfono: «Ci penso io!». La canzone l'ha scritta adesso su un tovagliolo e non c'è un programma di karaoke: il testo sul portatile lo mandi avanti tu, a mano.</p>
     <ul>
       <li>Tocca <b>AVANTI</b> quando la sillaba arriva sulla riga: Macio canta quella. Le sillabe lunghe <b>tienile premute</b>.</li>
+      <li>Macio si dimentica le parole: quando compare <b>???</b> scegli tu la parola. Quella che fa rima piace, le altre fanno ridere o fischiare.</li>
+      <li>Nel ponte Macio canta «Oh-oh!» e la palestra risponde: premi <b>CORO</b> sulle bolle azzurre.</li>
+      <li>Occhio a Gerry: se stacca la spina, <b>riattaccala</b> subito.</li>
       <li>Tieni la voce di Macio nella <b>zona verde</b>. Quando si gasa <b>urla</b> nel microfono: la zona scende, abbassalo e lascia cantare il pubblico.</li>
       <li>Se va verso le casse scende la <b>zona rossa</b>: lì sopra c'è il <b>larsen</b>.</li>
-      <li>Tastiera: <b>Spazio</b> per avanti, <b>↑ ↓</b> per la voce, B per la birra.</li>
+      <li>Tastiera: <b>Spazio</b> avanti, <b>C</b> coro, <b>1 2 3</b> parole, <b>R</b> spina, <b>↑ ↓</b> voce, B birra.</li>
     </ul>
     <div class="pick" id="diff-pick">Difficoltà<div>
       <button data-d="facile" aria-pressed="false">Facile</button><button data-d="normale" aria-pressed="true">Normale</button>
@@ -310,50 +334,65 @@
   const RFX = QS.has('rfx');
 
   /* ---------- la canzone: «Salviamo la serata» (testo e musica originali) ----------
-     100 BPM, 4/4. Battute 0-3 intro (Macio parla), 4-11 strofa, 12-19
-     ritornello, 20-27 seconda strofa, 28-35 ritornello finale (canta tutta la
-     palestra), 36-37 chiusura. Ogni verso dura due battute e parte sul primo
+     112 BPM, 4/4, circa un minuto. Battute 0-1 intro (Macio parla), 2-9
+     strofa, 10-17 ritornello, 18-21 ponte (botta e risposta col pubblico),
+     22-29 ritornello finale (canta tutta la palestra), 30-31 chiusura. Ogni
+     verso dura due battute e parte sul primo
      tempo. Per ogni sillaba: la durata in ottavi e il grado della scala di
      Do (1 = Do4 … 10 = Mi5). Una sillaba di 4 ottavi o più è da tenere. */
-  const BPM = 100, BEAT = 60 / BPM, BAR = BEAT * 4;
+  const BPM = 112, BEAT = 60 / BPM, BAR = BEAT * 4;
   const DEG = [0, 60, 62, 64, 65, 67, 69, 71, 72, 74, 76];
   const RIT = [
-    [12, 'Sal|via|mo| la| se|ra|ta', '2 2 2 1 1 2 5', '5 6 5 3 8 7 7'],
-    [14, 'Can|ta|te in|sie|me a| me', '2 2 2 2 2 5', '6 6 8 6 5 4'],
-    [16, 'an|che| se| so|no| sto|na|to', '1 1 2 1 1 2 2 5', '5 5 6 8 8 9 8 7'],
-    [18, 'sta|se|ra| la| star| è| me!', '1 1 2 1 2 2 6', '6 6 8 8 10 9 8']
+    [10, 'Sal|via|mo| la| se|ra|ta', '2 2 2 1 1 2 5', '5 6 5 3 8 7 7'],
+    [12, 'Can|ta|te in|sie|me a| me', '2 2 2 2 2 5', '6 6 8 6 5 4'],
+    [14, 'an|che| se| so|no| sto|na|to', '1 1 2 1 1 2 2 5', '5 5 6 8 8 9 8 7'],
+    [16, 'sta|se|ra| la| star| è| me!', '1 1 2 1 2 2 6', '6 6 8 8 10 9 8']
   ];
   const VERSI = [
-    [4, 'Ger|ry ha| spen|to| tut|to| quan|to', '2 1 1 2 1 1 2 5', '3 3 3 5 3 2 2 2'],
-    [6, 'e il| di|gei| è| già| sul| bus', '1 1 2 2 1 1 6', '1 1 3 3 3 2 1'],
-    [8, 'la| pa|le|stra a|spet|ta un| can|to', '1 1 1 2 1 2 2 5', '3 3 3 5 5 6 5 5'],
-    [10, 'pas|sa|mi il| mi|cro|fo|no!', '1 1 2 1 1 2 6', '6 6 5 3 2 3 4'],
+    [2, 'Ger|ry ha| spen|to| tut|to| quan|to', '2 1 1 2 1 1 2 5', '3 3 3 5 3 2 2 2'],
+    [4, 'e il| di|gei| è| già| sul| bus', '1 1 2 2 1 1 6', '1 1 3 3 3 2 1'],
+    [6, 'la| pa|le|stra a|spet|ta un| canto', '1 1 1 2 1 2 7', '3 3 3 5 5 6 5'],
+    [8, 'pas|sa|mi il| mi|cro|fo|no!', '1 1 2 1 1 2 6', '6 6 5 3 2 3 4'],
     ...RIT,
-    [20, 'Ho| sca|ri|ca|to il| fur|go|ne', '1 1 1 1 2 1 2 6', '3 3 3 5 3 2 2 2'],
-    [22, 'ho| por|ta|to| su il| ba|u|le', '1 1 1 1 2 1 2 6', '1 1 3 3 3 2 1 1'],
-    [24, 'o|ra| can|to| la| can|zo|ne', '1 1 2 1 1 2 2 5', '3 3 3 5 5 6 5 5'],
-    [26, 'con| la| vo|ce| di un| ma|ia|le', '1 1 2 1 2 1 2 5', '6 6 5 3 3 2 3 4'],
-    ...RIT.map(([b, s, d, g], i) => [b + 16, i === 3 ? 'sta|se|ra| la| star| è| meee!' : s, i === 3 ? '1 1 2 1 2 2 8' : d, g])
+    ...RIT.map(([b, s, d, g], i) => [b + 12, i === 3 ? 'sta|se|ra| la| star| è| meee!' : s, i === 3 ? '1 1 2 1 2 2 8' : d, g])
   ];
-  const BARS = 38, DUR = BARS * BAR;
+  /* Macio dimentica le parole: in quattro punti l'ultima parola del verso è
+     «???» e il tecnico sceglie al volo fra tre (verso, parole). La prima è
+     quella giusta (fa rima), la seconda fa ridere, la terza fa fischiare. */
+  const SCELTE = [
+    [2, ['canto', 'panino', 'boh']],
+    [5, ['me', 'Gerry', 'chi?']],
+    [7, ['me', 'il preside', 'ehm']],
+    [11, ['me', 'Macio', 'boh']]
+  ];
+  const SCELTA_FX = { giusta: { grad: 6, score: 300, judge: 'RIMA!', color: '#49b06a' }, buffa: { grad: 3, score: 150, judge: 'AHAHAH!', color: '#f2c53d' },
+    sbagliata: { grad: -6, score: 0, judge: 'FISCHI!', color: '#e0503f' }, nessuna: { grad: -4, score: 0, judge: 'NANANA…', color: '#e0503f' } };
+  const KINDS = ['giusta', 'buffa', 'sbagliata'];
+  /* Il ponte: botta e risposta. Macio canta «Oh-oh!» sul primo tempo e la
+     palestra risponde «OH! OH!» sul terzo e sul quarto: col tasto CORO. */
+  const PONTE = [18, 22];
+  const CORO_DEG = [5, 5];
+  // Gerry torna e stacca la spina all'inizio del ponte: va riattaccata (tre tocchi)
+  const SPINA_T = (PONTE[0] * 4 + 0.5) * BEAT, SPINA_TAPS = 3;
+  const BARS = 32, END_BAR = 30, DUR = BARS * BAR;
   const CHORDS = { C: [48, 60, 64, 67], G: [43, 59, 62, 67], Am: [45, 60, 64, 69], F: [41, 60, 65, 69] };
-  const chordAt = bar => bar >= 36 ? 'C' : ['C', 'G', 'Am', 'F'][bar % 4];
-  const SECTIONS = [[0, 'INTRO'], [4, 'STROFA'], [12, 'RITORNELLO'], [20, 'STROFA'], [28, 'RITORNELLO'], [36, 'CHIUSURA']];
+  const chordAt = bar => bar >= END_BAR ? 'C' : ['C', 'G', 'Am', 'F'][bar % 4];
+  const SECTIONS = [[0, 'INTRO'], [2, 'STROFA'], [10, 'RITORNELLO'], [PONTE[0], 'PONTE'], [PONTE[1], 'RITORNELLO'], [END_BAR, 'CHIUSURA']];
   const sectionAt = t => { const b = Math.floor(t / BAR + 1e-6); let k = 'INTRO'; SECTIONS.forEach(([a, s]) => { if (b >= a) k = s; }); return k; };
-  const finale = t => t >= 28 * BAR;
-  const BANNER = { STROFA: 'Strofa: manda avanti il testo', RITORNELLO: 'Ritornello!', CHIUSURA: 'Ultima nota!' };
+  const finale = t => t >= PONTE[1] * BAR;
+  const BANNER = { STROFA: 'Strofa: manda avanti il testo', RITORNELLO: 'Ritornello!', PONTE: 'Botta e risposta: CORO!', CHIUSURA: 'Ultima nota!' };
   const VOWEL = s => { const m = s.toLowerCase().match(/[aeiouèé](?=[^aeiouèé]*$)/); return m ? m[0].replace(/[èé]/, 'e') : 'a'; };
   const GIBBERISH = ['ehm', 'boh', 'na', 'uh', 'mmh', 'là'];
 
   /* Quando Macio si gasa e urla nel microfono (battute): la zona verde scende
      un tempo prima. La voce resta intonata, solo più forte.
      Quando va verso una cassa: scende la zona rossa del larsen. */
-  const URLA = [[7, 8.5], [18.4, 20], [24.5, 27], [34.2, 37]];
-  const WALK = [[14, 16.5, 1], [29, 31.5, -1]];       // 1 = verso la cassa di destra
+  const URLA = [[5, 6.5], [16.4, 18], [23, 24.5], [28.2, 31]];
+  const WALK = [[12, 14.5, 1], [24.5, 27, -1]];       // 1 = verso la cassa di destra
   const ZONE_TUNE = [0.58, 0.84], ZONE_LOUD = [0.18, 0.40], RED_FREE = 0.95, RED_WALK = 0.55;
   const PERFECT0 = 0.08, GOOD0 = 0.16;
   const REPS = { base: 5, larsen: -3 };
-  const BUBBLES = [[-1.6, 'Prova… prova… si sente?', 2.4, 'prova'], [1.2, 'Questa l\'ho scritta adesso!', 2.6, 'scritta'], [4.6, 'Tecnico, mandami il testo!', 2.6, 'testo']];
+  const BUBBLES = [[-2, 'Prova… prova… si sente?', 2.2, 'prova'], [1.4, 'Tecnico, mandami il testo!', 2.2, 'testo']];
 
   const NOTES = [], LINES = [];
   VERSI.forEach(([bar, syl, durs, degs], li) => {
@@ -361,13 +400,26 @@
     let e = 0;
     const line = { i: li, bar, notes: [] };
     S.forEach((text, i) => {
-      const n = { text, line: li, t: (bar * 4 + e / 2) * BEAT, len: D[i] / 2 * BEAT, midi: DEG[G[i]], vowel: VOWEL(text) };
+      const n = { kind: 'testo', text, line: li, t: (bar * 4 + e / 2) * BEAT, len: D[i] / 2 * BEAT, midi: DEG[G[i]], vowel: VOWEL(text) };
       n.hold = D[i] >= 4; n.end = n.t + n.len - 0.12;
       line.notes.push(n); NOTES.push(n); e += D[i];
     });
     line.t0 = line.notes[0].t; line.t1 = line.notes[line.notes.length - 1].t + line.notes[line.notes.length - 1].len;
     LINES.push(line);
   });
+  // le parole da scegliere: l'ultima nota del verso
+  SCELTE.forEach(([li, words]) => {
+    const n = LINES[li].notes[LINES[li].notes.length - 1];
+    n.choice = { words, lead: n.text.match(/^\s*/)[0] };
+    LINES[li].choice = n;
+  });
+  // il coro del ponte: due «OH!» per battuta, sul terzo e sul quarto tempo
+  const CALLS = [];
+  for (let b = PONTE[0]; b < PONTE[1]; b++) {
+    CALLS.push(b * BAR);
+    [2, 3].forEach((beat, k) => NOTES.push({ kind: 'coro', line: -1, text: 'OH!', t: (b * 4 + beat) * BEAT, len: BEAT * 0.5, midi: DEG[CORO_DEG[k]], hold: false, end: 0 }));
+  }
+  NOTES.sort((a, b) => a.t - b.t);
   NOTES.forEach((n, i) => { n.i = i; });
   const lineAt = t => LINES.find(l => t >= l.t0 - BEAT * 1.5 && t < l.t1 + BEAT * 0.5) || null;
   const singing = t => LINES.some(l => t >= l.t0 - 0.05 && t < l.t1);
@@ -388,7 +440,10 @@
       fader: 0.5, zlo: ZONE_TUNE[0], zhi: ZONE_TUNE[1], red: RED_FREE,
       inZone: 0, voiceTime: 0, lowTime: 0, highTime: 0,
       over_red: 0, larsens: 0, larsenCool: 0, larsenOn: 0, repParts: [],
-      loud: 0, macioX: 169, mouth: 0, bub: null, sec: null, phones: 0, end: null
+      loud: 0, macioX: 169, mouth: 0, bub: null, sec: null, phones: 0, end: null,
+      coroDown: false, coroHit: 0, coroMiss: 0, calls: 0,
+      choice: null, picks: [],                 // la scelta aperta e quelle fatte {li, kind, word}
+      spina: { on: false, done: false, taps: 0, t0: 0, off: 0 }
     };
   }
   const k = () => diff === 'facile' ? 1.35 : 1;
@@ -411,7 +466,7 @@
 
   /* ---------- audio: la base suonata dal codice, la voce di Macio, il pubblico ---------- */
   const audio = (() => {
-    let ac = null, out, music, voiceBus, crowdBus, larsenG, noiseBuf, sched = 0, voiceBuf = null;
+    let ac = null, out, plug, music, voiceBus, crowdBus, larsenG, noiseBuf, sched = 0, voiceBuf = null;
     const VOCE = window.MACIO_VOCE || null;
     const hz = m => 440 * Math.pow(2, (m - 69) / 12);
     const FORM = { a: [800, 1200], e: [500, 1800], i: [320, 2300], o: [500, 900], u: [350, 700] };
@@ -420,17 +475,20 @@
     function noise (t0, d, peak, f, type, dest) { const s = ac.createBufferSource(); s.buffer = noiseBuf; const fl = ac.createBiquadFilter(); fl.type = type || 'bandpass'; fl.frequency.value = f; const g = ac.createGain(); s.connect(fl).connect(g).connect(dest || out); env(g, t0, 0.005, peak, d); s.start(t0); s.stop(t0 + d + 0.05); return fl; }
     // una battuta della base: batteria, basso e accordi (da t0, in secondi del contesto)
     function bar (b, t0) {
-      const ch = CHORDS[chordAt(b)], full = b >= 4 && b < 36;
+      const ch = CHORDS[chordAt(b)], full = b >= 2 && b < END_BAR;
+      // il ponte: cassa su ogni tempo e battimani sul terzo e sul quarto, niente accordi
+      const ponte = b >= PONTE[0] && b < PONTE[1];
       for (let i = 0; i < 8; i++) {
         const t = t0 + i * BEAT / 2;
-        if (b >= 2 && b < 36) noise(t, 0.05, i % 2 ? 0.05 : 0.08, 8000, 'highpass', music);
-        if (full && i % 4 === 0) { const o = osc('sine', 120, t, 0.25, 0.9, music); o.frequency.exponentialRampToValueAtTime(42, t + 0.18); }
-        if (full && i % 4 === 2) { noise(t, 0.16, 0.35, 1800, 'bandpass', music); osc('triangle', 190, t, 0.08, 0.15, music); }
-        if (full || b >= 2 && b < 4) osc('sawtooth', hz(ch[0] + (i % 4 === 3 ? 12 : 0)), t, BEAT / 2 * 0.9, 0.12, music);
+        if (b >= 1 && b < END_BAR) noise(t, 0.05, i % 2 ? 0.05 : 0.08, 8000, 'highpass', music);
+        if (full && (ponte ? i % 2 === 0 : i % 4 === 0)) { const o = osc('sine', 120, t, 0.25, 0.9, music); o.frequency.exponentialRampToValueAtTime(42, t + 0.18); }
+        if (full && !ponte && i % 4 === 2) { noise(t, 0.16, 0.35, 1800, 'bandpass', music); osc('triangle', 190, t, 0.08, 0.15, music); }
+        if (ponte && (i === 4 || i === 6)) { noise(t, 0.12, 0.4, 1400, 'bandpass', music); noise(t + 0.012, 0.1, 0.3, 2200, 'bandpass', music); }
+        if (full && !ponte || b === 1) osc('sawtooth', hz(ch[0] + (i % 4 === 3 ? 12 : 0)), t, BEAT / 2 * 0.9, 0.12, music);
       }
-      const len = b >= 36 ? BAR * 2 : BAR;
-      ch.slice(1).forEach(m => { osc('triangle', hz(m), t0, len * 0.95, 0.07, music, 0.04); osc('triangle', hz(m + 12), t0, len * 0.5, 0.025, music, 0.02); });
-      if (b === 36) noise(t0, 2.5, 0.25, 6000, 'highpass', music);
+      const len = b >= END_BAR ? BAR * 2 : BAR;
+      if (!ponte) ch.slice(1).forEach(m => { osc('triangle', hz(m), t0, len * 0.95, 0.07, music, 0.04); osc('triangle', hz(m + 12), t0, len * 0.5, 0.025, music, 0.02); });
+      if (b === END_BAR) noise(t0, 2.5, 0.25, 6000, 'highpass', music);
     }
     return {
       get ok () { return !!ac; },
@@ -438,8 +496,10 @@
         if (ac) return;
         try { ac = new (window.AudioContext || window.webkitAudioContext)(); } catch (e) { ac = null; return; }
         out = ac.createGain(); out.gain.value = VOL; out.connect(ac.destination);
-        music = ac.createGain(); music.gain.value = 0.55; music.connect(out);
-        voiceBus = ac.createGain(); voiceBus.gain.value = 0.5; voiceBus.connect(out);
+        // la spina dell'impianto: Gerry la stacca e base e microfono tacciono
+        plug = ac.createGain(); plug.gain.value = 1; plug.connect(out);
+        music = ac.createGain(); music.gain.value = 0.55; music.connect(plug);
+        voiceBus = ac.createGain(); voiceBus.gain.value = 0.5; voiceBus.connect(plug);
         crowdBus = ac.createGain(); crowdBus.gain.value = 0; crowdBus.connect(out);
         noiseBuf = ac.createBuffer(1, ac.sampleRate * 2, ac.sampleRate);
         const d = noiseBuf.getChannelData(0); for (let i = 0; i < d.length; i++) d[i] = Math.random() * 2 - 1;
@@ -473,7 +533,9 @@
       reset () { sched = 0; },
       // programma la base fino a un secondo e mezzo più avanti
       schedule (startAt, t) { if (!ac) return; while (sched < BARS - 1 && sched * BAR < t + 1.5) { bar(sched, startAt + sched * BAR); sched++; } },
-      stopAll () { if (!ac) return; music.disconnect(); music = ac.createGain(); music.gain.value = 0.55; music.connect(out); larsenG.gain.value = 0; },
+      stopAll () { if (!ac) return; music.disconnect(); music = ac.createGain(); music.gain.value = 0.55; music.connect(plug); larsenG.gain.value = 0; plug.gain.value = 1; },
+      unplug (off) { if (ac) plug.gain.setTargetAtTime(off ? 0 : 1, ac.currentTime, off ? 0.04 : 0.01); },
+      laugh () { if (!ac) return; const t = ac.currentTime; for (let i = 0; i < 8; i++) for (let k = 0; k < 5; k++) osc('sawtooth', 180 + Math.random() * 160, t + k * 0.16 + Math.random() * 0.05, 0.1, 0.025, out, 0.01); noise(t, 0.9, 0.05, 1500); },
       // Macio canta una sillaba: due seghe filtrate come la vocale, col vibrato
       sing (midi, detune, vowel, dur) {
         if (!ac) return null;
@@ -493,10 +555,11 @@
         return { stop: () => stop(0) };
       },
       // il pubblico che canta: tante voci, un'ottava sotto e all'unisono
-      chorus (midi, dur) {
+      // loud: il «OH!» del ponte, che si sente anche a spina staccata (non passa dal bus del pubblico)
+      chorus (midi, dur, loud) {
         if (!ac) return;
-        const t0 = ac.currentTime, f = ac.createBiquadFilter(); f.type = 'bandpass'; f.frequency.value = 700; f.Q.value = 1.5; f.connect(crowdBus);
-        for (let i = 0; i < 6; i++) osc('sawtooth', hz(midi - (i % 2 ? 12 : 0)) * (1 + rnd(-0.012, 0.012)), t0 + rnd(0, 0.05), dur, 0.05, f, 0.06);
+        const t0 = ac.currentTime, f = ac.createBiquadFilter(); f.type = 'bandpass'; f.frequency.value = 700; f.Q.value = 1.5; f.connect(loud ? out : crowdBus);
+        for (let i = 0; i < 6; i++) osc('sawtooth', hz(midi - (i % 2 ? 12 : 0)) * (1 + rnd(-0.012, 0.012)), t0 + rnd(0, 0.05), dur, 0.05 * (loud || 1), f, 0.06);
       },
       mumble () { if (!ac) return; const t = ac.currentTime; noise(t, 0.18, 0.12, 380, 'bandpass', voiceBus); osc('sawtooth', 140, t, 0.2, 0.08, voiceBus); },
       cheer (d = 1.6) { if (ac) noise(ac.currentTime, d, 0.14, 2200); },
@@ -571,7 +634,6 @@
     $('#ring-r').setAttribute('opacity', lars && S.macioX > MACIO_HOME ? 0.5 + 0.5 * Math.sin(t * 30) : 0);
     const pulse = S.running && t > 0 && !S.end ? Math.max(0, 1 - ((t / BEAT) % 1) * 3) : 0;
     $('#cone-l').setAttribute('r', 15 + pulse * 1.5); $('#cone-r').setAttribute('r', 15 + pulse * 1.5);
-    $('#pc-glow').setAttribute('opacity', S.down ? 0.95 : 0.45);
     // la nuvoletta di Macio
     const b = S.bub && t < S.bub.until ? S.bub : null;
     $('#bub').setAttribute('opacity', b ? 1 : 0);
@@ -594,7 +656,10 @@
       o.phone.setAttribute('opacity', ph ? (RFX ? 0.85 : 0.6 + 0.4 * Math.sin(t * 2 + i)) : 0);
     });
     // Gerry alla fine entra dalla porta
-    const gx = S.end ? Math.max(318, 430 - (t - S.end.t) * 60) : 430;
+    const sp = S.spina, gin = sp.on ? Math.max(330, 430 - (t - sp.t0) * 200) : sp.done && t - sp.t0 - sp.off < 1.5 ? 330 + (t - sp.t0 - sp.off) * 70 : 430;
+    const gx = S.end ? Math.max(318, 430 - (t - S.end.t) * 60) : Math.min(430, gin);
+    $('#beams').setAttribute('opacity', sp.on ? 0.1 : 0.9);
+    $('#pc-glow').setAttribute('opacity', sp.on ? 0.05 : S.down ? 0.95 : 0.45);
     $('#gerry-g').setAttribute('transform', `translate(${gx} 70)`);
     $('#dark').setAttribute('opacity', 0);
   }
@@ -608,13 +673,14 @@
       const next = LINES.find(l => l.t0 > t);
       if (t < LINES[0].t0) cur = '<span class="talk">🎤 Macio prende il microfono…</span>';
       else if (S.end || !next) cur = '<span class="talk">MA-CIO! MA-CIO!</span>';
+      else if (sectionAt(t) === 'PONTE') cur = '<span class="talk">Macio: «Oh-oh!» · Palestra: «OH! OH!»</span>';
       else cur = '<span class="talk">♪ ♪ ♪</span>';
       nxt = next ? lineText(next) : '';
     } else {
       cur = L.notes.map(n => {
         const s = S.notes[n.i];
         const cls = s.state === 'holding' ? 'held' : s.state === 'hit' || s.state === 'done' ? 'sung' : s.state === 'miss' || s.state === 'broken' ? 'miss' : '';
-        const txt = (s.text[0] === ' ' ? '\u00a0' : '') + (s.state === 'miss' ? s.gib : s.text.trim());
+        const txt = (s.text[0] === ' ' ? '\u00a0' : '') + (s.state === 'miss' ? s.gib : pending(s) ? '???' : s.text.trim());
         return `<span class="s ${cls}">${txt}</span>`;
       }).join('');
       const nl = LINES[L.i + 1];
@@ -626,7 +692,9 @@
     $('#ly-cur').innerHTML = cur; $('#ly-nxt').textContent = nxt;
   }
   // il verso come si legge: le sillabe attaccate, gli spazi fra le parole
-  const lineText = l => VERSI[l.i][1].replace(/\|/g, '');
+  const lineText = l => l.notes.map(n => { const s = S.notes[n.i]; return pending(s) ? s.choice.lead + '???' : s.text; }).join('');
+  // una parola da scegliere non ancora scelta
+  const pending = s => !!(s.choice && !s.picked);
 
   /* ---------- la pista del testo: le sillabe arrivano da destra ---------- */
   const cv = $('#hw'), cx = cv.getContext('2d');
@@ -663,12 +731,13 @@
       const grey = st === 'miss' || st === 'broken';
       cx.globalAlpha = grey ? 0.35 : 1;
       if (n.hold) { cx.fillStyle = grey ? '#55575f' : st === 'holding' ? '#ffd28a' : '#f2a54188'; cx.fillRect(x0, y - hgt * 0.18, Math.max(0, x1 - x0), hgt * 0.36); }
-      const tw = cx.measureText(n.text.trim()).width + 10, bw = Math.max(tw, hgt * 0.8);
+      const label = pending(n) ? '???' : n.text.trim(), coro = n.kind === 'coro';
+      const tw = cx.measureText(label).width + 10, bw = Math.max(tw, hgt * 0.8);
       if (st !== 'holding') {
-        cx.fillStyle = grey ? '#3a3c44' : '#f2a541';
+        cx.fillStyle = grey ? '#3a3c44' : coro ? '#3fc1b0' : '#f2a541';
         cx.beginPath(); cx.roundRect ? cx.roundRect(x0 - bw / 2, y - hgt / 2, bw, hgt, 8) : cx.rect(x0 - bw / 2, y - hgt / 2, bw, hgt); cx.fill();
         cx.fillStyle = grey ? '#8b8e98' : '#1a1206';
-        cx.textAlign = 'center'; cx.fillText(n.text.trim(), x0, y + 1);
+        cx.textAlign = 'center'; cx.fillText(label, x0, y + 1);
       }
       cx.globalAlpha = 1;
     });
@@ -688,7 +757,7 @@
   function sing (n, dur) {
     if (S.voice) S.voice.stop();
     // la voce vera (già intonata, più forte dove urla); se non c'è, il suono sintetico
-    S.voice = (audio.voice ? audio.clip(n.i) : audio.sing(n.midi, 0, n.vowel, dur)) || null;
+    S.voice = (audio.voice ? audio.clip(n.clip != null ? n.clip : n.i) : audio.sing(n.midi, 0, n.vowel, dur)) || null;
     S.mouth = 1;
     if (dur && S.voice) { const v = S.voice; setTimeout(() => { if (S.voice === v) S.voice = null; }, dur * 1000); }
   }
@@ -698,10 +767,11 @@
     const t = judgedNow(), [PERFECT, GOOD] = windows();
     let best = null;
     for (const n of S.notes) {
-      if (n.state !== 'wait') continue;
+      if (n.state !== 'wait' || n.kind !== 'testo') continue;
       if (n.t > t + GOOD) break;
       if (Math.abs(n.t - t) <= GOOD && (!best || Math.abs(n.t - t) < Math.abs(best.t - t))) best = n;
     }
+    if (best && pending(best)) pick(null);   // canta prima di scegliere: «ehm»
     if (!best) {
       S.stray++; breakCombo(); S.grad = clamp(S.grad - 1);
       judge('FUORI TEMPO', '#e0503f'); audio.mumble(); bubble('Eh? Dove siamo?', 1); return;
@@ -732,7 +802,79 @@
     n.state = 'done'; S.score += 50 * S.mult; S.grad = clamp(S.grad + 1);
     if (S.holding === n) { S.holding = null; if (S.voice) { S.voice.stop(); S.voice = null; } }
   }
-  function paintPad () { $('#pad').classList.toggle('down', S.down); }
+  function paintPad () { $('#pad').classList.toggle('down', S.down); $('#coro').classList.toggle('down', S.coroDown); }
+
+  /* ---------- il coro del ponte: la palestra risponde a Macio ---------- */
+  function pressCoro () {
+    if (!S.running || S.paused || S.over || S.end || S.coroDown) return;
+    S.coroDown = true; paintPad();
+    const t = judgedNow(), [PERFECT, GOOD] = windows();
+    const n = S.notes.find(n => n.kind === 'coro' && n.state === 'wait' && Math.abs(n.t - t) <= GOOD);
+    if (!n) { S.stray++; breakCombo(); S.grad = clamp(S.grad - 1); judge('FUORI TEMPO', '#e0503f'); return; }
+    const perfect = Math.abs(n.t - t) <= PERFECT;
+    if (perfect) S.perfect++; else S.good++;
+    n.state = 'hit'; S.coroHit++;
+    S.score += (perfect ? 100 : 60) * S.mult; addCombo();
+    S.grad = clamp(S.grad + (perfect ? 1.4 : 1));
+    judge(perfect ? 'OH!' : 'oh', perfect ? '#3fc1b0' : '#f2c53d');
+    audio.chorus(n.midi, BEAT * 0.45, 1.6); audio.cheer(0.3);
+  }
+  function releaseCoro () { S.coroDown = false; paintPad(); }
+
+  /* ---------- Macio dimentica la parola: la sceglie il tecnico ---------- */
+  function openChoice (li) {
+    const n = LINES[li].choice;
+    const opts = n.choice.words.map((word, k) => ({ word, k, kind: KINDS[k] }));
+    for (let i = opts.length - 1; i > 0; i--) { const j = Math.floor(Math.random() * (i + 1)); [opts[i], opts[j]] = [opts[j], opts[i]]; }
+    S.choice = { li, n: S.notes[n.i], opts };
+    const box = $('#choices div');
+    box.innerHTML = '';
+    opts.forEach((o, i) => {
+      const b = document.createElement('button');
+      b.innerHTML = `${o.word}<kbd>${i + 1}</kbd>`;
+      b.addEventListener('pointerdown', e => { e.preventDefault(); pick(i); });
+      box.appendChild(b);
+    });
+    $('#choices').hidden = false;
+  }
+  function pick (i) {
+    const c = S.choice;
+    if (!c || !S.running || S.paused) return;
+    const o = i == null ? null : c.opts[i];
+    if (i != null && !o) return;
+    const kind = o ? o.kind : 'nessuna', fx = SCELTA_FX[kind], n = c.n;
+    n.picked = kind;
+    if (kind === 'giusta') n.clip = n.i;                                       // la parola del verso
+    else if (o) { n.text = n.choice.lead + o.word; n.clip = `opt-${c.li}-${o.k}`; }
+    else { n.text = n.choice.lead + 'ehm'; n.clip = 'ehm'; }
+    S.picks.push({ li: c.li, kind, word: o ? o.word : null });
+    S.grad = clamp(S.grad + fx.grad); S.score += fx.score * S.mult;
+    if (kind === 'giusta') addCombo(); else if (kind !== 'buffa') breakCombo();
+    judge(fx.judge, fx.color);
+    if (kind === 'giusta') audio.cheer(0.8); else if (kind === 'buffa') audio.laugh(); else audio.boo();
+    S.choice = null; $('#choices').hidden = true;
+  }
+
+  /* ---------- Gerry stacca la spina ---------- */
+  function unplug () {
+    const sp = S.spina;
+    sp.on = true; sp.t0 = S.t; sp.taps = 0;
+    audio.unplug(true);
+    if (S.voice) { S.voice.stop(); S.voice = null; }
+    $('#spina-n').textContent = SPINA_TAPS; $('#spina').hidden = false;
+    judge('SPINA!', '#e0503f');
+  }
+  function tapSpina () {
+    const sp = S.spina;
+    if (!sp.on || !S.running || S.paused) return;
+    sp.taps++;
+    $('#spina-n').textContent = SPINA_TAPS - sp.taps;
+    if (sp.taps < SPINA_TAPS) return;
+    sp.on = false; sp.done = true; sp.off = S.t - sp.t0;
+    audio.unplug(false); audio.ok();
+    $('#spina').hidden = true;
+    toast(sp.off < 1.5 ? 'Spina riattaccata al volo! Gerry se ne va brontolando.' : 'Spina riattaccata. Gerry se ne va brontolando.', 'ok');
+  }
 
   /* ---------- il fader della voce ---------- */
   function setFader (v) { S.fader = Math.max(0, Math.min(1, v)); paintFader(); }
@@ -774,8 +916,13 @@
   function autoplay (t) {
     for (const n of S.notes) {
       if (n.t > t) break;
-      if (n.state === 'wait' && !S.down) { press(); if (!n.hold) release(); }
+      if (n.state !== 'wait') continue;
+      if (n.kind === 'coro') { pressCoro(); releaseCoro(); }
+      else if (!S.down) { press(); if (!n.hold) release(); }
     }
+    // il capo sceglie la parola giusta e riattacca la spina subito
+    if (S.choice && t >= S.choice.n.t - BEAT * 2) pick(S.choice.opts.findIndex(o => o.kind === 'giusta'));
+    if (S.spina.on && t - S.spina.t0 > 0.2 * (S.spina.taps + 1)) tapSpina();
     if (S.holding && t >= S.holding.end) release();
     const mid = (S.zlo + S.zhi) / 2;
     setFader(S.fader + (mid - S.fader) * Math.min(1, 0.08));
@@ -796,11 +943,28 @@
     for (const n of S.notes) {
       if (n.t > t) break;
       if (n.state === 'wait' && t - n.t > GOOD) {
-        n.state = 'miss'; n.gib = GIBBERISH[n.i % GIBBERISH.length]; S.miss++; breakCombo(); S.grad = clamp(S.grad - 1.5);
+        n.state = 'miss'; S.miss++; breakCombo(); S.grad = clamp(S.grad - 1.5);
+        if (n.kind === 'coro') { S.coroMiss++; judge('SILENZIO', '#e0503f'); continue; }
+        n.gib = GIBBERISH[n.i % GIBBERISH.length];
         judge('PERSA', '#e0503f'); if (audio.voice) bubble('Ehm…', 1, 'ehm'); else audio.mumble(); S.mouth = 0.6;
       }
       if (n.state === 'holding' && t >= n.end) finishHold(n);
     }
+    // le parole da scegliere: si aprono due tempi prima del verso, si chiudono sulla sillaba
+    SCELTE.forEach(([li]) => {
+      const L = LINES[li], n = S.notes[L.choice.i];
+      if (!n.picked && !S.choice && t >= L.t0 - BEAT * 2 && t < n.t) openChoice(li);
+    });
+    if (S.choice && t >= S.choice.n.t - 0.02) pick(null);
+    // il ponte: Macio chiama «Oh-oh!» a inizio battuta
+    while (S.calls < CALLS.length && t >= CALLS[S.calls]) {
+      S.calls++; bubble('Oh-oh!', BEAT * 1.6); S.mouth = 1;
+      if (!S.spina.on) { if (audio.voice) audio.clip('ohoh'); else audio.sing(DEG[8], 0, 'o', BEAT * 0.9); }
+    }
+    $('#coro').classList.toggle('call', sectionAt(t) === 'PONTE' && !S.end);
+    // la spina: Gerry la stacca all'inizio del ponte, e finché è staccata il pubblico se ne va
+    if (!S.spina.on && !S.spina.done && t >= SPINA_T) unplug();
+    if (S.spina.on) S.grad = clamp(S.grad - dt * 5);
     // la voce: zona verde mentre canta
     const voc = singing(t);
     S.highTimeNow = false;
@@ -860,7 +1024,7 @@
 
   function togglePause () {
     if (!S.running || S.over) return;
-    if (!S.paused) { S.t = clock.now(); S.paused = true; release(); audio.suspend(); clock.pausedAt = performance.now(); }
+    if (!S.paused) { S.t = clock.now(); S.paused = true; release(); releaseCoro(); audio.suspend(); clock.pausedAt = performance.now(); }
     else {
       S.paused = false; audio.resume();
       if (!audio.ok) clock.perf0 += performance.now() - clock.pausedAt;
@@ -882,7 +1046,8 @@
   }
   function finish () {
     if (S.over) return;
-    S.over = true; S.running = false; release();
+    S.over = true; S.running = false; release(); releaseCoro();
+    $('#choices').hidden = true; $('#spina').hidden = true;
     audio.stopAll(); audio.levels(0, 0, 0);
     const R = results();
     const notes = [];
@@ -891,12 +1056,16 @@
     if (R.grad >= 70) { beers++; notes.push('🍺 Pubblico contento (almeno 70%).'); }
     notes.push(`${R.hits} sillabe su ${R.total} a tempo (${S.perfect} perfette), ${S.miss} perse${S.holdsBroken ? ', ' + S.holdsBroken + ' note lunghe mollate' : ''}.`);
     notes.push(`Voce di Macio nella zona verde per il ${Math.round(R.zone * 100)}% del tempo.`);
+    const rime = S.picks.filter(p => p.kind === 'giusta').length, risate = S.picks.filter(p => p.kind === 'buffa').length;
+    notes.push(`Parole scelte: ${rime} rime su ${SCELTE.length}${risate ? ', ' + risate + ' risate' : ''}.`);
+    notes.push(`Coro: ${S.coroHit} «OH!» su ${S.coroHit + S.coroMiss}.`);
+    if (S.spina.done) notes.push(`Spina riattaccata in ${S.spina.off.toFixed(1)} secondi.`);
     if (S.drunk) notes.push('Birre bevute durante il karaoke: ' + S.drunk + '.');
     S.repParts.forEach(([what, v]) => notes.push(what + ` (${v > 0 ? '+' : ''}${v}).`));
     const rep = REPS.base + Math.round((R.grad - 60) / 10) + S.repParts.reduce((a, p) => a + p[1], 0);
     const msg = R.grad >= 45 ? 'Macio ha salvato la serata. Ora si smonta e si carica il furgone.' : 'La serata è finita lo stesso. Ora si smonta e si carica il furgone.';
     result = { type: 'karaoke', grad: R.grad, rep, beers, drunk: S.drunk, larsens: S.larsens, stars: R.stars,
-      acc: Math.round(R.acc * 100), zone: Math.round(R.zone * 100), fatigue: Math.round(S.fatigue), maxCombo: R.maxCombo, score: R.score, msg, notes };
+      acc: Math.round(R.acc * 100), zone: Math.round(R.zone * 100), rime, coro: S.coroHit, spina: S.spina.done ? +S.spina.off.toFixed(1) : null, fatigue: Math.round(S.fatigue), maxCombo: R.maxCombo, score: R.score, msg, notes };
     $('#outro-title').textContent = S.auto ? 'Così fa il capo.' : R.grad >= 75 ? 'MA-CIO! MA-CIO!' : R.grad >= 45 ? 'Serata salvata!' : 'Almeno ci ha provato.';
     $('#outro-msg').textContent = msg;
     $('#r-stars').innerHTML = '★'.repeat(R.stars) + '<i>' + '★'.repeat(5 - R.stars) + '</i>';
@@ -912,7 +1081,7 @@
     S = fresh(auto);
     BUBBLES.forEach(b => { b.shown = false; });
     resize();
-    ['intro', 'outro', 'pausa'].forEach(id => { $('#' + id).hidden = true; });
+    ['intro', 'outro', 'pausa', 'choices', 'spina'].forEach(id => { $('#' + id).hidden = true; });
     $('#pause-btn').textContent = '⏸';
     audio.init(); audio.resume(); audio.reset();
     clock.vt = -2.4;
@@ -928,11 +1097,15 @@
     if (e.code === 'Space' || e.code === 'KeyJ' || e.code === 'Enter') { if (S.running) { e.preventDefault(); press(); } }
     else if (e.code === 'ArrowUp' || e.code === 'KeyW') { keysHeld.up = true; e.preventDefault(); }
     else if (e.code === 'ArrowDown' || e.code === 'KeyS') { keysHeld.down = true; e.preventDefault(); }
+    else if (e.code === 'KeyC' || e.code === 'KeyK') pressCoro();
+    else if (/^(Digit|Numpad)[123]$/.test(e.code)) pick(+e.code.slice(-1) - 1);
+    else if (e.code === 'KeyR') tapSpina();
     else if (e.code === 'KeyB') drinkBeer();
     else if (e.code === 'KeyP' || e.code === 'Escape') togglePause();
   });
   window.addEventListener('keyup', e => {
     if (e.code === 'Space' || e.code === 'KeyJ' || e.code === 'Enter') release();
+    else if (e.code === 'KeyC' || e.code === 'KeyK') releaseCoro();
     else if (e.code === 'ArrowUp' || e.code === 'KeyW') keysHeld.up = false;
     else if (e.code === 'ArrowDown' || e.code === 'KeyS') keysHeld.down = false;
   });
@@ -941,6 +1114,12 @@
   pad.addEventListener('pointerup', release);
   pad.addEventListener('pointercancel', release);
   pad.addEventListener('contextmenu', e => e.preventDefault());
+  const coroPad = $('#coro');
+  coroPad.addEventListener('pointerdown', e => { e.preventDefault(); coroPad.setPointerCapture(e.pointerId); pressCoro(); });
+  coroPad.addEventListener('pointerup', releaseCoro);
+  coroPad.addEventListener('pointercancel', releaseCoro);
+  coroPad.addEventListener('contextmenu', e => e.preventDefault());
+  $('#spina').addEventListener('pointerdown', e => { e.preventDefault(); tapSpina(); });
   $('#beer').onclick = drinkBeer;
   document.addEventListener('visibilitychange', () => { if (document.hidden && S.running && !S.paused) togglePause(); });
 
@@ -960,6 +1139,7 @@
   // per i test (tests/karaoke.js, tests/karaoke-gioco.js): orologio finto, stato e comandi
   window.__karaoke = {
     state: () => S, notes: NOTES, lines: LINES, beat: BEAT, bar: BAR, dur: DUR, urla: URLA, walk: WALK,
+    scelte: SCELTE, calls: CALLS, spinaT: SPINA_T, pick, pressCoro, releaseCoro, tapSpina,
     start, press, release, setFader, drinkBeer, results, result: () => result, windows, zoneTarget, togglePause,
     virtual (on) { clock.virtual = on; },
     advance (sec, fps = 60) {

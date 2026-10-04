@@ -8,7 +8,7 @@ ogni sillaba.
 
 Uso:  python3 strumenti/voce-macio.py canzone.json cartella-del-modello
   canzone.json: le note di karaoke.html (window.__karaoke.notes, beat,
-  urla), vedi tests/karaoke.js per come aprire la pagina.
+  urla, scelte), vedi tests/karaoke.js per come aprire la pagina.
   cartella-del-modello: vits-piper-it_IT-riccardo-x_low scompattato, da
   github.com/k2-fsa/sherpa-onnx/releases/download/tts-models/
 Richiede: numpy, pyworld, sherpa-onnx, soundfile, ffmpeg."""
@@ -30,6 +30,8 @@ ACCENTO = {
   'anche se sono stonato': 'anghe se sono stonato',
   'stasera la star è me!': 'stasèra la star è me!',
   'stasera la star è meee!': 'stasèra la star è me!',
+  # le parole sbagliate che il tecnico può scegliere quando Macio si dimentica
+  'Gerry': 'Gèrry', 'il preside': 'il prèside', 'Macio': 'Màcio', 'panino': 'panìno',
   'ora canto la canzone': 'òra cando la canzone',
   'con la voce di un maiale': 'con la voce di un maiale',
 }
@@ -138,8 +140,17 @@ def trim (x, sr):
   a, b = (on[0], on[-1] + 1) if len(on) else (0, len(en))
   return x[max(0, a * w - w):min(len(x), b * w + w)]
 
+def word (text, midi, dur, sr0=None):
+  """Una parola intera cantata su una nota sola (le parole da scegliere)."""
+  x1, sr = say(ACCENTO.get(text, text), SPEED)
+  x1 = trim(x1, sr)
+  g0, gs, ga = analyze(x1, sr)
+  vi = np.where(g0 > 0)[0]
+  return sing(g0, gs, ga, 0, len(g0), int(vi[0]) + 2 if len(vi) else 0, midi - 12, dur, sr), sr
+
 lines = {}
-for n in song['notes']: lines.setdefault(n['line'], []).append(n)
+for n in song['notes']:
+  if n.get('kind', 'testo') == 'testo': lines.setdefault(n['line'], []).append(n)
 for li, ns in sorted(lines.items()):
   # il verso detto tutto di fila (suona naturale), poi diviso nelle sue sillabe
   text = ''.join(n['text'] for n in ns).strip()
@@ -158,6 +169,20 @@ for li, ns in sorted(lines.items()):
       y = sing(g0, gs, ga, 0, len(g0), int(vi[0]) + 2 if len(vi) else 0, n['midi'] - 12, dur, sr)
     add(n['i'], y / max(1e-6, np.abs(y).max()) * 0.45 * forte_at(n['t']), sr, False)
   print('verso', li, text, '->', ACCENTO.get(text, text))
+# le parole sbagliate (la giusta è già la sillaba del verso): sulla stessa nota
+for li, words in song.get('scelte', []):
+  n = lines[li][-1]
+  dur = n['len'] if n['hold'] else min(n['len'], song['beat'] * 0.9)
+  for k, w in enumerate(words):
+    if k == 0: continue
+    y, sr = word(w, n['midi'], max(dur, 0.25 * len(w.split())), sr)
+    add(f'opt-{li}-{k}', y / max(1e-6, np.abs(y).max()) * 0.45 * forte_at(n['t']), sr, False)
+  print('scelte', li, words)
+# il richiamo del ponte: «Oh-oh!» sul primo e sul secondo tempo
+b = song['beat']
+y1, sr = word('Oh', 72, b * 0.8); y2, _ = word('Oh', 69, b * 0.9)
+y = np.concatenate([y1, np.zeros(max(0, int(sr * b) - len(y1))), y2])
+add('ohoh', y / max(1e-6, np.abs(y).max()) * 0.45 * 1.6, sr, False)
 for k, text in PARLATO.items():
   x, sr = say(text, 0.95)
   add(k, x, sr)
