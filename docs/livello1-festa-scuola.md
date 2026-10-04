@@ -347,7 +347,8 @@ scegliere chi va a sistemarli.
 - Il capo solo per i guasti grossi (fase che scatta, PAR senza DMX); i
   guasti-nota restano del giocatore. Al massimo **due favori per set**.
 - Dal livello 2 il capo non c'è più (tutor solo al livello 1): al suo posto
-  un **assistente** da assumere con la reputazione, pagato a birre.
+  un **assistente** da assumere con la reputazione, pagato a birre (design
+  in `docs/assistente.md`).
 
 **Il rewind del DJ**
 - Quando torni alle luci dopo aver sistemato un guasto grosso, DJ

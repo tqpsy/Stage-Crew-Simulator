@@ -1657,8 +1657,12 @@ const SAVE_FILE_KIND = 'stage-crew-simulator';   // firma del file esportato
 const SHARED_KEYS = ['settings', 'records', 'usedServices'];
 
 function defaultProfile () {
-  return { v: SAVE_VERSION, player: '', service: '', serviceInfo: null, usedServices: [], settings: { volume: 0.8, reducedFx: false, skipShow: false, skipScarico: false, testMusic: true, bossTips: true, tapeMarks: true, traceSignal: true }, tutorSeen: {}, logo: null, level: null, scarico: null, cavi: null, preside: null, cambioDj: null, dj: null, beers: 0, fatigue: 0, records: {}, reputation: { total: 0, earned: {}, log: [] }, levelsSeen: 1, savedAt: 0 };
+  return { v: SAVE_VERSION, player: '', service: '', serviceInfo: null, usedServices: [], settings: { volume: 0.8, reducedFx: false, skipShow: false, skipScarico: false, testMusic: true, bossTips: true, tapeMarks: true, traceSignal: true }, tutorSeen: {}, logo: null, level: null, scarico: null, cavi: null, preside: null, cambioDj: null, dj: null, beers: 0, assistant: defaultAssistant(), fatigue: 0, records: {}, reputation: { total: 0, earned: {}, log: [] }, levelsSeen: 1, savedAt: 0 };
 }
+// l'assistente della serata (dal livello 2, vedi ASSISTANTS): chi è e
+// quanti favori ha già fatto nel set in corso. Le partite salvate prima
+// dell'assistente non lo hanno: fillSlot le parte con nessuno assunto.
+function defaultAssistant () { return { id: null, favors: 0 }; }
 // solo la partita (senza le parti comuni): è quello che va in uno slot
 function slotPart (d) {
   const s = { ...d };
@@ -1722,7 +1726,8 @@ function fillSlot (s, root) {
   return { ...def, ...(s || {}), v: SAVE_VERSION,
     settings: { ...def.settings, ...root.settings },
     records: root.records || {}, usedServices: root.usedServices || [],
-    reputation: { ...def.reputation, ...((s && s.reputation) || {}) } };
+    reputation: { ...def.reputation, ...((s && s.reputation) || {}) },
+    assistant: { ...def.assistant, ...((s && s.assistant) || {}) } };
 }
 
 /* file esportato: una partita (uno slot) con firma e versione. Si legge
@@ -1763,9 +1768,11 @@ function readSlotFile (text) {
   const color = c => typeof c === 'string' && /^#[0-9a-f]{3,8}$/i.test(c) ? c : undefined;
   const key = (k, set) => typeof k === 'string' && (k === 'iniziali' || k in set) ? k : undefined;
   const info = slot.serviceInfo && typeof slot.serviceInfo === 'object' ? slot.serviceInfo : null;
+  const as = slot.assistant && typeof slot.assistant === 'object' ? slot.assistant : null;
   slot = { ...slot, player: String(slot.player || '').slice(0, NAME_MAX), service: String(slot.service || '').slice(0, SERVICE_NAME_MAX),
     logo: lg ? JSON.parse(JSON.stringify({ shape: key(lg.shape, LOGO_SHAPES), icon: key(lg.icon, LOGO_ICONS), bg: color(lg.bg), fg: color(lg.fg), style: key(lg.style, BRAND_STYLES) })) : null,
     serviceInfo: info ? { kind: key(info.kind, SERVICE_KINDS) || null, boss: String(info.boss || '').slice(0, NAME_MAX * 2) } : null,
+    assistant: as ? { id: typeof as.id === 'string' ? as.id.slice(0, NAME_MAX) : null, favors: Number.isInteger(as.favors) && as.favors >= 0 ? as.favors : 0 } : undefined,
     fatigue: Math.min(100, Math.max(0, +slot.fatigue || 0)) };
   return { slot };
 }
@@ -2445,6 +2452,50 @@ function addRecord () {
   return addReputation(REP.phaseDone, 'Collaudo del livello ' + LEVEL_ID, 'L' + LEVEL_ID + ':collaudo');
 }
 
+/* ASSISTENTE (dal livello 2) — dove c'è il capo tutor (TUTOR_LEVELS) il
+   favore nei guasti grossi lo fa lui; negli altri livelli si assume un
+   assistente per la serata. La reputazione è una soglia (non si spende),
+   i favori si pagano in birre. Ognuno ha il suo carattere: quante note
+   manca alle luci, quanto ci mette, quali guasti sa sistemare, quanti
+   favori per set. Design in docs/assistente.md; lo spettacolo che li usa
+   non c'è ancora. */
+const ASSISTANTS = {
+  nico:   { name: 'Nico «Cavetto»',       rep: 10, beers: 1, missEvery: 2, fixS: 25, fixes: ['fase'],        favors: 2,
+            line: 'Stagista, tanta voglia e poca pratica: alle luci ne manca una su due, il DMX non lo tocca.' },
+  sabri:  { name: 'Sabri «Nastro Nero»',  rep: 20, beers: 1, missEvery: 3, fixS: 15, fixes: ['fase', 'dmx'], favors: 2,
+            line: 'Brava quanto il capo: una nota su tre alle luci, sistema fasi e DMX.' },
+  tonino: { name: 'Tonino «Ventennale»',  rep: 35, beers: 2, missEvery: 5, fixS: 10, fixes: ['fase', 'dmx'], favors: 3,
+            line: 'Vent\'anni di palchi: ne manca una su cinque, velocissimo, ma costa due birre a favore.' }
+};
+const assistantLevel = (level = LEVEL_ID) => !TUTOR_LEVELS.has(level);
+const assistantUnlocked = id => Object.hasOwn(ASSISTANTS, id) && reputation() >= ASSISTANTS[id].rep;
+const assistant = () => Object.hasOwn(ASSISTANTS, Profile.data.assistant.id) ? ASSISTANTS[Profile.data.assistant.id] : null;
+// assume per la serata (o con null resta da solo); vale solo nei livelli
+// senza capo e con la reputazione che basta
+function hireAssistant (id, level = LEVEL_ID) {
+  if (!assistantLevel(level) || (id !== null && !assistantUnlocked(id))) return false;
+  Profile.data.assistant = { id, favors: 0 };
+  Profile.save();
+  return true;
+}
+// nuovo set: i favori ripartono da zero, l'assistente resta
+function assistantNewSet () { Profile.data.assistant.favors = 0; Profile.save(); }
+// l'assistente può andare a sistemare questo guasto grosso ('fase', 'dmx')?
+function assistantCanFix (fault) {
+  const a = assistant();
+  return !!a && a.fixes.includes(fault) && Profile.data.assistant.favors < a.favors && (Profile.data.beers || 0) >= a.beers;
+}
+// ci va l'assistente: paga le birre e conta il favore; false se non può
+function assistantFavor (fault) {
+  if (!assistantCanFix(fault)) return false;
+  const a = assistant();
+  Profile.data.beers -= a.beers;
+  Profile.data.assistant.favors++;
+  Profile.save();
+  applySettings();
+  return true;
+}
+
 /* STANCHEZZA del tecnico — il tempo della serata si sente addosso.
    Un valore solo, da 0 (riposato) a 100, salvato nel profilo
    (Profile.data.fatigue) e mostrato sotto il tasto 🍺 in testata:
@@ -2644,6 +2695,7 @@ function startNewGame (player, offer, offers) {
   if (el('#dj-frame')) el('#dj-frame').remove();
   djOpen = false;
   Profile.data.beers = 0;
+  Profile.data.assistant = defaultAssistant();   // il nuovo tecnico non ha ancora nessuno
   Profile.data.fatigue = 0;      // la serata comincia: tecnico riposato
   Profile.data.tutorSeen = {};   // il nuovo tecnico non ha ancora sentito i consigli del capo
   whenScene(scene => {
