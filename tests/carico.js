@@ -4,7 +4,7 @@
    scuola va a Gerry e la nostra no, un case che sporge non entra. Nella
    prova su strada un case slegato con spazio davanti scivola e si rovina,
    lo stesso case legato no.
-   Nel gioco: dopo il DJ set la scaletta porta al carico, il risultato torna
+   Nel gioco: dopo il DJ set e il karaoke di Macio la scaletta porta al carico, il risultato torna
    indietro (stelle, reputazione una volta sola, birra), la scaletta e il
    foglio lo raccontano, resta dopo la ricarica e non si rifà. Saltarlo non
    dà reputazione.
@@ -144,10 +144,12 @@ const SOL = { corrente: [0, 0, 4, 2], segnale: [4, 0, 2, 4], sub1: [0, 2, 3, 3],
     // prima del DJ set il carico non si apre
     await ev(() => { closeSchedule(); finishScarico({ skipped: true }); settings().bossTips = false; openCarico(); });
     check(!(await p.$('#carico-frame')), 'il carico si apre prima del DJ set');
-    await ev(() => finishDj({ skipped: true }));
+    await ev(() => { finishDj({ skipped: true }); clearTimeout(karaokeTimer); openCarico(); });
+    check(!(await p.$('#carico-frame')), 'il carico si apre prima del karaoke di Macio');
+    await ev(() => finishKaraoke({ skipped: true }));
     const rep0 = await ev(() => Profile.data.reputation.total), beer0 = await ev(() => Profile.data.beers || 0);
     await ev(() => openSchedule(false));
-    check((await p.textContent('#schedule-go')) === 'Carica il furgone', 'la scaletta dopo il DJ set non porta al carico: ' + await p.textContent('#schedule-go'));
+    check((await p.textContent('#schedule-go')) === 'Carica il furgone', 'la scaletta dopo il karaoke non porta al carico: ' + await p.textContent('#schedule-go'));
     await p.click('#schedule-go');
     await p.waitForSelector('#carico-frame');
     const frame = await (await p.$('#carico-frame')).contentFrame();
@@ -187,7 +189,7 @@ const SOL = { corrente: [0, 0, 4, 2], segnale: [4, 0, 2, 4], sub1: [0, 2, 3, 3],
     // saltarlo non dà reputazione
     await ev(() => { startNewGame('Salta', serviceOffers([])[0]); });
     await p.waitForFunction(() => !menuOpen);
-    await ev(() => { closeSchedule(); finishScarico({ skipped: true }); finishDj({ skipped: true }); openCarico(); });
+    await ev(() => { closeSchedule(); finishScarico({ skipped: true }); finishDj({ skipped: true }); clearTimeout(karaokeTimer); finishKaraoke({ skipped: true }); openCarico(); });
     await p.waitForSelector('#carico-frame');
     const f2 = await (await p.$('#carico-frame')).contentFrame();
     await f2.click('#btn-skip');

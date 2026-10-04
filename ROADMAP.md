@@ -123,12 +123,14 @@ cambiano da una fase all'altra.
   Il discorso resta col suo palco disegnato di fronte, non va
   nell'isometrico (deciso); lo stesso vale per il DJ set e il cantante. Il microfono va bene su qualsiasi ingresso MIC,
   purché cablato.
-- Dopo il DJ set (deciso, da progettare): Gerry ha cacciato il DJ e
-  **Macio** improvvisa un **karaoke**, un minigioco nuovo a metà fra il
-  discorso del preside e il DJ Hero. Prende il posto del cantante con
-  chitarra. Design in `docs/livello1-festa-scuola.md`.
+- Dopo il DJ set (fatto): Gerry ha cacciato il DJ e **Macio** improvvisa
+  un **karaoke** (`karaoke.html`): il tecnico manda avanti il testo a mano,
+  sillaba per sillaba, sceglie le parole che Macio dimentica, fa partire il
+  coro del pubblico, riattacca la spina che Gerry stacca e tiene la voce di
+  Macio (accento di Chieti) nella zona verde. Prende il posto del cantante
+  con chitarra. Design in `docs/livello1-festa-scuola.md`.
 - **Carico del furgone** (23:00): prima versione nel gioco, `carico.html`
-  dopo il DJ set (dopo il karaoke, quando ci sarà). Il tetris del furgone
+  dopo il karaoke. Il tetris del furgone
   col marciapiede da tre posti, la roba della scuola da ridare a Gerry,
   l'assetto, tre cinghie e la prova su strada. Da provare giocando. Design
   in `docs/minigioco-carico.md`.
