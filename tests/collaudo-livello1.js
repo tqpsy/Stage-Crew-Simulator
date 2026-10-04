@@ -36,6 +36,7 @@ const N = parseInt(process.argv[2] || '40', 10), SEED0 = parseInt(process.argv[3
       const shuffle = a => { a = a.slice(); for (let i = a.length - 1; i > 0; i--) { const j = Math.floor(rng() * (i + 1)); [a[i], a[j]] = [a[j], a[i]]; } return a; };
       const S = window.__scene;
       S.resetLevel();
+      setFatigue(0);   // tanti montaggi di fila: ognuno da riposati (il connettore non scivola, vedi tests/stanchezza.js)
       const P = (ty, gx, gy) => { const w = gridToScreen(gx + .5, gy + .5); S.placeComponentAt(ty, w.x, w.y); };
       const subSpots = shuffle([[1, 8], [7, 8]]);
       P('sub', ...subSpots[0]); P('sub', ...subSpots[1]); P('top', 1, 8); P('top', 7, 8);

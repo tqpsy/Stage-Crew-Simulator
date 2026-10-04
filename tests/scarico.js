@@ -97,8 +97,8 @@ const path = require('path');
   await p.waitForTimeout(600);
 
   // birre dello scarico in testata (in orario sì, senza rotture no)
-  const beers = await ev(() => ({ n: Profile.data.beers, tag: el('#service-tag').textContent }));
-  check(beers.n === 1 && /🍺 1$/.test(beers.tag), 'birre dello scarico sbagliate: ' + JSON.stringify(beers));
+  const beers = await ev(() => ({ n: Profile.data.beers, btn: el('#beer-n').textContent, shown: !el('#beer-btn').hidden }));
+  check(beers.n === 1 && beers.btn === '1' && beers.shown, 'birre dello scarico sbagliate: ' + JSON.stringify(beers));
   // pezzi difettosi: il finale col segno arancione blocca il giro audio finché non lo sistemi
   const f1 = await ev(() => {
     const S = window.__scene, P = (ty, gx, gy) => { const w = gridToScreen(gx + .5, gy + .5); S.placeComponentAt(ty, w.x, w.y); };

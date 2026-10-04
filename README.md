@@ -39,8 +39,12 @@ node tests/partita-telefono.js 360 640
 ```
 
 Senza rete, indica le librerie locali con `PHASER_PATH` e `MATTER_PATH`.
-La posa dei cavi ha due test: `tests/posa-cavi.js` (la pagina da sola) e
-`tests/posa-cavi-gioco.js` (dentro il gioco). Il discorso del preside (21:00,
+La posa dei cavi ha due test: `tests/posa-cavi.js` (il vecchio minigioco,
+pagina da sola) e `tests/posa-cavi-gioco.js` (i cavi stesi al montaggio e il
+giro di Gerry alle 20:00). Il discorso del preside (21:00,
 `preside.html`, dopo la posa) ne ha altri due: `tests/preside-gioco.js`
 (dentro il gioco, dopo collaudo e posa) e `tests/preside-cavi.js` (le
 conseguenze della posa, pagina da sola).
+Lo spettacolo del DJ (21:15, `dj.html`, dopo il cambio palco) ha
+`tests/spettacolo-dj.js` (la pagina da sola) e `tests/dj-gioco.js` (dentro
+il gioco).

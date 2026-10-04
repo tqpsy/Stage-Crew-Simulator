@@ -1,0 +1,1682 @@
+<!doctype html>
+<meta charset="utf-8">
+<title>Notte fuori controllo</title>
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@600;700&family=Permanent+Marker&family=Inter:wght@400;500;600;700&display=swap">
+<style>
+  /* Lo spettacolo del DJ (21:15): Light Operator Hero. Il tecnico fa le luci a
+     ritmo del brano, una corsia per memoria della consolle luci, e intanto
+     insegue i guasti del DJ. Stessi colori e caratteri del gioco (solo tema
+     scuro, come il gioco). Nel gioco si apre in un iframe con ?embed=1. */
+  :root{
+    color-scheme: dark;
+    --bg-deck:#141519; --bg-panel:#1c1d22; --bg-raised:#24252b; --hairline:#34363e;
+    --text:#eee9df; --muted:#8b8e98; --amber:#f2a541; --green:#49b06a; --red:#e0503f; --yellow:#f2c53d;
+    --l0:#ff3d8b; --l1:#2fc3ff; --l2:#f4f1ea;
+    --display:'Barlow Condensed', 'Arial Narrow', sans-serif;
+    --ui:'Inter', system-ui, sans-serif;
+    --marker:'Permanent Marker', 'Comic Sans MS', cursive;
+  }
+  *{box-sizing:border-box}
+  [hidden]{display:none!important}
+  html,body{height:100%}
+  body{margin:0;background:var(--bg-deck);color:var(--text);font-family:var(--ui);overflow:hidden;-webkit-tap-highlight-color:transparent;user-select:none;-webkit-user-select:none}
+  button{font:inherit;color:inherit;cursor:pointer}
+  button:focus-visible{outline:2px solid var(--amber);outline-offset:2px}
+  #app{height:100%;display:grid;grid-template-rows:auto minmax(150px,34vh) 1fr;max-width:1200px;margin:0 auto}
+
+  /* ---- header ---- */
+  header{padding:8px 16px;background:var(--bg-panel);border-bottom:1px solid var(--hairline);display:grid;gap:6px}
+  .row{display:flex;align-items:center;gap:10px;min-width:0}
+  .faces{display:flex;flex:none}
+  .face-mini{width:34px;height:34px;border-radius:50%;background:linear-gradient(#3a2250,#1a1233);border:1px solid var(--hairline);overflow:hidden;flex:none}
+  .faces .face-mini+.face-mini{margin-left:-10px}
+  .who{font-family:var(--display);font-size:18px;letter-spacing:.03em;line-height:1;white-space:nowrap;min-width:0;overflow:hidden;text-overflow:ellipsis}
+  .who small{display:block;font-family:var(--ui);font-size:11px;color:var(--muted);letter-spacing:0;margin-top:2px;overflow:hidden;text-overflow:ellipsis}
+  .timeline{flex:1;height:8px;background:var(--bg-raised);border-radius:4px;overflow:hidden;min-width:30px}
+  .timeline i{display:block;height:100%;width:0;background:var(--amber)}
+  .clock{font-family:var(--display);font-size:20px;font-variant-numeric:tabular-nums}
+  .stat{display:flex;align-items:center;gap:6px;font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:.06em}
+  .bar{height:12px;background:var(--bg-raised);border-radius:6px;overflow:hidden;flex:1}
+  .bar i{display:block;height:100%;width:60%;transition:width .3s,background .3s}
+  .stat.grad{flex:1;min-width:0;color:var(--text)}
+  .grad-n{font-family:var(--display);font-size:18px;letter-spacing:0;font-variant-numeric:tabular-nums;min-width:3ch;text-align:right}
+  .score{font-family:var(--display);font-size:18px;font-variant-numeric:tabular-nums;white-space:nowrap}
+  .mult{font-family:var(--display);font-size:16px;border:1px solid var(--hairline);border-radius:999px;padding:1px 8px;background:var(--bg-raised);min-width:3.2ch;text-align:center}
+  .mult.hot{border-color:var(--amber);color:var(--amber)}
+  .pill{border:1px solid var(--hairline);background:var(--bg-raised);border-radius:999px;padding:4px 10px;font-size:14px;line-height:1.2;white-space:nowrap}
+  .pill.beer{display:flex;align-items:center;gap:6px}
+  .fat{display:grid;gap:2px;font-size:9px;color:var(--muted);text-transform:uppercase;letter-spacing:.06em;line-height:1}
+  .fat .bar{width:34px;height:5px;flex:none}
+
+  /* ---- palco ---- */
+  #stage{position:relative;overflow:hidden;background:#07080b}
+  #scene{position:absolute;inset:0;width:100%;height:100%}
+  #beams{mix-blend-mode:screen}
+  #par-hit{cursor:pointer}
+  #pausa{position:absolute;inset:0;background:rgba(8,8,10,.85);display:grid;place-items:center;font-family:var(--display);font-size:34px;letter-spacing:.1em;z-index:5}
+  #toast{position:absolute;left:50%;bottom:10px;transform:translateX(-50%);background:var(--bg-raised);border:2px solid var(--hairline);padding:8px 14px;border-radius:10px;font-size:15px;font-weight:600;line-height:1.3;box-shadow:0 6px 20px rgba(0,0,0,.5);z-index:4;opacity:0;transition:opacity .25s;pointer-events:none;max-width:calc(100% - 32px);text-align:center}
+  #toast.show{opacity:1}#toast.ok{border-color:var(--green)}#toast.bad{border-color:var(--red)}
+  .chip{position:absolute;left:8px;top:8px;z-index:3;background:#4a1c17;border:2px solid var(--red);color:#fff;border-radius:999px;padding:5px 12px;font-size:13px;font-weight:700;animation:blink 1s steps(2) infinite}
+  @keyframes blink{50%{background:var(--red)}}
+  .stage-msg{position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);z-index:4;width:min(320px,calc(100% - 32px));background:rgba(20,21,25,.94);border:2px solid var(--amber);border-radius:12px;padding:12px 14px;text-align:center;font-size:15px;font-weight:600;line-height:1.4;box-shadow:0 8px 24px rgba(0,0,0,.6)}
+  .outro-msg{margin:0;background:var(--bg-raised);border-left:3px solid var(--amber);border-radius:8px;padding:8px 10px;font-size:14px;line-height:1.4}
+  /* comandi dei guasti, sopra il palco: fader da tirare giù, mute del microfono, il PAR da sistemare */
+  #pops{position:absolute;right:8px;top:8px;bottom:8px;z-index:3;display:flex;gap:8px;align-items:stretch;pointer-events:none}
+  .pop{pointer-events:auto;background:rgba(20,21,25,.94);border:2px solid var(--amber);border-radius:12px;padding:8px;display:grid;gap:6px;align-content:start;box-shadow:0 6px 20px rgba(0,0,0,.5)}
+  .pop b{font-family:var(--display);font-size:15px;letter-spacing:.05em;line-height:1.1}
+  .pop small{font-size:11px;color:var(--muted);line-height:1.3}
+  .pop.fader{width:92px;grid-template-rows:auto 1fr auto;justify-items:center;text-align:center}
+  .track{position:relative;width:46px;height:100%;min-height:90px;background:#0c0d10;border-radius:8px;touch-action:none;cursor:ns-resize;overflow:hidden}
+  .track .red{position:absolute;left:0;right:0;top:0;height:30%;background:rgba(224,80,63,.35);border-bottom:1px solid var(--red)}
+  .track .knob{position:absolute;left:3px;right:3px;height:18px;margin-top:-9px;background:linear-gradient(#d8d4cb,#8f8b84);border-radius:4px;box-shadow:0 2px 4px #000}
+  .track .knob::after{content:"";position:absolute;left:5px;right:5px;top:8px;height:2px;background:#222}
+  .pop.mute{width:118px;justify-items:center;text-align:center;border-color:var(--red)}
+  .mute-btn{width:100%;min-height:70px;border-radius:10px;border:2px solid var(--red);background:#4a1c17;color:#fff;font-family:var(--display);font-size:20px;letter-spacing:.05em;padding:6px}
+  .mute-btn[aria-pressed=true]{background:var(--red)}
+  .pop.par{width:min(236px,calc(100vw - 32px));border-color:var(--red)}
+  .pop .act{background:#15161a;border:1px solid var(--hairline);border-radius:8px;padding:8px;font-size:13px;font-weight:600;text-align:left}
+  .pop .act:disabled{opacity:.4}
+  .pop .x{justify-self:end;background:none;border:0;color:var(--muted);font-size:16px;padding:0 4px;margin-top:-4px}
+  kbd{font:600 10px var(--ui);color:var(--muted)}
+  @media (hover:none){kbd{display:none}}
+
+  /* ---- la pista delle luci ---- */
+  #rig{position:relative;background:var(--bg-panel);border-top:1px solid var(--hairline);display:grid;grid-template-rows:1fr auto;min-height:0;padding:0 16px calc(10px + env(safe-area-inset-bottom,0px))}
+  #road{position:relative;min-height:0;overflow:hidden;perspective:520px;background:#101116}
+  #crowd-far{position:absolute;left:0;top:0;width:100%;height:62%;opacity:.5;pointer-events:none;
+    -webkit-mask-image:linear-gradient(#000 0%,#000 30%,transparent 100%);mask-image:linear-gradient(#000 0%,#000 30%,transparent 100%)}
+  #hw{position:absolute;left:0;right:0;bottom:0;height:130%;width:100%;transform-origin:50% 100%;transform:rotateX(24deg);z-index:1}
+  #judge{position:absolute;left:0;right:0;bottom:24%;text-align:center;font-family:var(--display);font-size:26px;letter-spacing:.08em;pointer-events:none;opacity:0;text-shadow:0 2px 8px #000;z-index:2}
+  #judge.show{animation:pop .45s ease-out}
+  @keyframes pop{0%{opacity:1;transform:translateY(6px) scale(.9)}40%{opacity:1;transform:none}100%{opacity:0;transform:translateY(-10px)}}
+  #banner{position:absolute;left:0;right:0;top:8px;text-align:center;font-family:var(--marker);font-size:22px;color:var(--amber);pointer-events:none;opacity:0;transition:opacity .3s;text-shadow:0 2px 8px #000;z-index:2}
+  #banner.show{opacity:1}
+  .pads{display:grid;grid-template-columns:repeat(3,1fr);gap:8px}
+  .pad{position:relative;height:66px;border-radius:12px;border:2px solid var(--c);background:color-mix(in srgb,var(--c) 14%,#15161a);display:grid;place-items:center;align-content:center;gap:2px;touch-action:none;padding:0}
+  .pad b{font-family:var(--display);font-size:17px;letter-spacing:.06em;line-height:1}
+  .pad small{font-size:10px;color:var(--muted);letter-spacing:.04em;line-height:1.1}
+  .pad.down{background:color-mix(in srgb,var(--c) 55%,#15161a);box-shadow:0 0 18px color-mix(in srgb,var(--c) 70%,transparent)}
+  .pad.down b{color:#111}.pad.down small{color:#222}
+  .pad.dead{border-color:#3a3c44;background:#18191d;box-shadow:none}.pad.dead b{color:#55575f}
+  .pad[data-l="0"]{--c:var(--l0)}.pad[data-l="1"]{--c:var(--l1)}.pad[data-l="2"]{--c:var(--l2)}
+
+  /* ---- guasto grosso: chi ci va, e il Quadro ---- */
+  #choice{position:absolute;left:0;right:0;top:8px;z-index:3;margin:0 auto;width:min(360px,100%);background:rgba(28,29,34,.97);border:2px solid var(--red);border-radius:12px;padding:10px;display:grid;gap:8px;box-shadow:0 8px 24px rgba(0,0,0,.6)}
+  #choice p{margin:0;font-size:14px;line-height:1.35}
+  #choice p b{color:#ff9b8f}
+  .opt{display:grid;grid-template-columns:1fr auto;gap:2px 8px;align-items:center;text-align:left;background:var(--bg-raised);border:1px solid var(--hairline);border-radius:9px;padding:8px 10px}
+  .opt b{font-size:14px}.opt small{grid-column:1;font-size:11px;color:var(--muted);line-height:1.3}
+  .opt span{grid-row:1 / span 2;grid-column:2;font-family:var(--display);font-size:17px}
+  .opt:disabled{opacity:.4}
+  .opt .pos{color:var(--green)}.opt .neg{color:var(--red)}
+  .countdown{height:4px;border-radius:2px;background:#0c0d10;overflow:hidden}.countdown i{display:block;height:100%;background:var(--red)}
+  #quadro{position:absolute;inset:0;z-index:4;background:var(--bg-panel);padding:10px 16px calc(10px + env(safe-area-inset-bottom,0px));display:grid;gap:10px;align-content:start;overflow:auto}
+  #quadro.mini{inset:auto 8px 8px auto;width:min(300px,calc(100% - 16px));border:2px solid var(--red);border-radius:12px;padding:8px;gap:6px;max-height:calc(100% - 16px)}
+  #quadro.mini .q-help{display:none}
+  .q-head{display:flex;justify-content:space-between;align-items:baseline;gap:8px}
+  .q-head b{font-family:var(--display);font-size:20px;letter-spacing:.05em}
+  .q-head span{font-family:var(--display);font-size:18px;font-variant-numeric:tabular-nums;color:var(--amber)}
+  .q-help{margin:0;font-size:13px;color:var(--muted);line-height:1.4}
+  .phases{display:grid;grid-template-columns:repeat(3,1fr);gap:8px}
+  .ph{background:#15161a;border:2px solid var(--hairline);border-radius:10px;padding:8px;display:grid;gap:4px;font-size:12px;line-height:1.3}
+  .ph b{font-family:var(--display);font-size:18px}
+  .ph .kw{font-variant-numeric:tabular-nums;color:var(--muted)}
+  .ph.down{border-color:var(--red);background:#2a1614}.ph.down b{color:#ff9b8f}
+  .ph .plug{background:#3a2a16;border:1px solid var(--amber);border-radius:6px;padding:3px 6px;color:var(--amber);font-weight:600}
+  .q-acts{display:grid;grid-template-columns:repeat(3,1fr);gap:8px}
+  .q-acts button{background:var(--bg-raised);border:1px solid var(--hairline);border-radius:9px;padding:9px 4px;font-size:13px;font-weight:600}
+  .q-acts button.go{border-color:var(--amber);color:var(--amber)}
+  .q-acts button:disabled{opacity:.4}
+  .prog{height:6px;background:#0c0d10;border-radius:3px;overflow:hidden}.prog i{display:block;height:100%;width:0;background:var(--amber)}
+
+  /* ---- schede iniziale e finale ---- */
+  .overlay{position:fixed;inset:0;background:rgba(10,10,12,.88);display:grid;place-items:center;padding:16px;z-index:10}
+  .card{width:min(440px,100%);background:var(--bg-panel);border:1px solid var(--hairline);border-radius:14px;padding:18px;display:grid;gap:12px;max-height:100%;overflow:auto}
+  .card-top{display:flex;gap:14px;align-items:center}
+  .portraits{display:flex;flex:none}
+  .portrait{width:78px;height:78px;border-radius:12px;background:linear-gradient(#3a2250,#1a1233);flex:none;overflow:hidden;border:2px solid var(--amber)}
+  .portraits .portrait+.portrait{margin-left:-14px}
+  .card h2{margin:0;font-family:var(--marker);font-weight:400;font-size:26px;line-height:1.1;color:var(--amber);text-wrap:balance}
+  .card .tag{font-size:11px;letter-spacing:.08em;text-transform:uppercase;color:var(--muted)}
+  .card p{margin:0;font-size:15px;line-height:1.5}
+  .card ul{margin:0;padding-left:18px;font-size:15px;line-height:1.5}
+  .lanes-help{display:grid;grid-template-columns:repeat(3,1fr);gap:6px;text-align:center;font-size:11px;line-height:1.3;color:var(--muted)}
+  .lanes-help b{display:block;font-family:var(--display);font-size:15px;letter-spacing:.05em;color:var(--c)}
+  .lanes-help div{border:1px solid var(--hairline);border-top:3px solid var(--c);border-radius:8px;padding:6px 4px;background:var(--bg-raised)}
+  .pick{display:grid;gap:6px;font-size:13px;color:var(--muted)}
+  .pick div{display:grid;grid-template-columns:repeat(2,1fr);gap:6px}
+  .pick button{background:var(--bg-raised);border:1px solid var(--hairline);border-radius:8px;padding:8px 2px;font-size:13px;font-weight:600}
+  .pick button[aria-pressed=true]{border-color:var(--amber);color:var(--amber)}
+  .toggle{display:flex;align-items:center;justify-content:space-between;gap:10px;background:var(--bg-raised);border:1px solid var(--hairline);border-radius:10px;padding:8px 12px;font-size:13px;text-align:left}
+  .toggle small{display:block;color:var(--muted);font-size:11px;margin-top:2px}
+  .toggle[aria-pressed=true] .sw{background:var(--green)}
+  .sw{width:38px;height:22px;border-radius:11px;background:#3a3c44;position:relative;flex:none;transition:background .2s}
+  .sw::after{content:"";position:absolute;top:3px;left:3px;width:16px;height:16px;border-radius:50%;background:#fff;transition:left .2s}
+  .toggle[aria-pressed=true] .sw::after{left:19px}
+  .lag{display:grid;grid-template-columns:auto 1fr auto;align-items:center;gap:10px;font-size:13px;color:var(--muted)}
+  .lag input{width:100%;accent-color:var(--amber)}
+  .lag output{font-variant-numeric:tabular-nums;color:var(--text);min-width:6ch;text-align:right}
+  .cta{background:var(--amber);color:#1a1206;border:0;border-radius:10px;padding:12px;font-family:var(--display);font-size:22px;letter-spacing:.06em}
+  .cta:disabled{opacity:.5}
+  .ghost{background:none;border:1px solid var(--hairline);border-radius:10px;padding:9px;font-size:14px;color:var(--muted)}
+  .results{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;text-align:center}
+  .results div{background:var(--bg-raised);border-radius:10px;padding:8px 4px}
+  .results b{display:block;font-family:var(--display);font-size:26px;font-variant-numeric:tabular-nums}
+  .results span{font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:.06em}
+  .stars{font-size:26px;letter-spacing:4px;text-align:center;color:var(--amber)}
+  .stars i{font-style:normal;color:#3a3c44}
+
+  @media (max-width:520px){
+    .pad b{font-size:15px}
+    .pads{gap:6px}
+  }
+  @media (min-width:900px){
+    #app{grid-template-columns:1fr 420px;grid-template-rows:auto 1fr}
+    header{grid-column:1 / -1}
+    #rig{border-top:0;border-left:1px solid var(--hairline);padding-top:8px}
+  }
+  @media (max-height:520px) and (orientation:landscape){
+    #app{grid-template-columns:1fr 1fr;grid-template-rows:auto 1fr}
+    header{grid-column:1 / -1;padding:4px 16px}
+    .pad{height:52px}
+  }
+  @media (prefers-reduced-motion:reduce){.chip{animation:none}}
+</style>
+
+<svg width="0" height="0" style="position:absolute" aria-hidden="true">
+  <defs>
+    <!-- copiati da img/personaggi.svg (dipre-cuffie, musa-base) e da preside.html (gerry) -->
+<symbol id="dipre-cuffie" viewBox="0 0 100 140">
+  <!-- abito scuro, camicia bianca, cravatta rossa larga -->
+  <path d="M2 140 L6 104 Q12 92 32 88 Q50 84 68 88 Q88 92 94 104 L98 140 Z" fill="#1f2230"/>
+  <path d="M37 88 L50 116 L63 88 Z" fill="#f6f4ef"/>
+  <path d="M29 90 L40 87 L50 116 L42 140 L33 140 Z M71 90 L60 87 L50 116 L58 140 L67 140 Z" fill="#2a2e3e"/>
+  <path d="M46 93 L54 93 L55 99 L52 101 L48 101 L45 99 Z" fill="#b8201f"/>
+  <path d="M48 101 L52 101 L57 134 L50 140 L43 134 Z" fill="#d42b2b"/>
+  <!-- collo largo -->
+  <path d="M33 76 L67 76 L67 92 Q50 98 33 92 Z" fill="#e8bba0"/>
+  <!-- orecchie -->
+  <ellipse cx="20" cy="56" rx="4.5" ry="7.5" fill="#e8bba0"/><ellipse cx="80" cy="56" rx="4.5" ry="7.5" fill="#e8bba0"/>
+  <!-- faccia: fronte e tempie larghe, guance piene, mento morbido col doppio mento -->
+  <path d="M23 34 Q26 16 50 16 Q74 16 77 34 Q81 48 81 62 Q81 82 69 90 Q60 95 50 95 Q40 95 31 90 Q19 82 19 62 Q19 48 23 34 Z" fill="#f1d3c0"/>
+  <path d="M22 66 Q24 82 34 89 M78 66 Q76 82 66 89" stroke="#deab8f" stroke-width="1.5" fill="none" stroke-linecap="round"/>
+  <path d="M40 92 Q50 97 60 92" stroke="#deab8f" stroke-width="1.4" fill="none" stroke-linecap="round"/>
+  <path d="M49 88 Q50 89.6 51 88" stroke="#deab8f" stroke-width="1" fill="none" stroke-linecap="round"/>
+  <!-- sopracciglia scure e folte, con l'interno alzato: aria malinconica -->
+  <path d="M28 46 Q35 41 45 41.6 M55 41.6 Q65 41 72 46" stroke="#2a201b" stroke-width="3.6" fill="none" stroke-linecap="round"/>
+  <!-- occhiaie scure e violacee, larghe -->
+  <path d="M29 55 Q37.5 64 46 55 Q44 61.5 37.5 62.5 Q31 61.5 29 55 Z M54 55 Q62.5 64 71 55 Q69 61.5 62.5 62.5 Q56 61.5 54 55 Z" fill="#8e5a6e" opacity=".55"/>
+  <path d="M30 57 Q37.5 65.5 45 57.4 M55 57.4 Q62.5 65.5 70 57" stroke="#7a4a5c" stroke-width="1.1" fill="none" stroke-linecap="round" opacity=".7"/>
+  <!-- occhi vitrei, arrossati, palpebre cadenti che coprono metà dell'iride -->
+  <path d="M30.2 54 Q37.5 47.6 44.8 54 Q37.5 59.4 30.2 54 Z M55.2 54 Q62.5 47.6 69.8 54 Q62.5 59.4 55.2 54 Z" fill="#f3dcd6"/>
+  <path d="M31.4 55 L34 54.6 M31.6 56 L33.8 55.4 M68.6 55 L66 54.6 M68.4 56 L66.2 55.4" stroke="#d9534f" stroke-width=".6" stroke-linecap="round"/>
+  <circle cx="37.5" cy="53.8" r="3" fill="#6f7f6a"/><circle cx="62.5" cy="53.8" r="3" fill="#6f7f6a"/>
+  <circle cx="37.5" cy="53.8" r="2.1" fill="#0d0a09"/><circle cx="62.5" cy="53.8" r="2.1" fill="#0d0a09"/>
+  <circle cx="36.6" cy="52.8" r=".6" fill="#fff" opacity=".8"/><circle cx="61.6" cy="52.8" r=".6" fill="#fff" opacity=".8"/>
+  <!-- palpebra pesante: pelle che scende fino a metà occhio -->
+  <path d="M29.4 53.6 Q37.5 45.6 45.6 53.6 Q37.5 48.6 29.4 53.6 Z M54.4 53.6 Q62.5 45.6 70.6 53.6 Q62.5 48.6 54.4 53.6 Z" fill="#ecc2a8"/>
+  <path d="M29.4 53.6 Q37.5 48.4 45.6 53.6 M54.4 53.6 Q62.5 48.4 70.6 53.6" stroke="#3b2a22" stroke-width="1.7" fill="none" stroke-linecap="round"/>
+  <path d="M30.5 49.4 Q37.5 44.4 44.5 49 M55.5 49 Q62.5 44.4 69.5 49.4" stroke="#d8a58c" stroke-width="1.1" fill="none" stroke-linecap="round"/>
+  <path d="M31 58.2 Q37.5 60.2 44 58.2 M56 58.2 Q62.5 60.2 69 58.2" stroke="#b77d6e" stroke-width=".9" fill="none" stroke-linecap="round"/>
+  <!-- gocce di sudore -->
+  <path d="M25 40 q-2 4 0 5.5 q2 -1.5 0 -5.5 Z M77 44 q-2 4 0 5.5 q2 -1.5 0 -5.5 Z M70 36 q-1.6 3.2 0 4.4 q1.6 -1.2 0 -4.4 Z" fill="#bfe3f5"/>
+  <ellipse cx="29" cy="64" rx="6" ry="4" fill="#e98a82" opacity=".45"/><ellipse cx="71" cy="64" rx="6" ry="4" fill="#e98a82" opacity=".45"/>
+  <!-- naso lungo e dritto, punta larga -->
+  <path d="M48 50 Q47.4 60 45.4 65 L54.6 65 Q52.6 60 52 50 Z" fill="#ecc0a4"/>
+  <path d="M45.4 64 Q42.4 66 43.4 69 Q45.4 71 48 70 M54.6 64 Q57.6 66 56.6 69 Q54.6 71 52 70" fill="#e5b497"/>
+  <ellipse cx="50" cy="67" rx="4.6" ry="3.8" fill="#efc3a7"/>
+  <ellipse cx="46.6" cy="69.6" rx="2" ry="1.2" fill="#d9776e"/><ellipse cx="53.4" cy="69.6" rx="2" ry="1.2" fill="#d9776e"/>
+  <path d="M46.6 70.4 Q50 71.6 53.4 70.4" stroke="#b77d63" stroke-width="1" fill="none" stroke-linecap="round"/>
+  <!-- bocca chiusa e impassibile, piccola, angoli appena in giù; labbro di sotto carnoso -->
+  <!-- labbra: sopra sottile con l'arco di cupido marcato, sotto pieno e sporgente a broncio; angoli infossati; ghigno appena accennato a destra -->
+  <path d="M40.6 78.8 Q44 77.2 47.4 76.4 Q49 75.6 50 76.8 Q51 75.6 52.6 76.2 Q56 76.8 59.6 76.2 Q56.6 78.8 50 79 Q44 79.2 40.6 78.8 Z" fill="#cf7f7a"/>
+  <path d="M41.4 79 Q44 83.6 50 84 Q56.4 83.6 59 77.8 Q56 79.4 50 79.4 Q44.6 79.4 41.4 79 Z" fill="#e3968f"/>
+  <ellipse cx="50" cy="81.4" rx="4.2" ry="1.1" fill="#f0b4ab"/>
+  <path d="M40.6 78.8 Q46 79.6 50 79.3 Q55.6 79.2 59.6 76.2" stroke="#8f4640" stroke-width="1.1" fill="none" stroke-linecap="round"/>
+  <path d="M39.6 78 Q39 79.6 40 81 M60 74.8 Q61.4 76 61 78" stroke="#d09a86" stroke-width="1.1" fill="none" stroke-linecap="round"/>
+  <path d="M47.4 76.4 Q48.4 72.6 48.8 71 M52.6 76.2 Q51.6 72.6 51.2 71" stroke="#e2b29a" stroke-width=".9" fill="none" stroke-linecap="round"/>
+  <!-- mascella tesa -->
+  <path d="M24 72 q2 3 0 6 M76 72 q-2 3 0 6" stroke="#deab8f" stroke-width="1.2" fill="none" stroke-linecap="round"/>
+  <!-- capelli castano scuro: testa tonda e bassa, gonfi sulle tempie, riga a sinistra e frangia che attraversa la fronte -->
+  <path d="M18 58 Q11 42 17 28 Q25 12 50 11 Q75 11 83 28 Q89 42 82 58 Q80 50 79 45 Q74 41 67 40 Q58 38 50 35 Q42 33 36 34 Q31 36 28 40 Q24 46 24 54 Z" fill="#2c221d"/>
+  <path d="M31 37 Q44 28 60 31 Q73 34 79 44 M34 31 Q50 21 68 26 Q76 29 80 36 M22 40 Q22 30 28 24" stroke="#46372e" stroke-width="1.4" fill="none" stroke-linecap="round"/>
+  <path d="M58 35 Q62 42 58 47 M62 36 Q68 40 67 46" stroke="#2c221d" stroke-width="2" fill="none" stroke-linecap="round"/>
+  <path d="M30 39 Q29 29 34 18" stroke="#17110e" stroke-width="1.6" fill="none" stroke-linecap="round"/>
+  <!-- cuffie da DJ in testa -->
+  <path d="M17 58 Q13 6 50 5 Q87 6 83 58" stroke="#121317" stroke-width="5" fill="none" stroke-linecap="round"/>
+  <path d="M22 18 Q50 0 78 18" stroke="#3a3c44" stroke-width="1.6" fill="none" stroke-linecap="round"/>
+  <rect x="9" y="46" width="15" height="21" rx="6" fill="#121317"/><rect x="76" y="46" width="15" height="21" rx="6" fill="#121317"/>
+  <rect x="11.5" y="49" width="10" height="15" rx="4.5" fill="#e0503f"/><rect x="78.5" y="49" width="10" height="15" rx="4.5" fill="#e0503f"/>
+</symbol>
+<symbol id="musa-base" viewBox="0 0 100 140">
+  <!-- massa di capelli neri lunghi dietro, fin sotto le spalle -->
+  <path d="M50 6 Q18 5 12 32 Q6 36 9 44 Q3 52 7 60 Q1 68 6 76 Q1 86 5 100 Q10 108 16 100 Q20 110 26 102 Q30 110 36 100 L36 76 L64 76 L64 100 Q70 110 74 102 Q80 110 84 100 Q90 108 95 100 Q99 86 94 76 Q99 68 93 60 Q97 52 91 44 Q94 36 88 32 Q82 5 50 6 Z" fill="#17120f"/>
+  <!-- a petto nudo: spalle tonde e pancia, peli ovunque, catenina con la croce -->
+  <path d="M0 140 L2 108 Q8 92 30 88 Q50 84 70 88 Q92 92 98 108 L100 140 Z" fill="#f0c9b2"/>
+  <path d="M8 106 Q14 98 22 100 M92 106 Q86 98 78 100" stroke="#e0ae95" stroke-width="1.4" fill="none" stroke-linecap="round"/>
+  <path d="M20 96 Q50 88 80 96 Q78 110 70 116 Q62 122 58 130 L56 140 L44 140 L42 130 Q38 122 30 116 Q22 110 20 96 Z" fill="#3b2e28" opacity=".45"/>
+  <path d="M36 100 Q50 96 64 100 Q62 114 56 122 L54 140 L46 140 L44 122 Q38 114 36 100 Z" fill="#2f2420" opacity=".35"/>
+  <path d="M46.6 118.9 q1.1 0.9 0.0 2.3 M56.3 100.9 q0.4 1.5 -1.5 2.0 M63.9 94.0 q1.0 1.6 -1.0 2.8 M52.0 94.9 q1.1 -0.5 1.7 0.9 M47.4 113.1 q0.8 1.2 -0.7 2.2 M50.0 123.8 q-0.3 1.2 -1.8 0.9 M34.8 95.4 q0.2 1.3 -1.5 1.6 M47.8 139.1 q0.6 0.9 -0.5 1.6 M21.3 94.9 q0.8 0.8 -0.2 1.8 M46.2 101.2 q0.6 0.9 -0.5 1.7 M29.3 105.0 q1.7 0.3 1.3 2.5 M42.4 133.0 q-0.2 1.1 -1.6 0.8 M29.4 104.4 q1.3 0.2 1.0 1.8 M56.0 103.7 q1.1 0.7 0.3 2.1 M64.7 104.3 q1.5 0.3 1.2 2.2 M54.3 132.9 q-0.0 1.3 -1.6 1.2 M55.2 98.3 q-0.3 1.8 -2.5 1.3 M61.3 125.2 q1.0 -0.5 1.6 0.8 M48.7 127.1 q1.8 -0.6 2.6 1.6 M53.3 127.4 q0.7 1.5 -1.2 2.4 M39.3 124.9 q1.6 0.8 0.6 2.8 M55.2 122.0 q0.9 1.2 -0.6 2.4 M66.4 110.6 q1.3 0.7 0.4 2.4 M74.4 96.0 q0.7 0.8 -0.3 1.6 M48.6 103.1 q0.9 1.1 -0.6 2.2 M45.8 134.8 q1.6 -0.1 1.7 1.9 M45.0 130.7 q1.7 0.7 0.8 2.8 M49.7 132.2 q-0.2 1.6 -2.2 1.4 M33.9 100.1 q1.2 -0.0 1.3 1.6 M43.8 122.0 q0.2 1.3 -1.4 1.5 M59.3 113.4 q0.3 1.6 -1.6 2.0 M48.0 126.3 q1.2 0.4 0.7 1.9 M64.2 117.0 q1.5 0.7 0.7 2.6 M66.0 98.2 q-0.0 1.6 -2.0 1.5 M41.1 119.3 q-0.2 1.7 -2.3 1.5 M47.4 123.3 q0.3 1.6 -1.7 2.0 M70.9 107.4 q1.7 0.5 1.0 2.6 M53.6 128.9 q0.2 1.0 -1.0 1.3 M26.4 108.1 q1.1 -0.2 1.3 1.2 M51.2 126.7 q-0.2 1.6 -2.2 1.4 M49.5 137.6 q0.9 0.8 -0.1 1.9 M60.0 117.1 q1.5 0.3 1.1 2.2 M41.4 132.6 q0.1 1.2 -1.3 1.3 M55.3 101.6 q0.9 1.1 -0.5 2.3 M51.2 111.2 q1.2 0.9 0.1 2.4 M63.8 95.2 q-0.2 1.4 -1.9 1.1 M48.1 98.1 q-0.0 1.7 -2.2 1.7 M48.3 107.2 q-0.1 1.6 -2.0 1.4 M37.2 109.1 q0.4 1.0 -0.9 1.5 M32.0 101.5 q1.3 0.5 0.7 2.1 M60.0 117.4 q0.2 1.5 -1.8 1.7 M36.7 107.1 q-0.3 1.2 -1.7 0.8 M68.6 116.1 q1.1 -0.4 1.6 1.0 M53.7 116.7 q1.1 -0.1 1.2 1.3 M20.9 95.0 q0.4 1.3 -1.3 1.9 M37.5 114.4 q0.9 1.1 -0.5 2.2 M43.1 120.8 q0.4 1.8 -1.9 2.3 M69.1 111.5 q1.0 0.3 0.6 1.6 M39.6 122.7 q-0.1 1.2 -1.6 1.0 M62.0 108.2 q1.1 1.0 -0.1 2.4 M60.2 125.7 q1.7 -0.8 2.7 1.3 M42.9 94.4 q1.3 -0.4 1.7 1.3 M53.6 116.4 q-0.3 1.5 -2.2 1.1 M48.0 100.1 q1.4 -0.6 2.1 1.3 M51.9 120.7 q0.7 1.1 -0.7 1.9 M54.4 105.6 q1.1 -0.6 1.8 0.8 M68.3 110.7 q1.6 -0.6 2.3 1.3 M44.9 114.9 q0.9 0.8 -0.1 1.9 M47.7 139.0 q1.5 -0.4 1.9 1.5 M55.9 112.1 q-0.3 1.4 -2.1 1.0 M31.2 97.5 q1.0 1.4 -0.7 2.6 M39.9 105.0 q1.0 1.1 -0.5 2.4 M33.5 112.4 q0.8 0.7 -0.1 1.7 M62.7 118.4 q1.1 0.8 0.1 2.1 M29.2 108.5 q1.7 -0.6 2.4 1.5 M44.6 104.4 q0.7 1.1 -0.7 2.0 M53.5 127.8 q1.3 0.5 0.7 2.1 M54.6 115.3 q0.4 1.2 -1.2 1.7 M61.7 95.9 q0.8 1.5 -1.1 2.4 M65.1 119.3 q-0.1 1.8 -2.4 1.8 M45.5 130.5 q1.2 0.5 0.5 2.0 M40.2 111.0 q0.8 0.8 -0.2 1.9 M53.2 119.2 q0.3 1.5 -1.6 2.0 M69.1 117.0 q1.3 0.4 0.8 2.0 M49.5 117.8 q-0.1 1.6 -2.1 1.6 M43.6 131.7 q0.4 1.7 -1.8 2.2 M51.7 126.1 q1.2 0.6 0.4 2.2 M47.0 120.0 q1.0 -0.3 1.3 1.0 M68.5 107.0 q1.4 1.0 0.2 2.8 M53.4 137.9 q1.1 -0.5 1.7 0.9 M41.7 117.3 q-0.3 1.2 -1.8 0.9 M48.0 109.8 q1.0 1.3 -0.6 2.6 M51.2 122.6 q0.9 0.8 -0.1 2.0 M65.6 96.7 q-0.2 1.4 -1.9 1.2 M56.2 133.2 q1.5 0.8 0.6 2.7 M51.8 99.6 q1.3 0.3 0.9 1.8 M47.6 126.3 q1.6 -0.4 2.1 1.6 M42.4 114.2 q0.9 1.5 -0.9 2.6 M65.1 103.4 q1.3 -0.6 2.1 0.9 M34.9 110.0 q1.2 0.3 0.8 1.9 M54.5 126.7 q1.7 -0.5 2.3 1.6 M24.1 96.5 q1.6 -0.1 1.8 1.9 M43.0 132.2 q1.1 0.0 1.0 1.4 M44.7 116.6 q0.3 1.7 -1.8 2.0 M41.8 107.9 q0.9 0.4 0.4 1.6 M37.8 108.4 q1.0 0.4 0.5 1.7 M50.7 129.9 q1.5 -0.2 1.8 1.7 M53.5 108.9 q0.5 1.0 -0.8 1.6 M64.2 107.8 q1.1 0.7 0.2 2.1 M53.1 118.9 q-0.0 1.2 -1.6 1.2 M57.3 97.9 q0.0 1.3 -1.6 1.3 M36.2 124.2 q0.9 1.0 -0.4 2.1 M55.0 100.3 q0.9 0.9 -0.3 2.0 M62.3 98.9 q1.3 0.8 0.2 2.5 M43.6 121.9 q0.6 1.6 -1.4 2.3 M49.0 139.7 q1.6 0.8 0.6 2.8 M45.2 119.2 q1.1 1.0 -0.1 2.4 M45.1 135.4 q0.4 1.0 -0.8 1.5 M57.0 128.1 q1.4 -0.5 2.1 1.3 M50.2 111.0 q1.2 1.1 -0.1 2.6 M31.0 95.3 q1.0 1.6 -1.1 2.8 M72.0 102.6 q-0.0 1.5 -1.9 1.5 M36.2 115.9 q1.6 1.0 0.3 3.0 M28.9 106.2 q1.8 -0.1 1.9 2.2 M48.0 100.3 q1.9 -0.1 2.0 2.3 M59.5 101.2 q1.0 -0.3 1.3 1.0 M66.3 107.0 q0.7 1.6 -1.3 2.5 M27.0 103.3 q1.6 0.6 0.8 2.6 M56.5 103.0 q0.9 1.6 -1.0 2.7 M57.2 105.7 q1.6 -0.5 2.3 1.6 M31.7 105.4 q0.0 1.2 -1.5 1.2 M47.2 128.0 q1.5 1.1 0.1 2.9 M60.4 109.3 q1.3 1.1 -0.0 2.7 M50.4 132.6 q-0.2 1.5 -2.0 1.2 M30.9 113.1 q0.4 1.7 -1.7 2.2 M57.0 126.3 q1.8 -0.2 2.0 2.1 M49.7 112.9 q0.3 1.2 -1.2 1.6 M55.0 118.1 q1.2 -0.2 1.4 1.3 M56.4 96.2 q1.2 0.1 1.0 1.5 M40.2 102.4 q0.8 0.6 0.1 1.7 M30.6 104.2 q1.0 0.6 0.2 1.9 M38.7 125.3 q0.0 1.5 -1.9 1.6 M47.3 110.9 q0.4 1.3 -1.3 1.7 M53.6 99.9 q1.0 0.6 0.2 1.9 M36.2 113.5 q0.1 1.6 -1.9 1.8 M32.9 110.9 q1.6 0.2 1.4 2.2 M40.0 99.4 q0.4 1.3 -1.2 1.8 M41.7 96.0 q0.4 1.2 -1.2 1.7 M51.4 94.6 q1.1 -0.5 1.7 0.9 M64.9 104.5 q1.6 -0.3 1.9 1.7 M28.7 105.5 q1.3 0.5 0.6 2.1 M59.4 119.2 q1.8 0.3 1.4 2.7 M59.5 96.3 q1.3 -0.5 1.9 1.1 M41.6 107.8 q1.2 -0.2 1.4 1.4 M43.0 114.8 q1.6 0.1 1.5 2.1 M44.4 99.2 q1.2 1.1 -0.3 2.6 M43.1 94.6 q1.3 0.8 0.2 2.4 M54.7 104.6 q1.0 0.6 0.2 1.9 M40.1 119.7 q1.0 1.4 -0.7 2.6 M58.7 111.7 q0.2 1.2 -1.3 1.5 M36.2 109.3 q1.1 -0.1 1.2 1.4 M53.2 110.9 q0.8 1.2 -0.7 2.2 M53.5 122.0 q-0.3 1.7 -2.4 1.4 M38.0 108.6 q0.5 1.2 -0.9 1.8 M64.1 125.0 q1.7 -0.2 2.0 1.9 M58.8 115.6 q1.3 0.2 1.0 1.9 M51.0 98.0 q1.0 -0.3 1.4 1.0 M64.7 97.4 q1.4 1.0 0.2 2.7 M50.5 130.2 q1.6 0.1 1.5 2.2 M44.3 125.9 q0.4 1.7 -1.7 2.2 M44.2 122.3 q-0.4 1.8 -2.6 1.3 M48.8 109.9 q0.2 1.7 -1.9 2.0 M34.4 110.8 q-0.3 1.7 -2.4 1.3 M42.0 125.3 q1.7 -0.3 2.0 1.9 M26.6 97.1 q1.0 0.7 0.1 2.0 M33.7 102.9 q1.3 0.1 1.2 1.8 M48.8 139.9 q1.5 1.0 0.2 2.8 M43.8 130.7 q0.8 0.7 -0.2 1.7 M66.9 111.2 q0.5 1.7 -1.6 2.3 M64.8 104.0 q0.7 0.8 -0.3 1.6 M59.9 109.0 q1.8 0.4 1.2 2.6 M67.4 102.1 q0.7 1.3 -0.9 2.2 M50.2 111.4 q-0.2 1.5 -2.0 1.2 M27.2 109.1 q0.7 0.9 -0.5 1.7 M58.4 134.6 q1.2 1.0 0.0 2.5 M54.9 97.5 q1.4 0.8 0.3 2.6 M61.9 112.1 q0.8 0.9 -0.4 1.9 M59.2 113.4 q-0.1 1.5 -2.0 1.4 M36.5 127.4 q0.1 1.4 -1.6 1.5 M49.4 103.2 q-0.1 1.6 -2.1 1.4 M50.8 139.7 q0.7 1.6 -1.3 2.5 M46.7 117.7 q1.2 0.2 0.9 1.6 M60.3 95.5 q1.4 1.0 0.1 2.7 M53.5 135.5 q1.1 0.4 0.6 1.7 M42.0 132.8 q1.7 -0.6 2.4 1.6 M59.3 134.1 q0.6 1.0 -0.7 1.8 M38.4 107.1 q0.8 1.0 -0.4 2.0 M57.9 109.2 q0.9 1.7 -1.2 2.8 M43.4 99.0 q0.3 1.4 -1.5 1.7 M43.4 113.9 q1.8 0.5 1.1 2.8 M64.7 103.3 q0.1 1.3 -1.5 1.3 M62.7 113.8 q0.5 1.3 -1.1 1.9 M44.2 105.5 q1.8 0.3 1.4 2.6 M43.6 98.3 q1.1 0.6 0.4 1.9 M38.6 131.4 q1.1 1.1 -0.2 2.4 M41.0 126.7 q0.0 1.3 -1.6 1.3 M59.6 114.5 q1.4 0.3 1.0 2.0 M62.3 121.1 q-0.4 1.8 -2.7 1.3 M42.5 131.8 q-0.4 1.6 -2.4 1.1 M40.6 98.9 q1.6 -0.5 2.2 1.5 M69.9 97.7 q0.1 1.0 -1.2 1.1 M52.6 117.6 q1.7 0.3 1.3 2.4 M50.5 98.0 q1.1 -0.3 1.5 1.0 M50.9 106.1 q1.1 0.5 0.4 1.9 M46.5 118.8 q1.7 -0.5 2.3 1.7 M75.2 99.4 q1.3 0.6 0.6 2.3 M58.1 133.5 q1.2 -0.6 2.0 0.9 M44.0 95.8 q-0.0 1.1 -1.4 1.0 M37.7 115.5 q-0.2 1.8 -2.4 1.5 M54.9 116.0 q1.3 0.3 1.0 1.9 M44.9 114.9 q1.2 0.7 0.3 2.2 M53.4 111.2 q1.0 0.4 0.5 1.7 M56.7 138.1 q1.4 0.5 0.8 2.3 M35.7 121.2 q1.0 0.8 0.1 2.1 M51.2 128.2 q1.1 0.1 1.0 1.4 M44.6 133.3 q0.6 1.1 -0.8 1.9 M53.8 136.5 q-0.1 1.0 -1.4 0.9 M44.1 124.6 q1.7 -0.6 2.5 1.6 M70.3 113.1 q1.2 0.7 0.3 2.1 M45.5 97.7 q1.6 -0.5 2.2 1.4 M43.9 117.7 q0.1 1.1 -1.3 1.2 M45.1 110.1 q1.5 1.1 0.1 2.9 M63.6 110.6 q0.4 1.0 -0.9 1.5 M39.2 120.4 q0.9 1.0 -0.3 2.1 M56.0 115.1 q0.6 1.2 -0.9 1.9 M30.8 104.5 q1.5 0.1 1.3 2.0 M41.2 126.4 q1.1 1.1 -0.3 2.5 M46.8 115.4 q1.6 -0.4 2.2 1.6 M54.9 118.5 q-0.1 1.1 -1.5 1.0 M29.7 101.6 q1.5 -0.3 1.9 1.6 M63.6 109.5 q1.6 0.3 1.3 2.3 M52.7 104.2 q1.2 -0.2 1.5 1.3 M48.9 105.1 q1.0 0.8 -0.0 2.0 M76.9 99.7 q1.1 1.4 -0.6 2.8 M53.2 127.2 q-0.1 1.6 -2.1 1.5 M40.7 127.0 q1.0 1.0 -0.3 2.3 M39.1 103.1 q-0.1 1.1 -1.5 1.0 M61.3 95.4 q0.8 0.8 -0.2 1.7 M55.1 139.2 q0.5 1.7 -1.7 2.3 M51.5 95.7 q0.9 0.8 -0.1 1.9 M64.8 112.0 q0.9 0.6 0.1 1.7 M54.1 138.7 q1.1 0.2 0.8 1.6 M38.2 125.7 q-0.2 1.9 -2.6 1.6 M49.3 120.4 q1.0 1.2 -0.6 2.4 M63.6 116.9 q0.4 1.6 -1.7 2.1 M69.5 104.6 q1.4 0.4 0.9 2.2 M61.1 104.5 q0.1 1.2 -1.5 1.3 M37.7 126.9 q1.3 1.2 -0.2 2.7 M70.3 108.2 q1.3 0.2 1.0 1.9 M56.7 127.6 q1.5 -0.8 2.5 1.2 M49.9 110.3 q1.8 -0.3 2.2 1.9 M40.8 97.8 q1.7 -0.6 2.5 1.6 M51.9 117.9 q1.3 1.1 -0.1 2.7 M50.3 99.7 q1.5 0.3 1.1 2.1 M47.1 120.9 q1.4 -0.1 1.5 1.7 M49.9 123.3 q1.0 -0.5 1.7 0.8 M40.6 114.7 q1.2 0.4 0.7 1.9 M44.0 117.9 q-0.0 1.3 -1.7 1.2 M34.5 96.7 q0.9 0.9 -0.2 2.1 M49.8 136.3 q1.2 -0.6 2.0 0.8 M49.7 104.9 q1.3 0.8 0.3 2.5 M48.7 122.8 q1.1 0.6 0.3 2.0 M71.5 104.2 q1.3 0.7 0.4 2.3 M54.0 137.4 q1.4 0.2 1.1 2.0 M71.7 100.5 q1.3 0.1 1.2 1.7 M50.9 108.5 q-0.0 1.5 -2.0 1.5 M58.8 98.0 q0.1 1.0 -1.2 1.1 M49.4 110.5 q1.0 -0.1 1.2 1.1 M71.3 103.0 q0.8 1.5 -1.1 2.5 M51.1 107.2 q0.6 1.0 -0.6 1.8 M38.0 105.4 q1.3 -0.6 2.0 1.1 M48.1 127.7 q0.8 0.9 -0.3 1.9 M51.9 137.5 q1.2 0.6 0.5 2.1 M30.9 114.7 q1.0 0.5 0.3 1.7 M54.0 122.8 q1.8 0.1 1.6 2.4 M53.0 139.9 q0.4 1.1 -1.0 1.6 M53.7 105.1 q1.6 0.4 1.1 2.4 M64.8 113.9 q0.9 0.6 0.1 1.7 M45.5 98.1 q0.5 1.4 -1.2 2.1 M43.0 123.2 q1.4 -0.6 2.2 1.2 M47.7 97.1 q1.4 1.0 0.1 2.8 M56.3 107.1 q1.1 0.2 0.8 1.6 M50.6 111.7 q1.8 0.2 1.6 2.4 M46.3 109.6 q1.4 0.3 1.0 2.0 M58.9 111.7 q1.4 0.9 0.3 2.7 M48.1 134.2 q0.0 1.3 -1.7 1.3 M42.9 124.2 q0.5 1.2 -1.0 1.8 M62.2 112.9 q0.4 1.2 -1.1 1.6 M52.8 139.0 q1.5 -0.7 2.4 1.1 M44.0 128.8 q1.6 0.0 1.5 2.0 M42.2 120.3 q0.6 1.6 -1.4 2.3 M55.7 104.1 q1.1 1.0 -0.2 2.4 M70.2 107.6 q1.8 0.2 1.5 2.5 M54.8 117.4 q0.7 0.9 -0.5 1.8 M44.2 99.0 q1.1 0.9 -0.1 2.3 M63.8 125.1 q1.3 0.2 1.1 1.8 M33.0 115.5 q0.2 1.0 -1.1 1.2 M75.9 102.1 q1.6 0.4 1.0 2.4 M48.1 107.1 q1.2 1.3 -0.4 2.7 M30.1 102.7 q-0.2 1.1 -1.6 0.9 M38.6 113.1 q-0.1 1.7 -2.2 1.7 M62.7 100.2 q1.6 -0.0 1.6 2.0 M65.7 94.3 q0.1 1.0 -1.2 1.2 M26.7 105.1 q1.6 0.4 1.1 2.4 M47.7 105.9 q1.2 0.4 0.7 2.0 M50.8 107.0 q1.0 1.3 -0.7 2.6 M61.5 125.2 q1.3 0.5 0.6 2.1 M50.3 114.5 q0.4 1.4 -1.4 1.9 M63.2 125.2 q1.3 0.6 0.6 2.2 M53.8 134.3 q0.3 1.8 -2.0 2.1 M51.1 106.9 q-0.3 1.4 -2.1 1.0 M54.5 137.1 q1.1 1.3 -0.5 2.6 M55.9 100.3 q0.9 1.6 -1.1 2.7 M29.6 113.5 q0.9 1.0 -0.3 2.1 M29.4 95.5 q-0.2 1.3 -1.8 1.1 M54.2 96.9 q0.2 1.2 -1.3 1.5 M48.1 138.0 q0.2 1.2 -1.3 1.5 M54.5 110.4 q0.5 1.1 -0.9 1.7 M31.1 105.9 q-0.3 1.6 -2.3 1.2 M49.4 110.4 q0.9 -0.4 1.5 0.7 M37.8 99.1 q1.8 -0.2 2.0 2.1 M50.0 116.0 q1.5 0.1 1.4 2.0 M47.7 132.5 q0.5 1.6 -1.5 2.2 M66.0 94.5 q1.1 -0.1 1.3 1.3 M20.2 94.2 q-0.1 1.5 -2.0 1.5 M41.0 99.2 q1.3 0.6 0.6 2.2 M58.3 101.3 q0.0 1.0 -1.2 1.0 M56.3 110.8 q1.8 -0.4 2.3 1.9 M41.6 126.0 q-0.0 1.6 -2.1 1.6 M42.3 132.9 q-0.2 1.1 -1.6 0.8 M40.1 121.1 q1.2 1.3 -0.5 2.9 M70.2 95.0 q1.2 0.3 0.8 1.8 M57.7 101.2 q-0.4 1.7 -2.5 1.3 M32.9 109.5 q0.1 1.2 -1.3 1.3 M37.6 105.2 q1.5 -0.5 2.1 1.3 M65.6 103.2 q0.2 1.6 -1.9 1.8 M36.9 111.1 q1.4 0.9 0.3 2.7 M63.4 99.3 q1.9 -0.1 1.9 2.3 M43.8 100.8 q0.8 1.3 -0.9 2.3 M47.1 131.6 q0.2 1.5 -1.7 1.7 M40.8 97.4 q1.0 0.0 1.0 1.3 M62.3 127.0 q1.0 1.1 -0.4 2.4 M48.3 104.6 q1.1 0.9 -0.0 2.3 M57.7 124.7 q1.7 0.3 1.3 2.4 M46.8 116.3 q-0.1 1.4 -1.8 1.3 M48.8 111.1 q-0.3 1.3 -1.9 0.9 M57.3 128.7 q1.2 0.4 0.6 1.9 M48.8 98.3 q0.6 1.7 -1.5 2.5 M29.4 113.4 q-0.1 1.0 -1.4 0.9 M38.1 98.9 q1.0 -0.4 1.6 0.8 M60.9 114.6 q1.7 -0.0 1.8 2.1 M47.9 106.5 q0.7 1.0 -0.6 1.8 M37.1 126.7 q1.6 -0.7 2.4 1.3 M50.3 98.7 q0.2 1.8 -2.2 2.0 M47.4 97.7 q0.2 1.1 -1.2 1.4 M49.7 122.9 q1.3 -0.1 1.5 1.5 M57.0 121.4 q0.1 1.5 -1.9 1.6 M60.7 110.0 q0.7 1.1 -0.7 2.0 M39.4 108.9 q0.8 1.5 -1.0 2.6 M60.3 104.1 q0.3 1.1 -1.1 1.4 M68.7 102.8 q1.1 0.7 0.2 2.1 M22.6 95.7 q1.4 -0.7 2.2 1.0 M46.6 120.7 q0.9 0.5 0.3 1.6 M43.6 99.5 q0.0 1.5 -1.9 1.5 M60.5 114.7 q1.6 -0.2 1.9 1.8 M52.2 111.8 q0.8 1.5 -1.1 2.4 M55.0 129.9 q1.1 -0.2 1.3 1.2 M45.6 114.3 q0.3 1.2 -1.2 1.6 M53.4 96.5 q1.1 0.1 0.9 1.4 M62.0 111.8 q1.0 0.6 0.2 1.9 M41.3 99.6 q1.9 -0.2 2.1 2.2 M48.1 98.1 q0.7 1.0 -0.6 1.8 M45.5 113.9 q1.1 0.7 0.3 2.1 M56.5 132.3 q1.1 -0.3 1.5 1.1 M67.1 106.5 q1.1 0.7 0.2 2.1 M71.1 104.6 q1.2 1.4 -0.6 2.9 M45.8 132.3 q0.0 1.2 -1.5 1.2 M35.1 112.1 q0.3 1.5 -1.6 1.9 M43.7 118.2 q1.5 0.3 1.2 2.1 M38.2 115.6 q1.2 -0.5 1.7 1.0 M39.9 113.3 q1.0 -0.3 1.3 1.0 M49.5 108.5 q0.4 1.4 -1.4 1.8 M47.2 117.6 q0.3 1.4 -1.5 1.8 M75.8 94.5 q1.0 1.2 -0.5 2.4 M49.2 127.3 q1.6 -0.8 2.6 1.2 M33.8 95.9 q1.6 -0.6 2.3 1.4 M38.3 97.0 q1.8 -0.4 2.3 1.9 M46.1 105.1 q1.1 0.3 0.7 1.6 M43.5 114.7 q-0.1 1.5 -2.1 1.3 M47.1 122.9 q-0.3 1.3 -1.9 0.9 M48.0 127.8 q1.4 0.2 1.2 2.0 M51.8 123.8 q1.6 -0.3 1.9 1.7 M66.6 115.4 q1.6 1.0 0.4 3.0 M62.6 123.9 q0.8 1.1 -0.6 2.0 M47.3 101.8 q1.2 1.1 -0.2 2.6 M42.6 103.8 q1.1 0.5 0.4 1.9 M38.4 95.4 q0.5 0.9 -0.6 1.5 M57.6 130.8 q-0.4 1.7 -2.5 1.2 M58.2 122.6 q1.5 0.5 0.8 2.3 M56.7 132.9 q1.6 1.0 0.3 3.0 M42.4 105.2 q1.1 0.2 0.8 1.6 M42.4 98.0 q0.3 1.3 -1.4 1.7 M35.0 115.4 q0.9 0.8 -0.1 2.0 M56.8 133.6 q1.0 -0.2 1.3 1.1 M41.7 95.4 q1.2 0.0 1.2 1.5 M73.3 96.3 q1.0 -0.3 1.4 1.0 M71.1 94.9 q1.4 1.0 0.1 2.8 M51.9 136.4 q0.4 1.0 -0.8 1.6 M64.5 107.8 q1.4 0.7 0.5 2.4 M51.9 105.2 q1.7 0.5 1.0 2.7 M56.4 95.0 q0.6 0.8 -0.4 1.6 M49.5 112.2 q1.8 0.4 1.3 2.7 M64.5 103.2 q0.7 1.6 -1.3 2.5 M31.6 99.5 q-0.1 1.8 -2.4 1.7 M53.0 94.5 q1.7 -0.6 2.5 1.5 M35.3 94.0 q1.3 -0.4 1.8 1.2 M39.6 101.8 q0.8 1.3 -0.8 2.3 M72.2 104.6 q1.1 0.5 0.5 1.9 M53.9 117.8 q0.8 1.6 -1.2 2.7 M30.1 101.6 q0.9 0.9 -0.2 2.0 M23.1 96.0 q1.3 0.9 0.2 2.5 M60.3 130.4 q1.1 0.2 0.8 1.6 M49.2 135.8 q0.4 1.7 -1.8 2.2 M69.0 114.7 q1.1 0.6 0.4 2.0 M58.4 95.1 q1.5 1.1 0.0 3.0 M45.8 94.6 q1.4 0.6 0.6 2.4 M57.9 133.6 q1.1 0.2 0.9 1.6 M54.2 111.6 q1.2 -0.0 1.2 1.5 M55.5 103.8 q0.6 1.7 -1.5 2.5 M68.7 104.4 q0.0 1.6 -2.0 1.6 M55.9 104.3 q1.2 -0.3 1.6 1.3 M31.4 96.8 q0.4 1.1 -1.0 1.5 M33.7 109.4 q0.3 1.7 -1.9 2.0 M55.9 107.5 q1.5 0.1 1.4 2.0 M60.2 133.5 q1.1 -0.5 1.7 0.9 M40.4 112.8 q1.1 1.0 -0.0 2.4 M57.6 118.5 q1.1 1.0 -0.2 2.4 M46.7 100.6 q1.1 0.0 1.0 1.4 M57.2 122.0 q1.5 0.3 1.2 2.2 M47.4 125.1 q1.1 1.2 -0.5 2.6 M53.5 128.9 q1.2 0.6 0.4 2.1 M56.6 126.5 q1.5 0.8 0.5 2.7 M59.7 118.3 q1.4 -0.4 2.0 1.4 M39.8 99.9 q0.5 1.1 -0.8 1.7 M46.3 122.6 q1.1 0.4 0.6 1.7 M52.8 114.6 q1.1 1.3 -0.6 2.7 M57.1 105.0 q1.6 -0.7 2.5 1.4 M60.6 115.4 q1.1 0.0 1.1 1.5 M45.5 112.3 q0.7 1.0 -0.5 1.9 M48.1 130.2 q-0.2 1.2 -1.7 0.9 M53.3 108.1 q1.4 0.8 0.4 2.6 M63.2 104.3 q0.1 1.2 -1.5 1.3 M45.6 111.2 q1.1 1.0 -0.2 2.3 M54.4 137.6 q-0.2 1.1 -1.5 0.8 M49.4 138.5 q1.2 1.3 -0.5 2.8 M31.3 109.9 q-0.1 1.1 -1.4 1.0 M48.8 101.6 q1.7 0.2 1.4 2.4 M56.3 96.4 q0.9 0.7 0.0 1.9 M63.5 102.9 q0.5 1.4 -1.3 2.1 M50.7 100.5 q1.5 -0.4 2.0 1.5 M53.1 101.4 q1.5 0.8 0.4 2.7 M46.0 117.8 q0.5 1.7 -1.7 2.3 M50.5 100.9 q-0.1 1.2 -1.7 1.1 M45.2 131.1 q0.4 1.3 -1.3 1.9 M49.4 111.2 q-0.1 1.6 -2.1 1.5 M63.5 107.2 q1.2 0.5 0.6 2.0 M48.7 116.6 q1.7 0.1 1.5 2.2 M43.0 103.9 q0.7 1.2 -0.9 2.0 M44.6 129.6 q0.9 0.6 0.1 1.7 M32.2 106.3 q0.5 1.3 -1.2 2.0 M30.9 116.4 q1.2 1.0 -0.1 2.5 M51.8 120.6 q1.1 1.1 -0.3 2.5 M60.5 111.7 q0.1 1.5 -1.8 1.6 M53.8 103.9 q1.6 0.1 1.4 2.1 M58.1 118.4 q1.4 0.1 1.3 1.8 M35.9 125.4 q1.3 0.3 0.9 1.9 M46.2 112.6 q0.5 1.6 -1.5 2.2 M46.2 123.3 q1.6 0.8 0.6 2.7 M54.1 116.9 q1.0 0.1 0.8 1.4 M48.3 137.7 q-0.3 1.8 -2.5 1.4 M49.7 131.2 q1.6 -0.3 1.9 1.7 M32.5 94.8 q0.6 1.4 -1.1 2.2 M44.2 137.0 q0.1 1.5 -1.8 1.6 M26.9 106.0 q-0.2 1.5 -2.1 1.3 M62.9 94.2 q1.4 -0.0 1.5 1.7 M32.4 114.6 q0.9 1.0 -0.3 2.1 M67.1 111.3 q0.8 1.3 -0.8 2.3 M63.2 100.6 q1.1 0.4 0.5 1.8 M41.3 108.1 q1.0 0.5 0.5 1.8 M39.5 126.2 q0.1 1.9 -2.3 2.0 M40.2 107.7 q0.3 1.0 -0.9 1.4 M48.9 132.4 q0.6 1.0 -0.6 1.7 M43.8 137.9 q1.2 0.3 0.9 1.8 M31.5 117.7 q1.8 -0.6 2.5 1.6 M37.7 126.7 q0.8 1.4 -1.0 2.4 M51.8 128.4 q0.4 1.0 -0.8 1.5 M49.3 106.3 q1.1 0.9 -0.1 2.3 M52.9 99.4 q-0.2 1.8 -2.5 1.6 M35.2 97.4 q1.4 0.2 1.1 2.0 M53.2 137.2 q1.6 -0.4 2.1 1.5 M45.4 121.3 q1.5 0.5 0.9 2.4 M61.1 102.0 q1.1 0.9 -0.1 2.2 M65.5 100.0 q1.2 1.5 -0.7 3.0 M47.7 105.0 q0.1 1.7 -1.9 1.8 M50.5 125.2 q-0.1 1.6 -2.1 1.4 M58.3 115.5 q1.4 -0.1 1.5 1.6 M58.3 131.9 q-0.1 1.2 -1.6 1.0 M47.1 100.0 q1.2 -0.1 1.3 1.3 M62.0 104.1 q1.2 0.7 0.3 2.2 M47.5 127.9 q1.2 -0.4 1.7 1.1" stroke="#2f2420" stroke-width=".75" fill="none" stroke-linecap="round" opacity=".85"/>
+  <path d="M6 104 q1.6 -1.6 3 0 M10 100 q1.6 -1.6 3 0 M91 100 q1.6 -1.6 3 0 M87 104 q1.6 -1.6 3 0" stroke="#2f2420" stroke-width=".8" fill="none" stroke-linecap="round" opacity=".7"/>
+  <path d="M38 90 Q50 112 62 90" stroke="#e5c04e" stroke-width="1.4" fill="none"/>
+  <path d="M50 104 V116 M46.4 107.6 H53.6" stroke="#e5c04e" stroke-width="2.4" stroke-linecap="round"/>
+  <!-- collo largo che si confonde col doppio mento -->
+  <path d="M30 74 L70 74 L70 92 Q50 98 30 92 Z" fill="#e6b8a0"/>
+  <!-- faccione largo e tondo, pallido -->
+  <path d="M22 40 Q24 14 50 14 Q76 14 78 40 Q85 54 84 68 Q83 89 50 94 Q17 89 16 68 Q15 54 22 40 Z" fill="#f4d0bc"/>
+  <!-- barba scura rasata: mascelle, mento e baffi -->
+  <path d="M17 60 Q18 89 50 94 Q82 89 83 60 Q78 72 68 76 Q64 86 50 88 Q36 86 32 76 Q22 72 19 60 Z" fill="#4a4250" opacity=".42"/>
+  <path d="M36 68 Q50 62.5 64 68 Q56 66 50 66.4 Q44 66 36 68 Z" fill="#4a4250" opacity=".5"/>
+  <path d="M30 90 Q50 98 70 90" stroke="#d9a78e" stroke-width="1.4" fill="none" stroke-linecap="round"/>
+  <ellipse cx="29" cy="60" rx="7" ry="4.5" fill="#e9978a" opacity=".35"/><ellipse cx="71" cy="60" rx="7" ry="4.5" fill="#e9978a" opacity=".35"/>
+  <!-- sopracciglia nere, folte e dritte, vicine agli occhi -->
+  <path d="M29 46 Q36 42 45 40.5 M55 40.5 Q64 42 71 46" stroke="#17120f" stroke-width="4" fill="none" stroke-linecap="round"/>
+  <!-- occhi piccoli e stretti -->
+  <path d="M32 51 Q37.5 48 43 51 Q37.5 53 32 51 Z M57 51 Q62.5 48 68 51 Q62.5 53 57 51 Z" fill="#fbf6f0"/>
+  <circle cx="37.5" cy="50.6" r="1.7" fill="#241c18"/><circle cx="62.5" cy="50.6" r="1.7" fill="#241c18"/>
+  <path d="M31.5 50.8 Q37.5 47.2 43.5 50.6 M56.5 50.6 Q62.5 47.2 68.5 50.8" stroke="#241c18" stroke-width="1.8" fill="none" stroke-linecap="round"/>
+  <path d="M33 54.6 Q37.5 56.4 42 54.6 M58 54.6 Q62.5 56.4 67 54.6" stroke="#e0ab92" stroke-width="1.2" fill="none" stroke-linecap="round"/>
+  <!-- naso piccolo e tondo -->
+  <path d="M48 52 Q47 58 45.6 61.6 Q50 64.4 54.4 61.6 Q53 58 52 52 Z" fill="#ebbca4"/>
+  <ellipse cx="50" cy="61" rx="4.4" ry="3.2" fill="#eec3aa"/>
+  <path d="M46.6 63.4 Q50 64.6 53.4 63.4" stroke="#b98470" stroke-width="1" fill="none" stroke-linecap="round"/>
+  <!-- bocca spalancata: denti di sopra e lingua -->
+  <path d="M35 70 Q50 65.6 65 70 Q63.4 84 50 85 Q36.6 84 35 70 Z" fill="#5a1f1d"/>
+  <!-- denti storti, giallastri e con i buchi -->
+  <path d="M38 70.2 L41.6 69 L42 73.6 L38.6 73.2 Z" fill="#e6d9a8"/>
+  <path d="M42.6 68.8 L46 68 L46.2 74.4 L43 73.8 Z" fill="#efe4b8"/>
+  <path d="M47.6 67.8 L50.6 67.6 L50.4 72 L47.8 72.4 Z" fill="#d9c98e"/>
+  <path d="M53.8 67.8 L57 68.4 L56.2 74.2 L53.4 73.2 Z" fill="#efe4b8"/>
+  <path d="M57.8 68.6 L61 69.6 L60.4 72.4 L57.6 72.8 Z" fill="#c9b673"/>
+  <path d="M61.6 69.8 L63 70.4 L62.4 72 L61.2 72 Z" fill="#e6d9a8"/>
+  <path d="M44 83 L46.4 80.6 L48.4 83.4 Z M53 83.2 L55 80.4 L57.2 82.8 Z" fill="#d9c98e"/>
+  <ellipse cx="50" cy="81" rx="8" ry="3.2" fill="#c8605a"/>
+  <path d="M35 70 Q50 65.6 65 70" stroke="#c77f6e" stroke-width="1.2" fill="none"/>
+  <!-- capelli davanti: riga in mezzo, fronte alta, ciocche che coprono le orecchie e scendono -->
+  <path d="M50 8 Q22 7 16 34 Q13 50 17 70 Q13 82 16 92 Q20 80 22 70 Q21 54 25 40 Q31 24 47 20 Q49 17 50 17 Q51 17 53 20 Q69 24 75 40 Q79 54 78 70 Q80 80 84 92 Q87 82 83 70 Q87 50 84 34 Q78 7 50 8 Z" fill="#17120f"/>
+  <path d="M40 12 Q28 18 23 34 M60 12 Q72 18 77 34 M20 50 q-3 6 0 12 M80 50 q3 6 0 12" stroke="#3a302b" stroke-width="1.3" fill="none" stroke-linecap="round"/>
+</symbol>
+<symbol id="gerry" viewBox="0 0 100 140">
+    <!-- camice da bidello blu, spalle larghe -->
+    <path d="M2 140 L6 104 Q12 92 32 88 Q50 84 68 88 Q88 92 94 104 L98 140 Z" fill="#2f5d8a"/>
+    <path d="M34 88 L50 112 L66 88 L58 86 L50 98 L42 86 Z" fill="#23476b"/>
+    <path d="M40 88 L50 106 L60 88 L54 86 L50 94 L46 86 Z" fill="#a9c8e8"/>
+    <path d="M46 88 L50 100 L54 88 Z" fill="#cf8c68"/>
+    <rect x="64" y="108" width="15" height="12" rx="1.5" fill="#23476b"/>
+    <rect x="67" y="104" width="2" height="8" rx="1" fill="#e9c23f"/>
+    <rect x="20" y="110" width="17" height="7" rx="1.5" fill="#f4f1ea"/>
+    <!-- collo largo -->
+    <rect x="34" y="76" width="32" height="14" rx="4" fill="#cf8c68"/>
+    <!-- orecchie -->
+    <ellipse cx="16" cy="56" rx="5" ry="8" fill="#cf8c68"/><ellipse cx="84" cy="56" rx="5" ry="8" fill="#cf8c68"/>
+    <!-- testone a pera: cranio alto e pelato, mascelle larghissime -->
+    <path d="M50 4 Q76 4 78 34 Q86 50 86 64 Q86 86 50 92 Q14 86 14 64 Q14 50 22 34 Q24 4 50 4 Z" fill="#e8a883"/>
+    <ellipse cx="44" cy="17" rx="11" ry="5" fill="#f4c7a4"/>
+    <path d="M34 10 Q44 3 56 5 M40 12 Q50 6 62 8" stroke="#7d7570" stroke-width="1.4" fill="none" stroke-linecap="round"/>
+    <!-- ciuffi grigi solo ai lati, gonfi -->
+    <path d="M14 58 Q8 38 16 26 Q22 20 28 20 Q22 32 22 44 Q20 52 20 58 Z" fill="#7d7570"/>
+    <path d="M86 58 Q92 38 84 26 Q78 20 72 20 Q78 32 78 44 Q80 52 80 58 Z" fill="#7d7570"/>
+    <!-- sopracciglia alte e sornione -->
+    <path d="M28 40 Q36 33 44 38 M56 36 Q64 29 72 36" stroke="#5f5752" stroke-width="3" fill="none" stroke-linecap="round"/>
+    <!-- occhi a fessura -->
+    <path d="M30 48 Q37 43.5 44 47.5 Q37 50 30 48 Z M56 47 Q63 42.5 70 47.5 Q63 49.5 56 47 Z" fill="#f4e8de"/>
+    <circle cx="38" cy="47" r="1.9" fill="#6d8a92"/><circle cx="64" cy="46.4" r="1.9" fill="#6d8a92"/>
+    <path d="M30 48 Q37 43 44 47.5 M56 47.5 Q63 42.5 70 47.5" stroke="#2a1d12" stroke-width="2.2" fill="none" stroke-linecap="round"/>
+    <!-- nasone carnoso -->
+    <path d="M47 46 Q45 56 42 61 Q40 68 50 68 Q60 68 58 61 Q55 56 53 46 Z" fill="#d6926c"/>
+    <!-- solchi del sorriso -->
+    <path d="M38 62 Q28 68 31 79 M62 62 Q73 66 72 74" stroke="#c07e5c" stroke-width="2" fill="none" stroke-linecap="round"/>
+    <!-- sorrisone da una guancia all'altra -->
+    <path d="M30 75 Q48 94 73 68 Q52 77 30 75 Z" fill="#5e2220"/>
+    <path d="M33 75.6 Q52 78.4 70 69.6 L68 73.6 Q52 82 35 79 Z" fill="#fbfaf5"/>
+    </symbol>
+    <linearGradient id="fade" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#fff" stop-opacity=".9"/><stop offset="1" stop-color="#fff" stop-opacity=".08"/></linearGradient>
+    <radialGradient id="haze" cx=".5" cy=".3" r=".7"><stop offset="0" stop-color="#b9b6c8" stop-opacity=".5"/><stop offset="1" stop-color="#b9b6c8" stop-opacity="0"/></radialGradient>
+    <mask id="beam-fade"><rect width="400" height="250" fill="url(#fade)"/></mask>
+  </defs>
+</svg>
+
+<div id="app">
+  <header>
+    <div class="row">
+      <div class="faces">
+        <div class="face-mini"><svg viewBox="6 2 88 88" width="34" height="34"><use href="#dipre-cuffie"/></svg></div>
+        <div class="face-mini"><svg viewBox="6 2 88 88" width="34" height="34"><use href="#musa-base"/></svg></div>
+      </div>
+      <div class="who">NOTTE FUORI CONTROLLO<small>DJ Inestimabile · Musa Esistenziale</small></div>
+      <div class="timeline" aria-label="Avanzamento del brano"><i id="tl"></i></div>
+      <div class="clock" id="clock">21:15</div>
+    </div>
+    <div class="row">
+      <div class="stat grad">Pubblico <div class="bar"><i id="grad-bar"></i></div><b class="grad-n" id="grad-n">60%</b></div>
+      <span class="mult" id="mult" title="Moltiplicatore">×1</span>
+      <span class="score" id="score">0</span>
+      <button class="pill beer" id="beer" title="Bevi una birra: meno stanchezza, finestra più larga">🍺 <span id="beer-n">2</span><span class="fat">stanco<span class="bar"><i id="fat-bar"></i></span></span></button>
+      <button class="pill" id="pause-btn" title="Pausa">⏸</button>
+    </div>
+  </header>
+
+  <div id="stage">
+    <svg id="scene" viewBox="0 0 400 250" preserveAspectRatio="xMidYMid slice">
+      <!-- palestra: muro in fondo, americana, casse, palco e platea -->
+      <rect width="400" height="250" fill="#0b0c10"/>
+      <rect width="400" height="150" fill="#12131a"/>
+      <g stroke="#1a1c24" stroke-width="1"><path d="M0 40 H400 M0 70 H400 M0 100 H400 M0 130 H400"/></g>
+      <text x="200" y="62" text-anchor="middle" font-family="Permanent Marker, cursive" font-size="20" fill="#1d1f29" letter-spacing="1">NOTTE FUORI CONTROLLO</text>
+      <rect id="wash" width="400" height="150" fill="#000" opacity="0"/>
+      <rect x="0" y="6" width="400" height="8" fill="#2a2c33"/>
+      <path d="M0 6 L400 14 M0 14 L400 6" stroke="#3a3c44" stroke-width=".6"/>
+      <g id="spk-l"><rect x="10" y="78" width="44" height="72" rx="3" fill="#1b1c21" stroke="#34363e"/><circle cx="32" cy="98" r="8" fill="#0a0a0c"/><circle id="cone-l" cx="32" cy="128" r="15" fill="#0a0a0c" stroke="#2a2b30"/></g>
+      <g id="spk-r"><rect x="346" y="78" width="44" height="72" rx="3" fill="#1b1c21" stroke="#34363e"/><circle cx="368" cy="98" r="8" fill="#0a0a0c"/><circle id="cone-r" cx="368" cy="128" r="15" fill="#0a0a0c" stroke="#2a2b30"/></g>
+      <!-- le onde del larsen, quando Musa va verso la cassa -->
+      <g id="ring" opacity="0" stroke="#f2c53d" fill="none" stroke-width="2"><path d="M60 96 Q68 116 60 136"/><path d="M68 90 Q80 116 68 142"/><path d="M76 84 Q92 116 76 148"/></g>
+      <!-- DJ Inestimabile dietro la consolle -->
+      <g id="dj"><g id="dj-body" transform="translate(240 70)"><use href="#dipre-cuffie" width="58" height="81"/></g>
+        <g stroke="#e8bba0" stroke-width="5" stroke-linecap="round" fill="none"><path id="dj-arm-l" d="M252 136 L246 124"/><path id="dj-arm-r" d="M286 136 L292 124"/></g>
+      </g>
+      <g id="consolle">
+        <rect x="222" y="120" width="94" height="30" rx="2" fill="#1d1e24" stroke="#3a3c44"/>
+        <rect x="222" y="116" width="94" height="6" rx="1.5" fill="#2b2d35"/>
+        <ellipse id="deck-l" cx="240" cy="119" rx="12" ry="3" fill="#0d0e12" stroke="#555" stroke-dasharray="4 3"/>
+        <ellipse id="deck-r" cx="298" cy="119" rx="12" ry="3" fill="#0d0e12" stroke="#555" stroke-dasharray="4 3"/>
+        <rect x="260" y="117" width="18" height="4" rx="1" fill="#111"/>
+        <g id="leds"></g>
+        <text x="269" y="140" text-anchor="middle" font-family="Barlow Condensed, sans-serif" font-size="8" fill="#6b6f78" letter-spacing="1">INESTIMABILE</text>
+      </g>
+      <!-- la ciabattina del DJ: fumo e laser, la roba che fa scattare la fase -->
+      <g id="ciabattina"><rect x="318" y="144" width="22" height="6" rx="2" fill="#e8e2cf"/><circle cx="323" cy="147" r="1.3" fill="#e0503f"/><circle cx="329" cy="147" r="1.3" fill="#333"/><circle cx="335" cy="147" r="1.3" fill="#333"/></g>
+      <!-- Musa Esistenziale al microfono: la bocca si apre quando nella canzone c'è la voce -->
+      <g id="musa" transform="translate(112 70)">
+        <svg width="62" height="87" viewBox="0 0 100 140" overflow="visible">
+          <use href="#musa-base"/>
+          <path d="M33 65 Q50 61 67 65 L67 87 Q50 91 33 87 Z" fill="#f4d0bc"/>
+          <path d="M17 60 Q18 89 50 94 Q82 89 83 60 Q78 72 68 76 Q64 86 50 88 Q36 86 32 76 Q22 72 19 60 Z" fill="#4a4250" opacity=".42"/>
+          <path d="M32 76 Q36 86 50 88 Q64 86 68 76 Q60 80 50 80 Q40 80 32 76 Z" fill="#4a4250" opacity=".3"/>
+          <path d="M36 68 Q50 62.5 64 68 Q56 66 50 66.4 Q44 66 36 68 Z" fill="#4a4250" opacity=".5"/>
+          <ellipse id="mouth" cx="50" cy="74" rx="10" ry="1.2" fill="#5a1f1d"/>
+          <rect id="teeth" x="42" y="71" width="16" height="2.6" rx="1" fill="#e6d9a8" opacity="0"/>
+          <g id="mic"><path d="M0 0 L9 -24" stroke="#2a2b30" stroke-width="5" stroke-linecap="round"/>
+            <circle cx="10.5" cy="-28" r="5.8" fill="#9aa0a8"/><path d="M6 -30 L15 -26 M7 -32.4 L14.4 -29" stroke="#6b7078" stroke-width="1"/>
+            <ellipse cx="0" cy="2" rx="7.5" ry="5.4" fill="#f0c9b2"/></g>
+        </svg>
+      </g>
+      <g id="voice-bub" opacity="0">
+        <path d="M78 36 h40 a7 7 0 0 1 7 7 v10 a7 7 0 0 1 -7 7 h-16 l-8 8 v-8 h-16 a7 7 0 0 1 -7 -7 v-10 a7 7 0 0 1 7 -7 z" fill="#f4f1ea" stroke="#141519" stroke-width="1.5"/>
+        <g id="voice-bars" fill="#141519"></g>
+      </g>
+      <!-- Gerry, il bidello: entra quando ci pensa lui, e alla fine stacca la corrente -->
+      <g id="gerry-g" transform="translate(430 70)"><svg width="58" height="81" viewBox="0 0 100 140" overflow="visible"><use href="#gerry"/>
+        <!-- Gerry arrabbiato: via il sorriso e le sopracciglia sornione, fronte rossa, bocca che urla -->
+        <g id="gerry-angry" opacity="0">
+          <path d="M28 40 Q36 33 44 38 M56 36 Q64 29 72 36" stroke="#e8a883" stroke-width="5.5" fill="none" stroke-linecap="round"/>
+          <path d="M27 64 Q50 60 77 62 L77 84 Q50 92 25 84 Z" fill="#e8a883"/>
+          <ellipse cx="50" cy="26" rx="25" ry="13" fill="#e0503f" opacity=".35"/>
+          <path d="M27 37 L45 44 M73 36 L55 43" stroke="#5f5752" stroke-width="3.6" fill="none" stroke-linecap="round"/>
+          <path d="M36 66 Q50 61 64 66" stroke="#c07e5c" stroke-width="2" fill="none" stroke-linecap="round"/>
+          <ellipse id="gerry-mouth" cx="50" cy="77" rx="9" ry="6" fill="#5e2220"/>
+          <rect x="43" y="72" width="14" height="2.6" rx="1" fill="#fbfaf5"/>
+          <text x="84" y="16" font-size="16">💢</text>
+        </g></svg></g>
+      <g id="talk-bub" opacity="0">
+        <path id="talk-bub-bg" d="M0 0" fill="#f4f1ea" stroke="#141519" stroke-width="1.5"/>
+        <text id="talk-bub-t" font-family="Inter, sans-serif" font-size="9" font-weight="700" fill="#141519" text-anchor="middle"></text>
+      </g>
+      <g id="gerry-bub" opacity="0">
+        <path id="gerry-bub-bg" d="M0 0" fill="#f4f1ea" stroke="#141519" stroke-width="1.5"/>
+        <text id="gerry-bub-t" font-family="Inter, sans-serif" font-size="9" font-weight="700" fill="#141519" text-anchor="middle"></text>
+      </g>
+      <rect x="0" y="150" width="400" height="12" fill="#2b2320"/>
+      <rect x="0" y="162" width="400" height="88" fill="#0d0e12"/>
+      <rect id="haze-r" x="0" y="20" width="400" height="160" fill="url(#haze)" opacity="0"/>
+      <g id="beams" mask="url(#beam-fade)"></g>
+      <g id="pars"></g>
+      <g id="crowd"></g>
+      <rect id="crowd-glow" x="0" y="165" width="400" height="85" fill="#000" opacity="0" style="mix-blend-mode:screen"/>
+      <rect id="strobe" width="400" height="250" fill="#fff" opacity="0" pointer-events="none"/>
+      <rect id="dark" width="400" height="250" fill="#000" opacity="0" pointer-events="none"/>
+    </svg>
+    <button class="chip" id="dmx-chip" hidden>PAR 4 senza DMX: tocca per sistemarlo</button>
+    <div id="pops">
+      <div class="pop par" id="pop-par" hidden>
+        <button class="x" id="par-close" aria-label="Chiudi">✕</button>
+        <b>PAR 4 non sente la consolle</b>
+        <small id="par-clue"></small>
+        <div id="par-acts" style="display:grid;gap:6px"></div>
+      </div>
+      <div class="pop mute" id="pop-mute" hidden>
+        <b>Musa va verso la cassa!</b>
+        <button class="mute-btn" id="mute-btn" aria-pressed="false">🔇 MUTE MIC</button>
+        <kbd>tasto M</kbd>
+      </div>
+      <div class="pop fader" id="pop-fader" hidden>
+        <b id="fader-name">FADER DJ</b>
+        <div class="track" id="track"><div class="red"></div><div class="knob" id="knob"></div></div>
+        <small>tira giù<kbd> · V</kbd></small>
+      </div>
+    </div>
+    <div id="toast"></div>
+    <div class="stage-msg" id="stage-msg" hidden>Il bidello ha cacciato via i musicisti. Ora si può ripristinare il palco per l'ultima band.</div>
+    <div id="pausa" hidden>PAUSA</div>
+  </div>
+
+  <section id="rig" aria-label="Consolle luci">
+    <div id="road">
+      <svg id="crowd-far" viewBox="0 190 400 76" preserveAspectRatio="xMidYMin slice" aria-hidden="true" hidden>
+        <rect x="0" y="150" width="400" height="130" fill="#0d0e12"/>
+        <g id="crowd2"></g>
+        <rect id="crowd-glow2" x="0" y="150" width="400" height="130" fill="#000" opacity="0" style="mix-blend-mode:screen"/>
+      </svg>
+      <canvas id="hw"></canvas>
+      <div id="banner"></div>
+      <div id="judge"></div>
+      <div id="choice" hidden>
+        <p><b id="choice-what">Scatta la fase L2 del Quadro: i PAR sono spenti.</b> Chi va a sistemarlo?</p>
+        <button class="opt" id="opt-tu"><b>Ci vado io</b><small id="opt-tu-sub">Il capo ti dà il cambio alle luci. Tornando, il DJ fa il rewind.</small><span class="pos">+5</span></button>
+        <button class="opt" id="opt-capo"><b>Pago una 🍺 al capo</b><small id="opt-capo-sub">Ci va lui, tu resti alle luci.</small><span>0</span></button>
+        <button class="opt" id="opt-gerry"><b>Aspetto: ci pensa Gerry</b><small>Arriva tra un po'. Intanto il pubblico sta al buio.</small><span class="neg">−5</span></button>
+        <div class="countdown"><i id="choice-bar"></i></div>
+      </div>
+    </div>
+    <div class="pads" id="pads">
+      <button class="pad" data-l="0"><b>COLORI</b><small>tutti i PAR<kbd> · D</kbd></small></button>
+      <button class="pad" data-l="1"><b>CHASE</b><small>PAR in giro<kbd> · F</kbd></small></button>
+      <button class="pad" data-l="2"><b>STROBO</b><small>flash<kbd> · J</kbd></small></button>
+    </div>
+    <div id="quadro" hidden>
+      <div class="q-head"><b>AL QUADRO</b><span id="q-time">0 s</span></div>
+      <p class="q-help" id="q-help">Il capo è alle luci. La ciabattina del DJ ha fatto scattare L2: sposta il carico su una fase che lo regge, poi riarma. Ogni fase regge 3,6 kW.</p>
+      <div class="phases" id="phases"></div>
+      <div class="q-acts" id="q-acts"></div>
+      <div class="prog"><i id="q-prog"></i></div>
+    </div>
+  </section>
+</div>
+
+<div class="overlay" id="intro">
+  <div class="card">
+    <div class="card-top">
+      <div class="portraits">
+        <div class="portrait"><svg viewBox="6 2 88 88" width="78" height="78"><use href="#dipre-cuffie"/></svg></div>
+        <div class="portrait"><svg viewBox="6 2 88 88" width="78" height="78"><use href="#musa-base"/></svg></div>
+      </div>
+      <div><div class="tag">Obiettivo 3 · 21:15</div><h2>Notte fuori controllo</h2></div>
+    </div>
+    <p>DJ Inestimabile mette il pezzo, Musa Esistenziale urla al microfono. Tu sei alla consolle luci: le memorie si suonano a tempo, quando la nota tocca la riga.</p>
+    <div class="lanes-help">
+      <div style="--c:var(--l0)"><b>COLORI</b>tutti i PAR sulla cassa</div>
+      <div style="--c:var(--l1)"><b>CHASE</b>i PAR girano sui controtempi</div>
+      <div style="--c:var(--l2)"><b>STROBO</b>il drop è una nota lunga: tienila</div>
+    </div>
+    <ul>
+      <li>I guasti piccoli arrivano come <b>note speciali</b>: tira giù il fader che va in rosso, dai il <b>MUTE</b> quando Musa va verso la cassa.</li>
+      <li>Se un PAR perde il DMX la sua corsia diventa grigia: <b>tocca il PAR</b> e sistemalo quando puoi.</li>
+      <li>Per un guasto grosso scegli chi ci va: <b>tu</b>, <b>il capo</b> per una 🍺, o <b>Gerry</b>. Se ci vai tu, al ritorno il DJ fa il <b>rewind</b>.</li>
+      <li>Più va avanti il pezzo, più le note corrono e si fanno fitte.</li>
+      <li>Tastiera: <b>D F J</b>, M per il mute, V per il fader, B per la birra.</li>
+    </ul>
+    <div class="pick" id="diff-pick">Difficoltà<div>
+      <button data-d="facile" aria-pressed="false">Facile</button><button data-d="normale" aria-pressed="true">Normale</button>
+    </div></div>
+    <button class="toggle" id="strobe-btn" aria-pressed="false"><span>Strobo vero<small>Lampi bianchi rapidi. Spento: lo strobo si vede come un bagliore morbido.</small></span><span class="sw"></span></button>
+    <label class="lag">Ritardo audio<input type="range" id="lag" min="-100" max="300" step="10" value="0"><output id="lag-n">0 ms</output></label>
+    <button class="cta" id="start">Via la musica</button>
+    <button class="ghost" id="demo">Guarda la demo: le luci le fa il capo</button>
+    <button class="ghost" id="skip" hidden>Salta lo show (niente reputazione)</button>
+  </div>
+</div>
+
+<div class="overlay" id="outro" hidden>
+  <div class="card">
+    <div class="card-top">
+      <div class="portraits">
+        <div class="portrait"><svg viewBox="6 2 88 88" width="78" height="78"><use href="#dipre-cuffie"/></svg></div>
+        <div class="portrait"><svg viewBox="6 0 88 88" width="78" height="78"><use href="#gerry"/></svg></div>
+      </div>
+      <div><div class="tag">Obiettivo 3 · fine</div><h2 id="outro-title">Che notte!</h2></div>
+    </div>
+    <p class="outro-msg" id="outro-msg">Il bidello ha cacciato via i musicisti. Ora si può ripristinare il palco per l'ultima band.</p>
+    <div class="stars" id="r-stars"></div>
+    <div class="results">
+      <div><b id="r-grad">0%</b><span>Pubblico</span></div>
+      <div><b id="r-beer">+0</b><span>Birre</span></div>
+      <div><b id="r-rep">+0</b><span>Reputazione</span></div>
+    </div>
+    <ul id="r-notes"></ul>
+    <button class="cta" id="again">Rimetti il pezzo</button>
+  </div>
+</div>
+
+<audio id="song" preload="auto"></audio>
+<script src="dj-mappa.js"></script>
+<script>
+(() => {
+  const $ = s => document.querySelector(s);
+  const NS = 'http://www.w3.org/2000/svg';
+  const mk = (tag, attrs, parent) => { const e = document.createElementNS(NS, tag); for (const k in attrs) e.setAttribute(k, attrs[k]); if (parent) parent.appendChild(e); return e; };
+  const rnd = (a, b) => a + Math.random() * (b - a);
+  const clamp = (v, a = 0, b = 100) => Math.max(a, Math.min(b, v));
+  const store = { get (k, d) { try { const v = localStorage.getItem(k); return v == null ? d : JSON.parse(v); } catch (e) { return d; } }, set (k, v) { try { localStorage.setItem(k, JSON.stringify(v)); } catch (e) {} } };
+  const EMBED = new URLSearchParams(location.search).has('embed');
+
+  const M = window.DJ_MAPPA;
+  const BEAT = 60 / M.bpm, BAR = BEAT * 4;
+  const beatAt = t => (t - M.t0) / BEAT;
+  const timeOf = b => M.t0 + b * BEAT;
+  const barAt = t => Math.floor(beatAt(t) / 4 + 1e-6);
+  // secondi di pista visibili prima della riga: col passare del pezzo le note corrono di più
+  const look = () => 1.9 - 0.45 * clamp(S.t / CUT, 0, 1);
+  const PERFECT0 = 0.08, GOOD0 = 0.16;        // livello 1: finestre larghe (secondi)
+  const LANE_C = ['#ff3d8b', '#2fc3ff', '#f4f1ea'];
+  const KEYS = { KeyD: 0, KeyF: 1, KeyJ: 2 };
+  const COLORI = 0, CHASE = 1, STROBO = 2, NL = 3;
+  // Gerry arriva arrabbiato a GERRY_BAR e stacca la corrente a CUT, poco prima della fine del brano
+  const CUT = timeOf(M.taglio), GERRY_BAR = 80;
+  // colori per sezione: [memoria COLORI, memoria CHASE]
+  const PALETTE = { INTRO: ['#3f5bff', '#7a3fff'], GROOVE: ['#ff3d8b', '#2fc3ff'], BREAK: ['#7a3fff', '#3f7fe0'], BUILD: ['#f4f1ea', '#f2a541'], DROP: ['#ff2a2a', '#39ff6a'], OUTRO: ['#f2a541', '#ff3d8b'] };
+  const BANNER = { GROOVE: 'Groove: pulsa sulla cassa', BREAK: 'Break', BUILD: 'Sale! Poi un battito al buio', DROP: 'DROP! Tieni lo strobo!', OUTRO: 'Chiusura' };
+
+  /* I guasti del set, uno alla volta, nei punti giusti del brano (battuta):
+     gain  il DJ alza il suo volume: nota FADER DJ;
+     fase  la ciabattina del DJ fa scattare L2 (guasto grosso, nel break);
+     dmx   il PAR 4 perde il DMX: la corsia CHASE si spegne;
+     larsen Musa va verso la cassa mentre canta: nota MUTE MIC;
+     mangia Musa si mangia il microfono: nota FADER MIC. */
+  const FAULTS = [
+    { id: 'gain', bar: 10 }, { id: 'fase', bar: 17 }, { id: 'dmx', bar: 42 },
+    { id: 'larsen', bar: 49 }, { id: 'mangia', bar: 67 }
+  ];
+  const REPS = { set: 5, small: 1, dmx: 3, tuFast: 5, gerry: -5, larsen: -5 };
+  const FASE_KW = { L1: 2.4, L2: 0.4, L3: 0.2 };        // carichi senza la ciabattina
+  const CIABATTINA_KW = 3.4, FASE_MAX = 3.6;
+  const AWAY_FAST = 15, CAPO_PATIENCE = 30, CHOICE_S = 10, CAPO_FIX_S = 6, GERRY_S = 20, REWIND_MAX = 8 * BAR;
+
+  const SEC = [];
+  M.sezioni.forEach(([a, b, k]) => { const s = { k, a, b }; for (let i = a; i <= b; i++) SEC[i] = s; });
+  const sectionAt = t => SEC[Math.max(0, Math.min(SEC.length - 1, barAt(t)))];
+  const voiceAt = t => M.voce.some(([a, b]) => t >= a && t < b);
+  const mouthAt = t => { const i = Math.floor(t * 25); return i >= 0 && i < M.bocca.length ? +M.bocca[i] / 9 : 0; };
+
+  let diff = store.get('dj-diff', 'normale');
+  let realStrobe = store.get('dj-strobe', false);
+  let lag = store.get('dj-lag', 0);
+  let pocket = 2, boss = 'il capo', pars = ['PAR 1', 'PAR 2', 'PAR 3', 'PAR 4'];
+  let S;
+
+  function buildNotes () {
+    return M.note.filter(n => diff === 'normale' || n[3]).map(([b, lane, len]) => ({
+      lane, t: timeOf(b), end: len ? timeOf(b + len) : 0, hold: len > 0,
+      state: 'wait'       // wait | hit | miss | lost | holding | done | broken
+    }));
+  }
+  function fresh (auto) {
+    const notes = buildNotes(); notes.forEach((n, i) => { n.i = i; });
+    return {
+      running: false, paused: false, auto: !!auto, over: false, sent: false,
+      t: -2, grad: 60, score: 0, combo: 0, maxCombo: 0, mult: 1,
+      perfect: 0, good: 0, miss: 0, lost: 0, stray: 0, holdsBroken: 0,
+      fatigue: 30, beers: pocket, drunk: 0, favours: 0,
+      notes, specials: [],
+      down: [false, false, false], holding: [null, null, null],
+      colori: 0, chase: 0, chaseIdx: 0, strobe: 0, flash: 0, lastQ: -1,
+      faults: {}, active: null, repParts: [], larsens: 0, lines: [],
+      phaseDown: false, dmxDead: false, big: null, away: null, capo: false,
+      dj: 0.5, mic: 0.5, djHot: false, micHot: false, micMuted: false, musaX: 112, musaGo: 0,
+      gerryX: 430, gerrySay: '', gerryUntil: -1, gerryAngry: false, talk: null,
+      sec: null, drops: 0, dropHeld: 0, singing: false, micUp: 0, audioOn: false,
+      finale: null, rewinds: 0
+    };
+  }
+  // la stanchezza stringe la finestra, e anche il pezzo che va avanti (fino a −18% alla fine)
+  const windows = () => { const k = (1 - S.fatigue / 250) * (1 - 0.18 * clamp(S.t / CUT, 0, 1)); return [PERFECT0 * k, GOOD0 * k]; };
+  const deadLanes = () => [S.phaseDown, S.phaseDown || S.dmxDead, false];
+
+  /* ---------- il tempo del brano: l'audio comanda, il resto lo segue ---------- */
+  const song = $('#song');
+  song.src = M.file;
+  const clock = {
+    virtual: false, vt: -2, startPerf: 0, base: 0, basePerf: 0, lastA: -1,
+    now () {
+      if (this.virtual) return this.vt;
+      const p = performance.now();
+      if (!S.running || S.paused) return S.t;
+      if (!S.audioOn) return (p - this.startPerf) / 1000 - 2;   // i due secondi prima della musica
+      const a = song.currentTime;
+      if (a !== this.lastA && !song.paused) { this.lastA = a; const guess = this.base + (p - this.basePerf) / 1000; if (Math.abs(guess - a) > 0.05) { this.base = a; this.basePerf = p; } }
+      return this.base + (p - this.basePerf) / 1000;
+    }
+  };
+  // salto nel brano: il rewind del DJ
+  function seek (t) {
+    S.t = t;
+    if (clock.virtual) { clock.vt = t; return; }
+    clock.base = t; clock.basePerf = performance.now(); clock.lastA = -1;
+    try { song.currentTime = t; } catch (e) {}
+  }
+  const judgedNow = () => clock.now() - lag / 1000;
+
+  /* ---------- palco ---------- */
+  const PAR_X = [70, 150, 250, 330];
+  const beamsG = $('#beams'), parsG = $('#pars'), crowdG = $('#crowd');
+  const BEAM_D = [
+    'M64 18 L76 18 L230 160 L150 160 Z',
+    'M145 18 L155 18 L162 156 L118 156 Z',
+    'M245 18 L255 18 L170 156 L126 156 Z',
+    'M324 18 L336 18 L250 160 L170 160 Z'
+  ];
+  const beamEls = BEAM_D.map(d => mk('path', { d, opacity: 0 }, beamsG));
+  const parLabels = [];
+  const parEls = PAR_X.map((x, i) => {
+    mk('rect', { x: x - 8, y: 10, width: 16, height: 10, rx: 3, fill: '#222' }, parsG);
+    parLabels.push(mk('text', { x, y: 30, 'text-anchor': 'middle', 'font-size': 6, fill: '#555', 'font-family': 'Inter, sans-serif' }, parsG));
+    return mk('circle', { cx: x, cy: 20, r: 5, fill: '#333' }, parsG);
+  });
+  const dmxMark = mk('text', { x: PAR_X[3], y: 42, 'text-anchor': 'middle', 'font-size': 11, fill: '#e0503f', 'font-weight': 700, opacity: 0 }, parsG);
+  dmxMark.textContent = '⚠';
+  const parHit = mk('rect', { id: 'par-hit', x: PAR_X[3] - 22, y: 4, width: 44, height: 44, fill: 'transparent' }, parsG);
+  mk('rect', { x: 186, y: 8, width: 28, height: 11, rx: 2, fill: '#202127', stroke: '#3a3c44' }, parsG);
+  const strobeLamp = mk('rect', { x: 189, y: 11, width: 22, height: 5, rx: 1, fill: '#444' }, parsG);
+  const leds = [];
+  for (let i = 0; i < 10; i++) leds.push(mk('rect', { x: 262 + (i % 5) * 3.2, y: 126 + Math.floor(i / 5) * 5, width: 2.2, height: 3, fill: '#222' }, $('#leds')));
+  const bars = [];
+  for (let i = 0; i < 7; i++) bars.push(mk('rect', { x: 84 + i * 5, y: 48, width: 3, height: 2, rx: 1 }, $('#voice-bars')));
+  const paintParLabels = () => parLabels.forEach((t, i) => { t.textContent = pars[i] || 'PAR ' + (i + 1); });
+  paintParLabels();
+
+  const people = [];
+  for (let r = 0; r < 4; r++) for (let i = 0; i < 17; i++) {
+    const x = 6 + i * 24 + (r % 2) * 12 + rnd(-3, 3), y = 180 + r * 18;
+    const g = mk('g', {}, crowdG);
+    const arms = mk('path', { d: `M${x - 7} ${y + 10} L${x - 11} ${y - 6} M${x + 7} ${y + 10} L${x + 11} ${y - 6}`, stroke: '#2b2f3a', 'stroke-width': 3.2, 'stroke-linecap': 'round', opacity: 0 }, g);
+    mk('rect', { x: x - 9, y: y + 6, width: 18, height: 22, rx: 6, fill: ['#384152', '#4a3a3a', '#2f4a3a', '#4b4458', '#3d3a2c'][(i + r) % 5] }, g);
+    const h = mk('circle', { cx: x, cy: y, r: 7, fill: '#d9a57a' }, g);
+    const phone = mk('rect', { x: x + 6, y: y - 12, width: 3, height: 5, rx: .6, fill: '#dfe8ff', opacity: 0 }, g);
+    people.push({ g, h, arms, phone, x, keen: Math.random(), ph: rnd(-0.08, 0.08), sway: rnd(0, 6), row: r });
+  }
+  // col palco sopra la pista (telefono in verticale) la prima fila resta sul palco
+  // e le altre tre scendono dietro la pista: il palco si vede più grande
+  let crowdUnder = null;
+  let VIS = [0, 400];        // la parte del palco (in unità della scena) che si vede davvero
+  function layoutCrowd () {
+    const st = $('#stage').getBoundingClientRect(), rg = $('#rig').getBoundingClientRect();
+    const under = rg.top >= st.bottom - 2 && rg.left <= st.left + 2;
+    if (under !== crowdUnder) {
+      crowdUnder = under;
+      people.forEach(o => { if (o.row > 0) (under ? $('#crowd2') : crowdG).appendChild(o.g); });
+      $('#scene').setAttribute('viewBox', under ? '0 0 400 212' : '0 0 400 250');
+      $('#crowd-far').toggleAttribute('hidden', !under);
+    }
+    const vw = st.width / Math.max(st.width / 400, st.height / (under ? 212 : 250));
+    VIS = [Math.max(0, 200 - vw / 2), Math.min(400, 200 + vw / 2)];
+    if (!under) return;
+    // stessa scala e stesso centro del palco: le file continuano quelle di sopra
+    const far = $('#crowd-far').getBoundingClientRect();
+    const k = Math.max(st.width / 400, st.height / 212);
+    const w = far.width / k, h = far.height / k;
+    const cxp = (st.left + st.width / 2 - far.left) / k;
+    $('#crowd-far').setAttribute('viewBox', `${(200 - cxp).toFixed(1)} 190 ${w.toFixed(1)} ${h.toFixed(1)}`);
+  }
+
+  // la luce di ogni PAR adesso: [intensità, colore]
+  function parLight (i, pal) {
+    if (S.phaseDown || (S.finale && !finaleLit())) return [0, '#000'];
+    if (i === 3 && S.dmxDead) return [0, '#000'];
+    let v = 0, c = pal[0];
+    if (i === 1 || i === 2) { v = 0.28; c = '#fff6e0'; }           // i frontali tengono Musa in luce
+    if (S.colori > v) { v = S.colori; c = pal[0]; }
+    const ch = S.chaseIdx === i ? S.chase : 0;
+    if (ch > v) { v = ch; c = pal[1]; }
+    return [v, c];
+  }
+  function drawStage () {
+    const t = S.t, sec = sectionAt(t), pal = PALETTE[sec.k];
+    const b = beatAt(t), bf = ((b % 1) + 1) % 1;
+    const off = !!S.finale && !finaleLit();
+    const onMusic = t >= 0 && !S.finale && t < M.durata;
+    let side = 0, washC = pal[0];
+    for (let i = 0; i < 4; i++) {
+      const [v, c] = parLight(i, pal);
+      beamEls[i].setAttribute('fill', c);
+      beamEls[i].setAttribute('opacity', (0.5 * v).toFixed(3));
+      parEls[i].setAttribute('fill', v > 0.05 ? c : '#333');
+      if (v > side && c !== '#fff6e0') { side = v; washC = c; }
+    }
+    dmxMark.setAttribute('opacity', S.dmxDead ? (Math.floor(t * 3) % 2 ? 1 : 0.3) : 0);
+    let st = 0;
+    if (S.strobe > 0 && !off) st = realStrobe ? (S.flash > 0 ? 0.85 : 0) : 0.28 * S.strobe;
+    $('#strobe').setAttribute('opacity', st.toFixed(3));
+    strobeLamp.setAttribute('fill', S.strobe > 0.05 ? '#fff' : '#444');
+    $('#wash').setAttribute('fill', washC); $('#wash').setAttribute('opacity', (0.16 * side).toFixed(3));
+    const glow = $('#crowd-glow');
+    glow.setAttribute('fill', washC); glow.setAttribute('opacity', (0.22 * side + 0.25 * S.strobe).toFixed(3));
+    $('#crowd-glow2').setAttribute('fill', washC); $('#crowd-glow2').setAttribute('opacity', glow.getAttribute('opacity'));
+    $('#haze-r').setAttribute('opacity', (sec.k === 'BUILD' ? 0.5 : sec.k === 'DROP' ? 0.3 : 0.12).toFixed(2));
+    // il blackout (e la corrente staccata da Gerry) spegne la sala
+    // Gerry ha staccato la corrente: sala al buio, resta la luce d'emergenza
+    $('#dark').setAttribute('opacity', off ? 0.55 : 0);
+
+    // casse e consolle a tempo; il gain in rosso accende tutti i LED
+    const kickOn = onMusic && (sec.k === 'GROOVE' || sec.k === 'DROP' || sec.k === 'OUTRO');
+    const punch = kickOn ? Math.exp(-bf * 7) : 0;
+    $('#cone-l').setAttribute('r', (15 + punch * 2).toFixed(2)); $('#cone-r').setAttribute('r', (15 + punch * 2).toFixed(2));
+    const level = S.djHot ? 1 : onMusic ? (sec.k === 'DROP' ? 0.75 : sec.k === 'GROOVE' ? 0.6 : 0.4) * (0.7 + 0.3 * punch) : 0;
+    leds.forEach((l, i) => l.setAttribute('fill', (i % 5) / 5 < level ? ((i % 5) > 3 ? '#e0503f' : (i % 5) > 2 ? '#f2c53d' : '#49b06a') : '#222'));
+    const spin = onMusic ? t * 200 : 0;
+    $('#deck-l').setAttribute('stroke-dashoffset', (spin % 7).toFixed(1));
+    $('#deck-r').setAttribute('stroke-dashoffset', (-spin % 7).toFixed(1));
+    $('#ciabattina').setAttribute('transform', S.faults.fase && S.faults.fase.moved ? 'translate(-300 0)' : '');
+
+    // DJ Inestimabile: testa a tempo, mani in alto al drop, scratch al rewind
+    const bob = onMusic ? Math.sin(bf * Math.PI) * (sec.k === 'DROP' ? 3 : 1.6) : 0;
+    const out = S.finale ? S.finale.push : 0;
+    $('#dj-body').setAttribute('transform', `translate(${240 - out} ${(70 + bob).toFixed(2)})`);
+    const handsUp = onMusic && sec.k === 'DROP' && (b / 4 - sec.a) < 1;
+    const scratch = S.scratchUntil && performance.now() < S.scratchUntil;
+    $('#dj-arm-l').setAttribute('d', handsUp ? `M${252 - out} 128 L${240 - out} 92` : `M${252 - out} 136 L${246 - out} ${(124 + Math.sin(t * 9) * 1.5).toFixed(1)}`);
+    $('#dj-arm-r').setAttribute('d', handsUp ? `M${286 - out} 128 L${298 - out} 92` : `M${286 - out} 136 L${(scratch ? 298 + Math.sin(performance.now() / 40) * 6 : 292) - out} ${(124 + Math.cos(t * 7) * 1.5).toFixed(1)}`);
+    const lit = Math.max(side, S.strobe, 0.3);
+    $('#dj').style.filter = `brightness(${(0.35 + 0.65 * Math.min(1, lit)).toFixed(2)})`;
+
+    // Musa: parla quando nel brano c'è la voce; al drop salta anche lui
+    const m = mouthAt(t);
+    $('#mouth').setAttribute('ry', (1.2 + 7.5 * m).toFixed(2));
+    $('#mouth').setAttribute('rx', (9 + 4 * m).toFixed(2));
+    $('#teeth').setAttribute('opacity', m > 0.3 ? 1 : 0);
+    const up = S.micHot ? 1.25 : S.micUp;
+    const hx = 58 + (1 - up) * 10, hy = 118 + (1 - up) * 10, rot = -8 + (1 - up) * 38;
+    $('#mic').setAttribute('transform', `translate(${hx.toFixed(1)} ${hy.toFixed(1)}) rotate(${rot.toFixed(1)})`);
+    const jumpM = onMusic && sec.k === 'DROP' ? Math.sin(bf * Math.PI) * 6 : onMusic ? Math.sin(bf * Math.PI) * 1.2 : 0;
+    $('#musa').setAttribute('transform', `translate(${(S.musaX - out).toFixed(1)} ${(70 - jumpM).toFixed(2)})`);
+    const front = Math.max(parLight(1, pal)[0], parLight(2, pal)[0]);
+    $('#musa').style.filter = `brightness(${(0.2 + 0.8 * Math.min(1, Math.max(front * 1.6, side * 0.4, S.strobe * 0.8))).toFixed(2)})`;
+    $('#voice-bub').setAttribute('opacity', S.singing ? 1 : 0);
+    $('#voice-bub').setAttribute('transform', `translate(${(S.musaX - 112 - out).toFixed(1)} 0)`);
+    bars.forEach((r, i) => { const h = 2 + m * 12 * (0.5 + 0.5 * Math.sin(t * 23 + i * 1.7)); r.setAttribute('y', (48 - h / 2).toFixed(1)); r.setAttribute('height', h.toFixed(1)); });
+    const ring = S.faults.larsen && S.faults.larsen.state === 'larsen' ? 1 : S.musaGo > 0.5 && !S.micMuted ? (S.musaGo - 0.5) : 0;
+    $('#ring').setAttribute('opacity', ring.toFixed(2));
+
+    // Gerry: arrabbiato trema e urla
+    const shake = S.gerryAngry || S.finale ? Math.sin(performance.now() / 35) * 1.2 : 0;
+    $('#gerry-g').setAttribute('transform', `translate(${(S.gerryX + shake).toFixed(1)} 70)`);
+    $('#gerry-angry').setAttribute('opacity', S.gerryAngry || S.finale ? 1 : 0);
+    $('#gerry-mouth').setAttribute('ry', (S.gerrySay ? 4 + 3 * Math.abs(Math.sin(performance.now() / 90)) : 2).toFixed(1));
+    const tb = $('#talk-bub');
+    if (S.talk) {
+      const cxw = S.talk.who === 'musa' ? S.musaX + 31 - out : 269 - out, w = Math.max(60, S.talk.text.length * 5.2 + 14);
+      const x0 = Math.min(VIS[1] - 4 - w, Math.max(VIS[0] + 4, cxw - w / 2));
+      $('#talk-bub-bg').setAttribute('d', `M${x0} 40 h${w} v18 h-${w / 2 - 6} l-6 7 v-7 h-${w / 2} z`);
+      $('#talk-bub-t').setAttribute('x', (x0 + w / 2).toFixed(1)); $('#talk-bub-t').setAttribute('y', 52.5);
+      $('#talk-bub-t').textContent = S.talk.text;
+      tb.setAttribute('opacity', 1);
+    } else tb.setAttribute('opacity', 0);
+    const gb = $('#gerry-bub');
+    if (S.gerrySay && S.gerryX < 400) {
+      const w = Math.max(60, S.gerrySay.length * 5.2 + 14), x0 = Math.min(VIS[1] - 4 - w, Math.max(VIS[0] + 4, S.gerryX + 29 - w / 2));
+      $('#gerry-bub-bg').setAttribute('d', `M${x0} 40 h${w} v18 h-${w / 2 - 6} l-6 7 v-7 h-${w / 2} z`);
+      $('#gerry-bub-t').setAttribute('x', (x0 + w / 2).toFixed(1)); $('#gerry-bub-t').setAttribute('y', 52.5);
+      $('#gerry-bub-t').textContent = S.gerrySay;
+      gb.setAttribute('opacity', 1);
+    } else gb.setAttribute('opacity', 0);
+
+    // il pubblico: al drop salta a ogni battito, sulla salita alza le mani e al
+    // battito prima del drop si abbassa; nel groove muove la testa, nel break ondeggia
+    const mood = S.grad / 100;
+    const lastBuildBeat = sec.k === 'BUILD' && b >= (sec.b + 1) * 4 - 1;
+    people.forEach(o => {
+      let dy = 0, dx = 0, armsOn = 0, phone = 0;
+      if (S.finale) {
+        const F = S.finale;
+        dy = 2;
+        if (F.f >= BOO_AT && F.f < BOO_END && o.keen < 0.7) { armsOn = 1; dy = -Math.abs(Math.sin(F.f * 9 + o.sway)) * 3; dx = Math.sin(F.f * 13 + o.sway) * 1.2; }
+      }
+      else if (onMusic && !S.paused) {
+        const pf = (((b + o.ph) % 1) + 1) % 1;
+        if (sec.k === 'DROP') {
+          if (o.keen < mood * 1.15 - 0.05) { dy = -Math.sin(pf * Math.PI) * (6 + 5 * mood); armsOn = o.keen < mood * 0.8 ? 1 : 0; }
+          else dy = -Math.abs(Math.sin(pf * Math.PI)) * 1.5;
+        } else if (sec.k === 'BUILD') {
+          armsOn = o.keen < mood + 0.1 ? 1 : 0;
+          dy = lastBuildBeat ? 4 : -Math.abs(Math.sin(pf * Math.PI)) * 1.5;
+        } else if (sec.k === 'GROOVE' || sec.k === 'OUTRO') {
+          dy = -Math.abs(Math.sin(pf * Math.PI)) * 2.5 * (0.4 + mood);
+        } else {
+          dx = Math.sin(b * Math.PI / 4 + o.sway) * 2 * mood;
+          phone = sec.k === 'BREAK' && o.keen < mood * 0.5 ? 1 : 0;
+        }
+      }
+      o.g.setAttribute('transform', `translate(${dx.toFixed(2)} ${dy.toFixed(2)})`);
+      o.arms.setAttribute('opacity', armsOn);
+      o.phone.setAttribute('opacity', phone);
+      o.h.setAttribute('fill', mood < 0.3 ? '#8d8f96' : '#d9a57a');
+    });
+  }
+
+  /* ---------- pista (canvas) ---------- */
+  const cv = $('#hw'), cx = cv.getContext('2d');
+  let W = 0, H = 0, DPR = 1;
+  function resize () {
+    DPR = Math.min(2, window.devicePixelRatio || 1);
+    W = cv.clientWidth; H = cv.clientHeight;
+    cv.width = Math.round(W * DPR); cv.height = Math.round(H * DPR);
+    cx.setTransform(DPR, 0, 0, DPR, 0, 0);
+  }
+  window.addEventListener('resize', () => { resize(); layoutCrowd(); });
+  const SPECIAL_LABEL = { 'fader-dj': '⬇ FADER DJ', 'fader-mic': '⬇ FADER MIC', mute: '🔇 MUTE MIC' };
+  function drawRoad () {
+    if (!W) resize();
+    const t = S.t, hitY = H - 22, laneW = W / NL, dead = deadLanes(), LOOK = look();
+    const yOf = tt => hitY - (tt - t) / LOOK * (hitY - 10);
+    cx.clearRect(0, 0, W, H);
+    for (let l = 0; l < NL; l++) {
+      cx.fillStyle = dead[l] ? 'rgba(40,41,46,.75)' : S.down[l] ? LANE_C[l] + '2a' : (l % 2 ? 'rgba(26,27,34,.45)' : 'rgba(16,17,22,.3)');
+      cx.fillRect(l * laneW, 0, laneW, H);
+    }
+    cx.strokeStyle = '#2a2c33'; cx.lineWidth = 1;
+    for (let l = 1; l < NL; l++) { cx.beginPath(); cx.moveTo(l * laneW, 0); cx.lineTo(l * laneW, H); cx.stroke(); }
+    if (S.finale) return;
+    const b0 = Math.ceil(beatAt(t - 0.3)), b1 = Math.floor(beatAt(t + LOOK));
+    for (let b = b0; b <= b1; b++) {
+      const y = yOf(timeOf(b));
+      cx.strokeStyle = b % 4 === 0 ? '#3a3d48' : '#22242c'; cx.lineWidth = b % 4 === 0 ? 2 : 1;
+      cx.beginPath(); cx.moveTo(0, y); cx.lineTo(W, y); cx.stroke();
+      if (b % 4 === 0 && SEC[b / 4] && SEC[b / 4].a === b / 4 && b / 4 > 0) {
+        cx.fillStyle = '#f2a541'; cx.font = '600 12px Barlow Condensed, sans-serif'; cx.textAlign = 'left';
+        cx.fillText(SEC[b / 4].k, 4, y - 4);
+      }
+    }
+    cx.fillStyle = '#eee9df22'; cx.fillRect(0, hitY - 2, W, 4);
+    for (let l = 0; l < NL; l++) {
+      cx.strokeStyle = dead[l] ? '#3a3c44' : LANE_C[l]; cx.lineWidth = S.down[l] ? 4 : 2;
+      cx.beginPath(); cx.arc(l * laneW + laneW / 2, hitY, Math.min(18, laneW * 0.28), 0, Math.PI * 2); cx.stroke();
+    }
+    const vis = S.notes.filter(n => (n.hold ? n.end : n.t) > t - 0.3 && n.t < t + LOOK);
+    const r = Math.min(15, laneW * 0.24);
+    vis.forEach(n => {
+      if (!n.hold) return;
+      const x = n.lane * laneW + laneW / 2;
+      const yA = n.state === 'holding' ? hitY : yOf(n.t), yB = yOf(n.end);
+      if (yA <= yB) return;
+      const live = n.state === 'holding', gone = n.state === 'broken' || n.state === 'miss' || n.state === 'lost' || dead[n.lane];
+      cx.fillStyle = gone ? '#3a3c44' : LANE_C[n.lane] + (live ? 'ee' : '88');
+      cx.fillRect(x - r * 0.35, Math.max(0, yB), r * 0.7, yA - Math.max(0, yB));
+    });
+    const byT = {};
+    vis.forEach(n => { if (n.state === 'wait') (byT[n.t.toFixed(3)] = byT[n.t.toFixed(3)] || []).push(n); });
+    Object.values(byT).forEach(g => { if (g.length < 2) return; const y = yOf(g[0].t); cx.strokeStyle = '#eee9df88'; cx.lineWidth = 3; cx.beginPath(); cx.moveTo(g[0].lane * laneW + laneW / 2, y); cx.lineTo(g[g.length - 1].lane * laneW + laneW / 2, y); cx.stroke(); });
+    vis.forEach(n => {
+      if (n.state !== 'wait' && n.state !== 'miss' && n.state !== 'lost') return;
+      const x = n.lane * laneW + laneW / 2, y = yOf(n.t);
+      if (y < -r || y > H + r) return;
+      const grey = n.state !== 'wait' || dead[n.lane];
+      cx.globalAlpha = n.state === 'wait' ? 1 : 0.3;
+      cx.fillStyle = grey ? '#55575f' : LANE_C[n.lane];
+      cx.beginPath(); cx.ellipse(x, y, r, r * 0.62, 0, 0, Math.PI * 2); cx.fill();
+      { cx.fillStyle = grey ? '#777' : '#fff'; cx.beginPath(); cx.ellipse(x, y - r * 0.12, r * 0.45, r * 0.24, 0, 0, Math.PI * 2); cx.fill(); }
+      if (n.lane === STROBO && !grey) { cx.fillStyle = '#141519'; cx.font = `700 ${Math.round(r * 0.9)}px Inter, sans-serif`; cx.textAlign = 'center'; cx.fillText('⚡', x, y + r * 0.32); }
+      cx.globalAlpha = 1;
+    });
+    // note speciali dei guasti: una sbarra rossa su tutta la pista
+    S.specials.forEach(sp => {
+      if (sp.state !== 'wait' || sp.t < t - 0.3 || sp.t > t + LOOK) return;
+      const y = yOf(sp.t);
+      cx.fillStyle = 'rgba(224,80,63,.9)'; cx.fillRect(6, y - 11, W - 12, 22);
+      cx.fillStyle = '#fff'; cx.font = '700 14px Barlow Condensed, sans-serif'; cx.textAlign = 'center';
+      cx.fillText(SPECIAL_LABEL[sp.kind], W / 2, y + 5);
+    });
+    if (t < 0) {
+      cx.fillStyle = '#eee9df'; cx.font = '700 40px Barlow Condensed, sans-serif'; cx.textAlign = 'center';
+      cx.fillText(String(Math.ceil(-t)), W / 2, H * 0.45);
+    }
+  }
+
+  /* ---------- tocchi e giudizio ---------- */
+  function judge (text, color) {
+    const j = $('#judge'); j.textContent = text; j.style.color = color;
+    j.classList.remove('show'); void j.offsetWidth; j.classList.add('show');
+  }
+  function addCombo () {
+    if (S.capo) return;                        // il capo alle luci non fa combo
+    S.combo++; S.maxCombo = Math.max(S.maxCombo, S.combo);
+    S.mult = Math.min(4, 1 + Math.floor(S.combo / 10));
+  }
+  function breakCombo () { S.combo = 0; S.mult = 1; }
+  function fire (lane, t) {
+    if (lane === COLORI) S.colori = 1;
+    else if (lane === CHASE) { S.chaseIdx = (S.chaseIdx + 1) % 4; S.chase = 1; }
+    else { S.strobe = 1; S.flash = 0.06; }
+  }
+  function press (lane) {
+    // mentre sei al Quadro le luci le suona il capo
+    if (!S.running || S.paused || S.over || S.finale || S.down[lane] || S.away && !S.capoPress) return;
+    S.down[lane] = true; paintPads();
+    const t = judgedNow();
+    if (deadLanes()[lane]) { if (!S.capoPress) judge('SENZA LUCE', '#8b8e98'); return; }
+    const [PERFECT, GOOD] = windows();
+    let best = null;
+    for (const n of S.notes) {
+      if (n.lane !== lane || n.state !== 'wait') continue;
+      const d = Math.abs(n.t - t);
+      if (d <= GOOD && (!best || d < Math.abs(best.t - t))) best = n;
+      if (n.t > t + GOOD) break;
+    }
+    fire(lane, t);
+    if (!best) {
+      S.stray++; breakCombo(); S.grad = clamp(S.grad - 1.2);
+      judge('FUORI TEMPO', '#e0503f'); sfx.miss(); return;
+    }
+    const d = Math.abs(best.t - t), perfect = d <= PERFECT;
+    if (!S.capo) { if (perfect) S.perfect++; else S.good++; S.score += (perfect ? 100 : 60) * S.mult; }
+    addCombo();
+    S.grad = clamp(S.grad + (perfect ? 1.1 : 0.7));
+    if (!S.capo) judge(perfect ? 'PERFETTO' : 'BENE', perfect ? '#49b06a' : '#f2c53d');
+    if (best.hold) { best.state = 'holding'; S.holding[lane] = best; }
+    else best.state = 'hit';
+  }
+  function release (lane) {
+    if (!S.down[lane]) return;
+    S.down[lane] = false; paintPads();
+    const n = S.holding[lane];
+    if (!n) return;
+    S.holding[lane] = null;
+    const t = judgedNow();
+    if (t < n.end - BEAT * 0.25) {
+      n.state = 'broken'; S.holdsBroken++; breakCombo(); S.grad = clamp(S.grad - 2);
+      judge('MOLLATA', '#e0503f');
+    } else finishHold(n);
+  }
+  function finishHold (n) {
+    n.state = 'done';
+    if (!S.capo) S.score += 50 * S.mult;
+    S.grad = clamp(S.grad + 1);
+    // il drop tenuto fino in fondo: boato del pubblico
+    if (n.lane === STROBO && sectionAt(n.t).k === 'DROP') { S.dropHeld++; S.grad = clamp(S.grad + 4); if (!S.capo) judge('DROP!', '#f2a541'); sfx.cheer(); }
+    if (S.holding[n.lane] === n) S.holding[n.lane] = null;
+  }
+  function paintPads () {
+    const dead = deadLanes();
+    document.querySelectorAll('.pad').forEach(p => { const l = +p.dataset.l; p.classList.toggle('down', S.down[l]); p.classList.toggle('dead', dead[l] || !!S.finale); });
+  }
+
+  document.querySelectorAll('.pad').forEach(p => {
+    const l = +p.dataset.l;
+    p.addEventListener('pointerdown', e => { e.preventDefault(); try { p.setPointerCapture(e.pointerId); } catch (x) {} press(l); });
+    p.addEventListener('pointerup', () => release(l));
+    p.addEventListener('pointercancel', () => release(l));
+    p.addEventListener('contextmenu', e => e.preventDefault());
+  });
+  window.addEventListener('keydown', e => {
+    if (e.code === 'Space' || e.code === 'Escape') { if (S.running && !S.over) { e.preventDefault(); togglePause(); } return; }
+    if (e.repeat) return;
+    if (e.code === 'KeyM') { e.preventDefault(); muteMic(); return; }
+    if (e.code === 'KeyV') { e.preventDefault(); setFader(activeFader(), 0.6); return; }
+    if (e.code === 'KeyB') { e.preventDefault(); drinkBeer(); return; }
+    if (e.code === 'KeyP') { e.preventDefault(); openParPanel(); return; }
+    if (!(e.code in KEYS)) return;
+    e.preventDefault(); press(KEYS[e.code]);
+  });
+  window.addEventListener('keyup', e => { if (e.code in KEYS) release(KEYS[e.code]); });
+  document.addEventListener('visibilitychange', () => { if (document.hidden && S.running && !S.paused && !S.over) togglePause(); });
+
+  /* ---------- birra: meno stanchezza, finestra più larga ---------- */
+  function drinkBeer () {
+    if (!S.running || S.over) return;
+    if (S.beers <= 0) { toast('Niente birre in tasca.'); return; }
+    S.beers--; S.drunk++; S.fatigue = Math.max(0, S.fatigue - 30); sfx.beer(); toast('Glu glu. Stanchezza giù, finestra più larga.', 'ok');
+  }
+  $('#beer').onclick = drinkBeer;
+
+  /* ---------- i guasti ---------- */
+  const say = (who, text, ms) => { if (who === 'gerry') { S.gerrySay = text; S.gerryUntil = S.t + (ms || 3); } };
+  function addSpecial (kind) {
+    // la nota speciale arriva sulla riga all'inizio della battuta dopo la prossima;
+    // le note normali lì intorno spariscono, così un pollice resta libero
+    const t = timeOf((barAt(S.t) + 2) * 4);
+    S.notes = S.notes.filter(n => n.state !== 'wait' || n.t < t - BEAT || n.t > t + BEAT * 0.5 || n.hold && n.t < t - BEAT);
+    const sp = { kind, t, state: 'wait' };
+    S.specials.push(sp);
+    return sp;
+  }
+  function startFault (id) {
+    const f = S.faults[id] = { id, start: S.t, state: 'on' };
+    S.active = f;
+    if (id === 'gain') { S.djHot = true; S.dj = 1; f.sp = addSpecial('fader-dj'); showFader('dj'); toast('DJ Inestimabile ha alzato il suo volume: in rosso!', 'bad'); }
+    if (id === 'mangia') { S.micHot = true; S.mic = 1; f.sp = addSpecial('fader-mic'); showFader('mic'); toast('Musa si mangia il microfono: la voce satura!', 'bad'); }
+    if (id === 'larsen') { S.musaGo = 0.01; f.sp = addSpecial('mute'); $('#pop-mute').hidden = false; toast('Musa scende verso la cassa col microfono!', 'bad'); }
+    if (id === 'dmx') {
+      S.dmxDead = true; f.cause = Math.random() < 0.5 ? 'cavo' : 'indirizzo';
+      $('#dmx-chip').hidden = false; sfx.miss(); toast('PAR 4 non risponde più: la corsia CHASE è spenta.', 'bad'); paintPads();
+    }
+    if (id === 'fase') {
+      S.phaseDown = true; sfx.clack(); paintPads();
+      for (let l = 0; l < NL; l++) if (deadLanes()[l] && S.holding[l]) { S.holding[l].state = 'lost'; S.holding[l] = null; }
+      S.big = { start: S.t, until: S.t + CHOICE_S };
+      openChoice();
+    }
+  }
+  function endFault (f, ok, msg) {
+    f.state = ok ? 'ok' : 'late';
+    if (S.active === f) S.active = null;
+    if (msg) toast(msg, ok ? 'ok' : undefined);
+  }
+  // le note speciali: MUTE e fader
+  function muteMic () {
+    const f = S.faults.larsen;
+    if (!f || f.state !== 'on' || S.micMuted) return;
+    S.micMuted = true; $('#mute-btn').setAttribute('aria-pressed', 'true');
+    const sp = f.sp, [, GOOD] = windows();
+    if (sp.state === 'wait' && judgedNow() <= sp.t + GOOD) {
+      sp.state = 'hit'; S.grad = clamp(S.grad + 3); judge('LARSEN EVITATO', '#49b06a');
+      S.repParts.push(['Mute a tempo: niente larsen', REPS.small]);
+      f.unmuteAt = sp.t + BAR;
+    }
+  }
+  $('#mute-btn').onclick = muteMic;
+  let faderWhich = null;
+  const activeFader = () => faderWhich;
+  function showFader (which) {
+    faderWhich = which;
+    $('#fader-name').textContent = which === 'dj' ? 'FADER DJ' : 'FADER MIC';
+    $('#pop-fader').hidden = false; paintFader();
+  }
+  function paintFader () { if (faderWhich) $('#knob').style.top = ((1 - S[faderWhich]) * 100).toFixed(1) + '%'; }
+  function setFader (which, v) {
+    if (!which || !S.running) return;
+    S[which] = Math.max(0, Math.min(1, v)); paintFader();
+    const f = which === 'dj' ? S.faults.gain : S.faults.mangia;
+    if (!f || f.state !== 'on' || S[which] > 0.7) return;
+    // in zona verde: il guasto è a posto
+    if (which === 'dj') S.djHot = false; else S.micHot = false;
+    const sp = f.sp, [, GOOD] = windows();
+    const inTime = sp.state === 'wait' && judgedNow() <= sp.t + GOOD;
+    if (sp.state === 'wait') sp.state = inTime ? 'hit' : 'late';
+    if (inTime) { S.grad = clamp(S.grad + 3); judge('VOLUME A POSTO', '#49b06a'); S.repParts.push([which === 'dj' ? 'Fader del DJ giù in tempo' : 'Fader del microfono giù in tempo', REPS.small]); }
+    endFault(f, inTime, inTime ? null : 'Volume a posto, ma il pubblico ha sentito la distorsione.');
+    setTimeout(() => { if (!S.active || S.active.id !== f.id) { $('#pop-fader').hidden = true; faderWhich = null; } }, 600);
+  }
+  (() => {
+    const tr = $('#track');
+    const at = e => { const r = tr.getBoundingClientRect(); return 1 - (e.clientY - r.top) / r.height; };
+    let drag = false;
+    tr.addEventListener('pointerdown', e => { e.preventDefault(); drag = true; try { tr.setPointerCapture(e.pointerId); } catch (x) {} setFader(faderWhich, at(e)); });
+    tr.addEventListener('pointermove', e => { if (drag) setFader(faderWhich, at(e)); });
+    tr.addEventListener('pointerup', () => { drag = false; });
+    tr.addEventListener('pointercancel', () => { drag = false; });
+  })();
+
+  // il PAR senza DMX: si guarda, si capisce e si sistema, mentre la pista va
+  function openParPanel () {
+    const f = S.faults.dmx;
+    if (!f || f.state !== 'on' || !S.running) return;
+    $('#pop-par').hidden = false;
+    $('#par-clue').innerHTML = f.cause === 'cavo'
+      ? 'Il connettore DMX penzola dal retro del PAR 4. Il display dice <b>A-010</b>.'
+      : 'Il cavo DMX è infilato. Il display dice <b>A-001</b>. Gli altri PAR: 001, 004, 007.';
+    const acts = [['plug', 'Rinfila il connettore DMX'], ['a001', 'Indirizzo 001'], ['a010', 'Indirizzo 010'], ['a013', 'Indirizzo 013']];
+    $('#par-acts').innerHTML = acts.map(([k, l]) => `<button class="act" data-k="${k}">${l}</button>`).join('');
+    $('#par-acts').querySelectorAll('button').forEach(b => b.onclick = () => fixPar(b.dataset.k));
+  }
+  function fixPar (k) {
+    const f = S.faults.dmx;
+    if (!f || f.state !== 'on') return;
+    const right = f.cause === 'cavo' ? k === 'plug' : k === 'a010';
+    // una prova sbagliata costa un secondo e mezzo prima della prossima
+    if (f.lockUntil && S.t < f.lockUntil) { toast('Aspetta: stai ancora provando.'); return; }
+    if (!right) {
+      S.grad = clamp(S.grad - 1); f.lockUntil = S.t + 1.5;
+      toast(f.cause === 'cavo' ? 'Non cambia niente: il PAR non riceve proprio il segnale.' : 'Non risponde: su quell\'indirizzo c\'è un altro PAR (o nessuno).', 'bad');
+      return;
+    }
+    S.dmxDead = false; $('#dmx-chip').hidden = true; $('#pop-par').hidden = true; paintPads();
+    const quick = S.t - f.start <= 12;
+    if (quick) S.repParts.push(['PAR 4 senza DMX sistemato in fretta', REPS.dmx]);
+    endFault(f, quick, 'PAR 4 di nuovo in DMX: torna la corsia CHASE.');
+  }
+  $('#dmx-chip').onclick = openParPanel;
+  parHit.addEventListener('click', openParPanel);
+  $('#par-close').onclick = () => { $('#pop-par').hidden = true; };
+
+  /* ---------- guasto grosso: chi va al Quadro ---------- */
+  function openChoice () {
+    const can = S.beers > 0 && S.favours < 2;
+    $('#opt-capo').disabled = !can;
+    $('#opt-capo-sub').textContent = S.beers <= 0 ? 'Non hai birre in tasca: niente favori.' : S.favours >= 2 ? 'Il capo ti ha già fatto due favori stasera.' : 'Ci va lui, tu resti alle luci. Hai ' + S.beers + ' 🍺.';
+    $('#choice').hidden = false;
+    toast('Scatta una fase del Quadro: metà luci spente!', 'bad');
+  }
+  function choose (who) {
+    const B = S.big;
+    if (!B || B.who) return;
+    B.who = who; $('#choice').hidden = true;
+    if (who === 'tu') {
+      S.favours++;
+      S.away = { from: S.t, steps: [] };
+      for (let l = 0; l < NL; l++) { S.down[l] = false; if (S.holding[l]) { S.holding[l].state = 'broken'; S.holding[l] = null; } }
+      S.capo = true; breakCombo(); paintPads();
+      $('#quadro').hidden = false; $('#quadro').classList.remove('mini'); $('#rig').appendChild($('#quadro'));
+      renderQuadro();
+      toast(capName() + ' prende le luci: tu corri al Quadro.', 'ok');
+    } else if (who === 'capo') {
+      S.beers--; S.favours++;
+      B.fixAt = S.t + CAPO_FIX_S;
+      toast(capName() + ' prende la birra e va al Quadro. Tu resta alle luci.', 'ok');
+    } else {
+      B.fixAt = B.start + GERRY_S; B.gerry = true;
+      toast('Nessuno si muove. Il pubblico aspetta al buio…', 'bad');
+    }
+  }
+  const capName = () => boss === 'il capo' ? 'Il capo' : boss;
+  $('#opt-tu').onclick = () => choose('tu');
+  $('#opt-capo').onclick = () => choose('capo');
+  $('#opt-gerry').onclick = () => choose('gerry');
+
+  // il Quadro: tre fasi, la ciabattina del DJ su L2 che è scattata
+  function renderQuadro () {
+    const f = S.faults.fase, where = f.plug || 'L2';
+    $('#phases').innerHTML = ['L1', 'L2', 'L3'].map(p => {
+      const kw = FASE_KW[p] + (where === p ? CIABATTINA_KW : 0);
+      const down = p === 'L2' && S.phaseDown;
+      const what = { L1: 'Finale, mixer', L2: 'PAR 1–4', L3: 'Consolle luci, PC' }[p];
+      return `<div class="ph${down ? ' down' : ''}"><b>${p} ${down ? '· giù' : '· su'}</b><span>${what}</span>`
+        + (where === p ? '<span class="plug">Ciabattina DJ 3,4 kW</span>' : '')
+        + `<span class="kw">${kw.toFixed(1).replace('.', ',')} / 3,6 kW</span></div>`;
+    }).join('');
+    const busy = !!f.busyUntil;
+    $('#q-acts').innerHTML = `<button data-a="L1"${busy || where === 'L1' ? ' disabled' : ''}>Ciabattina su L1</button>`
+      + `<button data-a="L3"${busy || where === 'L3' ? ' disabled' : ''}>Ciabattina su L3</button>`
+      + `<button class="go" data-a="arm"${busy || !S.phaseDown ? ' disabled' : ''}>Riarma L2</button>`;
+    $('#q-acts').querySelectorAll('button').forEach(b => b.onclick = () => quadro(b.dataset.a));
+  }
+  // ogni mossa al Quadro costa un secondo e mezzo; gli errori ne costano di più
+  function quadro (a) {
+    const f = S.faults.fase;
+    if (!f || !S.phaseDown || f.busyUntil || !S.away && !$('#quadro').classList.contains('mini')) return;
+    const doIt = (sec, then) => { f.busyUntil = S.t + sec; f.busyFrom = S.t; f.then = then; renderQuadro(); };
+    if (a === 'L1') doIt(2.5, () => toast('Su L1 c\'è già il finale: 5,8 kW, salterebbe anche l\'audio! La ciabattina resta dov\'è.', 'bad'));
+    else if (a === 'L3') doIt(1.5, () => { f.plug = 'L3'; f.moved = true; toast('Ciabattina su L3: 3,6 kW, ci sta.', 'ok'); });
+    else if (a === 'arm') doIt(1.5, () => {
+      if ((f.plug || 'L2') === 'L2') { sfx.clack(); toast('Riscatta subito: la ciabattina è ancora su L2.', 'bad'); return; }
+      S.phaseDown = false; paintPads(); sfx.ok();
+      fixedPhase();
+    });
+  }
+  function fixedPhase () {
+    const f = S.faults.fase, B = S.big;
+    const away = S.away ? S.t - S.away.from : 0;
+    if (S.away) {
+      const fast = away <= AWAY_FAST;
+      S.repParts.push([fast ? 'Fase del Quadro riarmata in fretta (ci sei andato tu)' : 'Fase del Quadro riarmata, ma con calma', fast ? REPS.tuFast : 0]);
+      endFault(f, fast, 'Fase riarmata in ' + Math.round(away) + ' s: le luci tornano.');
+      backToLights();
+    } else if (B && B.forced) {
+      S.repParts.push(['Fase del Quadro riarmata dopo che il capo ti ha rimandato alle luci', 0]);
+      endFault(f, false, 'Fase riarmata: le luci tornano.');
+      $('#quadro').hidden = true;
+    }
+  }
+  // si torna alle luci: il DJ fa lo scratch e riporta il brano indietro
+  function backToLights (forced) {
+    const away = S.t - S.away.from;
+    S.away = null; S.capo = false; S.capoPress = false;
+    for (let l = 0; l < NL; l++) S.down[l] = false;
+    paintPads();
+    if (forced) {
+      S.big.forced = true;
+      $('#stage').appendChild($('#quadro')); $('#quadro').classList.add('mini'); renderQuadro();
+      toast(capName() + ': «Basta, torna alle luci! Il Quadro finiscilo da lì.»', 'bad');
+    } else $('#quadro').hidden = true;
+    rewind(away);
+  }
+  function rewind (away) {
+    const back = Math.min(REWIND_MAX, Math.floor(away / BEAT) * BEAT);
+    if (back < BEAT) return;
+    const to = S.t - back, from = S.t;
+    S.notes.forEach(n => { if (n.t >= to - 0.01 && n.t <= from + 0.5 && n.state !== 'wait') { if (n.state === 'miss') S.miss--; if (n.state === 'lost') S.lost--; n.state = 'wait'; } });
+    breakCombo(); S.grad = clamp(S.grad + 3); S.rewinds++;
+    S.scratchUntil = performance.now() + 700; sfx.scratch();
+    banner('⏪ REWIND! DJ Inestimabile riporta il pezzo indietro');
+    seek(to);
+  }
+  function stepBig (dt) {
+    const B = S.big, f = S.faults.fase;
+    if (!B || !f) return;
+    if (!B.who) {
+      $('#choice-bar').style.width = clamp((B.until - S.t) / CHOICE_S * 100) + '%';
+      if (S.t >= B.until) choose('gerry');
+      return;
+    }
+    if (f.busyUntil && S.t >= f.busyUntil) { f.busyUntil = 0; const th = f.then; f.then = null; th(); if (S.phaseDown) renderQuadro(); }
+    if (f.busyUntil) $('#q-prog').style.width = clamp((S.t - f.busyFrom) / (f.busyUntil - f.busyFrom) * 100) + '%'; else $('#q-prog').style.width = '0';
+    if (S.away) {
+      const away = S.t - S.away.from;
+      $('#q-time').textContent = Math.floor(away) + ' s';
+      if (away >= CAPO_PATIENCE && S.phaseDown) backToLights(true);
+    }
+    if (B.fixAt && S.phaseDown && S.t >= B.fixAt) {
+      S.phaseDown = false; paintPads(); f.plug = 'L3'; f.moved = true;
+      if (B.gerry) {
+        S.repParts.push(['Fase del Quadro riarmata da Gerry', REPS.gerry]); S.gerryIn = S.t;
+        say('gerry', 'Tranquilli, ci penso io!', 4);
+        endFault(f, false, 'Gerry ha spostato la ciabattina e riarmato: luci tornate. (−5)');
+      } else {
+        S.repParts.push(['Fase del Quadro riarmata dal capo (una birra)', 0]);
+        endFault(f, true, capName() + ' ha spostato la ciabattina su L3 e riarmato.');
+      }
+    }
+  }
+
+  function stepFaults (dt) {
+    // uno alla volta: il prossimo parte quando l'altro è finito
+    for (const F of FAULTS) {
+      if (S.faults[F.id] || S.active || S.finale) continue;
+      if (S.t >= timeOf(F.bar * 4) && S.t < timeOf((F.bar + 6) * 4)) { startFault(F.id); break; }
+    }
+    const [, GOOD] = windows();
+    const tj = S.t - lag / 1000;
+    // fader non abbassato in tempo: distorsione finché non lo fai
+    ['gain', 'mangia'].forEach(id => {
+      const f = S.faults[id];
+      if (!f || f.state !== 'on') return;
+      if (f.sp.state === 'wait' && tj > f.sp.t + GOOD) { f.sp.state = 'late'; judge('DISTORCE!', '#e0503f'); }
+      if (f.sp.state === 'late') { S.grad = clamp(S.grad - dt * 1.5); if (Math.random() < dt * 6) sfx.crackle(); }
+      // dopo quattro battute se ne accorge il DJ (o Musa) da solo
+      if (tj > f.sp.t + BAR * 4) { if (id === 'gain') S.djHot = false; else S.micHot = false; endFault(f, false, id === 'gain' ? 'Il DJ si è abbassato da solo: brutta figura.' : 'Musa si è allontanato dal microfono da solo.'); $('#pop-fader').hidden = true; faderWhich = null; }
+    });
+    // Musa va verso la cassa: MUTE in tempo, o larsen. Poi torna al suo posto
+    const L = S.faults.larsen;
+    if (L && (L.state === 'on' || L.state === 'larsen')) {
+      if (L.state === 'on') S.musaGo = Math.min(1, S.musaGo + dt / (BEAT * 3));
+      if (L.state === 'on' && L.sp.state === 'wait' && tj > L.sp.t + GOOD) {
+        L.sp.state = 'late'; L.state = 'larsen'; S.larsens++; S.grad = clamp(S.grad - 8);
+        S.repParts.push(['Larsen: Musa davanti alla cassa col microfono aperto', REPS.larsen]);
+        judge('LARSEN!', '#e0503f'); sfx.larsen(); toast('LARSEEEN! Il pubblico si tappa le orecchie.', 'bad');
+        L.unmuteAt = S.t + 2.2;
+      }
+      if (L.unmuteAt && S.t >= L.unmuteAt) {
+        S.micMuted = false; $('#mute-btn').setAttribute('aria-pressed', 'false'); $('#pop-mute').hidden = true;
+        L.unmuteAt = 0; endFault(L, L.state === 'on');
+      }
+    } else S.musaGo = Math.max(0, S.musaGo - dt / (BEAT * 2));
+    S.musaX = 112 - 58 * S.musaGo;
+    stepBig(dt);
+    // Gerry entra in scena: per aiutare (la fase del Quadro) o, verso la fine,
+    // arrabbiato per il casino e le parolacce, fino a staccare la corrente
+    const bb = beatAt(S.t) - GERRY_BAR * 4;
+    S.gerryAngry = bb >= 0;
+    const gerryOn = S.gerryAngry || (S.gerryIn != null && S.t - S.gerryIn < 4);
+    const tx = gerryOn ? (S.gerryAngry ? 172 : 300) : 430;
+    S.gerryX += (tx - S.gerryX) * Math.min(1, dt * 2.5);
+    if (S.gerryAngry) S.gerrySay = bb < 4 ? 'Cos\'è \'sto casino?!' : bb < 8 ? 'Parolacce davanti ai bambini?!' : 'Adesso stacco tutto!';
+    else if (S.gerryUntil >= 0 && S.t > S.gerryUntil) S.gerrySay = '';
+  }
+
+  /* ---------- il capo suona le luci: nella demo tutte, al tuo posto una su tre la manca ---------- */
+  function autoplay (t) {
+    for (const n of S.notes) {
+      if (n.t > t + 0.02) break;
+      if (n.state === 'wait' && n.t <= t && !deadLanes()[n.lane]) {
+        if (S.capo && !S.auto && n.i % 3 === 2) continue;
+        S.down[n.lane] = false; S.capoPress = true; press(n.lane); S.capoPress = false; if (!n.hold) S.down[n.lane] = false;
+      }
+    }
+    for (let l = 0; l < NL; l++) { const h = S.holding[l]; if (h && t >= h.end) release(l); }
+    paintPads();
+  }
+  // la demo affronta anche i guasti, come farebbe un tecnico esperto
+  function autoFaults (t) {
+    const g = S.faults.gain, m = S.faults.mangia, L = S.faults.larsen, d = S.faults.dmx, F = S.faults.fase;
+    if (g && g.state === 'on' && t >= g.sp.t - BEAT) setFader('dj', 0.6);
+    if (m && m.state === 'on' && t >= m.sp.t - BEAT) setFader('mic', 0.6);
+    if (L && L.state === 'on' && !S.micMuted && t >= L.sp.t - BEAT) muteMic();
+    if (d && d.state === 'on' && t >= d.start + 2) { openParPanel(); fixPar(d.cause === 'cavo' ? 'plug' : 'a010'); }
+    if (F && S.big && !S.big.who && t >= S.big.start + 1) choose('tu');
+    if (F && S.away && !F.busyUntil && S.phaseDown) quadro(F.plug === 'L3' ? 'arm' : 'L3');
+  }
+
+  /* ---------- ciclo di gioco ---------- */
+  let last = 0;
+  function tick (now) {
+    const dt = Math.min(0.1, (now - last) / 1000 || 0); last = now;
+    if (S.running && !S.paused && !clock.virtual) step(dt);
+    requestAnimationFrame(tick);
+  }
+  function step (dt) {
+    if (S.finale) { stepFinale(dt); paint(); return; }
+    S.t = clock.now();
+    if (!clock.virtual && S.t >= 0 && !S.audioOn && !S.over) { S.audioOn = true; song.currentTime = S.t; song.play().catch(() => {}); clock.base = S.t; clock.basePerf = performance.now(); }
+    const t = S.t - lag / 1000;
+    S.fatigue = Math.min(100, S.fatigue + dt * 0.25);
+    if (S.auto) autoFaults(t);
+    if (S.auto || S.capo) autoplay(t);
+    const [, GOOD] = windows(), dead = deadLanes();
+
+    for (const n of S.notes) {
+      if (n.t > t) break;
+      if (n.state === 'wait' && t - n.t > GOOD) {
+        if (dead[n.lane]) { n.state = 'lost'; S.lost++; S.grad = clamp(S.grad - 0.8); continue; }
+        n.state = 'miss'; S.miss++; breakCombo();
+        S.grad = clamp(S.grad - (sectionAt(n.t).k === 'DROP' ? 3.5 : 2.5));
+        if (!S.capo) judge('MANCATA', '#8b8e98');
+      }
+    }
+    for (let l = 0; l < NL; l++) {
+      const n = S.holding[l];
+      if (!n) continue;
+      if (!S.capo) S.score += Math.round(dt * 40 * S.mult);
+      if (t >= n.end) finishHold(n);
+    }
+    // le luci: COLORI e CHASE pulsano e si spengono, lo strobo resta finché lo tieni
+    const decay = Math.exp(-dt * 7);
+    S.colori *= decay; S.chase *= Math.exp(-dt * 5);
+    if (S.holding[STROBO]) {
+      S.strobe = 1;
+      const q = Math.floor(beatAt(t) * 4);
+      if (q !== S.lastQ) { S.lastQ = q; S.flash = 0.04; }
+    } else S.strobe *= Math.exp(-dt * 9);
+    S.flash = Math.max(0, S.flash - dt);
+
+    stepFaults(dt);
+    if (S.phaseDown) S.grad = clamp(S.grad - dt * 0.5);
+
+    S.singing = t >= 0 && voiceAt(S.t) && mouthAt(S.t) > 0.12 && !S.micMuted;
+    const wantUp = voiceAt(S.t + 0.15) ? 1 : 0;
+    S.micUp += (wantUp - S.micUp) * Math.min(1, dt * 10);
+    S.grad = clamp(S.grad + (50 - S.grad) * dt * 0.004);
+    const sec = sectionAt(S.t);
+    if (sec !== S.sec && S.t >= 0) {
+      const newDrop = sec.k === 'DROP' && (!S.sec || S.sec.a < sec.a);
+      if (newDrop) S.drops++;
+      if (S.sec) { const bn = newDrop && S.drops >= 3 ? 'DROP! Il ritmo sale' : BANNER[sec.k]; if (bn) banner(bn); }
+      S.sec = sec;
+    }
+    if (S.t >= CUT && !S.over) startFinale();
+    paint();
+  }
+
+  /* ---------- finale: Gerry stacca la corrente di botto ----------
+     Poco prima della fine del brano. Prima va via la musica (il clac del
+     magnetotermico, il disco che rallenta e si ferma), subito dopo le luci
+     (sfarfallano e si spengono). Il pubblico fa «Ohhhh», poi rumoreggia contro
+     il bidello: buuu, urla e fischi. Gerry litiga coi musicisti e li butta
+     fuori; alla fine il messaggio per il prossimo cambio palco. */
+  const LIGHTS_OFF = 0.55, OOH_AT = 0.7, BOO_AT = 1.8, BOO_END = 6.2, MSG_AT = 7.4, FINE_AT = 10;
+  const TALK = [
+    [1.3, 'musa', 'Ehi! Eravamo sul più bello!'],
+    [2.8, 'gerry', 'Qui è una scuola! Basta parolacce!'],
+    [4.3, 'dj', 'Io sono INESTIMABILE!'],
+    [5.7, 'gerry', 'Fuori! Tutti e due!']
+  ];
+  // le luci restano accese un attimo dopo la musica, e prima di spegnersi sfarfallano
+  const finaleLit = () => {
+    const f = S.finale ? S.finale.f : 0;
+    if (f >= LIGHTS_OFF) return false;
+    return f < LIGHTS_OFF - 0.25 || Math.floor(f * 30) % 3 !== 0;
+  };
+  function startFinale () {
+    if (S.away) { S.away = null; S.capo = false; }
+    for (let l = 0; l < NL; l++) { S.down[l] = false; S.holding[l] = null; }
+    ['pop-par', 'pop-mute', 'pop-fader', 'choice', 'dmx-chip', 'quadro'].forEach(id => { $('#' + id).hidden = true; });
+    S.capo = false;
+    S.notes = S.notes.filter(n => n.state !== 'wait' || n.t < CUT);
+    S.finale = { f: 0, push: 0, cues: {} };
+    paintPads();
+    S.singing = false;
+    // la musica va via subito: il disco rallenta e si ferma
+    sfx.clack(); sfx.powerDown();
+    if (!clock.virtual) { try { song.preservesPitch = false; song.mozPreservesPitch = false; song.webkitPreservesPitch = false; } catch (e) {} }
+    $('#toast').className = '';
+    banner('Gerry ha staccato la corrente!');
+  }
+  function stepFinale (dt) {
+    const F = S.finale;
+    F.f += dt;
+    const once = (k, at, fn) => { if (F.f >= at && !F.cues[k]) { F.cues[k] = true; fn(); } };
+    // il disco rallenta per mezzo secondo, poi silenzio
+    if (!F.cues.stop) {
+      if (F.f < 0.5) { if (!clock.virtual) try { song.playbackRate = Math.max(0.25, 1 - F.f * 1.5); } catch (e) {} }
+      else { F.cues.stop = true; song.pause(); try { song.playbackRate = 1; } catch (e) {} }
+    }
+    once('lights', LIGHTS_OFF, () => { S.colori = S.chase = S.strobe = 0; sfx.clack(); });
+    once('ooh', OOH_AT, () => sfx.ooh());
+    once('boo', BOO_AT, () => sfx.boo(BOO_END - BOO_AT));
+    [2.1, 2.6, 3.4, 3.9, 4.8, 5.4].forEach((at, i) => once('w' + i, at, () => sfx.whistle()));
+    const line = TALK.filter(l => F.f >= l[0]).pop();
+    S.gerrySay = line && line[1] === 'gerry' ? line[2] : '';
+    S.talk = line && line[1] !== 'gerry' ? { who: line[1], text: line[2] } : null;
+    if (F.f >= 5.7) F.push = Math.min(260, F.push + dt * 110);
+    if (F.f >= MSG_AT) { S.gerrySay = ''; S.talk = null; $('#stage-msg').hidden = false; }
+    S.gerryX += (172 - S.gerryX) * Math.min(1, dt * 2.5);
+    if (F.f >= FINE_AT && !S.over) finish();
+  }
+
+  let bannerT;
+  function banner (msg) { const b = $('#banner'); b.textContent = msg; b.classList.add('show'); clearTimeout(bannerT); bannerT = setTimeout(() => b.classList.remove('show'), 1800); }
+  function paint () {
+    drawStage(); drawRoad();
+    $('#tl').style.width = clamp(S.t / M.durata * 100) + '%';
+    const mins = 15 + Math.floor(Math.max(0, S.t) / 60);
+    $('#clock').textContent = `21:${String(mins).padStart(2, '0')}`;
+    const g = Math.round(S.grad);
+    $('#grad-bar').style.width = g + '%';
+    $('#grad-bar').style.background = g >= 65 ? 'var(--green)' : g >= 35 ? 'var(--amber)' : 'var(--red)';
+    $('#grad-n').textContent = g + '%';
+    $('#score').textContent = S.score.toLocaleString('it-IT');
+    $('#mult').textContent = '×' + S.mult;
+    $('#mult').classList.toggle('hot', S.mult >= 3);
+    $('#beer-n').textContent = S.beers;
+    $('#fat-bar').style.width = S.fatigue + '%';
+    $('#fat-bar').style.background = S.fatigue > 70 ? 'var(--red)' : S.fatigue > 45 ? 'var(--amber)' : 'var(--green)';
+  }
+  let toastT;
+  function toast (msg, kind) { const t = $('#toast'); t.textContent = msg; t.className = 'show ' + (kind || ''); clearTimeout(toastT); toastT = setTimeout(() => t.className = '', 2800); }
+
+  function togglePause () {
+    if (!S.running || S.over) return;
+    S.paused = !S.paused;
+    $('#pausa').hidden = !S.paused;
+    $('#pause-btn').textContent = S.paused ? '▶' : '⏸';
+    if (S.paused) { if (!S.finale) S.t = clock.now(); song.pause(); for (let l = 0; l < NL; l++) release(l); }
+    else if (!clock.virtual && !S.finale) {
+      if (S.audioOn) { song.currentTime = S.t; song.play().catch(() => {}); clock.base = S.t; clock.basePerf = performance.now(); }
+      else clock.startPerf = performance.now() - (S.t + 2) * 1000;
+    }
+  }
+  $('#pause-btn').onclick = togglePause;
+
+  /* ---------- esito: stelle, birre, reputazione ---------- */
+  let result = null;
+  function results () {
+    const total = S.notes.length;
+    const hits = S.perfect + S.good;
+    const acc = total ? (S.perfect + S.good * 0.6) / total : 0;
+    const stars = acc >= 0.95 ? 5 : acc >= 0.85 ? 4 : acc >= 0.7 ? 3 : acc >= 0.5 ? 2 : 1;
+    return { total, hits, acc, stars, grad: Math.round(S.grad), maxCombo: S.maxCombo, score: S.score };
+  }
+  function finish () {
+    S.over = true; S.running = false; song.pause();
+    const R = results();
+    const notes = [];
+    let beers = 0;
+    const gerry = S.repParts.some(p => p[1] === REPS.gerry);
+    if (!S.larsens && !gerry) { beers++; notes.push('🍺 Niente larsen e nessun guasto lasciato a Gerry.'); }
+    if (R.grad >= 70) { beers++; notes.push('🍺 Pubblico contento (almeno 70%).'); }
+    notes.push(`${R.hits} note su ${R.total} a tempo (${S.perfect} perfette), ${S.miss} mancate${S.lost ? ', ' + S.lost + ' perse con le luci spente' : ''}.`);
+    if (S.drops) notes.push(`Drop tenuti fino in fondo: ${S.dropHeld} su ${S.drops}.`);
+    notes.push('Gerry ha staccato la corrente: troppo casino e troppe parolacce.');
+    if (S.rewinds) notes.push('Il DJ ha fatto il rewind: le note perse al Quadro sono tornate.');
+    if (S.drunk) notes.push('Birre bevute durante il set: ' + S.drunk + '.');
+    S.repParts.forEach(([what, v]) => notes.push(what + (v ? ` (${v > 0 ? '+' : ''}${v})` : '') + '.'));
+    const rep = REPS.set + Math.round((R.grad - 60) / 10) + S.repParts.reduce((a, p) => a + p[1], 0);
+    result = { type: 'dj', grad: R.grad, rep, beers, drunk: S.drunk, larsens: S.larsens, stars: R.stars, acc: Math.round(R.acc * 100),
+      msg: 'Il bidello ha cacciato via i musicisti. Ora si può ripristinare il palco per l\'ultima band.', maxCombo: R.maxCombo, score: R.score, favours: S.favours, fase: S.big ? S.big.who || 'gerry' : null, rewinds: S.rewinds, notes };
+    $('#outro-title').textContent = S.auto ? 'Così fa il capo.' : R.grad >= 75 ? 'La palestra è venuta giù!' : R.grad >= 45 ? 'Si è ballato.' : 'Il pubblico è andato al bar.';
+    $('#r-stars').innerHTML = '★'.repeat(R.stars) + '<i>' + '★'.repeat(5 - R.stars) + '</i>';
+    $('#r-grad').textContent = R.grad + '%';
+    $('#r-beer').textContent = '+' + beers;
+    $('#r-rep').textContent = (rep >= 0 ? '+' : '') + rep;
+    $('#r-notes').innerHTML = notes.map(n => `<li>${n}</li>`).join('');
+    if (!S.auto) store.set('dj-best', Math.max(store.get('dj-best', 0), R.score));
+    setTimeout(() => { $('#outro').hidden = false; }, 600);
+  }
+
+  function start (auto) {
+    S = fresh(auto);
+    resize();
+    try { song.playbackRate = 1; } catch (e) {}
+    ['intro', 'outro', 'pausa', 'choice', 'quadro', 'pop-par', 'pop-mute', 'pop-fader', 'dmx-chip', 'stage-msg'].forEach(id => { $('#' + id).hidden = true; });
+    $('#quadro').classList.remove('mini'); $('#rig').appendChild($('#quadro'));
+    $('#pause-btn').textContent = '⏸';
+    sfx.init();
+    song.pause(); song.currentTime = 0;
+    clock.startPerf = performance.now(); clock.base = 0; clock.basePerf = performance.now(); clock.lastA = -1;
+    clock.vt = -2;
+    S.running = true; paintPads();
+    if (!clock.virtual) { song.muted = true; song.play().then(() => { if (!S.audioOn) { song.pause(); song.currentTime = 0; } song.muted = false; }).catch(() => { song.muted = false; }); }
+    if (auto) toast('Demo: le luci le suona il capo', 'ok');
+  }
+
+  /* ---------- scheda iniziale ---------- */
+  const paintOpts = () => {
+    document.querySelectorAll('#diff-pick button').forEach(b => b.setAttribute('aria-pressed', b.dataset.d === diff));
+    $('#strobe-btn').setAttribute('aria-pressed', realStrobe);
+    $('#lag').value = lag; $('#lag-n').textContent = lag + ' ms';
+  };
+  document.querySelectorAll('#diff-pick button').forEach(b => b.onclick = () => { diff = b.dataset.d; store.set('dj-diff', diff); paintOpts(); });
+  $('#strobe-btn').onclick = () => { realStrobe = !realStrobe; store.set('dj-strobe', realStrobe); paintOpts(); };
+  $('#lag').oninput = e => { lag = +e.target.value; store.set('dj-lag', lag); paintOpts(); };
+  $('#start').onclick = () => start(false);
+  $('#demo').onclick = () => start(true);
+  $('#again').onclick = () => {
+    if (EMBED && result) { toGame(result); return; }
+    $('#outro').hidden = true; $('#intro').hidden = false;
+  };
+  paintOpts();
+
+  /* ---------- suoni: solo effetti brevi, la musica è il brano ---------- */
+  const sfx = (() => {
+    let ac, noiseBuf;
+    const noise = (dur, vol, fl, type) => {
+      if (!ac) return;
+      const s = ac.createBufferSource(); s.buffer = noiseBuf;
+      const f = ac.createBiquadFilter(); f.type = type || 'bandpass'; f.frequency.value = fl;
+      const g = ac.createGain(); s.connect(f).connect(g).connect(ac.destination);
+      const t0 = ac.currentTime; g.gain.setValueAtTime(0.0001, t0); g.gain.exponentialRampToValueAtTime(vol, t0 + 0.02); g.gain.exponentialRampToValueAtTime(0.0001, t0 + dur);
+      s.start(); s.stop(t0 + dur + 0.1);
+      return f;
+    };
+    const tone = (f, dur, type, vol) => { if (!ac) return; const o = ac.createOscillator(), g = ac.createGain(); o.type = type || 'sine'; o.frequency.value = f; o.connect(g).connect(ac.destination); const t0 = ac.currentTime; g.gain.setValueAtTime(0.0001, t0); g.gain.exponentialRampToValueAtTime(vol || 0.15, t0 + 0.01); g.gain.exponentialRampToValueAtTime(0.0001, t0 + dur); o.start(); o.stop(t0 + dur + 0.05); return o; };
+    return {
+      init () {
+        if (ac) return;
+        try { ac = new (window.AudioContext || window.webkitAudioContext)(); } catch (e) { return; }
+        noiseBuf = ac.createBuffer(1, ac.sampleRate * 2, ac.sampleRate);
+        const d = noiseBuf.getChannelData(0); for (let i = 0; i < d.length; i++) d[i] = Math.random() * 2 - 1;
+      },
+      miss () { noise(0.12, 0.05, 300); },
+      cheer () { noise(1.6, 0.12, 2200); },
+      beer () { noise(0.5, 0.08, 3000); },
+      ok () { tone(660, 0.1, 'triangle', 0.08); setTimeout(() => tone(990, 0.15, 'triangle', 0.08), 90); },
+      // la corrente che va via: un ronzio che scende e si spegne
+      powerDown () {
+        if (!ac) return;
+        const t0 = ac.currentTime;
+        [[110, 'sawtooth', 0.12], [55, 'sine', 0.25]].forEach(([f0, type, vol]) => {
+          const o = ac.createOscillator(), g = ac.createGain();
+          o.type = type; o.frequency.setValueAtTime(f0, t0); o.frequency.exponentialRampToValueAtTime(f0 * 0.25, t0 + 0.7);
+          o.connect(g).connect(ac.destination);
+          g.gain.setValueAtTime(vol, t0); g.gain.exponentialRampToValueAtTime(0.0001, t0 + 0.8);
+          o.start(t0); o.stop(t0 + 0.85);
+        });
+      },
+      // il pubblico che rumoreggia: «buuu» di tante voci e il brusio che sale e scende
+      boo (dur) {
+        if (!ac) return;
+        const t0 = ac.currentTime, f = ac.createBiquadFilter(), g = ac.createGain();
+        f.type = 'bandpass'; f.frequency.value = 380; f.Q.value = 2.5;
+        f.connect(g).connect(ac.destination);
+        g.gain.setValueAtTime(0.0001, t0); g.gain.exponentialRampToValueAtTime(0.16, t0 + 0.5);
+        g.gain.setValueAtTime(0.16, t0 + dur - 1); g.gain.exponentialRampToValueAtTime(0.0001, t0 + dur);
+        for (let i = 0; i < 10; i++) {
+          const o = ac.createOscillator(); o.type = 'sawtooth';
+          const f0 = 105 + Math.random() * 70, st = t0 + Math.random() * 0.4;
+          o.frequency.setValueAtTime(f0, st);
+          // ogni «buuu» scende un po' e riparte
+          for (let k = 0.9; k < dur; k += 0.9 + Math.random() * 0.4) { o.frequency.linearRampToValueAtTime(f0 * 0.85, t0 + k - 0.1); o.frequency.setValueAtTime(f0, t0 + k); }
+          o.connect(f); o.start(st); o.stop(t0 + dur + 0.1);
+        }
+        const n = noise(dur, 0.06, 900);
+        if (n) n.Q.value = 0.6;
+      },
+      // un fischio con le dita: sale, trema e scende
+      whistle () {
+        if (!ac) return;
+        const t0 = ac.currentTime, o = ac.createOscillator(), g = ac.createGain(), lfo = ac.createOscillator(), lg = ac.createGain();
+        const f0 = 2200 + Math.random() * 700;
+        o.frequency.setValueAtTime(f0 * 0.8, t0); o.frequency.linearRampToValueAtTime(f0 * 1.15, t0 + 0.15); o.frequency.linearRampToValueAtTime(f0, t0 + 0.45); o.frequency.linearRampToValueAtTime(f0 * 0.7, t0 + 0.7);
+        lfo.frequency.value = 9; lg.gain.value = 40; lfo.connect(lg).connect(o.frequency);
+        o.connect(g).connect(ac.destination);
+        g.gain.setValueAtTime(0.0001, t0); g.gain.exponentialRampToValueAtTime(0.07, t0 + 0.05); g.gain.setValueAtTime(0.07, t0 + 0.5); g.gain.exponentialRampToValueAtTime(0.0001, t0 + 0.75);
+        o.start(t0); lfo.start(t0); o.stop(t0 + 0.8); lfo.stop(t0 + 0.8);
+      },
+      // il pubblico che fa «Ohhhh»: tante voci che scendono, filtrate come una vocale
+      ooh () {
+        if (!ac) return;
+        const t0 = ac.currentTime, f = ac.createBiquadFilter(), g = ac.createGain();
+        f.type = 'bandpass'; f.frequency.value = 520; f.Q.value = 3;
+        f.connect(g).connect(ac.destination);
+        g.gain.setValueAtTime(0.0001, t0); g.gain.exponentialRampToValueAtTime(0.18, t0 + 0.25); g.gain.exponentialRampToValueAtTime(0.0001, t0 + 2.2);
+        for (let i = 0; i < 9; i++) {
+          const o = ac.createOscillator(); o.type = 'sawtooth';
+          const f0 = 170 + Math.random() * 180;
+          o.frequency.setValueAtTime(f0, t0); o.frequency.linearRampToValueAtTime(f0 * 0.82, t0 + 2);
+          o.connect(f); o.start(t0 + Math.random() * 0.12); o.stop(t0 + 2.3);
+        }
+      },
+      clack () { tone(90, 0.12, 'square', 0.25); noise(0.08, 0.2, 1200); },
+      crackle () { noise(0.05, 0.12, 4000, 'highpass'); },
+      larsen () { if (!ac) return; const o = ac.createOscillator(), g = ac.createGain(); o.frequency.value = 2750; o.connect(g).connect(ac.destination); const t0 = ac.currentTime; g.gain.setValueAtTime(0.001, t0); g.gain.exponentialRampToValueAtTime(0.2, t0 + 0.4); g.gain.exponentialRampToValueAtTime(0.001, t0 + 2.2); o.start(); o.stop(t0 + 2.3); },
+      scratch () {
+        if (!ac) return;
+        const f = noise(0.6, 0.25, 900);
+        if (f) { const t0 = ac.currentTime; f.frequency.setValueAtTime(400, t0); f.frequency.linearRampToValueAtTime(2400, t0 + 0.15); f.frequency.linearRampToValueAtTime(300, t0 + 0.35); f.frequency.linearRampToValueAtTime(1800, t0 + 0.55); }
+      }
+    };
+  })();
+
+  S = fresh(false);
+  resize(); layoutCrowd(); paint();
+  // per i test (tests/spettacolo-dj.js, tests/dj-gioco.js): orologio finto, stato e comandi
+  window.__dj = {
+    state: () => S, mappa: M, start, press, release, results, result: () => result,
+    windows, look, cut: CUT,
+    choose, quadro, setFader, muteMic, openParPanel, fixPar, drinkBeer,
+    virtual (on) { clock.virtual = on; },
+    advance (sec, fps = 60) {
+      const n = Math.max(1, Math.round(sec * fps));
+      for (let i = 0; i < n; i++) { if (!S.running || S.over) break; if (!S.finale) clock.vt += sec / n; step(sec / n); }
+    }
+  };
+
+  /* ---------- DENTRO IL GIOCO: index.html apre lo show in un iframe con
+     ?embed=1. La pagina chiede i dati ('dj-pronto'), il gioco manda il
+     montaggio vero ('dj-dati': birre in tasca, nome del capo, i PAR montati)
+     e alla fine riceve l'esito ('dj-fine'). ---------- */
+  const toGame = res => window.parent.postMessage({ type: 'dj-fine', result: res }, '*');
+  if (EMBED) {
+    $('#demo').hidden = true; $('#skip').hidden = false; $('#start').disabled = true;
+    $('#skip').onclick = () => toGame({ type: 'dj', skipped: true });
+    $('#again').textContent = 'Torna al palco';
+    window.addEventListener('message', e => {
+      const d = e.data;
+      if (!d || d.type !== 'dj-dati') return;
+      pocket = Math.max(0, Math.floor(d.beers) || 0);
+      if (d.boss) boss = String(d.boss);
+      if (Array.isArray(d.pars) && d.pars.length) pars = d.pars.slice(0, 4).map(String);
+      paintParLabels();
+      S = fresh(false); paint();
+      $('#start').disabled = false;
+    });
+    window.parent.postMessage({ type: 'dj-pronto' }, '*');
+  }
+  requestAnimationFrame(tick);
+})();
+</script>

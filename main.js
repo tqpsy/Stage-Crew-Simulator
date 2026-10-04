@@ -1664,7 +1664,7 @@ const SAVE_FILE_KIND = 'stage-crew-simulator';   // firma del file esportato
 const SHARED_KEYS = ['settings', 'records', 'usedServices'];
 
 function defaultProfile () {
-  return { v: SAVE_VERSION, player: '', service: '', serviceInfo: null, usedServices: [], settings: { volume: 0.8, reducedFx: false, skipShow: false, skipScarico: false, testMusic: true, bossTips: true, tapeMarks: true, traceSignal: true }, tutorSeen: {}, logo: null, level: null, scarico: null, cavi: null, preside: null, cambioDj: null, beers: 0, assistant: defaultAssistant(), records: {}, reputation: { total: 0, earned: {}, log: [] }, levelsSeen: 1, savedAt: 0 };
+  return { v: SAVE_VERSION, player: '', service: '', serviceInfo: null, usedServices: [], settings: { volume: 0.8, reducedFx: false, skipShow: false, skipScarico: false, testMusic: true, bossTips: true, tapeMarks: true, traceSignal: true }, tutorSeen: {}, logo: null, level: null, scarico: null, cavi: null, preside: null, cambioDj: null, dj: null, beers: 0, assistant: defaultAssistant(), fatigue: 0, records: {}, reputation: { total: 0, earned: {}, log: [] }, levelsSeen: 1, savedAt: 0 };
 }
 // l'assistente della serata (dal livello 2, vedi ASSISTANTS): chi è e
 // quanti favori ha già fatto nel set in corso. Le partite salvate prima
@@ -1766,7 +1766,8 @@ function readSlotFile (text) {
   slot = { ...slot, player: String(slot.player || '').slice(0, NAME_MAX), service: String(slot.service || '').slice(0, SERVICE_NAME_MAX),
     logo: lg ? JSON.parse(JSON.stringify({ shape: key(lg.shape, LOGO_SHAPES), icon: key(lg.icon, LOGO_ICONS), bg: color(lg.bg), fg: color(lg.fg), style: key(lg.style, BRAND_STYLES) })) : null,
     serviceInfo: info ? { kind: key(info.kind, SERVICE_KINDS) || null, boss: String(info.boss || '').slice(0, NAME_MAX * 2) } : null,
-    assistant: as ? { id: typeof as.id === 'string' ? as.id.slice(0, NAME_MAX) : null, favors: Number.isInteger(as.favors) && as.favors >= 0 ? as.favors : 0 } : undefined };
+    assistant: as ? { id: typeof as.id === 'string' ? as.id.slice(0, NAME_MAX) : null, favors: Number.isInteger(as.favors) && as.favors >= 0 ? as.favors : 0 } : undefined,
+    fatigue: Math.min(100, Math.max(0, +slot.fatigue || 0)) };
   return { slot };
 }
 
@@ -2394,7 +2395,8 @@ const LEVELS = [
       { title: 'Montaggio e test impianto', done: s => ('L1:collaudo') in ((s.reputation && s.reputation.earned) || {}) },
       { title: 'Messa in sicurezza dei cavi', done: s => !!s.cavi },
       { title: 'Discorso del preside', done: s => !!s.preside },
-      { title: 'Cambio palco per il DJ', done: s => !!(s.cambioDj && s.cambioDj.done) }
+      { title: 'Cambio palco per il DJ', done: s => !!(s.cambioDj && s.cambioDj.done) },
+      { title: 'DJ set', done: s => !!s.dj }
     ] },
   { id: 2, name: 'Sagra in piazza', venue: 'Piazza con i sampietrini', vehicle: 'camion', rep: 20 },
   { id: 3, name: 'Matrimonio in villa', venue: 'Giardino di una villa, sotto la pioggia', vehicle: 'camion', rep: 60 },
@@ -2485,16 +2487,80 @@ function assistantFavor (fault) {
   return true;
 }
 
-// tempo di gioco: conta solo con la pagina in vista e il menù chiuso
+/* STANCHEZZA del tecnico — il tempo della serata si sente addosso.
+   Un valore solo, da 0 (riposato) a 100, salvato nel profilo
+   (Profile.data.fatigue) e mostrato sotto il tasto 🍺 in testata:
+   - sale col tempo di gioco (FATIGUE.perMinute) e con le azioni: ogni
+     pezzo posato e ogni cavo collegato (FATIGUE.perAction);
+   - scende bevendo una birra dal tasto 🍺 (FATIGUE.beer). La birra bevuta
+     non conta più nel punteggio finale: è una scelta, per questo il tasto
+     chiede conferma;
+   - effetti leggeri, il livello 1 perdona: da FATIGUE.slipFrom in su ogni
+     tanto il connettore scivola di mano (il cavo resta in mano, si
+     riprova). Nel discorso del preside fader più tremolanti e tempo limite
+     del guasto più corto: li calcola preside.html dalla stanchezza che
+     riceve, e alla fine la restituisce.
+   Nuova partita = tecnico riposato. */
+const FATIGUE = { max: 100, perMinute: 1, perAction: 0.25, beer: 30, slipFrom: 70, slipMax: 0.15, confirmMs: 4000 };
+const fatigue = () => Profile.data.fatigue || 0;
+// quiet: senza salvare subito (il tempo che passa ogni secondo si salva con
+// la prossima azione o all'uscita dalla pagina)
+function setFatigue (v, quiet) {
+  const f = Math.round(Math.max(0, Math.min(FATIGUE.max, +v || 0)) * 100) / 100;
+  if (f === fatigue()) return;
+  Profile.data.fatigue = f;
+  if (!quiet) Profile.save();
+  paintBeerBtn();
+}
+const tireOut = (amount, quiet) => { if (gameActive) setFatigue(fatigue() + amount, quiet); };
+// probabilità che un connettore scivoli di mano: 0 fino a slipFrom, poi sale fino a slipMax
+const slipChance = () => fatigue() <= FATIGUE.slipFrom ? 0 : FATIGUE.slipMax * (fatigue() - FATIGUE.slipFrom) / (FATIGUE.max - FATIGUE.slipFrom);
+const fatigueSlip = () => Math.random() < slipChance();
+const fatigueWord = () => { const f = fatigue(); return f < 30 ? 'riposato' : f < 60 ? 'un po\' stanco' : f < 80 ? 'stanco' : 'stanchissimo'; };
+function paintBeerBtn () {
+  const b = el('#beer-btn');
+  if (!b) return;
+  b.hidden = !gameActive;
+  el('#beer-n').textContent = Profile.data.beers || 0;
+  const fill = el('#fat-fill');
+  fill.style.width = fatigue() + '%';
+  fill.classList.toggle('high', fatigue() >= FATIGUE.slipFrom);
+  b.title = 'Stanchezza ' + Math.round(fatigue()) + '% (' + fatigueWord() + ') · birre in tasca: ' + (Profile.data.beers || 0)
+    + '. Tocca per bere: stanchezza −' + FATIGUE.beer + ', una birra in meno nel punteggio.';
+}
+let beerAskAt = 0;
+function drinkBeer () {
+  if (!gameActive || minigameOpen()) return;
+  const f = Math.round(fatigue());
+  if (!Profile.data.beers) { showToast('Stanchezza ' + f + '% (' + fatigueWord() + '). Niente birre in tasca: si guadagnano lavorando bene.'); return; }
+  if (f < 1) { showToast('Sei riposato: tieni la birra per dopo.'); return; }
+  if (Date.now() - beerAskAt > FATIGUE.confirmMs) {
+    beerAskAt = Date.now();
+    showToast('Stanchezza ' + f + '% (' + fatigueWord() + '). Tocca ancora 🍺 per bere: −' + FATIGUE.beer + ' di stanchezza, ma una birra in meno nel punteggio finale.');
+    return;
+  }
+  beerAskAt = 0;
+  Profile.data.beers--;
+  setFatigue(fatigue() - FATIGUE.beer);
+  applySettings();
+  showToast('Glu glu. Stanchezza giù: ' + Math.round(fatigue()) + '%.', 'ok');
+}
+
+// tempo di gioco: conta solo con la pagina in vista e il menù chiuso. Nel
+// discorso del preside la stanchezza la tiene preside.html
 setInterval(() => {
-  if (gameActive && !menuOpen && !document.hidden) { gameState.stats.playMs += 1000; cambioTick(1000); }
+  if (gameActive && !menuOpen && !document.hidden) {
+    gameState.stats.playMs += 1000; cambioTick(1000);
+    if (!presideOpen) tireOut(FATIGUE.perMinute / 60, true);
+  }
 }, 1000);
 
 function applySettings () {
   SFX.setVolume(settings().volume);
+  paintBeerBtn();
   const tag = el('#service-tag');
   if (tag) tag.textContent = gameActive || Profile.data.service
-    ? (playerName() + ' · ' + serviceName()).toUpperCase() + ' · REPUTAZIONE ' + reputation() + (Profile.data.beers ? ' · 🍺 ' + Profile.data.beers : '')
+    ? (playerName() + ' · ' + serviceName()).toUpperCase() + ' · REPUTAZIONE ' + reputation()
     : 'STAGE CREW SIMULATOR';
   const logo = el('#service-logo');
   if (logo) logo.innerHTML = gameActive || Profile.data.service ? logoSVG(serviceLogo(), Profile.data.service, 30) : '';
@@ -2611,10 +2677,17 @@ function startNewGame (player, offer, offers) {
   Profile.data.reputation = defaultProfile().reputation;
   Profile.data.scarico = null;
   Profile.data.cavi = null;
+  Profile.data.caviGiri = 0;
   Profile.data.preside = null;
+  Profile.data.dj = null;
   Profile.data.cambioDj = null;
+  // uno show del DJ ancora aperto o in arrivo della partita vecchia
+  clearTimeout(djTimer);
+  if (el('#dj-frame')) el('#dj-frame').remove();
+  djOpen = false;
   Profile.data.beers = 0;
   Profile.data.assistant = defaultAssistant();   // il nuovo tecnico non ha ancora nessuno
+  Profile.data.fatigue = 0;      // la serata comincia: tecnico riposato
   Profile.data.tutorSeen = {};   // il nuovo tecnico non ha ancora sentito i consigli del capo
   whenScene(scene => {
     gameActive = true;
@@ -2797,11 +2870,11 @@ const SCHEDULE = [
   { time: '16:00', title: 'Arrivo e scarico', text: 'Il furgone accosta al cortile: tu e Tonino portate i case nella palestra prima delle 16:30.', phase: 'scarico' },
   { time: '16:30', title: 'Montaggio impianto', text: 'Corrente dal Quadro, PC → scheda → mixer → finale → casse, i PAR in DMX dalla consolle.', phase: 'montaggio' },
   { time: '19:30', title: 'Test impianto', text: 'Il collaudo: tutto acceso senza scatti né colpi nelle casse, audio e luci a posto.', phase: 'collaudo', rep: REP.phaseDone },
-  { time: '20:00', title: 'Messa in sicurezza dei cavi', text: 'I cavi stesi per terra come si deve: via di fuga libera, passacavi nei passaggi, nastro dove si cammina. Gerry, il bidello, controlla prima di aprire.', phase: 'cavi' },
+  { time: '20:00', title: 'Messa in sicurezza dei cavi', text: 'I cavi stesi al montaggio come si deve: via di fuga libera, passaggi attraversati dritti, niente cavi in mezzo alla scena, segnale lontano dalla corrente. Gerry, il bidello, controlla prima di aprire.', phase: 'cavi' },
   { time: '20:30', title: 'Apertura porte', text: 'Entrano famiglie e studenti; musica di sottofondo dal PC.', phase: 'porte' },
   { time: '21:00', title: 'Discorso del Preside Tramp', text: 'Microfono su asta sul palco, cablato a un ingresso MIC del mixer: ricordati quale. Vuole essere sentito fino al parcheggio.', phase: 'preside' },
   { time: '21:10', title: 'Cambio palco: arriva il DJ', text: 'DJ Inestimabile porta la sua consolle: corrente, uscite nella DI e dalla DI al mixer. Il microfono resta dov\'è, per Musa Esistenziale. Il pubblico aspetta: non metterci troppo.', phase: 'cambio-dj', rep: REP.changeDone },
-  { time: '21:15', title: 'Notte fuori controllo', text: 'DJ Inestimabile in consolle e Musa Esistenziale al microfono: mixer DJ → DI → mixer di sala, il microfono del vocalist, luci colorate al drop. E tanti guasti da inseguire.', poster: 'img/locandina-dj.svg' },
+  { time: '21:15', title: 'Notte fuori controllo', text: 'DJ Inestimabile in consolle e Musa Esistenziale al microfono: mixer DJ → DI → mixer di sala, il microfono del vocalist, luci colorate al drop. E tanti guasti da inseguire.', poster: 'img/locandina-dj.svg', phase: 'dj' },
   { time: '22:00', title: 'Dante unplugged', text: 'Voce e chitarra (via DI). Gli ingressi non bastano: cambio palco e via il DJ.' },
   { time: '23:00', title: 'Smontaggio', text: 'Tutto nei case e i case nel furgone. Si torna a casa.' }
 ];
@@ -2814,6 +2887,7 @@ function schedulePhaseState (phase) {
   if (phase === 'porte') return caviDone() ? 'done' : 'next';
   if (phase === 'preside') return presideDone() ? 'done' : caviDone() ? 'now' : 'next';
   if (phase === 'cambio-dj') return cambioDjDone() ? 'done' : presideDone() ? 'now' : 'next';
+  if (phase === 'dj') return djDone() ? 'done' : cambioDjDone() ? 'now' : 'next';
   return collaudoDone() ? 'done' : 'next';
 }
 const SCHEDULE_STATE_LABEL = { done: 'Fatto', now: 'Adesso', next: 'Da fare', soon: 'In arrivo' };
@@ -2837,6 +2911,7 @@ function renderSchedule () {
         : s.phase === 'cavi' && caviDone() ? caviSummary()
         : s.phase === 'preside' && presideDone() ? presideSummary()
         : s.phase === 'cambio-dj' && cambioDjDone() ? cambioSummary()
+        : s.phase === 'dj' && djDone() ? djSummary()
         : s.phase === 'montaggio' ? s.text.replace('i PAR', parsRequired() + ' PAR') : s.text) + '</small>'
       + (s.poster ? '<button class="sched-poster" type="button" data-poster="' + s.poster + '">🎟️ Guarda la locandina</button>' : '')
       + '</span>'
@@ -2853,8 +2928,8 @@ function openSchedule (first) {
   // dopo il collaudo la scaletta porta alla posa dei cavi, poi al discorso
   // del preside, poi al cambio palco per il DJ
   scheduleNext = first ? null : schedulePhaseState('cavi') === 'now' ? 'cavi' : schedulePhaseState('preside') === 'now' ? 'preside'
-    : schedulePhaseState('cambio-dj') === 'now' && !cambioDj() ? 'cambio-dj' : null;
-  el('#schedule-go').textContent = first ? 'Al lavoro!' : { cavi: 'Stendi i cavi', preside: 'Il preside sale sul palco', 'cambio-dj': 'Inizia il cambio palco' }[scheduleNext] || 'Torna al palco';
+    : schedulePhaseState('cambio-dj') === 'now' && !cambioDj() ? 'cambio-dj' : schedulePhaseState('dj') === 'now' ? 'dj' : null;
+  el('#schedule-go').textContent = first ? 'Al lavoro!' : { cavi: 'Chiama Gerry', preside: 'Il preside sale sul palco', 'cambio-dj': 'Inizia il cambio palco', dj: 'Via al DJ set' }[scheduleNext] || 'Torna al palco';
   el('#schedule-modal').classList.add('show');
   setSceneInput(false);
 }
@@ -2959,7 +3034,6 @@ function scaricoSummary () {
    la regia sul tavolo) e i cavi collegati al montaggio tra basi diverse,
    uniti quando fanno la stessa strada (DMX e PowerCON dei PAR). Gli errori
    li trova solo Gerry; le stelle diventano reputazione, una volta sola. */
-let caviOpen = false;
 const caviDone = () => !!Profile.data.cavi;
 const CAVI_LOOK = { sub: 'sub', stativo: 'par', asta: 'asta', tavolo: 'tavolo', quadro: 'quadro', allaccio: 'allaccio' };
 // la base di un pezzo montato (PAR → stativo, regia → tavolo, mic → asta)
@@ -3021,29 +3095,163 @@ function posaLayout () {
   caviLines = lines;
   return { title: 'Festa della scuola', sub: 'La tua regia · Gerry controlla alle 20:30', devices, lines };
 }
-function openCavi () {
-  if (caviOpen || caviDone()) return;
-  caviOpen = true;
-  setSceneInput(false);
-  sceneKeyboard(false);
-  const f = document.createElement('iframe');
-  f.id = 'cavi-frame';
-  f.className = 'minigame-frame';
-  f.title = 'La posa dei cavi';
-  f.src = 'posa-cavi.html?embed=1';
-  f.addEventListener('load', () => { try { f.contentWindow.focus(); } catch (e) { /* niente fuoco: si tocca */ } });
-  document.body.appendChild(f);
+/* GERRY AL MONTAGGIO — i cavi si stendono già al montaggio (StageScene.
+   startLay); alle 20:00 Gerry, il bidello, passa e li controlla con le
+   regole della posa (docs/minigioco-posa-cavi.md). Celle da 50 cm come la
+   posa: i = gx / CELL, j = gy / CELL. Passacavi e nastro li mette la crew
+   da sola: si guarda solo da dove passano i cavi. */
+const GERRY_PASSAGES = [
+  { id: 'artisti', label: 'passaggio degli artisti', r: [13, 4, 2, 4] },
+  { id: 'corridoio', label: 'corridoio del pubblico', r: [9, 20, 2, 12] }
+];
+const GERRY_EXITS = [{ id: 'fuga', label: 'via di fuga', r: [0, 22, 3, 3] }];
+const gInRect = (r, i, j) => i >= r[0] && i < r[0] + r[2] && j >= r[1] && j < r[1] + r[3];
+// in mezzo alla pedana (il bordo largo 50 cm resta per i cavi)
+const gInterior = (i, j) => i >= 5 && i <= 10 && j >= 9 && j <= 14;
+// passaggi e via di fuga, senza quelli dove è già stato posato un pezzo
+function gerryZones () {
+  const busy = new Set();
+  Object.values(gameState.placed).forEach(c => (c.cells || []).forEach(k => busy.add(k)));
+  const clear = z => { for (let i = z.r[0]; i < z.r[0] + z.r[2]; i++) for (let j = z.r[1]; j < z.r[1] + z.r[3]; j++) if (busy.has(i + ',' + j)) return false; return true; };
+  return { passages: GERRY_PASSAGES.filter(clear), exits: GERRY_EXITS.filter(clear) };
 }
-window.addEventListener('message', ev => {
-  const d = ev.data, f = el('#cavi-frame');
-  if (!caviOpen || !d || !f) return;
-  if (d.type === 'posa-cavi-pronta') f.contentWindow.postMessage({ type: 'posa-cavi-pianta', layout: posaLayout() }, '*');
-  if (d.type === 'posa-cavi-fine') finishCavi(d.result || { skipped: true });
+const GERRY_SENSITIVE = new Set(['xlr', 'jack']);
+function gerryCableName (e) {
+  const it = cableItem(e.signal);
+  return (it ? it.name : cableName(e.signal)) + ' ' + compLabel(e.a) + ' → ' + compLabel(e.b);
+}
+// le celle che un cavo tocca per terra, con la direzione (h: lungo gx, v: lungo gy)
+function gerryCells (e, scene) {
+  const f = scene.edgeFloor(e);
+  if (!f) return null;
+  const P = gameState.placed, own = new Set();
+  [posaBase(P[e.a]), posaBase(P[e.b])].forEach(b => (b && b.cells || []).forEach(k => own.add(k)));
+  const out = [], seen = new Set();
+  for (let s = 0; s < f.pts.length - 1; s++) {
+    const a = f.pts[s], b = f.pts[s + 1], L = Math.abs(b.gx - a.gx) + Math.abs(b.gy - a.gy);
+    const dir = Math.abs(b.gx - a.gx) > Math.abs(b.gy - a.gy) ? 'h' : 'v';
+    for (let t = CELL / 4; t < L; t += CELL / 2) {
+      const x = a.gx + (b.gx - a.gx) * t / L, y = a.gy + (b.gy - a.gy) * t / L;
+      const i = Math.floor(x / CELL), j = Math.floor(y / CELL), k = i + ',' + j;
+      if (own.has(k) || seen.has(k + dir)) continue;
+      seen.add(k + dir);
+      out.push({ i, j, dir });
+    }
+  }
+  return { cells: out, base: [posaBase(P[e.a]), posaBase(P[e.b])] };
+}
+function gerryIssues () {
+  const scene = window.__scene;
+  if (!scene) return [];
+  const { passages, exits } = gerryZones();
+  const issues = [];
+  const add = (type, ids, cells, text) => issues.push({ type, ids, cells, text });
+  const use = new Map();
+  const nearInterior = b => (b && b.cells || []).some(k => { const [i, j] = k.split(',').map(Number); return [-1, 0, 1].some(di => [-1, 0, 1].some(dj => gInterior(i + di, j + dj))); });
+  gameState.edges.forEach(e => {
+    const g = gerryCells(e, scene);
+    if (!g) return;
+    const name = gerryCableName(e);
+    const mic = g.base.some(b => b && b.type === 'asta') || g.base.some(nearInterior);
+    const fuga = [], open = [], along = [], scena = [];
+    g.cells.forEach(c => {
+      const k = c.i + ',' + c.j;
+      if (!use.has(k)) use.set(k, []);
+      use.get(k).push({ e, dir: c.dir });
+      if (exits.some(z => gInRect(z.r, c.i, c.j))) fuga.push(c);
+      const ps = passages.find(z => gInRect(z.r, c.i, c.j));
+      if (ps && c.dir === 'v') along.push(Object.assign({ ps }, c));
+      if (!mic && gInterior(c.i, c.j)) scena.push(c);
+    });
+    if (fuga.length) add('fuga', [e.id], fuga, name + ' passa sulla via di fuga: lì per terra non ci deve essere niente.');
+    if (along.length) add('lungo', [e.id], along, name + ' corre lungo il ' + along[0].ps.label + ': i passaggi si attraversano dritti, di traverso.');
+    if (scena.length) add('scena', [e.id], scena, name + ' passa in mezzo alla scena: il preside ci inciampa. Sul palco solo il microfono, gli altri lungo i bordi.');
+  });
+  // ronzio: segnale debole affiancato alla corrente per almeno 1 m
+  const pairs = new Map();
+  use.forEach((list, k) => {
+    list.filter(u => GERRY_SENSITIVE.has(u.e.signal)).forEach(s => list.filter(u => POWER_CABLE_IDS.has(u.e.signal)).forEach(pw => {
+      if (s.dir !== pw.dir) return;
+      const pk = s.e.id + '|' + pw.e.id;
+      if (!pairs.has(pk)) pairs.set(pk, { s: s.e, pw: pw.e, cells: [] });
+      pairs.get(pk).cells.push({ i: +k.split(',')[0], j: +k.split(',')[1] });
+    }));
+  });
+  pairs.forEach(({ s, pw, cells }) => {
+    if (cells.length < 2) return;
+    add('ronzio', [s.id], cells, gerryCableName(s) + ' corre accanto a ' + gerryCableName(pw) + ' per ' + fmtM(cells.length * CELL) + ': ronzio nelle casse. Il segnale incrocia la corrente, non ci va affiancato.');
+  });
+  return issues;
+}
+// metri di cavo per terra, nastro (palco, Pit e platea, non lungo i muri) e passacavi
+function gerryStats () {
+  const scene = window.__scene, { passages } = gerryZones();
+  let cableM = 0;
+  const tape = new Set(), ramps = new Set();
+  gameState.edges.forEach(e => {
+    const f = scene && scene.edgeFloor(e);
+    if (!f) return;
+    cableM += layLength(f.pts);
+    gerryCells(e, scene).cells.forEach(c => {
+      const ps = passages.find(z => gInRect(z.r, c.i, c.j));
+      if (ps) { ramps.add(ps.id + ':' + c.j); return; }
+      const gx = c.i * CELL, gy = c.j * CELL;
+      if ((isStageCoreCell(gx, gy) || isPitCell(gx, gy) || isPlateaCell(gx, gy)) && c.i > 0 && c.i < VENUE_W / CELL - 1) tape.add(c.i + ',' + c.j);
+    });
+  });
+  return { cableM, tapeM: tape.size * CELL, ramps: ramps.size };
+}
+let gerryOpen = false;
+// alle 20:00 (o dalla scaletta) Gerry fa il suo giro
+function openCavi () {
+  if (gerryOpen || caviDone()) return;
+  if (window.__scene) window.__scene.endLay(true);
+  Profile.data.caviGiri = (Profile.data.caviGiri || 0) + 1;
+  Profile.save();
+  const issues = gerryIssues();
+  gerryOpen = true;
+  setSceneInput(false);
+  const giro = Profile.data.caviGiri;
+  const box = el('#gerry-text'), list = el('#gerry-list');
+  if (!issues.length) {
+    const stars = Math.max(1, 4 - giro);
+    el('#gerry-title').textContent = 'Cavi a posto';
+    box.innerHTML = '<p>' + { 3: 'Perfetto al primo giro. Neanche io l\'avrei fatto meglio, e io i cavi li scavalco da trent\'anni!', 2: 'Adesso sì. Si può aprire!', 1: 'Finalmente. Apro le porte, ma la prossima volta pensaci prima.' }[stars] + '</p>'
+      + '<p class="gerry-stars">' + '★'.repeat(stars) + '<span>' + '★'.repeat(3 - stars) + '</span></p>';
+    list.innerHTML = '';
+    el('#gerry-fix').hidden = true;
+    el('#gerry-go').textContent = 'Apri le porte';
+    el('#gerry-go').onclick = () => { SFX.button(); finishCavi(Object.assign({ stars, inspections: giro }, gerryStats())); };
+  } else {
+    el('#gerry-title').textContent = ['Fermi tutti!', 'Ancora no, ragazzi.', 'Ci siamo quasi…'][Math.min(2, giro - 1)];
+    box.innerHTML = '<p>Prima di aprire le porte qui va sistemato (i punti sono segnati in rosso sul pavimento):</p>';
+    list.innerHTML = issues.slice(0, 5).map(i => '<li>' + escapeHtml(i.text) + '</li>').join('')
+      + (issues.length > 5 ? '<li class="more">…e altre ' + (issues.length - 5) + ' cose.</li>' : '');
+    el('#gerry-fix').hidden = false;
+    el('#gerry-go').textContent = 'Apri così';
+    el('#gerry-go').onclick = () => {
+      SFX.button();
+      finishCavi(Object.assign({ late: true, inspections: giro, left: issues.map(i => ({ type: i.type })) }, gerryStats()));
+    };
+  }
+  if (window.__scene) window.__scene.gerryMarks = issues;
+  if (window.__scene) window.__scene.redrawEdges();
+  el('#gerry-modal').classList.add('show');
+}
+function closeGerry () {
+  if (!gerryOpen) return;
+  gerryOpen = false;
+  el('#gerry-modal').classList.remove('show');
+  setTimeout(() => { if (!scheduleOpen && !menuOpen && !rearPanelId && !openCaseName) setSceneInput(true); }, 0);
+}
+el('#gerry-fix').addEventListener('click', () => {
+  SFX.button();
+  closeGerry();
+  showToast('Sistema i cavi segnati in rosso (tocca un cavo per prenderlo), poi richiama Gerry dalla scaletta.');
 });
 function finishCavi (r) {
-  const f = el('#cavi-frame');
-  if (f) f.remove();
-  caviOpen = false;
+  closeGerry();
+  if (window.__scene) window.__scene.gerryMarks = null;
   // late: alle 20:30 Gerry ha aperto con i cavi ancora in giro (nessuna stella)
   const late = !r.skipped && !!r.late;
   const stars = r.skipped || late ? 0 : Math.max(1, Math.min(3, r.stars || 1));
@@ -3057,7 +3265,7 @@ function finishCavi (r) {
   whenScene(scene => scene.redrawEdges());   // i cavi seguono le pieghe della posa
   const missing = presideReady();
   showToast((r.skipped ? 'Posa dei cavi saltata: Gerry apre le porte, ma la reputazione non cambia.'
-    : late ? 'Sono le 20:30: Gerry apre le porte con i cavi ancora in giro. La reputazione non cambia.'
+    : late ? 'Gerry apre le porte con i cavi ancora in giro. La reputazione non cambia.'
     : 'Cavi a posto, Gerry apre le porte! ' + '★'.repeat(stars) + (rep ? ' Reputazione +' + rep + '.' : ''))
     + (missing ? ' Alle 21:00 parla il preside: ' + missing : ' Alle 21:00 il preside sale sul palco.'), 'ok');
   updateFoglio();
@@ -3109,7 +3317,7 @@ function caviSummary () {
   if (c.skipped) return 'Saltata: niente reputazione.';
   if (c.late) {
     const left = caviLeftovers().map(k => CAVI_LEFT_TEXT[k]);
-    return 'Finita col tempo: alle 20:30 porte aperte con i cavi in giro, niente reputazione.' + (left.length ? ' Durante lo show ' + left.join(', ') + '.' : '');
+    return 'Porte aperte con i cavi in giro: niente reputazione.' + (left.length ? ' Durante lo show ' + left.join(', ') + '.' : '');
   }
   return '★'.repeat(c.stars) + '☆'.repeat(3 - c.stars) + ' · ' + (c.inspections === 1 ? 'promossa al primo giro di Gerry' : c.inspections + ' giri di Gerry')
     + ' · ' + String(Math.round(c.tapeM * 10) / 10).replace('.', ',') + ' m di nastro.';
@@ -3120,11 +3328,13 @@ function caviSummary () {
    dopo la posa dei cavi, o dalla scaletta. Serve il microfono montato
    sull'asta e collegato a un ingresso MIC del mixer acceso: la pagina riceve
    quell'ingresso (la risposta a «in che ingresso era?» quando si guasta), i
-   PAR montati coi loro ruoli, i cavi lasciati dalla posa e le birre in
-   tasca. L'esito torna al gioco: reputazione una volta sola, birre. */
+   PAR montati coi loro ruoli, i cavi lasciati dalla posa, le birre in
+   tasca e la stanchezza del tecnico. L'esito torna al gioco: reputazione
+   una volta sola, birre, stanchezza a fine discorso. */
 let presideOpen = false, presideTimer = null;
+let djOpen = false;              // lo spettacolo del DJ (openDj, più sotto)
 const presideDone = () => !!Profile.data.preside;
-const minigameOpen = () => scaricoOpen || caviOpen || presideOpen;
+const minigameOpen = () => scaricoOpen || gerryOpen || presideOpen || djOpen;
 // cosa manca perché il preside possa parlare (null se è tutto pronto)
 function presideReady () {
   const asta = placedOfType('asta')[0], mic = placedOfType('mic').find(m => mountBase(m));
@@ -3143,7 +3353,7 @@ function presidePars () {
 }
 function openPreside () {
   clearTimeout(presideTimer);
-  if (presideOpen || presideDone() || !caviDone() || scaricoOpen || caviOpen) return;
+  if (presideOpen || presideDone() || !caviDone() || scaricoOpen || gerryOpen) return;
   const missing = presideReady();
   if (missing) { showToast('Il preside aspetta dietro le quinte: ' + missing); return; }
   presideOpen = true;
@@ -3176,7 +3386,7 @@ function presideMicHint () {
 window.addEventListener('message', ev => {
   const d = ev.data, f = el('#preside-frame');
   if (!presideOpen || !d || !f) return;
-  if (d.type === 'preside-pronto') f.contentWindow.postMessage({ type: 'preside-dati', wired: micChannel(), left: caviLeftovers(), beers: Profile.data.beers || 0, pars: presidePars() }, '*');
+  if (d.type === 'preside-pronto') f.contentWindow.postMessage({ type: 'preside-dati', wired: micChannel(), left: caviLeftovers(), beers: Profile.data.beers || 0, fatigue: fatigue(), pars: presidePars() }, '*');
   if (d.type === 'preside-fine') finishPreside(d.result || { skipped: true });
 });
 function finishPreside (r) {
@@ -3189,6 +3399,8 @@ function finishPreside (r) {
   Profile.data.preside = { skipped, grad: skipped ? 0 : num(r.grad, 0), rep: skipped ? 0 : num(r.rep, 0), beers, drunk,
     larsens: skipped ? 0 : num(r.larsens, 0), fault: !skipped && !!r.fault };
   Profile.data.beers = Math.max(0, (Profile.data.beers || 0) - drunk + beers);
+  // la stanchezza a fine discorso (salito col tempo, sceso con le birre bevute)
+  if (!skipped && Number.isFinite(+r.fatigue)) setFatigue(+r.fatigue);
   const rep = skipped ? 0 : addReputation(Profile.data.preside.rep, 'Discorso del preside alla festa della scuola', 'L' + LEVEL_ID + ':preside');
   Profile.save();
   sceneKeyboard(true);
@@ -3349,22 +3561,95 @@ function finishCambioDj () {
     + (c.slow ? 'Il pubblico però ha aspettato troppo. ' : 'Cambio fatto in ' + mmss(c.ms) + '. ')
     + (c.micMoved ? 'Il microfono non è più sul CH ' + c.micCh + ': Musa dovrà cercarselo. ' : '')
     + (rep ? 'Reputazione ' + (rep > 0 ? '+' : '') + rep + '. ' : '')
-    + 'Lo spettacolo del DJ arriva presto.', 'ok');
+    + 'Tra poco si accendono le luci del set.', 'ok');
+  djSoon(6000);
 }
 function cambioSummary () {
   const c = cambioDj();
   return (c.slow ? 'Finito a pazienza esaurita: il pubblico ha fischiato.' : 'Finito in ' + mmss(c.ms) + ', prima dei fischi.')
-    + (c.micMoved ? ' Microfono spostato dal CH ' + c.micCh + '.' : '') + ' Il DJ set arriva presto.';
+    + (c.micMoved ? ' Microfono spostato dal CH ' + c.micCh + '.' : '');
 }
+/* ---------------- lo spettacolo del DJ (21:15) ----------------
+   «Notte fuori controllo» (dj.html), in un iframe sopra il gioco dopo il
+   cambio palco, o dalla scaletta e dal foglio. Il tecnico fa le luci a ritmo
+   del brano e insegue i guasti del DJ; per il guasto grosso sceglie se andarci
+   lui, pagare una birra al capo o lasciarlo a Gerry. La pagina riceve le
+   birre in tasca, il nome del capo e i PAR montati; l'esito torna al gioco:
+   reputazione una volta sola, birre bevute e guadagnate. */
+let djTimer = null;
+const djDone = () => !!Profile.data.dj;
+function openDj () {
+  clearTimeout(djTimer);
+  if (djOpen || djDone() || !cambioDjDone() || minigameOpen()) return;
+  djOpen = true;
+  setSceneInput(false);
+  sceneKeyboard(false);
+  if (window.__scene) window.__scene.stopFx();
+  const f = document.createElement('iframe');
+  f.id = 'dj-frame';
+  f.className = 'minigame-frame';
+  f.title = 'Notte fuori controllo';
+  f.allow = 'autoplay';
+  f.src = 'dj.html?embed=1';
+  f.addEventListener('load', () => { try { f.contentWindow.focus(); } catch (e) { /* niente fuoco: si tocca */ } });
+  document.body.appendChild(f);
+}
+// finito il cambio palco il DJ attacca da solo, appena letto l'avviso
+function djSoon (ms) {
+  clearTimeout(djTimer);
+  djTimer = setTimeout(() => {
+    if (!scheduleOpen && !menuOpen && !rearPanelId && !openCaseName && !cambioCardOpen) openDj();
+  }, ms || 3000);
+}
+window.addEventListener('message', ev => {
+  const d = ev.data, f = el('#dj-frame');
+  if (!djOpen || !d || !f) return;
+  if (d.type === 'dj-pronto') {
+    const info = Profile.data.serviceInfo;
+    f.contentWindow.postMessage({ type: 'dj-dati', beers: Profile.data.beers || 0, boss: info && info.boss ? info.boss : '', pars: presidePars().map(p => p.label) }, '*');
+  }
+  if (d.type === 'dj-fine') finishDj(d.result || { skipped: true });
+});
+function finishDj (r) {
+  const f = el('#dj-frame');
+  if (f) f.remove();
+  djOpen = false;
+  const skipped = !!r.skipped;
+  const num = (v, d) => Number.isFinite(+v) ? Math.round(+v) : d;
+  const beers = skipped ? 0 : Math.max(0, num(r.beers, 0)), drunk = skipped ? 0 : Math.max(0, num(r.drunk, 0));
+  const paid = skipped || r.fase !== 'capo' ? 0 : 1;          // la birra pagata al capo
+  Profile.data.dj = { skipped, grad: skipped ? 0 : num(r.grad, 0), rep: skipped ? 0 : num(r.rep, 0), beers, drunk: drunk + paid,
+    stars: skipped ? 0 : num(r.stars, 0), larsens: skipped ? 0 : num(r.larsens, 0), fase: skipped ? null : (['tu', 'capo', 'gerry'].includes(r.fase) ? r.fase : null) };
+  Profile.data.beers = Math.max(0, (Profile.data.beers || 0) - drunk - paid + beers);
+  const rep = skipped ? 0 : addReputation(Profile.data.dj.rep, 'Notte fuori controllo: le luci del DJ set', 'L' + LEVEL_ID + ':dj');
+  Profile.save();
+  sceneKeyboard(true);
+  if (!scheduleOpen && !menuOpen && !rearPanelId && !openCaseName) setSceneInput(true);
+  applySettings();
+  const p = Profile.data.dj;
+  showToast(skipped ? 'DJ set saltato: la musica c\'è stata lo stesso, ma la reputazione non cambia.'
+    : 'Il bidello ha cacciato via i musicisti. Ora si può ripristinare il palco per l\'ultima band. Pubblico al ' + p.grad + '%.' + (rep ? ' Reputazione ' + (rep > 0 ? '+' : '') + rep + '.' : '')
+      + (beers ? ' 🍺 +' + beers + '.' : ''), skipped || p.grad >= 40 ? 'ok' : undefined);
+  updateFoglio();
+}
+function djSummary () {
+  const p = Profile.data.dj;
+  if (p.skipped) return 'Saltato: niente reputazione.';
+  const who = { tu: 'la fase l\'hai riarmata tu', capo: 'la fase l\'ha riarmata il capo (una birra)', gerry: 'la fase l\'ha riarmata Gerry' }[p.fase];
+  return '★'.repeat(p.stars) + '☆'.repeat(5 - p.stars) + ' · pubblico al ' + p.grad + '%' + (p.larsens ? ' · larsen: ' + p.larsens : ' · niente larsen')
+    + (who ? ' · ' + who : '') + (p.beers ? ' · 🍺 +' + p.beers : '') + ' · reputazione ' + (p.rep >= 0 ? '+' : '') + p.rep + '.';
+}
+
 el('#cambio-go').addEventListener('click', () => { SFX.button(); closeCambioCard(); });
 el('#cambio-close').addEventListener('click', () => { SFX.button(); closeCambioCard(); });
 
 el('#schedule-btn').addEventListener('click', () => { SFX.button(); openSchedule(false); });
+el('#beer-btn').addEventListener('click', () => { SFX.button(); drinkBeer(); });
 el('#schedule-go').addEventListener('click', () => {
   SFX.button();
   const next = scheduleNext;
   closeSchedule();
-  if (next === 'cavi') openCavi(); else if (next === 'preside') openPreside(); else if (next === 'cambio-dj') startCambioDj();
+  if (next === 'cavi') openCavi(); else if (next === 'preside') openPreside(); else if (next === 'cambio-dj') startCambioDj(); else if (next === 'dj') openDj();
 });
 el('#schedule-close').addEventListener('click', () => { SFX.button(); closeSchedule(); });
 el('#schedule-modal').addEventListener('click', ev => { if (ev.target.id === 'schedule-modal') closeSchedule(); });
@@ -4538,6 +4823,17 @@ function selectCable (cableId) {
   updateCableHand();
 }
 
+/* Spina o cavo di corrente in mano e nessuna presa adatta libera in giro:
+   non manca niente, le prese del Quadro accettano più cavi. Si dice come
+   arrivarci (chi resta senza ciabatte pensava di dover rubare corrente). */
+function noFreeSocketHint (signal) {
+  if ((signal !== 'schuko' && signal !== 'powercon') || !window.__scene || window.__scene.compatibleTargets().length) return '';
+  const adapter = signal === 'schuko' ? 'cee_schuko' : 'cee_powercon';
+  return 'Nessuna presa ' + SIGNAL_LABEL[signal] + ' libera? Non manca niente: le prese del Quadro accettano più cavi. ' +
+    'Prendi l\'adattatore ' + cableName(adapter) + ' dal baule (scheda Cavi) e collegalo al Quadro' +
+    (signal === 'powercon' ? ', oppure usa il passante PowerCON di un PAR.' : '.');
+}
+const CIABATTE_FINITE = 'Ciabatte finite: non ne servono altre. Le prese del Quadro accettano più cavi, e con gli adattatori del baule (CEE / Schuko, CEE / PowerCON) ci colleghi qualunque spina.';
 function onRearPortClick (compId, portId) {
   const scene = window.__scene;
   if (!scene) return;
@@ -4608,9 +4904,13 @@ function onRearPortClick (compId, portId) {
   if (connected || picked) {
     // cavo collegato, o primo capo scelto: si torna alla scena
     closeRearPanel();
-    if (picked && p.lead) showToast('Spina in mano: tocca il dispositivo con la presa ' + SIGNAL_LABEL[p.signal] + ' dove infilarla (quelli in verde hanno una presa adatta libera).', 'ok');
+    const noSocket = picked && noFreeSocketHint(p.signal);
+    if (noSocket) showToast(noSocket);
+    else if (picked && p.lead) showToast('Spina in mano: tocca il dispositivo con la presa ' + SIGNAL_LABEL[p.signal] + ' dove infilarla (quelli in verde hanno una presa adatta libera).', 'ok');
     else if (picked) showToast('Cavo in mano: ora tocca il dispositivo da collegare (quelli in verde hanno una presa adatta libera).', 'ok');
     else if (!arced) showToast('Collegato: ' + compLabel(compId) + ' · ' + portLabel(compId, portId) + '.', 'ok');
+    // il cavo appena collegato resta in mano: si stende per terra
+    if (connected) scene.startLay(gameState.edges[gameState.edges.length - 1].id);
     return;
   }
   renderRearPanel();
@@ -4621,6 +4921,8 @@ function onRearPortClick (compId, portId) {
 // letto come un tocco sul pavimento (che annulla il cavo in mano)
 function setSceneInput (on) {
   const scene = window.__scene;
+  // si apre un pannello o un menù: il cavo in mano resta come è stato steso
+  if (!on && scene && scene.lay) scene.endLay(true);
   if (scene && scene.input) scene.input.enabled = on;
 }
 function openRearPanel (compId) {
@@ -4680,6 +4982,10 @@ function updateCableBanner () {
     : `Cavo <b>${escapeHtml(cableName(gameState.selectedCable))}</b> in mano da <b>${escapeHtml(compLabel(pending.componentId))} · ${escapeHtml(portLabel(pending.componentId, pending.portId))}</b> → tocca il dispositivo da collegare`;
   bar.classList.add('show');
 }
+// barra del cavo in mano da stendere (vedi StageScene.startLay)
+el('#lay-done').addEventListener('click', () => { SFX.button(); if (window.__scene) window.__scene.endLay(true); });
+el('#lay-auto').addEventListener('click', () => { SFX.button(); if (window.__scene) window.__scene.layReset(); });
+el('#lay-del').addEventListener('click', () => { if (window.__scene) window.__scene.layDelete(); });
 el('#cable-banner-cancel').addEventListener('click', () => {
   if (window.__scene) window.__scene.cancelPending();
 });
@@ -5044,7 +5350,7 @@ document.addEventListener('pointerup', ev => {
     if (window.__scene) { window.__scene.clearDropPreview(); window.__scene.showZoneHint(gameState.selectedPieceType); }
     const { over } = stagePointFromClient(ev.clientX, ev.clientY);
     if (over && window.__scene) {
-      if (gameState.stock[type] <= 0) showToast('Esaurito in questo livello: ' + COMPONENT_TYPES[type].label + '.');
+      if (gameState.stock[type] <= 0) showToast(/^ciabatta/.test(type) ? CIABATTE_FINITE : 'Esaurito in questo livello: ' + COMPONENT_TYPES[type].label + '.');
       else window.__scene.handleExternalDrop(type, ev.clientX, ev.clientY);
     }
     window.__draggedType = null;
@@ -5172,10 +5478,16 @@ function updateFoglio () {
     body = '<ul class="fg-list">' + list.map(x => '<li class="' + (x.ok ? 'ok' : '') + '">' + (x.ok ? '✓' : '○') + ' ' + escapeHtml(x.what) + '</li>').join('') + '</ul>'
       + '<p class="fg-note">Quando è tutto a posto premi PRONTI: tocca al DJ.</p>';
     patience = true;
-  } else if (cambioDjDone()) {
+  } else if (cambioDjDone() && !djDone()) {
     icon = '🎧 ';
-    head = 'Cambio palco fatto';
-    body = '<p class="fg-note">DJ Inestimabile e Musa Esistenziale sono pronti a partire. Lo spettacolo del DJ arriva presto.</p>';
+    head = 'Prossimo: Notte fuori controllo';
+    body = '<p class="fg-note">DJ Inestimabile e Musa Esistenziale sono pronti. Tu vai alla consolle luci: le memorie si suonano a tempo col brano.</p>'
+      + '<button type="button" class="fg-go" id="foglio-dj">Via al DJ set</button>';
+  } else if (djDone()) {
+    icon = '🎧 ';
+    head = 'DJ set finito';
+    body = '<p class="fg-note">Il bidello ha cacciato via i musicisti. Ora si può ripristinare il palco per l\'ultima band (Dante unplugged, alle 22:00: arriva presto).</p>'
+      + '<p class="fg-note">' + escapeHtml(djSummary()) + '</p>';
   } else if (caviDone() && !presideDone()) {
     // il discorso del preside: pronto se il microfono è cablato
     const missing = presideReady();
@@ -5200,6 +5512,8 @@ function updateFoglio () {
   if (go) go.addEventListener('click', () => { SFX.button(); startCambioDj(); });
   const pr = el('#foglio-preside');
   if (pr) pr.addEventListener('click', () => { SFX.button(); openPreside(); });
+  const dg = el('#foglio-dj');
+  if (dg) dg.addEventListener('click', () => { SFX.button(); openDj(); });
 }
 
 // cambio di scheda verso una chiusa: si spiega perché
@@ -5215,6 +5529,7 @@ document.querySelectorAll('.tab-btn').forEach(btn => {
 /* Run button: la prova del giro in corso, o il Test impianto a montaggio finito */
 el('#run-btn').addEventListener('click', () => {
   if (!window.__scene) return;
+  window.__scene.endLay(true);
   if (gameState.giro < GIRO_COLLAUDO) window.__scene.runGiroTest();
   else if (cambioDjOn()) window.__scene.runCambioTest();
   else window.__scene.runSystemTest();
@@ -5235,7 +5550,7 @@ const __stageWrapEl = document.getElementById('stage-wrap');
 const __rawRatio = (__stageWrapEl && __stageWrapEl.clientWidth && __stageWrapEl.clientHeight)
   ? __stageWrapEl.clientHeight / __stageWrapEl.clientWidth
   : 1.3; // valore di riserva se la misura non fosse disponibile
-const __containerRatio = Math.min(2.2, Math.max(0.75, __rawRatio)); // limite di sicurezza
+const __containerRatio = Math.min(2.2, Math.max(0.45, __rawRatio)); // limite di sicurezza
 const GAME_H = Math.round(GAME_W * __containerRatio);
 
 const ORIGIN_X = 853;
@@ -5246,6 +5561,9 @@ const ORIGIN_Y = Math.round((GAME_H - (VENUE_W + VENUE_H) * TILE_H / 2) / 2);
 
 const ZOOM_MIN = 0.5, ZOOM_MAX = 4;
 const DEFAULT_ZOOM = 1.05;
+// pixel di schermo per unità di mondo a cui si avvicina la scena quando un
+// tocco cade in mezzo a più dispositivi (su telefono a zoom base è ≈ 0,3)
+const CROWD_SCALE = 0.6;
 const SHOW_ZOOM = 2;         // zoom dello show finale: palco e Pit a tutto schermo
 const PLATFORM_HEIGHT = 26; // px: altezza visiva della pedana rialzata
 
@@ -5396,6 +5714,119 @@ function computeRoutePoints (from, to, stageBox, margin) {
   return [from, { x: railX, y: from.y }, { x: railX, y: to.y }, to];
 }
 
+/* ---------------------------------------------------------------------
+   5b) POSA AL MONTAGGIO: ogni cavo per terra è fatto di tratti dritti
+       paralleli ai muri (come si stendono davvero). Il percorso è in metri:
+       { o0: 'h'|'v' orientamento del primo tratto, rails: [...] } dove
+       rails[i] è la quota del tratto i (y se orizzontale, x se verticale).
+       Il primo e l'ultimo tratto passano per i due capi; quelli in mezzo
+       si trascinano col dito e scattano sui centri delle celle da 50 cm.
+   --------------------------------------------------------------------- */
+// punto dello schermo -> metri sul pavimento (senza pedana)
+function screenToMeters (px, py) {
+  const rx = (px - ORIGIN_X) / (TILE_W / 2), ry = (py - ORIGIN_Y) / (TILE_H / 2);
+  return { gx: (rx + ry) / 2, gy: (ry - rx) / 2 };
+}
+// come sopra, ma se il punto cade sulla pedana tiene conto del rialzo
+function worldToFloor (px, py) {
+  const up = screenToMeters(px, py + PLATFORM_HEIGHT);
+  return isStageCell(up.gx, up.gy) ? up : screenToMeters(px, py);
+}
+const layOrient = (route, i) => (i % 2 === 0) === (route.o0 === 'h') ? 'h' : 'v';
+const laySnap = v => Math.round((v - CELL / 2) / CELL) * CELL + CELL / 2;
+// le quote dei capi: il primo e l'ultimo tratto passano per A e B
+function layPin (route, A, B) {
+  const n = route.rails.length;
+  route.rails[0] = layOrient(route, 0) === 'h' ? A.gy : A.gx;
+  route.rails[n - 1] = layOrient(route, n - 1) === 'h' ? B.gy : B.gx;
+  return route;
+}
+// i punti (in metri) del percorso, da A a B
+function layPoints (route, A, B) {
+  const r = route.rails, pts = [{ gx: A.gx, gy: A.gy }];
+  for (let i = 0; i < r.length - 1; i++) {
+    pts.push(layOrient(route, i) === 'h' ? { gx: r[i + 1], gy: r[i] } : { gx: r[i], gy: r[i + 1] });
+  }
+  pts.push({ gx: B.gx, gy: B.gy });
+  return pts;
+}
+function layLength (pts) {
+  let s = 0;
+  for (let i = 0; i < pts.length - 1; i++) s += Math.abs(pts[i + 1].gx - pts[i].gx) + Math.abs(pts[i + 1].gy - pts[i].gy);
+  return s;
+}
+// quanti tratti attraversano la pedana dello spettacolo (lì i cavi non vanno)
+function layCrossesStage (pts) {
+  let n = 0;
+  for (let i = 0; i < pts.length - 1; i++) {
+    const a = pts[i], b = pts[i + 1], L = Math.abs(b.gx - a.gx) + Math.abs(b.gy - a.gy);
+    for (let t = CELL / 2; t < L; t += CELL / 2) {
+      const x = a.gx + (b.gx - a.gx) * t / L, y = a.gy + (b.gy - a.gy) * t / L;
+      if (isStageCoreCell(x, y)) { n++; break; }
+    }
+  }
+  return n;
+}
+// percorso automatico: il più corto tra a Z e a L, girando intorno alla pedana
+function layAutoRoute (A, B) {
+  const onStage = isStageCoreCell(A.gx, A.gy) || isStageCoreCell(B.gx, B.gy);
+  const sx0 = STAGE_ORIGIN_X - CELL / 2, sx1 = STAGE_ORIGIN_X + STAGE_W + CELL / 2;
+  const sy0 = STAGE_ORIGIN_Y - CELL / 2, sy1 = STAGE_ORIGIN_Y + STAGE_H + CELL / 2;
+  const cands = [{ o0: 'h', rails: [0, 0] }, { o0: 'v', rails: [0, 0] }];
+  [laySnap((A.gx + B.gx) / 2), sx0, sx1].forEach(x => cands.push({ o0: 'h', rails: [0, x, 0] }));
+  [laySnap((A.gy + B.gy) / 2), sy0, sy1].forEach(y => cands.push({ o0: 'v', rails: [0, y, 0] }));
+  let best = null, bestScore = Infinity;
+  cands.forEach(c => {
+    layPin(c, A, B);
+    const pts = layPoints(c, A, B);
+    const score = layLength(pts) + (onStage ? 0 : layCrossesStage(pts) * 100) + c.rails.length * 0.01;
+    if (score < bestScore) { bestScore = score; best = c; }
+  });
+  return best;
+}
+// toglie i tratti lunghi zero (due tratti in fila diventano uno)
+function layTidy (route, A, B) {
+  layPin(route, A, B);
+  for (let k = 0; k < 8; k++) {
+    const r = route.rails, n = r.length;
+    let done = true;
+    for (let i = 1; i < n - 1; i++) {
+      if (Math.abs(r[i - 1] - r[i + 1]) < 1e-6 && n > 3) {
+        // il tratto i non ha lunghezza: i-1 e i+1 sono sulla stessa riga
+        r.splice(i, 2); done = false; break;
+      }
+    }
+    if (done) break;
+  }
+  return layPin(route, A, B);
+}
+// metri sul pavimento -> schermo, con lo scalino della pedana
+function layToScreen (pts) {
+  const out = [];
+  const up = (x, y) => { const p = gridToScreen(x, y); return isStageCell(x, y) ? { x: p.x, y: p.y - PLATFORM_HEIGHT } : p; };
+  for (let i = 0; i < pts.length - 1; i++) {
+    const a = pts[i], b = pts[i + 1], L = Math.abs(b.gx - a.gx) + Math.abs(b.gy - a.gy);
+    out.push(up(a.gx, a.gy));
+    let prev = isStageCell(a.gx, a.gy);
+    for (let t = CELL / 4; t < L; t += CELL / 4) {
+      const x = a.gx + (b.gx - a.gx) * t / L, y = a.gy + (b.gy - a.gy) * t / L;
+      const s = isStageCell(x, y);
+      if (s !== prev) { out.push(up(x, y)); prev = s; }
+    }
+  }
+  const z = pts[pts.length - 1];
+  out.push(up(z.gx, z.gy));
+  return out;
+}
+// lunghezza del cavo del baule (null: spina della ciabatta, cavo suo)
+function layMaxLen (e) {
+  const pd = getPortDef(e.b, e.bPort);
+  if (pd && pd.lead) return null;
+  const it = cableItem(e.signal), m = it && /(\d+) m/.exec(it.info);
+  return m ? +m[1] : null;
+}
+const fmtM = v => (Math.round(v * 2) / 2).toLocaleString('it-IT') + ' m';
+
 function strokeRoutedPath (g, pts, color, width, chamfer, alpha) {
   g.lineStyle(width, color, alpha == null ? 1 : alpha);
   if (pts.length <= 2) { g.lineBetween(pts[0].x, pts[0].y, pts[1].x, pts[1].y); return; }
@@ -5453,7 +5884,7 @@ class StageScene extends Phaser.Scene {
   create () {
     window.__scene = this;
 
-    this.occupied = {};
+    this.occupied = {}; this.blockSceneryCells();
     this.compVisuals = {};
     this.moveSelected = null;
     this.selectedEdgeId = null;
@@ -5476,8 +5907,9 @@ class StageScene extends Phaser.Scene {
 
     this.cursors = this.input.keyboard.createCursorKeys();
     this.wasd = this.input.keyboard.addKeys({ up: 'W', down: 'S', left: 'A', right: 'D' });
-    this.input.keyboard.on('keydown-DELETE', () => { if (this.selectedEdgeId != null) this.deleteSelectedEdge(); });
-    this.input.keyboard.on('keydown-BACKSPACE', () => { if (this.selectedEdgeId != null) this.deleteSelectedEdge(); });
+    this.input.keyboard.on('keydown-DELETE', () => { if (this.lay) this.layDelete(); else if (this.selectedEdgeId != null) this.deleteSelectedEdge(); });
+    this.input.keyboard.on('keydown-BACKSPACE', () => { if (this.lay) this.layDelete(); else if (this.selectedEdgeId != null) this.deleteSelectedEdge(); });
+    this.input.keyboard.on('keydown-ENTER', () => { if (this.lay) this.endLay(true); });
     this.input.keyboard.on('keydown-Z', event => {
       if (!(event.ctrlKey || event.metaKey)) return;
       if (event.shiftKey) this.redo(); else this.undo();
@@ -5502,8 +5934,9 @@ class StageScene extends Phaser.Scene {
   /* ---------------- movimento: zoom (rotellina/pizzico/pulsanti),
      pan (tasto destro o trascinamento sul vuoto), frecce/WASD ---------------- */
   setupCameraControls () {
+    // la rotella ingrandisce dove sta il puntatore
     this.input.on('wheel', (pointer, gameObjects, deltaX, deltaY) => {
-      this.adjustZoom(deltaY > 0 ? -0.12 : 0.12);
+      this.adjustZoom(deltaY > 0 ? -0.12 : 0.12, pointer.x, pointer.y);
     });
 
     this.game.canvas.addEventListener('contextmenu', e => e.preventDefault());
@@ -5541,8 +5974,9 @@ class StageScene extends Phaser.Scene {
 
       const p1 = this.input.pointer1, p2 = this.input.pointer2;
       if (p1 && p2 && p1.isDown && p2.isDown) {
+        // il pizzico ingrandisce fra le due dita, non al centro dello schermo
         const dist = Phaser.Math.Distance.Between(p1.x, p1.y, p2.x, p2.y);
-        if (this.lastPinchDist) this.adjustZoom((dist - this.lastPinchDist) * 0.004);
+        if (this.lastPinchDist) this.adjustZoom((dist - this.lastPinchDist) * 0.004, (p1.x + p2.x) / 2, (p1.y + p2.y) / 2);
         this.lastPinchDist = dist;
       } else {
         this.lastPinchDist = null;
@@ -5569,6 +6003,9 @@ class StageScene extends Phaser.Scene {
     if (pendKey !== this.pendingKey) { this.pendingKey = pendKey; updateCableBanner(); this.highlightTargets(); }
     // le note della musica di prova seguono il loro dispositivo
     if (this.signalFx) Object.values(this.signalFx).forEach(f => { if (f.note) this.placeSignalNote(f); });
+    // i pallini del cavo in mano restano grandi come un dito a ogni zoom
+    if (this.lay && this.layZoom !== cam.zoom) { this.layZoom = cam.zoom; this.drawLay(); }
+    const speed = (420 * (delta / 1000)) / cam.zoom;
     let dx = 0, dy = 0;
     if (this.cursors.left.isDown || this.wasd.left.isDown) dx -= speed;
     if (this.cursors.right.isDown || this.wasd.right.isDown) dx += speed;
@@ -5577,9 +6014,25 @@ class StageScene extends Phaser.Scene {
     if (dx || dy) { cam.scrollX += dx; cam.scrollY += dy; }
   }
 
-  adjustZoom (delta) {
-    const cam = this.cameras.main;
-    cam.setZoom(Phaser.Math.Clamp(cam.zoom + delta, ZOOM_MIN, ZOOM_MAX));
+  /* zoom; con un punto (in pixel del gioco) quel punto resta fermo sotto
+     il dito o il puntatore, come nelle mappe */
+  adjustZoom (delta, ax, ay) {
+    const cam = this.cameras.main, z0 = cam.zoom;
+    const z1 = Phaser.Math.Clamp(z0 + delta, ZOOM_MIN, ZOOM_MAX);
+    cam.setZoom(z1);
+    if (ax == null || z1 === z0) return;
+    cam.scrollX += (ax - cam.width / 2) * (1 / z0 - 1 / z1);
+    cam.scrollY += (ay - cam.height / 2) * (1 / z0 - 1 / z1);
+  }
+  /* tocco su più dispositivi vicini con la scena piccola (telefono):
+     oltre al menu "Quale?" la scena si avvicina lì, così il tocco dopo
+     prende quello giusto senza dover zoomare a mano */
+  zoomToCrowd (wx, wy) {
+    const cam = this.cameras.main, rc = this.game.canvas.getBoundingClientRect();
+    const k = cam.zoom * (rc.width / GAME_W);
+    if (k >= CROWD_SCALE) return;
+    cam.zoomTo(Math.min(ZOOM_MAX, CROWD_SCALE * GAME_W / rc.width), 250, 'Sine.easeOut');
+    cam.pan(wx, wy, 250, 'Sine.easeOut');
   }
 
   resetView () {
@@ -5590,29 +6043,79 @@ class StageScene extends Phaser.Scene {
   /* ---------------- disegno venue: terreno, zone, pedana ---------------- */
   drawGround () {
     const g = this.add.graphics().setDepth(0);
-    g.fillStyle(0x383b45, 1);
     const p0 = gridToScreen(0, 0), p1 = gridToScreen(VENUE_W, 0),
           p2 = gridToScreen(VENUE_W, VENUE_H), p3 = gridToScreen(0, VENUE_H);
-    g.beginPath();
-    g.moveTo(p0.x, p0.y); g.lineTo(p1.x, p1.y); g.lineTo(p2.x, p2.y); g.lineTo(p3.x, p3.y);
-    g.closePath(); g.fillPath();
-    // griglia di posa leggera, celle da 50 cm (una linea più marcata ogni metro)
-    for (let x = CELL; x < VENUE_W; x += CELL) {
-      const a = gridToScreen(x, 0), b = gridToScreen(x, VENUE_H);
-      g.lineStyle(1, 0x484c58, x % 1 ? 0.35 : 0.6); g.lineBetween(a.x, a.y, b.x, b.y);
+    // rettangolo di pavimento da (x0, y0) a (x1, y1), in metri
+    const quad = (x0, y0, x1, y1, color, alpha = 1) => {
+      g.fillStyle(color, alpha);
+      g.fillPoints([gridToScreen(x0, y0), gridToScreen(x1, y0), gridToScreen(x1, y1), gridToScreen(x0, y1)], true);
+    };
+    // generatore fisso: lo stesso pavimento a ogni partita
+    let seed = 7;
+    const rnd = () => { seed = (seed * 16807) % 2147483647; return seed / 2147483647; };
+
+    // cortile di carico, fuori dalla palestra: di notte si vede solo dai
+    // finestroni della parete di fondo, quindi resta quasi nero
+    // (tagliato in diagonale a destra, così non sporge oltre la parete)
+    g.fillStyle(0x202226, 1);
+    g.fillPoints([gridToScreen(0, 0), gridToScreen(VENUE_W - CARICO_ROWS, 0), gridToScreen(VENUE_W, CARICO_ROWS), gridToScreen(0, CARICO_ROWS)], true);
+    for (let i = 0; i < 160; i++) {
+      const x = rnd() * (VENUE_W - CARICO_ROWS), y = rnd() * CARICO_ROWS, q = gridToScreen(x, y);
+      g.fillStyle(rnd() < 0.5 ? 0x2a2c31 : 0x18191c, 0.9); g.fillCircle(q.x, q.y, 1 + rnd() * 1.2);
     }
-    for (let y = CELL; y < VENUE_H; y += CELL) {
+
+    // backstage: cemento a lastre
+    quad(0, CARICO_ROWS, VENUE_W, STAGE_ORIGIN_Y, 0x3a3c42);
+    for (let x = 2; x < VENUE_W; x += 2) {
+      const a = gridToScreen(x, CARICO_ROWS), b = gridToScreen(x, STAGE_ORIGIN_Y);
+      g.lineStyle(1, 0x2c2e33, 0.9); g.lineBetween(a.x, a.y, b.x, b.y);
+    }
+
+    // palestra: parquet a doghe, dal palco fino in fondo
+    const woods = [0x4b3a29, 0x523f2c, 0x473726, 0x4e3c2a];
+    for (let x = 0, k = 0; x < VENUE_W - 0.01; x += 0.25, k++) {
+      let y = STAGE_ORIGIN_Y - (k % 4) * 0.6;
+      while (y < VENUE_H) {
+        const y0 = Math.max(STAGE_ORIGIN_Y, y), y1 = Math.min(VENUE_H, y + 2.4);
+        quad(x, y0, x + 0.25, y1, woods[Math.floor(rnd() * woods.length)]);
+        y += 2.4;
+      }
+      const a = gridToScreen(x, STAGE_ORIGIN_Y), b = gridToScreen(x, VENUE_H);
+      g.lineStyle(1, 0x2e2318, 0.55); g.lineBetween(a.x, a.y, b.x, b.y);
+    }
+    // righe del campo da basket, sbiadite
+    const pitStart = STAGE_ORIGIN_Y + STAGE_H, fohStart = pitStart + PIT_ROWS + PLATEA_ROWS;
+    const line = (pts, color, alpha) => { g.lineStyle(3, color, alpha); g.strokePoints(pts.map(([x, y]) => gridToScreen(x, y)), false); };
+    line([[0.5, pitStart + 0.5], [0.5, VENUE_H - 0.4], [VENUE_W - 0.5, VENUE_H - 0.4], [VENUE_W - 0.5, pitStart + 0.5]], 0xe9e4d6, 0.22);
+    const circ = []; for (let a = 0; a <= Math.PI; a += Math.PI / 24) circ.push([VENUE_W / 2 + Math.cos(a) * 1.8, VENUE_H - 0.4 - Math.sin(a) * 1.8]);
+    line(circ, 0xe9e4d6, 0.22);
+    line([[VENUE_W / 2 - 1.2, VENUE_H - 0.4], [VENUE_W / 2 - 1.2, VENUE_H - 2.6], [VENUE_W / 2 + 1.2, VENUE_H - 2.6], [VENUE_W / 2 + 1.2, VENUE_H - 0.4]], 0xd6392f, 0.28);
+    // Pit: fascia più scura davanti al palco, dove stanno le casse
+    quad(0, pitStart, VENUE_W, pitStart + PIT_ROWS, 0x000000, 0.18);
+
+    // griglia di posa appena accennata (un metro), per orientarsi
+    for (let x = 1; x < VENUE_W; x += 1) {
+      const a = gridToScreen(x, CARICO_ROWS), b = gridToScreen(x, VENUE_H);
+      g.lineStyle(1, 0xffffff, 0.045); g.lineBetween(a.x, a.y, b.x, b.y);
+    }
+    for (let y = CARICO_ROWS + 1; y < VENUE_H; y += 1) {
       const a = gridToScreen(0, y), b = gridToScreen(VENUE_W, y);
-      g.lineStyle(1, 0x484c58, y % 1 ? 0.35 : 0.6); g.lineBetween(a.x, a.y, b.x, b.y);
+      g.lineStyle(1, 0xffffff, 0.045); g.lineBetween(a.x, a.y, b.x, b.y);
     }
-    g.lineStyle(2, 0x484c58, 0.9);
-    g.beginPath();
-    g.moveTo(p0.x, p0.y); g.lineTo(p1.x, p1.y); g.lineTo(p2.x, p2.y); g.lineTo(p3.x, p3.y);
-    g.closePath(); g.strokePath();
+    g.lineStyle(2, 0x0c0d10, 0.9);
+    g.strokePoints([gridToScreen(0, CARICO_ROWS), gridToScreen(VENUE_W, CARICO_ROWS), p2, p3], true);
+    this.drawGymWalls();
+    this.drawGymDetails();
+    this.drawWorkLights();
 
     g.setInteractive(new Phaser.Geom.Rectangle(0, 0, GAME_W, GAME_H), Phaser.Geom.Rectangle.Contains);
     g.on('pointerdown', pointer => {
       if (pointer.rightButtonDown()) return;
+      // Phaser sente anche i tocchi sui pulsanti sopra la scena (zoom, ⤢):
+      // non sono tocchi sul pavimento e non devono far cadere il cavo in mano
+      if (pointer.downElement && pointer.downElement !== this.game.canvas) return;
+      // cavo in mano: un tocco sul cavo ne prende il tratto (niente pan)
+      if (this.lay && this.layPointerDown(pointer)) return;
       this.floorDown = { x: pointer.x, y: pointer.y, moved: false };
     });
     g.on('pointerup', pointer => {
@@ -5621,6 +6124,8 @@ class StageScene extends Phaser.Scene {
       this.floorDown = null;
       if (moved) return;
 
+      // cavo in mano: un tocco sul pavimento lo lascia così com'è
+      if (this.lay) { this.endLay(true); return; }
       // un pezzo armato si posa; altrimenti un tocco su un cavo lo seleziona,
       // e un tocco sul pavimento vuoto chiude montaggio e cavo in attesa
       if (gameState.selectedPieceType) { this.placeArmedPieceAt(pointer.worldX, pointer.worldY); return; }
@@ -5634,6 +6139,9 @@ class StageScene extends Phaser.Scene {
       }
       const hitEdge = this.findEdgeAt(pointer.worldX, pointer.worldY);
       if (hitEdge) {
+        // un cavo per terra si prende in mano per sistemarlo; quelli sul
+        // tavolo della regia (niente pavimento) si selezionano e basta
+        if (this.startLay(hitEdge.id)) return;
         if (this.selectedEdgeId === hitEdge.id) this.clearEdgeSelection();
         else this.selectEdge(hitEdge);
         return;
@@ -5644,29 +6152,217 @@ class StageScene extends Phaser.Scene {
     this.floorGraphics = g;
   }
 
-  drawZoneOutline (corners, label) {
+  // celle dove sta la scenografia (i case nel backstage): lì non si posa niente
+  blockSceneryCells () {
+    for (let cx = 0; cx < 2; cx += CELL) for (let cy = VENUE_H - 1; cy < VENUE_H; cy += CELL) this.occupied[cellKey(cx, cy)] = 'scenografia';
+    for (let cx = 0; cx < 1; cx += CELL) for (let cy = VENUE_H - 2; cy < VENUE_H - 1; cy += CELL) this.occupied[cellKey(cx, cy)] = 'scenografia';
+  }
+
+  /* parete di fondo della palestra, lungo il lato sinistro (gx = 0): finestre
+     alte, spalliere, l'uscita di sicurezza e lo striscione della festa.
+     Sta dietro a tutto, quindi non copre mai i dispositivi. */
+  drawGymWalls () {
+    const g = this.add.graphics().setDepth(0.5);
+    const H = 190, gy0 = CARICO_ROWS, gy1 = VENUE_H;
+    // punto della parete: gy lungo il muro, h altezza in px
+    const wp = (gy, h) => { const q = gridToScreen(0, gy); return { x: q.x, y: q.y - h }; };
+    const face = (ya, yb, ha, hb, color, alpha = 1) => { g.fillStyle(color, alpha); g.fillPoints([wp(ya, ha), wp(yb, ha), wp(yb, hb), wp(ya, hb)], true); };
+    face(gy0, gy1, 0, H, 0x4a4f5a);
+    face(gy0, gy1, 0, 74, 0x2f4356);
+    face(gy0, gy1, 74, 79, 0xf2a541, 0.55);
+    face(gy0, gy1, H - 6, H, 0x5d636f);
+    // ombra del muro sul pavimento
+    g.fillStyle(0x000000, 0.28);
+    g.fillPoints([gridToScreen(0, gy0), gridToScreen(0, gy1), gridToScreen(0.45, gy1), gridToScreen(0.45, gy0)], true);
+    // finestre alte
+    for (let y = gy0 + 4.3; y < gy1 - 1; y += 2.1) {
+      if (y < 12.5 && y + 1.5 > 11) continue;   // lì c'è la seconda uscita
+      face(y, y + 1.5, 112, 170, 0x1a2738);
+      face(y, y + 1.5, 112, 116, 0x6b7180);
+      g.lineStyle(1.5, 0x6d8fb3, 0.35);
+      const a = wp(y + 0.3, 120), b = wp(y + 0.75, 162); g.lineBetween(a.x, a.y, b.x, b.y);
+      const m0 = wp(y + 0.75, 112), m1 = wp(y + 0.75, 170); g.lineStyle(2, 0x6b7180, 1); g.lineBetween(m0.x, m0.y, m1.x, m1.y);
+    }
+    // spalliere
+    for (let y = 12.9; y <= 14.3; y += 0.35) { const a = wp(y, 0), b = wp(y, 150); g.lineStyle(3, 0x8a6a45, 1); g.lineBetween(a.x, a.y, b.x, b.y); }
+    for (let h = 10; h <= 150; h += 14) { const a = wp(12.9, h), b = wp(14.3, h); g.lineStyle(2, 0x9c7a50, 0.9); g.lineBetween(a.x, a.y, b.x, b.y); }
+    // spigolo del muro verso il cortile
+    { const a = wp(gy0, 0), b = wp(gy0, H); g.lineStyle(3, 0x6b7180, 1); g.lineBetween(a.x, a.y, b.x, b.y); }
+    // uscita di sicurezza verso il backstage
+    face(2.5, 3.6, 0, 105, 0x1b1d21);
+    face(2.5, 3.6, 105, 109, 0x6b7180);
+    face(2.75, 3.35, 116, 134, 0x2fa35a);
+    // seconda uscita di sicurezza, in fondo alla via di fuga della sala
+    face(11.2, 12.3, 0, 105, 0x1b1d21);
+    face(11.7, 11.72, 0, 105, 0x0f1013);
+    face(11.2, 12.3, 105, 109, 0x6b7180);
+    face(11.45, 12.05, 116, 134, 0x2fa35a);
+    // striscione della festa
+    face(5.2, 9.6, 118, 150, 0xe9e4d6);
+    face(5.2, 9.6, 118, 123, 0xd6392f);
+    face(5.2, 9.6, 145, 150, 0xd6392f);
+    const c = wp(7.4, 134);
+    const ang = Phaser.Math.RadToDeg(Math.atan2(TILE_H / 2, -TILE_W / 2)) + 180;
+    this.add.text(c.x, c.y, 'FESTA DI FINE ANNO', { fontFamily: FONT_MARKER, fontSize: '15px', color: '#2b5fb0' })
+      .setOrigin(0.5).setAngle(ang).setDepth(0.55);
+    this.drawBackWall(H);
+    const ex = wp(3.05, 125);
+    [ex, wp(11.75, 125)].forEach(q => this.add.text(q.x, q.y, 'USCITA', { fontFamily: 'Inter, sans-serif', fontStyle: 'bold', fontSize: '8px', color: '#ffffff' })
+      .setOrigin(0.5).setAngle(ang).setDepth(0.55));
+  }
+
+  /* rifiniture della palestra: ombre morbide ai piedi dei muri, spessore
+     in cima alle pareti, luce della luna dalle finestre, canestro e
+     tabellone. Solo scenografia: nessuna cella occupata. */
+  drawGymDetails () {
+    const H = 190, y0 = CARICO_ROWS;
+    const g = this.add.graphics().setDepth(0.45);
+    const floorQuad = (x0, ya, x1, yb, color, alpha) => {
+      g.fillStyle(color, alpha);
+      g.fillPoints([gridToScreen(x0, ya), gridToScreen(x1, ya), gridToScreen(x1, yb), gridToScreen(x0, yb)], true);
+    };
+    // ombra morbida lungo i due muri (si allarga e sfuma verso la sala)
+    [[0.45, 0.9, 0.1], [0.9, 1.5, 0.05]].forEach(([a, b, al]) => {
+      floorQuad(a, y0, b, VENUE_H, 0x000000, al);
+      floorQuad(0, y0 + a, VENUE_W, y0 + b, 0x000000, al);
+    });
+    // luna dalle finestre della parete laterale: chiazze fredde sul parquet
+    const moon = this.add.graphics().setDepth(0.46).setBlendMode(Phaser.BlendModes.ADD);
+    for (let y = y0 + 4.3; y < VENUE_H - 1; y += 2.1) {
+      if (y + 1.5 < STAGE_ORIGIN_Y + STAGE_H + 0.5 || y + 3 > VENUE_H) continue;   // palco già illuminato; non fuori sala
+      moon.fillStyle(0x7f9ccc, 0.07);
+      moon.fillPoints([gridToScreen(0.7, y + 0.9), gridToScreen(2.1, y + 1.5), gridToScreen(2.1, y + 3.0), gridToScreen(0.7, y + 2.4)], true);
+    }
+
+    const w = this.add.graphics().setDepth(1.16);
+    // spessore in cima alle pareti: si capisce che sono muri veri
+    const top = (pts, color) => { w.fillStyle(color, 1); w.fillPoints(pts.map(([x, y]) => { const q = gridToScreen(x, y); return { x: q.x, y: q.y - H }; }), true); };
+    top([[-0.22, y0 - 0.22], [0, y0], [0, VENUE_H], [-0.22, VENUE_H]], 0x767c89);
+    top([[-0.22, y0 - 0.22], [VENUE_W, y0 - 0.22], [VENUE_W, y0], [0, y0]], 0x767c89);
+    { const a = gridToScreen(VENUE_W, y0 - 0.22), b = gridToScreen(VENUE_W, y0); w.fillStyle(0x3a3e47, 1);
+      w.fillPoints([{ x: a.x, y: a.y - H }, { x: b.x, y: b.y - H }, { x: b.x, y: b.y }, { x: a.x, y: a.y }], true); }
+    { const a = gridToScreen(0, VENUE_H), b = gridToScreen(-0.22, VENUE_H); w.fillStyle(0x3a3e47, 1);
+      w.fillPoints([{ x: a.x, y: a.y - H }, { x: b.x, y: b.y - H }, { x: b.x, y: b.y }, { x: a.x, y: a.y }], true); }
+
+    // tabellone segnapunti sulla parete di fondo, sopra la porta del carico
+    const bp = (gx, h) => { const q = gridToScreen(gx, y0); return { x: q.x, y: q.y - h }; };
+    const bface = (xa, xb, ha, hb, color) => { w.fillStyle(color, 1); w.fillPoints([bp(xa, ha), bp(xb, ha), bp(xb, hb), bp(xa, hb)], true); };
+    bface(3.05, 4.15, 112, 158, 0x0d0e11);
+    bface(3.05, 4.15, 112, 114, 0x5d636f);
+    const ang = Phaser.Math.RadToDeg(Math.atan2(TILE_H / 2, TILE_W / 2));
+    const sc = bp(3.6, 144), sl = bp(3.28, 124), sr = bp(3.92, 124);
+    const digit = { fontFamily: 'Barlow Condensed, sans-serif', fontStyle: 'bold', color: '#ff5a3c' };
+    this.add.text(sc.x, sc.y, '20:30', { ...digit, fontSize: '13px', color: '#ffb23c' }).setOrigin(0.5).setAngle(ang).setDepth(1.17);
+    this.add.text(sl.x, sl.y, 'CASA 12', { ...digit, fontSize: '7px' }).setOrigin(0.5).setAngle(ang).setDepth(1.17);
+    this.add.text(sr.x, sr.y, 'OSPITI 9', { ...digit, fontSize: '7px' }).setOrigin(0.5).setAngle(ang).setDepth(1.17);
+
+    // canestro laterale sulla parete sinistra, sopra l'angolo dei case
+    const lp = (gy, h, gx = 0) => { const q = gridToScreen(gx, gy); return { x: q.x, y: q.y - h }; };
+    const c = this.add.graphics().setDepth(0.55);
+    c.fillStyle(0x9aa0ab, 1); c.fillPoints([lp(14.95, 120), lp(15.25, 120), lp(15.25, 128, 0.35), lp(14.95, 128, 0.35)], true);
+    c.fillStyle(0xf4f2ec, 1); c.fillPoints([lp(14.45, 128, 0.35), lp(15.75, 128, 0.35), lp(15.75, 178, 0.35), lp(14.45, 178, 0.35)], true);
+    c.lineStyle(2, 0xd6392f, 1); c.strokePoints([lp(14.8, 132, 0.35), lp(15.4, 132, 0.35), lp(15.4, 152, 0.35), lp(14.8, 152, 0.35)], true);
+    const rim = lp(15.1, 132, 0.75);
+    c.lineStyle(2.5, 0xf06a1f, 1); c.strokeEllipse(rim.x, rim.y, 30, 14);
+    for (let i = -2; i <= 2; i++) { c.lineStyle(1, 0xe9e4d6, 0.6); c.lineBetween(rim.x + i * 6, rim.y + 3, rim.x + i * 3.5, rim.y + 20); }
+    c.lineStyle(1, 0xe9e4d6, 0.5); c.strokeEllipse(rim.x, rim.y + 12, 18, 7);
+  }
+
+  /* parete dietro al palco (gy = CARICO_ROWS): chiude la palestra. Dai
+     finestroni alti si intravede il cortile di notte col furgone del service.
+     Sta sopra il cortile e sotto tutto ciò che è dentro. */
+  drawBackWall (H) {
+    const g = this.add.graphics().setDepth(1.15);
+    const y = CARICO_ROWS;
+    const wp = (gx, h) => { const q = gridToScreen(gx, y); return { x: q.x, y: q.y - h }; };
+    const face = (xa, xb, ha, hb, color, alpha = 1) => { g.fillStyle(color, alpha); g.fillPoints([wp(xa, ha), wp(xb, ha), wp(xb, hb), wp(xa, hb)], true); };
+    const W0 = 66, W1 = 172;                     // davanzale e architrave dei finestroni
+    const wins = [[0.35, 2.85], [5.7, 7.6], [7.9, 9.7]];
+    // muro pieno sotto, sopra e fra i finestroni (i vetri restano aperti sul cortile)
+    face(0, VENUE_W, 0, W0, 0x464b56);
+    face(0, VENUE_W, W1, H, 0x464b56);
+    let x = 0;
+    wins.forEach(([a, b]) => { face(x, a, W0, W1, 0x464b56); x = b; });
+    face(x, VENUE_W, W0, W1, 0x464b56);
+    face(0, VENUE_W, 0, 56, 0x2f4356);
+    face(0, VENUE_W, 56, 60, 0xf2a541, 0.55);
+    face(0, VENUE_W, H - 6, H, 0x5d636f);
+    // vetri: notte fuori, riflessi e montanti
+    wins.forEach(([a, b]) => {
+      face(a, b, W0, W1, 0x0e1622, 0.35);
+      face(a, b, W0 - 4, W0, 0x6b7180);
+      face(a, b, W1, W1 + 4, 0x6b7180);
+      for (let m = a; m <= b + 0.001; m += (b - a) / Math.max(2, Math.round((b - a) / 0.8))) {
+        const p0 = wp(m, W0), p1 = wp(m, W1); g.lineStyle(3, 0x6b7180, 1); g.lineBetween(p0.x, p0.y, p1.x, p1.y);
+      }
+      const h0 = wp(a, (W0 + W1) / 2), h1 = wp(b, (W0 + W1) / 2); g.lineStyle(2, 0x6b7180, 1); g.lineBetween(h0.x, h0.y, h1.x, h1.y);
+      g.lineStyle(2, 0x9fb6d3, 0.22);
+      const r0 = wp(a + 0.2, W0 + 8), r1 = wp(a + 0.6, W1 - 6); g.lineBetween(r0.x, r0.y, r1.x, r1.y);
+    });
+    // porta del carico, da dove sono entrati i case
+    face(4.3, 5.4, 0, 100, 0x2a2d33);
+    face(4.85, 4.87, 0, 100, 0x14161a);
+    face(4.3, 5.4, 100, 104, 0x6b7180);
+    // ombra del muro sul pavimento del backstage
+    g.fillStyle(0x000000, 0.25);
+    g.fillPoints([gridToScreen(0, y), gridToScreen(VENUE_W, y), gridToScreen(VENUE_W, y + 0.4), gridToScreen(0, y + 0.4)], true);
+    // spigolo con la parete laterale
+    { const a = wp(0, 0), b = wp(0, H); g.lineStyle(3, 0x5d636f, 1); g.lineBetween(a.x, a.y, b.x, b.y); }
+  }
+
+  /* luci di servizio: pozze calde sul palco e in regia, buio ai bordi */
+  drawWorkLights () {
+    if (!this.textures.exists('pool')) {
+      const tex = this.textures.createCanvas('pool', 256, 256), ctx = tex.getContext();
+      const gr = ctx.createRadialGradient(128, 128, 0, 128, 128, 128);
+      gr.addColorStop(0, 'rgba(255,255,255,1)'); gr.addColorStop(0.5, 'rgba(255,255,255,.35)'); gr.addColorStop(1, 'rgba(255,255,255,0)');
+      ctx.fillStyle = gr; ctx.fillRect(0, 0, 256, 256); tex.refresh();
+    }
+    const pool = (gx, gy, sx, color, alpha) => {
+      const q = gridToScreen(gx, gy);
+      this.add.image(q.x, q.y, 'pool').setScale(sx, sx * 0.62).setTint(color).setAlpha(alpha)
+        .setBlendMode(Phaser.BlendModes.ADD).setDepth(0.9);
+    };
+    pool(1.8, 0.6, 2.2, 0xffd28a, 0.35);
+    pool(0.6, 3.05, 0.5, 0x2fa35a, 0.35);  // luce verde delle uscite
+    pool(0.6, 11.75, 0.5, 0x2fa35a, 0.35);   // lampione del cortile, si vede dai finestroni
+    pool(STAGE_ORIGIN_X + 2, STAGE_ORIGIN_Y + 2, 2.6, 0xffc98a, 0.22);
+    pool(7.5, 6, 1.6, 0xffe2b8, 0.16);
+    pool(5, 2.6, 2.4, 0xbfd4ff, 0.12);
+    pool(5, 13.5, 2.6, 0xffd9a0, 0.10);
+  }
+
+  // confine di zona: una striscia di nastro bianco sul pavimento
+  drawZoneOutline (corners, label, at) {
     const g = this.add.graphics().setDepth(1);
-    g.lineStyle(1.5, 0x565a68, 0.85);
-    const pts = corners.map(c => gridToScreen(c[0], c[1]));
-    g.beginPath();
-    g.moveTo(pts[0].x, pts[0].y);
-    for (let i = 1; i < pts.length; i++) g.lineTo(pts[i].x, pts[i].y);
-    g.closePath(); g.strokePath();
-    const cx = pts.reduce((s, p) => s + p.x, 0) / pts.length;
-    const cy = pts.reduce((s, p) => s + p.y, 0) / pts.length;
-    this.add.text(cx, cy, label, { fontFamily: 'Inter, sans-serif', fontSize: '11px', color: '#585b64' })
-      .setOrigin(0.5).setDepth(1);
+    const [[x0, y0], , [x1, y1]] = corners;
+    g.fillStyle(0xe9e4d6, 0.28);
+    if (y0 > 0) g.fillPoints([gridToScreen(x0, y0 - 0.03), gridToScreen(x1, y0 - 0.03), gridToScreen(x1, y0 + 0.03), gridToScreen(x0, y0 + 0.03)], true);
+    if (label) this.floorSticker(at ? at[0] : x0 + 0.9, at ? at[1] : (y0 + y1) / 2, label);
+  }
+
+  // etichetta di zona: un pezzo di nastro scritto a pennarello, sempre leggibile
+  floorSticker (gx, gy, text, color = '#d9d4c7') {
+    const p = gridToScreen(gx, gy);
+    const t = this.add.text(0, 0, text, { fontFamily: FONT_MARKER, fontSize: '15px', color: '#1b1b1b' }).setOrigin(0.5);
+    const w = t.width + 18, h = t.height + 2;
+    const bg = this.add.graphics();
+    bg.fillStyle(0x000000, 0.35); bg.fillRect(-w / 2 + 2, -h / 2 + 3, w, h);
+    bg.fillStyle(Phaser.Display.Color.HexStringToColor(color).color, 0.92);
+    bg.fillPoints([{ x: -w / 2, y: -h / 2 + 1 }, { x: w / 2, y: -h / 2 }, { x: w / 2 - 3, y: 0 }, { x: w / 2, y: h / 2 },
+      { x: -w / 2 + 1, y: h / 2 - 1 }, { x: -w / 2 + 4, y: 0 }], true);
+    return this.add.container(p.x, p.y, [bg, t]).setDepth(1.2).setAngle(-4).setAlpha(0.92);
   }
 
   drawZoneOutlines () {
     const pitStart = STAGE_ORIGIN_Y + STAGE_H;
     const plateaStart = pitStart + PIT_ROWS;
     const fohStart = plateaStart + PLATEA_ROWS;
-    this.drawZoneOutline([[0, 0], [VENUE_W, 0], [VENUE_W, CARICO_ROWS], [0, CARICO_ROWS]], 'Carico e scarico');
-    this.drawZoneOutline([[0, CARICO_ROWS], [VENUE_W, CARICO_ROWS], [VENUE_W, STAGE_ORIGIN_Y], [0, STAGE_ORIGIN_Y]], 'Backstage');
-    this.drawZoneOutline([[0, pitStart], [VENUE_W, pitStart], [VENUE_W, plateaStart], [0, plateaStart]], 'Pit');
-    this.drawZoneOutline([[0, plateaStart], [VENUE_W, plateaStart], [VENUE_W, fohStart], [0, fohStart]], 'Platea');
-    this.drawZoneOutline([[0, fohStart], [VENUE_W, fohStart], [VENUE_W, VENUE_H], [0, VENUE_H]], 'Regia di sala (FOH)');
+    this.drawZoneOutline([[0, 0], [VENUE_W, 0], [VENUE_W, CARICO_ROWS], [0, CARICO_ROWS]], null);
+    this.drawZoneOutline([[0, CARICO_ROWS], [VENUE_W, CARICO_ROWS], [VENUE_W, STAGE_ORIGIN_Y], [0, STAGE_ORIGIN_Y]], 'BACKSTAGE', [1.2, 3.1]);
+    this.drawZoneOutline([[0, pitStart], [VENUE_W, pitStart], [VENUE_W, plateaStart], [0, plateaStart]], 'PIT', [4.6, pitStart + 1.1]);
+    this.drawZoneOutline([[0, plateaStart], [VENUE_W, plateaStart], [VENUE_W, fohStart], [0, fohStart]], 'PLATEA', [4.6, plateaStart + 2]);
+    this.drawZoneOutline([[0, fohStart], [VENUE_W, fohStart], [VENUE_W, VENUE_H], [0, VENUE_H]], 'REGIA FOH', [4.6, fohStart + 1.2]);
   }
 
   /* Carico e scarico: il mezzo del service e i flight case, nella stessa
@@ -5679,11 +6375,12 @@ class StageScene extends Phaser.Scene {
     const vg = this.add.graphics().setDepth(1).setPosition(vp.x, vp.y);
     this.van = { vp, v, ...this.drawVehicle(vg, v) };
 
-    // i due bauli dei cavi e un case di ricambio, in fila lungo la banchina
-    const caseSpots = [[5.9, 0.9, 'segnale'], [7.2, 0.9, 'corrente'], [8.5, 0.9, null]];
+    // i due bauli dei cavi e un case di ricambio, dentro la palestra:
+    // nell'angolo dietro la regia FOH, contro la parete (celle occupate)
+    const caseSpots = [[0.55, 15.45, 'segnale'], [1.55, 15.45, 'corrente'], [0.55, 14.5, null]];
     caseSpots.forEach(([gx, gy, caseName], i) => {
       const p = gridToScreen(gx, gy);
-      const cg = this.add.graphics().setDepth(1.1 + gy / 100).setPosition(p.x, p.y);
+      const cg = this.add.graphics().setDepth(isoDepth(p.y) - 0.0005).setPosition(p.x, p.y);
       const tape = caseName === 'segnale' ? 0xeaff2b : caseName === 'corrente' ? 0xff4fb4 : null;
       this.drawFlightCase(cg, CASE_ISO, tape);
       if (!caseName) return;
@@ -5691,8 +6388,8 @@ class StageScene extends Phaser.Scene {
       this.casePos[caseName] = p;
       this.add.text(p.x, p.y - 34, CABLE_CASES[caseName].title, {
         fontFamily: 'Barlow Condensed, sans-serif', fontSize: '11px', fontStyle: 'bold', color: '#e6e8eb'
-      }).setOrigin(0.5).setDepth(2);
-      const hit = this.add.rectangle(p.x, p.y - 6, 58, 58, 0xffffff, 0.001).setDepth(2)
+      }).setOrigin(0.5).setDepth(isoDepth(p.y));
+      const hit = this.add.rectangle(p.x, p.y - 6, 58, 58, 0xffffff, 0.001).setDepth(isoDepth(p.y) + 0.0001)
         .setInteractive({ useHandCursor: true });
       hit.on('pointerdown', (pointer, lx, ly, event) => {
         if (event && event.stopPropagation) event.stopPropagation();
@@ -5897,19 +6594,22 @@ class StageScene extends Phaser.Scene {
           bottomV = gridToScreen(gx0 + totalW, gy0 + H), leftV = gridToScreen(gx0, gy0 + H);
 
     const sides = this.add.graphics().setDepth(2);
-    sides.fillStyle(0x2b241c, 1);
+    sides.fillStyle(0x1a1a1d, 1);
     sides.beginPath();
     sides.moveTo(rightV.x, rightV.y); sides.lineTo(bottomV.x, bottomV.y);
     sides.lineTo(bottomV.x, bottomV.y + PLATFORM_HEIGHT); sides.lineTo(rightV.x, rightV.y + PLATFORM_HEIGHT);
     sides.closePath(); sides.fillPath();
-    sides.fillStyle(0x231d17, 1);
+    sides.fillStyle(0x131315, 1);
     sides.beginPath();
     sides.moveTo(bottomV.x, bottomV.y); sides.lineTo(leftV.x, leftV.y);
     sides.lineTo(leftV.x, leftV.y + PLATFORM_HEIGHT); sides.lineTo(bottomV.x, bottomV.y + PLATFORM_HEIGHT);
     sides.closePath(); sides.fillPath();
 
+    // gonnellino nero del palco, a pieghe
+    for (let i = 0.25; i < totalW; i += 0.25) { const a = gridToScreen(gx0 + i, gy0 + H); sides.lineStyle(1, 0x2a2a2e, 0.9); sides.lineBetween(a.x, a.y + 2, a.x, a.y + PLATFORM_HEIGHT); }
+    for (let j = 0.25; j < H; j += 0.25) { const a = gridToScreen(gx0 + totalW, gy0 + j); sides.lineStyle(1, 0x2a2a2e, 0.9); sides.lineBetween(a.x, a.y + 2, a.x, a.y + PLATFORM_HEIGHT); }
     const top = this.add.graphics().setDepth(3);
-    top.fillStyle(0x3a3226, 1);
+    top.fillStyle(0x2c2721, 1);
     top.beginPath();
     top.moveTo(topV.x, topV.y); top.lineTo(rightV.x, rightV.y);
     top.lineTo(bottomV.x, bottomV.y); top.lineTo(leftV.x, leftV.y);
@@ -5930,13 +6630,17 @@ class StageScene extends Phaser.Scene {
         if ((i + j) % 2 === 0) continue;
         const p0 = gridToScreen(gx0 + i, gy0 + j), p1 = gridToScreen(gx0 + i + 1, gy0 + j),
               p2 = gridToScreen(gx0 + i + 1, gy0 + j + 1), p3 = gridToScreen(gx0 + i, gy0 + j + 1);
-        top.fillStyle(0x453b2c, 0.5);
+        top.fillStyle(0x36302a, 0.35);
         top.beginPath();
         top.moveTo(p0.x, p0.y); top.lineTo(p1.x, p1.y); top.lineTo(p2.x, p2.y); top.lineTo(p3.x, p3.y);
         top.closePath(); top.fillPath();
       }
     }
 
+    // nastro bianco di sicurezza sul bordo del palco
+    top.fillStyle(0xe9e4d6, 0.7);
+    top.fillPoints([gridToScreen(gx0, gy0 + H - 0.06), gridToScreen(gx0 + totalW, gy0 + H - 0.06), gridToScreen(gx0 + totalW, gy0 + H), gridToScreen(gx0, gy0 + H)], true);
+    top.fillPoints([gridToScreen(gx0, gy0), gridToScreen(gx0 + 0.06, gy0), gridToScreen(gx0 + 0.06, gy0 + H), gridToScreen(gx0, gy0 + H)], true);
     // contorno della sola pedana spettacolo (ambra, ben visibile: "qui suona la band")
     const coreRightV = gridToScreen(gx0 + STAGE_W, gy0), coreBottomV = gridToScreen(gx0 + STAGE_W, gy0 + H);
     top.lineStyle(2, 0xf2a541, 0.5);
@@ -5961,9 +6665,8 @@ class StageScene extends Phaser.Scene {
 
     const offCx = (coreRightV.x + rightV.x + bottomV.x + coreBottomV.x) / 4;
     const offCy = (coreRightV.y + rightV.y + bottomV.y + coreBottomV.y) / 4;
-    this.add.text(offCx, offCy, 'Off stage', {
-      fontFamily: 'Inter, sans-serif', fontSize: '10px', color: '#6b6e78'
-    }).setOrigin(0.5).setDepth(3);
+    this.floorSticker(STAGE_ORIGIN_X + STAGE_W + OFFSTAGE_W / 2, STAGE_ORIGIN_Y + 0.6, 'OFF STAGE', '#8b8e98').setDepth(3.1);
+    this.floorSticker(STAGE_ORIGIN_X + 0.9, STAGE_ORIGIN_Y + 0.5, 'PALCO', '#f2a541').setDepth(3.1);
 
     this.stageBox = {
       minX: Math.min(topV.x, rightV.x, bottomV.x, leftV.x),
@@ -5974,7 +6677,8 @@ class StageScene extends Phaser.Scene {
   }
 
   drawAllaccio () {
-    const pos = gridToScreen(8.5, CARICO_ROWS + 0.5);
+    // il quadro della palestra è appeso alla parete dietro al palco
+    const pos = gridToScreen(3.3, CARICO_ROWS + 0.25);
     const def = COMPONENT_TYPES.allaccio;
     const visual = this.buildComponentVisual('allaccio', def, pos.x, pos.y);
     this.compVisuals['allaccio'] = visual;
@@ -6693,7 +7397,8 @@ class StageScene extends Phaser.Scene {
     // sotto il dispositivo solo il conteggio delle prese collegate (es. "2/4"):
     // il nome si legge nel pannello, in scena sarebbe una scritta in più
     const idLabel = this.add.text(0, (def.body.oy || 0) + def.body.h / 2 + 12, '', {
-      fontFamily: 'Inter, sans-serif', fontSize: '11px', color: '#8b8e98'
+      fontFamily: 'Inter, sans-serif', fontStyle: 'bold', fontSize: '10px', color: '#8b8e98',
+      backgroundColor: 'rgba(12,13,16,0.82)', padding: { x: 5, y: 1 }
     }).setOrigin(0.5);
     c.add(idLabel);
 
@@ -6718,6 +7423,8 @@ class StageScene extends Phaser.Scene {
     body.on('pointerdown', (pointer, lx, ly, event) => {
       if (event && event.stopPropagation) event.stopPropagation();
       if (pointer.rightButtonDown()) return;
+      // cavo in mano: i dispositivi non rispondono, si prende solo il cavo
+      if (this.lay) { if (!this.layPointerDown(pointer)) this.layLocked(); return; }
       // un pezzo "armato" dalla barra si posa anche toccando sopra un dispositivo
       if (gameState.selectedPieceType) { this.placeArmedPieceAt(pointer.worldX, pointer.worldY); return; }
       this.onDevicePress(this.pickDeviceAt(pointer.worldX, pointer.worldY, 0) || id, pointer);
@@ -6748,6 +7455,7 @@ class StageScene extends Phaser.Scene {
       const badgeIcon = this.add.text(badgeX, badgeY, '🔍', { fontSize: '11px' }).setOrigin(0.5);
       badgeBg.on('pointerdown', (pointer, lx, ly, event) => {
         if (event && event.stopPropagation) event.stopPropagation();
+        if (this.lay) { if (!this.layPointerDown(pointer)) this.layLocked(); return; }
         renderQuadroModal();
         el('#quadro-modal').classList.add('show');
       });
@@ -6884,7 +7592,11 @@ class StageScene extends Phaser.Scene {
     }
     const pred = ZONE_PREDICATES[type] || (() => true);
     let n = 0;
-    g.fillStyle(0x49b06a, 0.2);
+    // il resto del locale si abbassa: resta in luce solo dove il pezzo può andare
+    g.fillStyle(0x07080a, 0.45);
+    g.fillPoints([gridToScreen(0, 0), gridToScreen(VENUE_W, 0), gridToScreen(VENUE_W, VENUE_H), gridToScreen(0, VENUE_H)], true);
+    g.fillStyle(0x49b06a, 0.3);
+    g.lineStyle(1, 0x7fe0a0, 0.55);
     for (let cx = 0; cx < VENUE_W; cx += CELL) {
       for (let cy = 0; cy < VENUE_H; cy += CELL) {
         if (!pred(cx, cy) || this.occupied[cellKey(cx, cy)]) continue;
@@ -6892,6 +7604,7 @@ class StageScene extends Phaser.Scene {
         const p0 = gridToScreen(cx + i, cy + i), p1 = gridToScreen(cx + CELL - i, cy + i),
               p2 = gridToScreen(cx + CELL - i, cy + CELL - i), p3 = gridToScreen(cx + i, cy + CELL - i);
         g.fillPoints([p0, p1, p2, p3], true);
+        g.strokePoints([p0, p1, p2, p3], true);
         n++;
       }
     }
@@ -6908,7 +7621,7 @@ class StageScene extends Phaser.Scene {
   /* piazza un componente in una posizione di mondo: usata sia dal trascinamento
      (via handleExternalDrop) sia dal tocco-e-tocco (via placeArmedPieceAt) */
   placeComponentAt (type, worldX, worldY) {
-    if (gameState.stock[type] <= 0) { showToast(type.toUpperCase() + ' esaurito per questo livello.'); return; }
+    if (gameState.stock[type] <= 0) { showToast(/^ciabatta/.test(type) ? CIABATTE_FINITE : type.toUpperCase() + ' esaurito per questo livello.'); return; }
 
     if (MOUNTS[type]) { this.attachToNearestBase(type, { x: worldX, y: worldY }); return; }
 
@@ -6940,6 +7653,7 @@ class StageScene extends Phaser.Scene {
     setCircuitStatus('untested');
     gameState.tested = false;
     this.pushHistory();
+    tireOut(FATIGUE.perAction);
     SFX.place();
     // la prima volta si spiega come si usa un dispositivo posato
     if (!this.gestureHintShown) {
@@ -7004,6 +7718,7 @@ class StageScene extends Phaser.Scene {
     SFX.place();
     showToast(m.done(base.id), 'ok');
     this.pushHistory();
+    tireOut(FATIGUE.perAction);
   }
 
   /* ---------------- wiring ---------------- */
@@ -7069,6 +7784,9 @@ class StageScene extends Phaser.Scene {
     };
     // il capo ferma il primo collegamento sotto carico (il cavo resta in mano)
     if (tutorOn() && wouldArc(edge, true) && tutorWarn('live')) return;
+    // tecnico stanco: ogni tanto il connettore scivola di mano (il cavo
+    // resta in mano, basta riprovare). Vedi FATIGUE.
+    if (fatigueSlip()) { showToast('Sei stanco: il connettore ti scivola di mano. Riprova (una 🍺 ti rimette in sesto).'); return; }
     gameState.edgeSeq++;
     // collegare sotto tensione fa scattare il salvavita; altrimenti il
     // dispositivo appena alimentato (se già acceso) parte davvero
@@ -7082,12 +7800,13 @@ class StageScene extends Phaser.Scene {
     setCircuitStatus('untested');
     gameState.tested = false;
     this.pushHistory();
+    tireOut(FATIGUE.perAction);
     if (edge.signal === 'xlr') presideMicHint();
   }
 
   redrawEdges () {
     this.edgeGraphics.clear();
-    const anySelected = this.selectedEdgeId != null;
+    const anySelected = this.selectedEdgeId != null || !!this.lay;
     gameState.edges.forEach(e => {
       const cableKind = CABLE_TYPES[e.signal];
       if (!gameState.visibleSignals[cableKind.layer]) { e._pts = null; return; }
@@ -7096,14 +7815,18 @@ class StageScene extends Phaser.Scene {
       if (!from || !to) { e._pts = null; return; }
       const zoneA = gameState.placed[e.a] && gameState.placed[e.a].zone;
       const zoneB = gameState.placed[e.b] && gameState.placed[e.b].zone;
-      const isSelected = e.id === this.selectedEdgeId;
+      const isSelected = e.id === this.selectedEdgeId || (this.lay && this.lay.id === e.id);
       const color = isSelected ? 0xf2a541 : cableKind.color;
       const width = isSelected ? 5 : 3;
       // con un cavo selezionato, tutti gli altri si "spengono" per farlo
       // risaltare nella matassa; senza selezione restano tutti a piena vista
       const alpha = anySelected ? (isSelected ? 1 : 0.16) : 1;
+      // i cavi per terra: quelli piegati alla posa delle 20:00, se no il
+      // percorso steso al montaggio (o quello automatico) a tratti dritti
       const route = caviRoute(e);
+      const floor = route ? null : this.edgeFloor(e);
       const pts = route ? [from, ...route, to]
+        : floor ? [from, ...layToScreen(floor.pts), to]
         : (zoneA === 'stage' && zoneB === 'stage') ? [from, to]
         : computeRoutePoints(from, to, this.stageBox, 30);
       // cavo in neoprene nero (come quelli veri), con un bordo appena più
@@ -7129,6 +7852,8 @@ class StageScene extends Phaser.Scene {
       if (!isSelected) this.drawFlowArrow(pts, color, alpha);
     });
     this.refreshEdgeDeleteButton();
+    this.drawGerryFloor();
+    if (this.lay || this.layGraphics) this.drawLay();
     this.updateConnectionBadges();
     this.refreshLive();
     updateConnectionCounter();
@@ -7230,6 +7955,288 @@ class StageScene extends Phaser.Scene {
     this.pushHistory();
   }
 
+  /* ---------------- posa del cavo al montaggio ----------------
+     Appena collegato (o toccandolo), il cavo resta "in mano": gli altri si
+     spengono, i dispositivi non rispondono ai tocchi, e i suoi tratti si
+     trascinano col dito scattando sulla griglia. Fatto (o un tocco sul
+     pavimento) lo lascia così; il percorso si salva sul cavo (e.route). */
+  edgeEnds (e) {
+    const P = gameState.placed, a = posaBase(P[e.a]), b = posaBase(P[e.b]);
+    if (!a || !b || a.id === b.id) return null;
+    const at = c => {
+      if (c.gx != null) return compCenter(c);
+      const v = this.compVisuals[c.id];
+      return v ? worldToFloor(v.container.x, v.container.y) : null;
+    };
+    const A = at(a), B = at(b);
+    return A && B ? { A, B, key: posaBaseKey(a) + '|' + posaBaseKey(b) } : null;
+  }
+
+  edgeFloor (e) {
+    const ends = this.edgeEnds(e);
+    if (!ends) return null;
+    let route;
+    if (this.lay && this.lay.id === e.id) route = this.lay.route;
+    else if (e.route && e.route.key === ends.key) route = layPin({ o0: e.route.o0, rails: e.route.rails.slice() }, ends.A, ends.B);
+    else route = layAutoRoute(ends.A, ends.B);
+    return { ...ends, route, pts: layPoints(route, ends.A, ends.B) };
+  }
+
+  // pixel di schermo per unità di mondo (per tenere i pallini grandi come un dito)
+  screenScale () {
+    const rc = this.game.canvas.getBoundingClientRect();
+    return this.cameras.main.zoom * (rc.width / GAME_W);
+  }
+
+  startLay (edgeId) {
+    const e = gameState.edges.find(x => x.id === edgeId);
+    const f = e && this.edgeFloor(e);
+    if (!f) return false;
+    this.endLay(true);
+    this.clearMoveSelection();
+    this.exitAssembly();
+    this.cancelPending();
+    this.selectedEdgeId = null;
+    if (this.edgeDeleteBtn) { this.edgeDeleteBtn.destroy(); this.edgeDeleteBtn = null; }
+    this.lay = { id: edgeId, route: { o0: f.route.o0, rails: f.route.rails.slice() }, start: JSON.stringify(f.route), drag: null, cam: null };
+    // sul telefono la scena è piccola: ci si avvicina al cavo, poi si torna
+    if (this.screenScale() < CROWD_SCALE) {
+      const sp = layToScreen(f.pts);
+      const xs = sp.map(p => p.x), ys = sp.map(p => p.y);
+      const bw = Math.max(80, Math.max(...xs) - Math.min(...xs)), bh = Math.max(60, Math.max(...ys) - Math.min(...ys));
+      const cam = this.cameras.main;
+      const z = Math.min(2.2, GAME_W * 0.65 / bw, GAME_H * 0.5 / bh);
+      if (z > cam.zoom * 1.1) {
+        this.lay.cam = { zoom: cam.zoom, x: cam.midPoint.x, y: cam.midPoint.y };
+        this.camGlide(z, (Math.min(...xs) + Math.max(...xs)) / 2, (Math.min(...ys) + Math.max(...ys)) / 2 + GAME_H * 0.06 / z);
+      }
+    }
+    el('#lay-bar').classList.add('show');
+    this.redrawEdges();
+    return true;
+  }
+
+  // la vista scivola a uno zoom e a un centro (in coordinate del mondo)
+  camGlide (z, x, y) {
+    const cam = this.cameras.main, z0 = cam.zoom, x0 = cam.midPoint.x, y0 = cam.midPoint.y;
+    if (this.camTween) this.camTween.stop();
+    this.camTween = this.tweens.addCounter({
+      from: 0, to: 1, duration: 250, ease: 'Sine.easeOut',
+      onUpdate: tw => { const t = tw.getValue(); cam.setZoom(z0 + (z - z0) * t); cam.centerOn(x0 + (x - x0) * t, y0 + (y - y0) * t); }
+    });
+  }
+
+  // save: il percorso resta sul cavo; altrimenti si lascia com'era
+  endLay (save) {
+    const L = this.lay;
+    if (!L) return;
+    this.lay = null;
+    el('#lay-bar').classList.remove('show');
+    if (this.layGraphics) this.layGraphics.clear();
+    const e = gameState.edges.find(x => x.id === L.id);
+    const ends = e && this.edgeEnds(e);
+    // si salva solo un percorso cambiato (con il suo passo di Annulla)
+    if (save && e && ends && JSON.stringify(L.route) !== L.start) {
+      e.route = { o0: L.route.o0, rails: L.route.rails.slice(), key: ends.key };
+      SFX.place();
+      this.pushHistory();
+    }
+    if (L.cam) {
+      this.camGlide(L.cam.zoom, L.cam.x, L.cam.y);
+    }
+    this.redrawEdges();
+  }
+
+  // un tocco sul cavo in mano: quale tratto si prende (null se nessuno)
+  layPointerDown (pointer) {
+    const L = this.lay;
+    if (!L || (pointer.downElement && pointer.downElement !== this.game.canvas)) return false;
+    const e = gameState.edges.find(x => x.id === L.id);
+    const f = e && this.edgeFloor(e);
+    if (!f) return false;
+    const k = this.screenScale(), tol = 28 / k;
+    let best = null, bestD = tol;
+    for (let i = 0; i < f.pts.length - 1; i++) {
+      const s = layToScreen([f.pts[i], f.pts[i + 1]]);
+      for (let j = 0; j < s.length - 1; j++) {
+        const d = pointToSegmentDistance(pointer.worldX, pointer.worldY, s[j].x, s[j].y, s[j + 1].x, s[j + 1].y);
+        if (d < bestD) { bestD = d; best = i; }
+      }
+    }
+    if (best == null) return false;
+    L.drag = { seg: best };
+    if (navigator.vibrate) navigator.vibrate(10);
+    return true;
+  }
+
+  layDragMove (pointer) {
+    const L = this.lay, e = gameState.edges.find(x => x.id === L.id);
+    const ends = e && this.edgeEnds(e);
+    if (!ends) return;
+    const r = L.route, n = r.rails.length;
+    let i = L.drag.seg;
+    const o = layOrient(r, i);
+    const m = worldToFloor(pointer.worldX, pointer.worldY);
+    const lim = (o === 'h' ? VENUE_H : VENUE_W) - CELL / 2;
+    const v = Math.min(lim, Math.max(CELL / 2, laySnap(o === 'h' ? m.gy : m.gx)));
+    if (Math.abs(v - r.rails[i]) < 1e-6) return;
+    const next = { o0: r.o0, rails: r.rails.slice() };
+    // il primo e l'ultimo tratto partono dal pezzo: spostandoli nasce un
+    // tratto corto che scende dal pezzo, e quello preso diventa libero
+    if (i === 0) { next.o0 = next.o0 === 'h' ? 'v' : 'h'; next.rails.unshift(0); i = 1; }
+    if (L.drag.seg === n - 1) next.rails.push(0);
+    next.rails[i] = v;
+    layPin(next, ends.A, ends.B);
+    const max = layMaxLen(e);
+    const len = layLength(layPoints(next, ends.A, ends.B)), cur = layLength(layPoints(r, ends.A, ends.B));
+    if (max && len > max + 1e-6 && len > cur) {
+      // il cavo è teso: non si allunga oltre la sua misura
+      if (!L.taut) { L.taut = true; this.updateLayBar(e, cur, max); if (navigator.vibrate) navigator.vibrate([15, 40, 15]); }
+      return;
+    }
+    L.taut = false;
+    L.route = next;
+    L.drag.seg = i;
+    this.redrawEdges();
+  }
+
+  layDragEnd () {
+    const L = this.lay, e = gameState.edges.find(x => x.id === L.id);
+    const ends = e && this.edgeEnds(e);
+    L.drag = null; L.taut = false;
+    if (ends) L.route = layTidy(L.route, ends.A, ends.B);
+    this.redrawEdges();
+  }
+
+  layReset () {
+    const L = this.lay, e = L && gameState.edges.find(x => x.id === L.id);
+    const ends = e && this.edgeEnds(e);
+    if (!ends) return;
+    L.route = layAutoRoute(ends.A, ends.B);
+    this.redrawEdges();
+  }
+
+  updateLayBar (e, len, max) {
+    const name = (cableItem(e.signal) || {}).name || cableName(e.signal);
+    const over = max && len > max + 1e-6;
+    el('#lay-text').innerHTML = `<b>${escapeHtml(name)}</b> · <span class="${over || this.lay.taut ? 'lay-over' : ''}">${fmtM(len)}${max ? ' / ' + max + ' m' : ''}</span>`
+      + (this.layIssue && !this.lay.taut ? `<small class="lay-over">${escapeHtml(this.layIssue.text)}</small>`
+        : `<small>${this.lay.taut ? 'Il cavo è teso: non arriva più in là.' : over ? 'Troppo corto: cerca una strada più breve.' : 'Trascina il cavo: scatta sulla griglia.'}</small>`);
+  }
+
+  /* via di fuga e passaggi sul pavimento (le regole di Gerry), e i punti
+     dei cavi che Gerry boccerebbe: quelli del cavo in mano mentre lo si
+     stende, tutti dopo un giro di Gerry finché non apre le porte */
+  drawGerryFloor () {
+    if (!this.gerryGraphics) {
+      this.gerryGraphics = this.add.graphics().setDepth(1.6);
+      this.gerryMarkGraphics = this.add.graphics().setDepth(5.8);
+      this.gerryLabels = {};
+    }
+    const g = this.gerryGraphics, mg = this.gerryMarkGraphics;
+    g.clear(); mg.clear();
+    const { passages, exits } = gerryZones();
+    const quad = (x0, y0, x1, y1) => [gridToScreen(x0, y0), gridToScreen(x1, y0), gridToScreen(x1, y1), gridToScreen(x0, y1)];
+    const fillQuad = (q, color, alpha) => { g.fillStyle(color, alpha); g.fillPoints(q, true); };
+    const label = (id, text, q, color) => {
+      let t = this.gerryLabels[id];
+      if (!t) t = this.gerryLabels[id] = this.add.text(0, 0, text, { fontFamily: 'Inter, sans-serif', fontSize: '10px', fontStyle: 'bold', color }).setOrigin(0.5).setDepth(1.7);
+      t.setPosition((q[0].x + q[2].x) / 2, (q[0].y + q[2].y) / 2).setVisible(true);
+    };
+    Object.values(this.gerryLabels).forEach(t => t.setVisible(false));
+    exits.forEach(z => {
+      const [i, j, w, h] = z.r, q = quad(i * CELL, j * CELL, (i + w) * CELL, (j + h) * CELL);
+      fillQuad(q, 0xe0503f, 0.22);
+      // strisce rosse in diagonale, come il nastro a terra
+      for (let k = 0; k < w + h; k++) {
+        const a = gridToScreen(Math.min(i + k, i + w) * CELL, (j + Math.max(0, k - w)) * CELL);
+        const b = gridToScreen(Math.max(i, i + k - h) * CELL, (j + Math.min(k, h)) * CELL);
+        g.lineStyle(2, 0xe0503f, 0.7); g.lineBetween(a.x, a.y, b.x, b.y);
+      }
+      g.lineStyle(2, 0xe0503f, 0.9); g.strokePoints(q, true);
+      label(z.id, 'VIA DI FUGA', q, '#ff8b7d');
+    });
+    passages.forEach(z => {
+      const [i, j, w, h] = z.r;
+      // strisce pedonali: si attraversa dritti (lungo gx)
+      for (let k = 0; k < h; k++) if (k % 2 === 0) fillQuad(quad(i * CELL, (j + k) * CELL, (i + w) * CELL, (j + k + 1) * CELL), 0xf2c53d, 0.2);
+      const q = quad(i * CELL, j * CELL, (i + w) * CELL, (j + h) * CELL);
+      g.lineStyle(1.5, 0xf2c53d, 0.6); g.strokePoints(q, true);
+      label(z.id, 'PASSAGGIO', q, '#f2c53d');
+    });
+    // i punti da sistemare
+    let issues = [];
+    if (this.gerryMarks || this.lay) {
+      issues = gerryIssues();
+      if (!this.gerryMarks) issues = issues.filter(x => x.ids.includes(this.lay.id));
+    }
+    issues.forEach(is => is.cells.forEach(c => {
+      const q = [[0, 0], [1, 0], [1, 1], [0, 1]].map(([di, dj]) => {
+        const x = (c.i + di) * CELL, y = (c.j + dj) * CELL, p = gridToScreen(x, y);
+        return isStageCell(c.i * CELL, c.j * CELL) ? { x: p.x, y: p.y - PLATFORM_HEIGHT } : p;
+      });
+      mg.fillStyle(0xe0503f, 0.35); mg.fillPoints(q, true);
+      mg.lineStyle(1.5, 0xe0503f, 0.95); mg.strokePoints(q, true);
+    }));
+    this.layIssue = this.lay ? (issues.find(x => x.ids.includes(this.lay.id)) || null) : null;
+  }
+
+  // pallini sui tratti del cavo in mano e il cavo che avanza, arrotolato
+  drawLay () {
+    if (!this.layGraphics) this.layGraphics = this.add.graphics().setDepth(7);
+    const g = this.layGraphics;
+    g.clear();
+    const L = this.lay, e = L && gameState.edges.find(x => x.id === L.id);
+    const f = e && this.edgeFloor(e);
+    if (!f) return;
+    const k = this.screenScale(), r = 11 / k;
+    const max = layMaxLen(e), len = layLength(f.pts);
+    for (let i = 0; i < f.pts.length - 1; i++) {
+      const a = f.pts[i], b = f.pts[i + 1];
+      if (Math.abs(b.gx - a.gx) + Math.abs(b.gy - a.gy) < CELL) continue;
+      const mid = layToScreen([{ gx: (a.gx + b.gx) / 2, gy: (a.gy + b.gy) / 2 }, { gx: (a.gx + b.gx) / 2, gy: (a.gy + b.gy) / 2 }])[0];
+      const on = L.drag && L.drag.seg === i;
+      g.fillStyle(on ? 0xf2a541 : 0x1c1d22, 1);
+      g.lineStyle(2.5 / k, 0xf2a541, 1);
+      g.fillCircle(mid.x, mid.y, on ? r * 1.25 : r);
+      g.strokeCircle(mid.x, mid.y, on ? r * 1.25 : r);
+      // freccette: il tratto si sposta di lato
+      const o = layOrient(f.route, i);
+      const d = o === 'h' ? gridToScreen(0, 1) : gridToScreen(1, 0), d0 = gridToScreen(0, 0);
+      const dx = d.x - d0.x, dy = d.y - d0.y, dl = Math.hypot(dx, dy);
+      g.fillStyle(on ? 0x1c1d22 : 0xf2a541, 1);
+      [-1, 1].forEach(s => {
+        const ux = dx / dl * s, uy = dy / dl * s, cx = mid.x + ux * r * 0.45, cy = mid.y + uy * r * 0.45;
+        g.fillTriangle(cx + ux * r * 0.4, cy + uy * r * 0.4, cx - uy * r * 0.3, cy + ux * r * 0.3, cx + uy * r * 0.3, cy - ux * r * 0.3);
+      });
+    }
+    // quello che avanza si arrotola a otto accanto al pezzo di arrivo
+    if (max && max - len >= 1) {
+      const B = layToScreen([f.B, f.B])[0], s = Math.min(1.6, 0.6 + (max - len) / 10);
+      g.lineStyle(2, 0x17181b, 1);
+      g.strokeEllipse(B.x + 14 * s, B.y + 6, 12 * s, 7 * s);
+      g.strokeEllipse(B.x + 24 * s, B.y + 6, 12 * s, 7 * s);
+      g.lineStyle(1, CABLE_TYPES[e.signal].color, 1);
+      g.strokeEllipse(B.x + 14 * s, B.y + 6, 12 * s, 7 * s);
+      g.strokeEllipse(B.x + 24 * s, B.y + 6, 12 * s, 7 * s);
+    }
+    this.updateLayBar(e, len, max);
+  }
+
+  // Togli: il cavo in mano torna nel baule
+  layDelete () {
+    const L = this.lay;
+    if (!L) return;
+    this.endLay(false);
+    this.selectedEdgeId = L.id;
+    this.deleteSelectedEdge();
+  }
+
+  // un tocco su un dispositivo mentre si stende un cavo: non succede niente
+  layLocked () {
+    showToast('Stai sistemando un cavo: tocca Fatto (o il pavimento) prima di passare ad altro.');
+  }
+
   /* ---------------- livelli: filtro di visibilità per tipo di cavo ---------------- */
   applyLayerVisibility () {
     this.selectedEdgeId = null;
@@ -7322,6 +8329,7 @@ class StageScene extends Phaser.Scene {
       first.edge > 0 ? x.edge - first.edge < 6 : (x.edge === 0 && x.center < first.center * 1.35 + 4)));
     if (!close.length) { openRearPanel(first.id); return true; }
     this.showPickMenu([first, ...close].slice(0, 4).map(x => x.id), wx, wy);
+    this.zoomToCrowd(wx, wy);
     return true;
   }
   showPickMenu (ids, wx, wy) {
@@ -7364,6 +8372,13 @@ class StageScene extends Phaser.Scene {
 
   // trascinamento di un dispositivo in montaggio: anteprima della cella
   onScenePointerMove (pointer) {
+    if (this.lay && this.lay.drag) {
+      // due dita: si zooma, il cavo resta dov'è
+      const p2 = this.input.pointer2;
+      if (p2 && p2.isDown) { this.layDragEnd(); return false; }
+      if (pointer.isDown) this.layDragMove(pointer);
+      return true;
+    }
     const pr = this.press;
     if (!pr || !pointer.isDown) return false;
     if (!pr.moved && Phaser.Math.Distance.Between(pointer.x, pointer.y, pr.x, pr.y) > 8) {
@@ -7381,6 +8396,7 @@ class StageScene extends Phaser.Scene {
   }
 
   onScenePointerUp (pointer) {
+    if (this.lay && this.lay.drag) { this.layDragEnd(); return; }
     const pr = this.press;
     if (!pr) return;
     this.press = null;
@@ -7952,7 +8968,7 @@ class StageScene extends Phaser.Scene {
     };
     const label = (gx, gy, text, color) => {
       const p = gridToScreen(gx, gy);
-      const t = this.add.text(p.x, p.y, text, { fontFamily: FONT_MARKER, fontSize: '10px', color }).setOrigin(0.5).setDepth(3.6).setAlpha(0.9);
+      const t = this.add.text(p.x, p.y, text, { fontFamily: FONT_MARKER, fontSize: '12px', color: '#141414', backgroundColor: color, padding: { x: 5, y: 0 } }).setOrigin(0.5).setDepth(3.6).setAlpha(0.88).setAngle(-4);
       this.tapeObjs.push(t);
     };
     TAPE_MARKS.forEach(m => {
@@ -7966,10 +8982,10 @@ class StageScene extends Phaser.Scene {
         });
         label(m.gx + m.w + 0.25, m.gy + m.h / 2, m.text, m.color);
       } else {
-        const r = 0.16;
-        strip(m.gx - r, m.gy - r, m.gx + r, m.gy + r, 0.06, color);
-        strip(m.gx - r, m.gy + r, m.gx + r, m.gy - r, 0.06, color);
-        label(m.gx + 0.05, m.gy + 0.42, m.text, m.color);
+        const r = 0.22;
+        strip(m.gx - r, m.gy - r, m.gx + r, m.gy + r, 0.08, color);
+        strip(m.gx - r, m.gy + r, m.gx + r, m.gy - r, 0.08, color);
+        label(m.gx + 0.05, m.gy + 0.5, m.text, m.color);
       }
     });
   }
@@ -8271,7 +9287,7 @@ class StageScene extends Phaser.Scene {
 
     Object.values(this.compVisuals).forEach(v => v.container.destroy());
     this.compVisuals = {};
-    this.occupied = {};
+    this.occupied = {}; this.blockSceneryCells();
     this.edgeGraphics.clear();
 
     gameState.placed = {};
@@ -8333,6 +9349,7 @@ class StageScene extends Phaser.Scene {
   }
 
   restoreSnapshot (snap) {
+    if (this.lay) { this.lay = null; el('#lay-bar').classList.remove('show'); }
     this.stopFx();
     this.clearEdgeSelection();
     this.clearMoveSelection();
@@ -8340,7 +9357,7 @@ class StageScene extends Phaser.Scene {
 
     Object.values(this.compVisuals).forEach(v => v.container.destroy());
     this.compVisuals = {};
-    this.occupied = {};
+    this.occupied = {}; this.blockSceneryCells();
 
     gameState.placed = JSON.parse(JSON.stringify(snap.placed));
     gameState.edges = JSON.parse(JSON.stringify(snap.edges));

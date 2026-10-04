@@ -83,10 +83,10 @@ const path = require('path');
   check(test.status === 'IMPIANTO OK' && /Monta l'asta|collegalo con un XLR/.test(test.msg), 'Test impianto non superato: ' + JSON.stringify(test));
   // fine dello show senza aspettare i timer di Phaser (come tests/posa-cavi-gioco.js)
   await ev(() => { const s = window.__scene; s.stopFx(); s.afterShow(); });
-  await p.waitForSelector('#cavi-frame', { timeout: 10000 });
+  await p.waitForSelector('#gerry-modal.show', { timeout: 10000 });
   check(await ev(() => schedulePhaseState('preside')) === 'next', 'il discorso è già "Adesso" prima della posa');
-  await p.frameLocator('#cavi-frame').locator('#btn-skip').click();
-  await p.waitForFunction(() => !document.querySelector('#cavi-frame'));
+  await p.click('#gerry-go');
+  await p.waitForFunction(() => !gerryOpen);
   // microfono staccato: il preside aspetta e l'avviso dice cosa fare
   const wait = await ev(() => ({ toast: el('#toast').textContent, state: schedulePhaseState('preside'), porte: schedulePhaseState('porte') }));
   check(/parla il preside: collega il microfono/.test(wait.toast) && wait.state === 'now' && wait.porte === 'done', 'dopo la posa, senza microfono: ' + JSON.stringify(wait));
@@ -106,8 +106,12 @@ const path = require('path');
   const intro = await frame.evaluate(() => ({
     wired: document.querySelector('.wired-n').textContent, fronts: document.querySelector('#front-names').textContent,
     picks: !document.querySelector('#cause-pick').hidden || !document.querySelector('#posa-pick').hidden,
-    pars: [...document.querySelectorAll('#par-btns .par')].map(x => x.textContent), left: [...window.__tramp.posaLeft], beers: window.__tramp.state().beers
+    pars: [...document.querySelectorAll('#par-btns .par')].map(x => x.textContent), left: [...window.__tramp.posaLeft], beers: window.__tramp.state().beers,
+    fatigue: window.__tramp.state().fatigue
   }));
+  // la stanchezza del tecnico entra nel discorso (salita col montaggio)
+  const tired = await ev(() => fatigue());
+  check(tired > 0 && intro.fatigue === tired, 'la stanchezza non arriva al discorso: ' + JSON.stringify({ tired, frame: intro.fatigue }));
   check(intro.wired === '3' && !intro.picks && intro.pars.length === 4 && intro.pars.filter(t => /frontale/.test(t)).length === 2
     && /^PAR \d e PAR \d$/.test(intro.fronts) && !intro.left.length && intro.beers === 2, 'scheda del discorso sbagliata: ' + JSON.stringify(intro));
   // il discorso: si beve una birra, poi si va dritti alla fine
@@ -121,6 +125,8 @@ const path = require('path');
   await p.waitForFunction(() => !document.querySelector('#preside-frame'));
   const after = await ev(() => ({ preside: Profile.data.preside, rep: Profile.data.reputation.earned['L1:preside'], beers: Profile.data.beers, open: presideOpen, toast: el('#toast').textContent,
     row: (renderSchedule(), [...document.querySelectorAll('.sched-row')].find(r => /Preside/.test(r.textContent)).textContent) }));
+  // e torna al gioco: salita durante il discorso, 30 in meno per la birra bevuta
+  check(Number.isFinite(res.fatigue) && Math.abs(await ev(() => fatigue()) - res.fatigue) < 0.1 && res.fatigue < tired, 'la stanchezza del discorso non torna al gioco: ' + JSON.stringify({ tired, res: res.fatigue, game: await ev(() => fatigue()) }));
   check(after.preside && after.preside.grad === res.grad && after.rep === res.rep && res.rep > 0 && after.beers === 2 - 1 + res.beers && !after.open,
     'esito del discorso non salvato: ' + JSON.stringify({ after, res }));
   check(/Fatto/.test(after.row) && /Pubblico al/.test(after.row) && /pubblico al/.test(after.toast), 'scaletta o avviso senza il discorso: ' + JSON.stringify(after));

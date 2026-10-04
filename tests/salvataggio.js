@@ -187,9 +187,9 @@ const os = require('os');
   const cards = await slotCards();
   check(cards.length === 3, 'non ci sono tre slot: ' + cards.length);
   check(!cards[0].empty && cards[0].text.includes(pick.name) && cards[0].text.includes('Marco') && cards[0].logo
-    && /Livello 1 · Festa della scuola: Messa in sicurezza dei cavi \(2\/5\)/.test(cards[0].text) && /★ 5/.test(cards[0].text)
+    && /Livello 1 · Festa della scuola: Messa in sicurezza dei cavi \(2\/6\)/.test(cards[0].text) && /★ 5/.test(cards[0].text)
     && /Ultima partita: \d/.test(cards[0].text), 'slot 1 incompleto: ' + cards[0].text);
-  check(cards[1].active && cards[1].text.includes('Nuova Tecnica') && /in gioco/.test(cards[1].text) && /Montaggio e test impianto \(1\/5\)/.test(cards[1].text) && /★ 0/.test(cards[1].text), 'slot 2 sbagliato: ' + cards[1].text);
+  check(cards[1].active && cards[1].text.includes('Nuova Tecnica') && /in gioco/.test(cards[1].text) && /Montaggio e test impianto \(1\/6\)/.test(cards[1].text) && /★ 0/.test(cards[1].text), 'slot 2 sbagliato: ' + cards[1].text);
   check(cards[2].empty, 'lo slot 3 non è vuoto');
 
   // ---- scelta del livello: il livello 1 aperto con le sue fasi, gli altri
@@ -301,12 +301,12 @@ const os = require('os');
   check(JSON.stringify(conv3) === JSON.stringify({ v: 5, sk: true, skipSet: false, rep: 7 }), 'conversione dalla versione 3 sbagliata: ' + JSON.stringify(conv3));
 
   // ---- salvataggio della versione 4 (un solo slot): la partita diventa
-  // il primo slot, impostazioni, record e service già proposti restano comuni
+  // il primo slot (il tecnico riprende riposato), impostazioni, record e service già proposti restano comuni
   await p.waitForTimeout(400);
   await ev(() => { Profile.flush = () => {}; localStorage.setItem('scs-save', JSON.stringify({ v: 4, player: 'Bruno', service: 'Faro Matto', logo: { shape: 'scudo', icon: 'faro', bg: '#e0503f', fg: '#eee9df', style: 'tour' }, serviceInfo: { kind: 'feste', boss: 'Gino' }, usedServices: ['Faro Matto', 'Altro Service'], settings: { volume: 0.4 }, tutorSeen: {}, level: { id: 1, placed: {}, edges: [] }, scarico: { skipped: true, lost: {}, delay: 0, beers: 0 }, cavi: null, preside: null, cambioDj: null, beers: 2, records: { 1: [{ at: 1, player: 'Bruno', service: 'Faro Matto', playMs: 1000, tests: 1, failedTests: 0, trips: 0, rcdTrips: 0, pops: 0 }] }, reputation: { total: 9, earned: { 'L1:collaudo': 5 }, log: [] } })); });
   await open();
-  const conv4 = await ev(() => { Profile.flush(); const saved = JSON.parse(localStorage.getItem('scs-save')); return { v: Profile.data.v, active: Profile.active, slots: Profile.slots().map(s => s && s.player), rep: reputation(), beers: Profile.data.beers, recs: Profile.data.records[1].length, vol: settings().volume, used: Profile.data.usedServices.length, savedV: saved.v, savedSlot: Object.keys(saved.slots[0]).includes('settings'), savedVol: saved.settings.volume, savedRecs: saved.records[1].length }; });
-  check(JSON.stringify(conv4) === JSON.stringify({ v: 5, active: 0, slots: ['Bruno', null, null], rep: 9, beers: 2, recs: 1, vol: 0.4, used: 2, savedV: 5, savedSlot: false, savedVol: 0.4, savedRecs: 1 }), 'conversione dalla versione 4 sbagliata: ' + JSON.stringify(conv4));
+  const conv4 = await ev(() => { Profile.flush(); const saved = JSON.parse(localStorage.getItem('scs-save')); return { v: Profile.data.v, active: Profile.active, slots: Profile.slots().map(s => s && s.player), rep: reputation(), beers: Profile.data.beers, fat: Profile.data.fatigue, recs: Profile.data.records[1].length, vol: settings().volume, used: Profile.data.usedServices.length, savedV: saved.v, savedSlot: Object.keys(saved.slots[0]).includes('settings'), savedVol: saved.settings.volume, savedRecs: saved.records[1].length }; });
+  check(JSON.stringify(conv4) === JSON.stringify({ v: 5, active: 0, slots: ['Bruno', null, null], rep: 9, beers: 2, fat: 0, recs: 1, vol: 0.4, used: 2, savedV: 5, savedSlot: false, savedVol: 0.4, savedRecs: 1 }), 'conversione dalla versione 4 sbagliata: ' + JSON.stringify(conv4));
   check((await p.textContent('#menu-resume')) === 'Continua · Bruno · Faro Matto · ★ 9', 'dopo la conversione manca Continua: ' + await p.textContent('#menu-resume'));
 
   // ---- sul telefono (360 px): la schermata degli slot entra senza scorrere di lato
