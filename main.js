@@ -7998,9 +7998,12 @@ class StageScene extends Phaser.Scene {
       // percorso steso al montaggio (o quello automatico) a tratti dritti
       const route = caviRoute(e);
       const floor = route ? null : this.edgeFloor(e);
+      // sub e testa sullo stesso palo: il cavetto va dritto dall'uno all'altra
+      const baseA = posaBase(gameState.placed[e.a]);
+      const sameBase = baseA && baseA === posaBase(gameState.placed[e.b]);
       const pts = route ? [from, ...route, to]
         : floor ? [from, ...layToScreen(floor.smooth), to]
-        : (zoneA === 'stage' && zoneB === 'stage') ? [from, to]
+        : (sameBase || (zoneA === 'stage' && zoneB === 'stage')) ? [from, to]
         : computeRoutePoints(from, to, this.stageBox, 30);
       // cavo in neoprene nero (come quelli veri), con un bordo appena più
       // chiaro per staccarlo dal pavimento e un filetto centrale del colore
