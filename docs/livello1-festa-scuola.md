@@ -13,7 +13,7 @@ Il livello è una serata divisa in fasi, sbloccate una dopo l'altra:
 | 1 | **Discorso del preside** | Test impianto superato | microfono su asta sul palco, XLR fino al mixer, canale aperto e udibile |
 | 2 | **DJ set** | discorso finito | consolle DJ (mixer DJ + 2 piatti) alimentata; uscita del mixer DJ → DI → XLR → mixer di sala |
 | 3 | **Karaoke di Macio** (fatto, al posto del cantante) | DJ cacciato da Gerry | il microfono ancora collegato al mixer acceso: vedi *Dopo il DJ: il karaoke di Macio* |
-| 4 | **Carico del furgone** (deciso) | fine serata | minigioco puzzle, da progettare |
+| 4 | **Carico del furgone** | fine serata (dopo il karaoke) | `carico.html`: incastrare i case nel furgone, tre cinghie, la prova su strada. Vedi `docs/minigioco-carico.md` |
 
 Ogni fase si chiude con un proprio test: se passa parte un'**animazione di 10 secondi**
 che mostra cosa succede (il preside parla e il pubblico applaude, la gente balla
@@ -412,19 +412,32 @@ che legge: se la sillaba non arriva in tempo si perde («ehm», «boh»).
 - **Il larsen**: due volte Macio va verso una cassa e scende la **zona
   rossa**: con la voce lì sopra per più di un terzo di secondo parte il
   larsen (−6 pubblico, −3 reputazione), poi un attimo di tregua.
+- **Macio dimentica le parole** (quattro volte): l'ultima parola del verso
+  è «???» e sopra la platea compaiono tre parole (tasti 1 2 3). Quella che
+  fa rima piace (+6 pubblico), quella buffa fa ridere («panino», «il
+  preside», «Gerry»…, +3), quella sbagliata fa fischiare (−6). Se non
+  scegli in tempo Macio canta «ehm» (−4). Macio canta la parola scelta.
+- **Botta e risposta** (il ponte, 4 battute): la base resta cassa e
+  battimani, Macio canta «Oh-oh!» e la palestra risponde «OH! OH!» sul
+  terzo e sul quarto tempo: bolle azzurre e tasto **CORO** (C).
+- **Gerry stacca la spina** all'inizio del ponte: base e microfono tacciono,
+  le luci si spengono e il pubblico cala finché non la riattacchi (tre
+  tocchi sul bottone, o R). Il coro si sente lo stesso: la palestra canta
+  anche senza impianto.
 - **Ritornello finale**: se il pubblico è almeno al 50% si accendono i
   telefoni e la palestra canta con lui. In fondo «MA-CIO! MA-CIO!».
 - **Stanchezza e birra** come nel DJ set: la stanchezza stringe la
   finestra, la birra la riallarga. Facile: finestre e zona verde più
   larghe.
-- **Esito**: stelle da sillabe a tempo (60%) e tempo nella zona verde
+- **Esito**: stelle da sillabe e «OH!» a tempo (60%) e tempo nella zona verde
   (40%); reputazione 5 + (pubblico − 60) / 10 − 3 per larsen; 🍺 senza
   larsen e 🍺 col pubblico almeno al 70%. Una volta sola, come le altre
   fasi.
 
 **La canzone**: «Salviamo la serata», testo e musica originali (niente
-diritti). 100 BPM, 38 battute (circa un minuto e mezzo): intro parlata,
-strofa, ritornello, seconda strofa, ritornello finale. La base (batteria,
+diritti). 112 BPM, 32 battute (circa un minuto): intro parlata, strofa,
+ritornello, ponte (botta e risposta), ritornello finale. Più corta e
+veloce della prima versione, che Luca trovava noiosa. La base (batteria,
 basso, accordi Do-Sol-La-Fa) e il coro del pubblico sono suonati dal codice
 con Web Audio. La **voce di Macio** ha l'**accento di Chieti** (Macio è di Chieti; non
 il dialetto: «spèndo», «quando», «cando», «anghe», «inzième»): una voce
@@ -432,7 +445,8 @@ italiana maschile sintetica dice ogni verso e il vocoder WORLD fa cantare
 ogni sillaba sulla sua nota, un'ottava sotto, **intonata giusta** (controllata
 nota per nota), con un vibrato leggero; dove urla è solo più forte. Dice
 anche le frasi dell'intro, «Ehm…» quando si perde una sillaba e «Grazie a
-tutti, vajù!» alla fine. Sta in `karaoke-voce.js` (un mp3 in base64, così
+tutti, vajù!» alla fine, le parole sbagliate da scegliere e l'«Oh-oh!» del
+ponte. Sta in `karaoke-voce.js` (un mp3 in base64, così
 funziona anche aprendo `index.html` dal disco), generato da
 `strumenti/voce-macio.py`. Se manca, canta il suono sintetico.
 
@@ -440,7 +454,8 @@ funziona anche aprendo `index.html` dal disco), generato da
 microfono e il karaoke si apre da solo (o dal foglio, «Macio prende il
 microfono», o dalla scaletta). Serve il microfono ancora collegato a un
 ingresso MIC del mixer acceso: se manca, Macio aspetta e il foglio dice
-cosa fare. Prende il posto della fase del cantante con chitarra: Dante e
+cosa fare. Dopo il karaoke la scaletta e il foglio portano al **carico del furgone**
+(23:00). Prende il posto della fase del cantante con chitarra: Dante e
 la sua fase escono di scena; le voci *cantante* qui sotto restano come
 appunti.
 
@@ -449,9 +464,10 @@ Codice: `karaoke.html` (la pagina), `openKaraoke`, `finishKaraoke` e
 `tests/karaoke.js` (la pagina da sola) e `tests/karaoke-gioco.js` (dentro
 il gioco).
 
-Dopo il karaoke la serata chiude col **carico del furgone**: un minigioco
-puzzle a sé, unico nel suo genere, da provare con un prototipo (vedi
-`docs/minigioco-scarico.md`, *Da decidere*).
+Dopo il karaoke la serata chiude col **carico del furgone** (`carico.html`):
+Macio porta fuori i case, tu li incastri nel furgone a quadretti, li leghi
+con tre cinghie e si parte; frenata, curve e dosso fanno scivolare quello
+che è slegato. Regole in `docs/minigioco-carico.md`.
 
 ## Personaggi (proposta)
 

@@ -125,11 +125,15 @@ cambiano da una fase all'altra.
   purché cablato.
 - Dopo il DJ set (fatto): Gerry ha cacciato il DJ e **Macio** improvvisa
   un **karaoke** (`karaoke.html`): il tecnico manda avanti il testo a mano,
-  sillaba per sillaba, e tiene la voce di Macio (accento di Chieti) nella
-  zona verde.
-  Prende il posto del cantante con chitarra. Da fare: a fine serata il
-  **carico del furgone**, un minigioco puzzle unico nel suo genere, da
-  provare. Design in `docs/livello1-festa-scuola.md`.
+  sillaba per sillaba, sceglie le parole che Macio dimentica, fa partire il
+  coro del pubblico, riattacca la spina che Gerry stacca e tiene la voce di
+  Macio (accento di Chieti) nella zona verde. Prende il posto del cantante
+  con chitarra. Design in `docs/livello1-festa-scuola.md`.
+- **Carico del furgone** (23:00): prima versione nel gioco, `carico.html`
+  dopo il karaoke. Il tetris del furgone
+  col marciapiede da tre posti, la roba della scuola da ridare a Gerry,
+  l'assetto, tre cinghie e la prova su strada. Da provare giocando. Design
+  in `docs/minigioco-carico.md`.
 
 ## Show del DJ set
 
@@ -172,6 +176,8 @@ cambiano da una fase all'altra.
   discorso del preside dentro il gioco, dopo collaudo e posa;
   `tests/preside-cavi.js`: i cavi lasciati dalla posa nel discorso (pagina da
   sola).
+- `tests/carico.js`: il carico del furgone, da solo (trascinare, girare,
+  Gerry, cinghie e viaggio) e dentro il gioco (scaletta, reputazione, birra).
 - `tests/stanchezza.js`: la stanchezza del tecnico (tasto 🍺, tempo, azioni,
   birra con conferma, connettore che scivola, ricarica, nuova partita).
 - `tests/robustezza.js`: frecce e WASD, ripresa con un altro schermo,

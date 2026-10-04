@@ -1665,7 +1665,7 @@ const SAVE_FILE_KIND = 'stage-crew-simulator';   // firma del file esportato
 const SHARED_KEYS = ['settings', 'records', 'usedServices'];
 
 function defaultProfile () {
-  return { v: SAVE_VERSION, player: '', service: '', serviceInfo: null, usedServices: [], settings: { volume: 0.8, reducedFx: false, skipShow: false, skipScarico: false, testMusic: true, bossTips: true, tapeMarks: true, traceSignal: true }, tutorSeen: {}, logo: null, level: null, scarico: null, cavi: null, preside: null, cambioDj: null, dj: null, karaoke: null, beers: 0, assistant: defaultAssistant(), fatigue: 0, records: {}, reputation: { total: 0, earned: {}, log: [] }, levelsSeen: 1, savedAt: 0 };
+  return { v: SAVE_VERSION, player: '', service: '', serviceInfo: null, usedServices: [], settings: { volume: 0.8, reducedFx: false, skipShow: false, skipScarico: false, testMusic: true, bossTips: true, tapeMarks: true, traceSignal: true }, tutorSeen: {}, logo: null, level: null, scarico: null, cavi: null, preside: null, cambioDj: null, dj: null, karaoke: null, carico: null, beers: 0, assistant: defaultAssistant(), fatigue: 0, records: {}, reputation: { total: 0, earned: {}, log: [] }, levelsSeen: 1, savedAt: 0 };
 }
 // l'assistente della serata (dal livello 2, vedi ASSISTANTS): chi è e
 // quanti favori ha già fatto nel set in corso. Le partite salvate prima
@@ -2414,7 +2414,8 @@ const LEVELS = [
       { title: 'Discorso del preside', done: s => !!s.preside },
       { title: 'Cambio palco per il DJ', done: s => !!(s.cambioDj && s.cambioDj.done) },
       { title: 'DJ set', done: s => !!s.dj },
-      { title: 'Karaoke di Macio', done: s => !!s.karaoke }
+      { title: 'Karaoke di Macio', done: s => !!s.karaoke },
+      { title: 'Carico del furgone', done: s => !!s.carico }
     ] },
   { id: 2, name: 'Sagra in piazza', venue: 'Piazza con i sampietrini', vehicle: 'camion', rep: 20 },
   { id: 3, name: 'Matrimonio in villa', venue: 'Giardino di una villa, sotto la pioggia', vehicle: 'camion', rep: 60 },
@@ -2698,6 +2699,7 @@ function startNewGame (player, offer, offers) {
   Profile.data.caviGiri = 0;
   Profile.data.preside = null;
   Profile.data.dj = null;
+  Profile.data.carico = null;
   Profile.data.cambioDj = null;
   Profile.data.karaoke = null;
   // uno show del DJ o un karaoke ancora aperto o in arrivo della partita vecchia
@@ -2899,7 +2901,7 @@ const SCHEDULE = [
   { time: '21:10', title: 'Cambio palco: arriva il DJ', text: 'DJ Inestimabile porta la sua consolle: corrente, uscite nella DI e dalla DI al mixer. Il microfono resta dov\'è, per Musa Esistenziale. Il pubblico aspetta: non metterci troppo.', phase: 'cambio-dj', rep: REP.changeDone },
   { time: '21:15', title: 'Notte fuori controllo', text: 'DJ Inestimabile in consolle e Musa Esistenziale al microfono: mixer DJ → DI → mixer di sala, il microfono del vocalist, luci colorate al drop. E tanti guasti da inseguire.', poster: 'img/locandina-dj.svg', phase: 'dj' },
   { time: '22:00', title: 'Fuori programma: il karaoke di Macio', text: 'Gerry ha cacciato il DJ. Macio prende il microfono e salva la serata con una canzone scritta lì per lì: tu mandi avanti il testo e tieni la sua voce nel verde.', phase: 'karaoke', surprise: true },
-  { time: '23:00', title: 'Smontaggio', text: 'Tutto nei case e i case nel furgone. Si torna a casa.' }
+  { time: '23:00', title: 'Smontaggio e carico', text: 'Tutto nei case e i case nel furgone: Macio li porta fuori, tu li incastri e li leghi con tre cinghie. Gerry chiude il cancello alle 23:30.', phase: 'carico' }
 ];
 const collaudoDone = () => ('L' + LEVEL_ID + ':collaudo') in Profile.data.reputation.earned;
 function schedulePhaseState (phase) {
@@ -2912,6 +2914,8 @@ function schedulePhaseState (phase) {
   if (phase === 'cambio-dj') return cambioDjDone() ? 'done' : presideDone() ? 'now' : 'next';
   if (phase === 'dj') return djDone() ? 'done' : cambioDjDone() ? 'now' : 'next';
   if (phase === 'karaoke') return karaokeDone() ? 'done' : djDone() ? 'now' : 'next';
+  // il carico chiude la serata: dopo il karaoke di Macio
+  if (phase === 'carico') return caricoDone() ? 'done' : karaokeDone() ? 'now' : 'next';
   return collaudoDone() ? 'done' : 'next';
 }
 const SCHEDULE_STATE_LABEL = { done: 'Fatto', now: 'Adesso', next: 'Da fare', soon: 'In arrivo' };
@@ -2937,6 +2941,7 @@ function renderSchedule () {
         : s.phase === 'cambio-dj' && cambioDjDone() ? cambioSummary()
         : s.phase === 'dj' && djDone() ? djSummary()
         : s.phase === 'karaoke' && karaokeDone() ? karaokeSummary()
+        : s.phase === 'carico' && caricoDone() ? caricoSummary()
         : s.phase === 'montaggio' ? s.text.replace('i PAR', parsRequired() + ' PAR') : s.text) + '</small>'
       + (s.poster ? '<button class="sched-poster" type="button" data-poster="' + s.poster + '">🎟️ Guarda la locandina</button>' : '')
       + '</span>'
@@ -2954,8 +2959,8 @@ function openSchedule (first) {
   // del preside, poi al cambio palco per il DJ
   scheduleNext = first ? null : schedulePhaseState('cavi') === 'now' ? 'cavi' : schedulePhaseState('preside') === 'now' ? 'preside'
     : schedulePhaseState('cambio-dj') === 'now' && !cambioDj() ? 'cambio-dj' : schedulePhaseState('dj') === 'now' ? 'dj'
-    : schedulePhaseState('karaoke') === 'now' ? 'karaoke' : null;
-  el('#schedule-go').textContent = first ? 'Al lavoro!' : { cavi: 'Chiama Gerry', preside: 'Il preside sale sul palco', 'cambio-dj': 'Inizia il cambio palco', dj: 'Via al DJ set', karaoke: 'Macio prende il microfono' }[scheduleNext] || 'Torna al palco';
+    : schedulePhaseState('karaoke') === 'now' ? 'karaoke' : schedulePhaseState('carico') === 'now' ? 'carico' : null;
+  el('#schedule-go').textContent = first ? 'Al lavoro!' : { cavi: 'Chiama Gerry', preside: 'Il preside sale sul palco', 'cambio-dj': 'Inizia il cambio palco', dj: 'Via al DJ set', karaoke: 'Macio prende il microfono', carico: 'Carica il furgone' }[scheduleNext] || 'Torna al palco';
   el('#schedule-modal').classList.add('show');
   setSceneInput(false);
 }
@@ -3369,8 +3374,9 @@ function caviSummary () {
 let presideOpen = false, presideTimer = null;
 let djOpen = false;              // lo spettacolo del DJ (openDj, più sotto)
 let karaokeOpen = false;         // il karaoke di Macio (openKaraoke, più sotto)
+let caricoOpen = false;          // il carico del furgone (openCarico, più sotto)
 const presideDone = () => !!Profile.data.preside;
-const minigameOpen = () => scaricoOpen || gerryOpen || presideOpen || djOpen || karaokeOpen;
+const minigameOpen = () => scaricoOpen || gerryOpen || presideOpen || djOpen || karaokeOpen || caricoOpen;
 // una finestra del gioco sopra la scena (menù, scaletta, pannello posteriore, baule)
 const panelOpen = () => scheduleOpen || menuOpen || !!rearPanelId || !!openCaseName;
 // qualcosa copre la scena: i tocchi non le arrivano finché non si chiude tutto
@@ -3689,7 +3695,7 @@ function djSummary () {
    scaletta e dal foglio. Serve il microfono ancora collegato al mixer
    acceso. La pagina riceve birre, stanchezza, nome del capo e canale del
    microfono; l'esito torna al gioco: reputazione una volta sola, birre,
-   stanchezza. Dopo viene il carico del furgone (non ancora nel gioco). */
+   stanchezza. Dopo viene il carico del furgone (openCarico). */
 let karaokeTimer = null;
 const karaokeDone = () => !!Profile.data.karaoke;
 // cosa manca perché Macio possa cantare (null se è tutto pronto)
@@ -3761,6 +3767,65 @@ function karaokeSummary () {
     + (p.beers ? ' · 🍺 +' + p.beers : '') + ' · reputazione ' + (p.rep >= 0 ? '+' : '') + p.rep + '.';
 }
 
+/* ---------------- il carico del furgone (23:00) ----------------
+   Minigioco a sé (carico.html, vedi docs/minigioco-carico.md), in un iframe
+   sopra il gioco dopo il karaoke di Macio, dalla scaletta o dal foglio. Macio porta
+   fuori i case, il tecnico li incastra nel furgone, li lega con tre cinghie
+   e si parte: quello che è slegato scivola e sbatte. L'esito torna al gioco:
+   reputazione una volta sola (la calcola la pagina dalle stelle) e birre. */
+const caricoDone = () => !!Profile.data.carico;
+function openCarico () {
+  if (caricoOpen || caricoDone() || !karaokeDone() || minigameOpen()) return;
+  caricoOpen = true;
+  setSceneInput(false);
+  sceneKeyboard(false);
+  if (window.__scene) window.__scene.stopFx();
+  const f = document.createElement('iframe');
+  f.id = 'carico-frame';
+  f.className = 'minigame-frame';
+  f.title = 'Il carico';
+  const logo = serviceLogo();
+  const info = Profile.data.serviceInfo;
+  f.src = 'carico.html?embed=1&service=' + encodeURIComponent(serviceName()) + '&bg=' + encodeURIComponent(logo.bg) + '&fg=' + encodeURIComponent(logo.fg)
+    + (info && info.boss ? '&boss=' + encodeURIComponent(info.boss) : '') + minigameQuery();
+  f.addEventListener('load', () => { try { f.contentWindow.focus(); } catch (e) { /* niente fuoco: si tocca */ } });
+  document.body.appendChild(f);
+}
+window.addEventListener('message', ev => {
+  const d = ev.data;
+  if (caricoOpen && d && d.type === 'carico-fine' && fromFrame(ev, 'carico-frame')) finishCarico(d.result || { skipped: true });
+});
+function finishCarico (r) {
+  const f = el('#carico-frame');
+  if (f) f.remove();
+  caricoOpen = false;
+  const skipped = !!r.skipped;
+  const num = (v, d) => Number.isFinite(+v) ? Math.round(+v) : d;
+  const stars = skipped ? 0 : Math.max(0, Math.min(5, num(r.stars, 0)));
+  const list = v => Array.isArray(v) ? v.filter(x => typeof x === 'string').slice(0, 14) : [];
+  Profile.data.carico = { skipped, stars, rep: skipped ? 0 : Math.max(-5, Math.min(5, num(r.rep, 0))), beers: skipped ? 0 : Math.max(0, Math.min(1, num(r.beers, 0))),
+    depart: skipped ? null : String(r.depart || '23:00').slice(0, 5), late: !skipped && !!r.late, order: !skipped && !!r.order, coffee: !skipped && !!r.coffee, damaged: skipped ? [] : list(r.damaged), taken: skipped ? [] : list(r.taken) };
+  const c = Profile.data.carico;
+  Profile.data.beers = (Profile.data.beers || 0) + c.beers;
+  const rep = skipped ? 0 : addReputation(c.rep, 'Carico del furgone a fine serata', 'L' + LEVEL_ID + ':carico');
+  Profile.save();
+  sceneKeyboard(true);
+  if (!sceneCovered()) setSceneInput(true);
+  applySettings();
+  showToast(skipped ? 'Carico saltato: il furgone è partito, ma la reputazione non cambia.'
+    : 'Furgone carico, si torna a casa. ' + '★'.repeat(stars) + '☆'.repeat(5 - stars) + (rep ? ' Reputazione ' + (rep > 0 ? '+' : '') + rep + '.' : '') + (c.beers ? ' 🍺 +' + c.beers + '.' : ''), skipped || stars >= 3 ? 'ok' : undefined);
+  updateFoglio();
+}
+function caricoSummary () {
+  const c = Profile.data.carico;
+  if (c.skipped) return 'Saltato: niente reputazione.';
+  return '★'.repeat(c.stars) + '☆'.repeat(5 - c.stars) + ' · partiti alle ' + c.depart + (c.late ? ' (dopo la chiusura)' : '')
+    + (c.damaged.length ? ' · rovinati: ' + c.damaged.join(', ') : ' · tutto integro')
+    + (c.taken.length ? ' · portati via per sbaglio: ' + c.taken.join(', ') : '')
+    + (c.order ? ' · PAR e PC al portellone' : '') + (c.coffee ? ' · caffè di Gerry' : '')
+    + (c.beers ? ' · 🍺 +' + c.beers : '') + ' · reputazione ' + (c.rep >= 0 ? '+' : '') + c.rep + '.';
+}
+
 el('#cambio-go').addEventListener('click', () => { SFX.button(); closeCambioCard(); });
 el('#cambio-close').addEventListener('click', () => { SFX.button(); closeCambioCard(); });
 
@@ -3770,7 +3835,7 @@ el('#schedule-go').addEventListener('click', () => {
   SFX.button();
   const next = scheduleNext;
   closeSchedule();
-  if (next === 'cavi') openCavi(); else if (next === 'preside') openPreside(); else if (next === 'cambio-dj') startCambioDj(); else if (next === 'dj') openDj(); else if (next === 'karaoke') openKaraoke();
+  if (next === 'cavi') openCavi(); else if (next === 'preside') openPreside(); else if (next === 'cambio-dj') startCambioDj(); else if (next === 'dj') openDj(); else if (next === 'karaoke') openKaraoke(); else if (next === 'carico') openCarico();
 });
 el('#schedule-close').addEventListener('click', () => { SFX.button(); closeSchedule(); });
 el('#schedule-modal').addEventListener('click', ev => { if (ev.target.id === 'schedule-modal') closeSchedule(); });
@@ -5354,13 +5419,29 @@ const toolbarEl = el('#toolbar');
 const NARROW_PX = 1000;
 function tabName (btn) { const b = btn && btn.querySelector('b'); return (b || btn).textContent.trim(); }
 function openDrawer () { toolbarEl.classList.add('open'); document.body.classList.add('drawer-open'); }
+// chiuso il cassetto, sotto il dito compaiono PROVA, zoom e annulla: il
+// "click" che il telefono manda dopo il tocco non deve finire su di loro
+let drawerClosedAt = -1e9;
+document.addEventListener('click', ev => {
+  if (performance.now() - drawerClosedAt < 350 && !(ev.target.closest && ev.target.closest('.tabs'))) { ev.stopPropagation(); ev.preventDefault(); }
+}, true);
 function closeDrawer () {
+  if (toolbarEl.classList.contains('open')) drawerClosedAt = performance.now();
   toolbarEl.classList.remove('open');
   document.body.classList.remove('drawer-open');
   document.querySelectorAll('.tab-panel.help').forEach(p => p.classList.remove('help'));
   document.querySelectorAll('.dr-help.on').forEach(b => b.classList.remove('on'));
 }
 function closeDrawerIfNarrow () { if (window.innerWidth < NARROW_PX) closeDrawer(); }
+// un pezzo si arma al rilascio del dito, ma il telefono manda il "click"
+// subito dopo: il cassetto si chiude solo quando quel click è arrivato
+function closeDrawerAfterTap () {
+  if (window.innerWidth >= NARROW_PX) return;
+  let done = false;
+  const fin = () => { if (done) return; done = true; document.removeEventListener('click', fin, true); setTimeout(closeDrawer, 0); };
+  document.addEventListener('click', fin, true);
+  setTimeout(fin, 450);
+}
 document.querySelectorAll('.tab-panel').forEach(panel => {
   const btn = document.querySelector('.tab-btn[data-tab="' + panel.dataset.panel + '"]');
   const head = document.createElement('div');
@@ -5467,7 +5548,7 @@ function armPiece (type, pieceEl) {
   if (window.__scene) { window.__scene.clearMoveSelection(); window.__scene.clearEdgeSelection(); window.__scene.cancelPending(); }
   gameState.selectedPieceType = type;
   document.querySelectorAll('.piece').forEach(p => p.classList.toggle('armed', p === pieceEl));
-  closeDrawerIfNarrow();
+  closeDrawerAfterTap();
   const free = window.__scene ? window.__scene.showZoneHint(type) : 1;
   const m = MOUNTS[type];
   if (m && !free) showToast(m.missing);
@@ -5674,9 +5755,10 @@ function updateFoglio () {
       + (missing ? '' : '<button type="button" class="fg-go" id="foglio-karaoke">Macio prende il microfono</button>');
   } else if (karaokeDone()) {
     icon = '🎤 ';
-    head = 'Serata finita';
+    head = 'Karaoke finito';
     body = '<p class="fg-note">' + escapeHtml('Karaoke di Macio: ' + karaokeSummary()) + '</p>'
-      + '<p class="fg-note">Ora si smonta e si carica il furgone (arriva presto).</p>';
+      + (caricoDone() ? '<p class="fg-note">Carico: ' + escapeHtml(caricoSummary()) + '</p>'
+        : '<button type="button" class="fg-go" id="foglio-carico">Smonta e carica il furgone</button>');
   } else if (caviDone() && !presideDone()) {
     // il discorso del preside: pronto se il microfono è cablato
     const missing = presideReady();
@@ -5705,6 +5787,8 @@ function updateFoglio () {
   if (dg) dg.addEventListener('click', () => { SFX.button(); openDj(); });
   const kg = el('#foglio-karaoke');
   if (kg) kg.addEventListener('click', () => { SFX.button(); openKaraoke(); });
+  const cg = el('#foglio-carico');
+  if (cg) cg.addEventListener('click', () => { SFX.button(); openCarico(); });
 }
 
 // cambio di scheda verso una chiusa: si spiega perché
@@ -8100,9 +8184,12 @@ class StageScene extends Phaser.Scene {
       // percorso steso al montaggio (o quello automatico) a tratti dritti
       const route = caviRoute(e);
       const floor = route ? null : this.edgeFloor(e);
+      // sub e testa sullo stesso palo: il cavetto va dritto dall'uno all'altra
+      const baseA = posaBase(gameState.placed[e.a]);
+      const sameBase = baseA && baseA === posaBase(gameState.placed[e.b]);
       const pts = route ? [from, ...route, to]
         : floor ? [from, ...layToScreen(floor.smooth), to]
-        : (zoneA === 'stage' && zoneB === 'stage') ? [from, to]
+        : (sameBase || (zoneA === 'stage' && zoneB === 'stage')) ? [from, to]
         : computeRoutePoints(from, to, this.stageBox, 30);
       // cavo in neoprene nero (come quelli veri), con un bordo appena più
       // chiaro per staccarlo dal pavimento e un filetto centrale del colore

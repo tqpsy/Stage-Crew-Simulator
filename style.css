@@ -875,7 +875,7 @@
   }
 
 /* lo scarico: minigioco a tutto schermo sopra il gioco (scarico.html) */
-#scarico-frame,#cavi-frame,#preside-frame,#dj-frame,#karaoke-frame{position:fixed;inset:0;width:100%;height:100%;border:0;z-index:1000;background:#141519}
+#scarico-frame,#cavi-frame,#preside-frame,#dj-frame,#karaoke-frame,#carico-frame{position:fixed;inset:0;width:100%;height:100%;border:0;z-index:1000;background:#141519}
 
 /* pezzo arrivato difettoso dallo scarico: riquadro nel pannello e nel baule */
 .fault-box{display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin:8px 0;padding:10px 12px;border:2px solid #f2843d;border-radius:10px;background:rgba(242,132,61,.12);font-size:14px;line-height:1.4}
@@ -960,10 +960,15 @@ body.show-layers .layers-panel{ display:flex; }
 @media (max-width:699px){ #foglio{ top:calc(var(--hud-h) + 16px); bottom:auto; max-width:calc(100% - 70px); } }
 
 /* ---------- messaggi: la radio del capo, sotto l'HUD ---------- */
-#toast{ top:calc(var(--hud-h) + 16px); background:linear-gradient(180deg,#22242a,#17181c); border:1px solid #3a3d45; border-radius:10px;
+/* fuori dalla scena: appena sopra il flight case (a sinistra di PROVA);
+   col cassetto aperto sale sotto l'HUD per non coprire i pezzi */
+#toast{ top:auto; bottom:calc(100% + 12px); left:50%; right:auto; width:min(520px, calc(100% - 300px)); max-width:none; margin:0;
+  transform:translate(-50%,8px); z-index:35; background:linear-gradient(180deg,#22242a,#17181c); border:1px solid #3a3d45; border-radius:10px;
   box-shadow:0 1px 0 rgba(255,255,255,.06) inset,0 8px 24px rgba(0,0,0,.5); font-size:13px; z-index:60; max-width:min(calc(100% - 16px),460px); }
 #toast::before{ border-radius:8px; flex-basis:26px; height:26px; line-height:26px; }
 #toast.boss{ border-color:rgba(242,165,65,.6); }
+#toast.show{ transform:translate(-50%,0); }
+body.drawer-open #toast{ position:fixed; bottom:auto; top:calc(var(--hud-h) + 16px); }
 
 /* ---------- cavo in mano, posa del cavo: sopra il flight case ---------- */
 #cable-banner, #lay-bar{ bottom:calc(var(--bar-h) + 14px); z-index:25; border-radius:10px; background:linear-gradient(180deg,#22242a,#17181c); }
@@ -1048,7 +1053,7 @@ body.show-layers .layers-panel{ display:flex; }
   .layers-panel{ left:8px; right:auto; bottom:calc(var(--bar-h) + 114px); }
   /* col cassetto aperto spariscono: starebbero sopra i pezzi */
   body.drawer-open .hud .history, body.drawer-open .zoom-controls, body.drawer-open .layers-panel{ display:none; }
-  #toast{ left:8px; right:8px; width:auto; max-width:none; transform:translateY(-16px); top:calc(var(--hud-h) + 60px); }
+  #toast{ left:8px; right:8px; width:auto; transform:translateY(8px); bottom:calc(100% + 112px); }
   #toast.show{ transform:none; }
   #cable-banner, #lay-bar{ bottom:calc(var(--bar-h) + 112px); }
   #cable-banner{ max-width:calc(100% - 70px); left:8px; transform:none; }
