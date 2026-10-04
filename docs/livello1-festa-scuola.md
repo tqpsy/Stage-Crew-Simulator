@@ -143,6 +143,26 @@ Test: `tests/aiuti.js`.
   ha fallito, se no la prima voce del suo giro che non va. Un collaudo
   riuscito azzera il conto (`giroFails[GIRO_COLLAUDO]`).
 
+## Collaudo come ricompensa e valutazione della serata (fatto)
+
+- **Accensione a catena**: al Test impianto superato cala il buio e
+  l'impianto si accende un pezzo alla volta nell'ordine del segnale (quadro
+  e ciabatte, PC → scheda → mixer → finale → sub → teste, consolle luci),
+  ognuno col suo suono di avvio; poi i PAR e il beat («SI VA IN SCENA!»).
+  Ogni prova di giro superata accende in verde la catena del suo giro
+  (`playSuccessSequence`, `giroCascade`).
+- **Pronti per la prova**: quando tutte le voci del foglio sono a posto il
+  pulsante della prova si illumina; ogni voce appena spuntata fa salire un ✓
+  verde dai suoi pezzi (`updateFoglio`, `floatCheck`).
+- **Valutazione della serata**: dopo il carico si apre «Com'è andata»:
+  tempo, errori, guasti risolti, danni, qualità del montaggio, del
+  troubleshooting e degli show, reputazione; punteggio su 100 (pesi
+  montaggio 30, troubleshooting 25, show 30, danni 15), stelle, titolo (da
+  DEVI FARE ANCORA PRATICA a CREW EXCELLENT) e il perché, con un consiglio.
+  La prima valutazione entra nei record (comuni a tutte le partite);
+  «Rigioca la serata» riparte nello stesso slot. Si riapre dalla scaletta e
+  dal foglio (`serataReport`, `openSerata`; test `tests/serata.js`).
+
 ## Scheda obiettivi
 
 **Fatto: scaletta della serata.** A ogni nuova partita, prima del montaggio, si
