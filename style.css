@@ -254,13 +254,13 @@
 
   /* notifica: una scheda discreta con un'icona, non un allarme.
      Il rosso resta solo per i guasti veri (classe .bad) */
-  /* in basso, sopra le barre del cavo in mano (bottom lo sposta placeToast):
-     in alto copriva il palco proprio mentre si collega */
+  /* fuori dalla scena: copre il testo d'aiuto in fondo alla barra dei pezzi,
+     appena sopra il pulsante di prova (sopra il palco dava fastidio) */
   #toast{
     --toast-accent:#4aa3ff;
     position:absolute;
-    bottom:12px; left:50%;
-    transform:translate(-50%,16px);
+    bottom:calc(100% + 4px); left:8px; right:8px;
+    transform:translateY(8px);
     display:flex;
     align-items:flex-start;
     gap:10px;
@@ -272,8 +272,7 @@
     box-shadow:0 8px 24px rgba(0,0,0,.45);
     font-size:12.5px;
     line-height:1.4;
-    width:max-content;
-    max-width:min(80%, 460px);
+    max-width:640px; margin:0 auto;
     text-align:left;
     opacity:0;
     pointer-events:none;
@@ -300,7 +299,7 @@
   #toast-x::before{ content:'\00d7'; }
   #toast-x:hover{ color:var(--text-main); background:rgba(255,255,255,.08); }
   #toast.show #toast-x{ pointer-events:auto; }
-  #toast.show{ opacity:1; transform:translate(-50%,0); }
+  #toast.show{ opacity:1; transform:none; }
   #toast.ok{ --toast-accent:var(--green); }
   #toast.ok::before{ content:'\2713'; }
   #toast.bad{ --toast-accent:var(--red); border-color:rgba(224,80,63,.55); }
@@ -659,6 +658,7 @@
   }
 
   #run-bar{
+    position:relative;
     display:flex;
     align-items:center;
     justify-content:center;
