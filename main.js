@@ -1739,6 +1739,19 @@ function fillSlot (s, root) {
 function exportSlotFile (slot) {
   return JSON.stringify({ kind: SAVE_FILE_KIND, v: SAVE_VERSION, exportedAt: Date.now(), slot: slotPart(slot) }, null, 1);
 }
+// il montaggio di un file importato: solo pezzi e cavi che il gioco conosce,
+// con i campi che servono a disegnarli (un tipo sconosciuto romperebbe la scena)
+function validLevel (lv) {
+  const num = v => typeof v === 'number' && Number.isFinite(v);
+  const placed = Object.entries(lv.placed);
+  const pieceOk = ([id, c]) => c && typeof c === 'object' && c.id === id && COMPONENT_TYPES[c.type]
+    && (c.gx == null || (num(c.gx) && num(c.gy))) && (!c.cells || (Array.isArray(c.cells) && c.cells.every(k => typeof k === 'string')))
+    && c.screen && num(c.screen.x) && num(c.screen.y);
+  const edgeOk = e => e && typeof e === 'object' && lv.placed[e.a] && lv.placed[e.b]
+    && typeof e.aPort === 'string' && typeof e.bPort === 'string' && CABLE_TYPES[e.signal];
+  return placed.every(pieceOk) && lv.edges.every(edgeOk);
+}
+
 function readSlotFile (text) {
   let d;
   try { d = JSON.parse(text); } catch (e) { return { error: 'Il file non è un salvataggio di Stage Crew Simulator.' }; }
@@ -1749,7 +1762,7 @@ function readSlotFile (text) {
   else if (d.v >= 1 && d.v <= 4 && !d.kind) { const one = upgradeSingle(d); slot = one && slotPart(one); }
   const ok = slot && typeof slot === 'object' && typeof (slot.service || '') === 'string' && typeof (slot.player || '') === 'string'
     && (!slot.reputation || typeof slot.reputation.total === 'number')
-    && (!slot.level || (typeof slot.level === 'object' && typeof slot.level.placed === 'object' && Array.isArray(slot.level.edges)));
+    && (!slot.level || (typeof slot.level === 'object' && slot.level.placed && typeof slot.level.placed === 'object' && Array.isArray(slot.level.edges) && validLevel(slot.level)));
   if (!ok || !slotUsed(slot)) return { error: 'Il file è rovinato o non contiene una partita.' };
   // il file può venire da chiunque: logo e service solo con valori ammessi
   // (i colori del logo finiscono dentro l'SVG)
@@ -2902,6 +2915,10 @@ function closeSchedule () {
    saltare (dalle impostazioni o dalla sua schermata iniziale): tutto arriva
    sano, ma niente birre. */
 let scaricoOpen = false;
+// volume ed «Effetti ridotti» delle impostazioni, passati ai minigiochi nell'indirizzo dell'iframe
+function minigameQuery () { return '&vol=' + settings().volume + (reducedFx() ? '&rfx=1' : ''); }
+// un messaggio vale solo se arriva davvero dall'iframe di quel minigioco
+const fromFrame = (ev, id) => { const f = el('#' + id); return !!f && ev.source === f.contentWindow; };
 const scaricoDone = () => !!Profile.data.scarico;
 function openScarico () {
   if (scaricoOpen) return;
@@ -2913,13 +2930,13 @@ function openScarico () {
   f.id = 'scarico-frame';
   f.title = 'Lo scarico';
   const logo = serviceLogo();
-  f.src = 'scarico.html?embed=1&service=' + encodeURIComponent(serviceName()) + '&bg=' + encodeURIComponent(logo.bg) + '&fg=' + encodeURIComponent(logo.fg);
+  f.src = 'scarico.html?embed=1&service=' + encodeURIComponent(serviceName()) + '&bg=' + encodeURIComponent(logo.bg) + '&fg=' + encodeURIComponent(logo.fg) + minigameQuery();
   f.addEventListener('load', () => { try { f.contentWindow.focus(); } catch (e) { /* niente fuoco: si clicca */ } });
   document.body.appendChild(f);
 }
 window.addEventListener('message', ev => {
   const d = ev.data;
-  if (scaricoOpen && d && d.type === 'scarico-fine') finishScarico(d.result || { skipped: true });
+  if (scaricoOpen && d && d.type === 'scarico-fine' && fromFrame(ev, 'scarico-frame')) finishScarico(d.result || { skipped: true });
 });
 function finishScarico (r) {
   const f = el('#scarico-frame');
@@ -3315,7 +3332,7 @@ function openPreside () {
   f.id = 'preside-frame';
   f.className = 'minigame-frame';
   f.title = 'Il discorso del preside';
-  f.src = 'preside.html?embed=1';
+  f.src = 'preside.html?embed=1' + minigameQuery();
   f.addEventListener('load', () => { try { f.contentWindow.focus(); } catch (e) { /* niente fuoco: si tocca */ } });
   document.body.appendChild(f);
 }
@@ -3336,7 +3353,7 @@ function presideMicHint () {
 }
 window.addEventListener('message', ev => {
   const d = ev.data, f = el('#preside-frame');
-  if (!presideOpen || !d || !f) return;
+  if (!presideOpen || !d || !f || ev.source !== f.contentWindow) return;
   if (d.type === 'preside-pronto') f.contentWindow.postMessage({ type: 'preside-dati', wired: micChannel(), left: caviLeftovers(), beers: Profile.data.beers || 0, fatigue: fatigue(), pars: presidePars() }, '*');
   if (d.type === 'preside-fine') finishPreside(d.result || { skipped: true });
 });
@@ -3541,7 +3558,7 @@ function openDj () {
   f.className = 'minigame-frame';
   f.title = 'Notte fuori controllo';
   f.allow = 'autoplay';
-  f.src = 'dj.html?embed=1';
+  f.src = 'dj.html?embed=1' + minigameQuery();
   f.addEventListener('load', () => { try { f.contentWindow.focus(); } catch (e) { /* niente fuoco: si tocca */ } });
   document.body.appendChild(f);
 }
@@ -3554,10 +3571,10 @@ function djSoon (ms) {
 }
 window.addEventListener('message', ev => {
   const d = ev.data, f = el('#dj-frame');
-  if (!djOpen || !d || !f) return;
+  if (!djOpen || !d || !f || ev.source !== f.contentWindow) return;
   if (d.type === 'dj-pronto') {
     const info = Profile.data.serviceInfo;
-    f.contentWindow.postMessage({ type: 'dj-dati', beers: Profile.data.beers || 0, boss: info && info.boss ? info.boss : '', pars: presidePars().map(p => p.label) }, '*');
+    f.contentWindow.postMessage({ type: 'dj-dati', beers: Profile.data.beers || 0, boss: info && info.boss ? info.boss : '', pars: presidePars().map(p => p.label), fatigue: fatigue() }, '*');
   }
   if (d.type === 'dj-fine') finishDj(d.result || { skipped: true });
 });
