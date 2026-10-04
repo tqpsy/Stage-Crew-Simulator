@@ -20,6 +20,8 @@ const path = require('path');
   const check = (ok, what) => { if (!ok) problems.push(what); };
   // il tempo di gioco intanto corre (1 al minuto): i confronti hanno un piccolo margine
   const near = (a, b) => Math.abs(a - b) < 0.1;
+  // dopo qualche secondo: il tempo di gioco stanca anche mentre il test aspetta (1 punto al minuto)
+  const nearT = (a, b) => Math.abs(a - b) < 0.5;
   const ev = (fn, arg) => p.evaluate(fn, arg);
   const open = async () => {
     await p.goto('file://' + path.join(__dirname, '..', 'index.html'));
@@ -52,19 +54,19 @@ const path = require('path');
   // barra e descrizione nel tasto
   await ev(() => setFatigue(75));
   const bar = await ev(() => ({ w: el('#fat-fill').style.width, high: el('#fat-fill').classList.contains('high'), title: el('#beer-btn').title }));
-  check(bar.w === '75%' && bar.high && /Stanchezza 75% \(stanco\)/.test(bar.title), 'tasto 🍺 sbagliato: ' + JSON.stringify(bar));
+  check(nearT(parseFloat(bar.w), 75) && bar.high && /Stanchezza 75% \(stanco\)/.test(bar.title), 'tasto 🍺 sbagliato: ' + JSON.stringify(bar));
 
   // senza birre non si beve; con le birre ci vuole la conferma
   await p.click('#beer-btn');
-  check(/Niente birre/.test(await p.textContent('#toast')) && near(await ev(() => fatigue()), 75), 'si beve senza birre');
+  check(/Niente birre/.test(await p.textContent('#toast')) && nearT(await ev(() => fatigue()), 75), 'si beve senza birre');
   await ev(() => { Profile.data.beers = 2; applySettings(); });
   check(await p.textContent('#beer-n') === '2', 'le birre non sono nel tasto');
   await p.click('#beer-btn');
   const ask = await ev(() => ({ f: fatigue(), n: Profile.data.beers, toast: el('#toast').textContent }));
-  check(near(ask.f, 75) && ask.n === 2 && /Tocca ancora/.test(ask.toast), 'la birra si beve senza conferma: ' + JSON.stringify(ask));
+  check(nearT(ask.f, 75) && ask.n === 2 && /Tocca ancora/.test(ask.toast), 'la birra si beve senza conferma: ' + JSON.stringify(ask));
   await p.click('#beer-btn');
   const drunk = await ev(() => ({ f: fatigue(), n: Profile.data.beers, btn: el('#beer-n').textContent }));
-  check(near(drunk.f, 45) && drunk.n === 1 && drunk.btn === '1', 'bere una birra: ' + JSON.stringify(drunk));
+  check(nearT(drunk.f, 45) && drunk.n === 1 && drunk.btn === '1', 'bere una birra: ' + JSON.stringify(drunk));
 
   // da stanco il connettore scivola: il cavo resta in mano, si riprova
   const wire = () => {

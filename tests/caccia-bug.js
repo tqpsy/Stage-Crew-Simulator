@@ -99,6 +99,7 @@ const SEED0 = parseInt(process.argv[4] || '1', 10);
         });
       });
       Object.entries(S.occupied).forEach(([k, id]) => {
+        if (id === 'scenografia') return;   // i case dei cavi dietro la regia (blockSceneryCells)
         if (!P[id]) bug('cella occupata da un pezzo che non c\'è', at + ': ' + k + ' -> ' + id);
         else if (!(P[id].cells || []).includes(k)) bug('cella occupata non del pezzo', at + ': ' + k + ' -> ' + id);
       });
