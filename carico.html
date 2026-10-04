@@ -83,6 +83,14 @@
   .p-integro{background:#d5ecd9;color:#1f5c31}.p-ammaccato{background:#ece6cf;color:#6a5712}
   .p-difettoso{background:#f6dcc0;color:#8a4a0f}.p-rotto{background:#f3cdc6;color:#8f2616}
   .notes{margin:0;padding-left:18px;font-size:14px;line-height:1.5}
+  /* la foto mandata al capo: una chat del telefono */
+  .chat{background:#e6ddd0;border-radius:10px;padding:10px;display:grid;gap:6px}
+  .chat small{font-size:11px;color:#6b665d;text-align:center}
+  .msg{max-width:85%;border-radius:10px;padding:6px 8px;font-size:14px;line-height:1.4;box-shadow:0 1px 1px rgba(0,0,0,.15)}
+  .msg.me{justify-self:end;background:#d7f2c8}
+  .msg.boss{justify-self:start;background:#fff}
+  .msg b{display:block;font-size:11px;color:#1f7a3f}
+  .msg img{display:block;max-width:180px;width:100%;border-radius:6px}
   .bolla .row{display:flex;gap:8px;flex-wrap:wrap}
   .bolla .primary{flex:1}
   @media (max-width:520px){
@@ -121,11 +129,12 @@
   <div class="overlay" id="start">
     <div class="card">
       <h1><small>Festa della scuola · furgone · ore 23:00</small>Il carico</h1>
-      <p>La festa è finita. Macio porta fuori i case dalla palestra: tu li incastri nel furgone, li leghi e si parte. Gerry chiude il cancello alle 23:30.</p>
+      <p>La festa è finita. Macio porta fuori i case dalla palestra: tu li incastri nel furgone, li leghi e si parte. Gerry chiude il cancello alle 23:30, e se parti prima delle 23:15 ti offre un caffè.</p>
       <ul>
         <li>Trascina i case dal marciapiede dentro il furgone. Un tocco li gira (anche <b>R</b> o ↻ Ruota).</li>
         <li>Sul marciapiede ci stanno solo tre case. Se è pieno, Macio aspetta.</li>
         <li>Macio a volte porta roba che non è vostra: dalla a Gerry, così si libera un posto.</li>
+        <li>Sub, rack e bauli hanno le <b>ruote</b>: nel furgone tocca la ruota nell'angolo per tirare il freno, o in viaggio rotolano lontano.</li>
         <li>I pesanti vanno verso la cabina e al centro: guarda l'<b>Assetto</b>.</li>
         <li>Poi le cinghie: ne hai tre. Tocca una fila del furgone e la cinghia la attraversa da una sponda all'altra: ogni case che tocca quella fila resta fermo (lucchetto). I case col <b>segno rosso</b> hanno spazio intorno e in viaggio scivolano.</li>
         <li>Si parte: frenata, curve, dosso. Quello che è slegato e ha spazio scivola e sbatte. Più è fragile, più si rovina.</li>
@@ -153,6 +162,7 @@
 const QS = new URLSearchParams(location.search);
 const EMBED = QS.has('embed');
 const SERVICE = (QS.get('service') || '').slice(0, 28);
+const BOSS = (QS.get('boss') || '').slice(0, 24) || 'Il capo';
 const hexOr = (v, d) => /^#[0-9a-f]{3,6}$/i.test(v || '') ? v : d;
 const LIVERY = { bg: hexOr(QS.get('bg'), '#1c1d22'), fg: hexOr(QS.get('fg'), '#f2a541') };
 const VOL = QS.has('vol') && Number.isFinite(+QS.get('vol')) ? Math.max(0, Math.min(1, +QS.get('vol'))) : 1;
@@ -182,21 +192,23 @@ const FRAG = { bassa: 0.3, media: 0.8, alta: 1.25, altissima: 1.7, legno: 0.6 };
 // (per chi sbatte i chili contano almeno 20: anche un case leggero sente il colpo)
 const HIT = { victim: 25, self: 14, wall: 18, bump: 14 };
 // la prova su strada: scivolano i case slegati, di "s" quadretti al massimo
+// un case con le ruote senza freno rotola: scivola di questi quadretti in più
+const ROLL_EXTRA = 3;
 const DRIVE = [
-  { name: 'Frenata', say: 'Il semaforo è giallo… FRENA!', dx: 0, dy: -1, s: 4 },
-  { name: 'Curva a destra', say: 'Rotonda, prima a destra.', dx: -1, dy: 0, s: 3 },
-  { name: 'Ripartenza', say: 'Verde! Si riparte.', dx: 0, dy: 1, s: 2 },
-  { name: 'Curva a sinistra', say: 'E adesso tutto a sinistra.', dx: 1, dy: 0, s: 3 },
-  { name: 'Dosso', say: 'Il dosso davanti alla scuola…', bump: true }
+  { name: 'Frenata', cause: 'gatto', say: 'Un gatto! FRENO!', dx: 0, dy: -1, s: 4 },
+  { name: 'Curva a destra', cause: 'destra', say: 'Rotonda, prima a destra. Un po\' larga…', dx: -1, dy: 0, s: 3 },
+  { name: 'Ripartenza', cause: 'via', say: 'Il gatto è passato. Si riparte!', dx: 0, dy: 1, s: 2 },
+  { name: 'Curva a sinistra', cause: 'sinistra', say: 'E adesso tutto a sinistra, che ho sbagliato strada.', dx: 1, dy: 0, s: 3 },
+  { name: 'Dosso', cause: 'dosso', say: 'Il dosso davanti alla scuola… l\'avevo visto, giuro.', bump: true }
 ];
 // i 12 case del livello 1 (gli stessi dello scarico), più la roba della
 // scuola che Macio carica per sbaglio. w × h in quadretti (larghezza × profondità)
 const CASES = [
-  { id: 'corrente', from: 'dal baule CORRENTE', name: 'Baule CORRENTE', short: 'CORRENTE', kg: 70, w: 4, h: 2, frag: 'bassa', tape: '#ff4fb4' },
-  { id: 'segnale', from: 'dal baule SEGNALE', name: 'Baule SEGNALE', short: 'SEGNALE', kg: 45, w: 4, h: 2, frag: 'bassa', tape: '#eaff2b' },
-  { id: 'sub1', from: 'dal sub', name: 'Sub 1', short: 'SUB 1', kg: 40, w: 3, h: 3, frag: 'media', tape: '#4fb7ff' },
-  { id: 'sub2', from: 'dal sub', name: 'Sub 2', short: 'SUB 2', kg: 40, w: 3, h: 3, frag: 'media', tape: '#4fb7ff' },
-  { id: 'rack', from: 'dal rack', name: 'Rack regia', short: 'RACK', kg: 55, w: 2, h: 2, frag: 'alta', tape: '#49e07a' },
+  { id: 'corrente', wheels: true, from: 'dal baule CORRENTE', name: 'Baule CORRENTE', short: 'CORRENTE', kg: 70, w: 4, h: 2, frag: 'bassa', tape: '#ff4fb4' },
+  { id: 'segnale', wheels: true, from: 'dal baule SEGNALE', name: 'Baule SEGNALE', short: 'SEGNALE', kg: 45, w: 4, h: 2, frag: 'bassa', tape: '#eaff2b' },
+  { id: 'sub1', wheels: true, from: 'dal sub', name: 'Sub 1', short: 'SUB 1', kg: 40, w: 3, h: 3, frag: 'media', tape: '#4fb7ff' },
+  { id: 'sub2', wheels: true, from: 'dal sub', name: 'Sub 2', short: 'SUB 2', kg: 40, w: 3, h: 3, frag: 'media', tape: '#4fb7ff' },
+  { id: 'rack', wheels: true, from: 'dal rack', name: 'Rack regia', short: 'RACK', kg: 55, w: 2, h: 2, frag: 'alta', tape: '#49e07a' },
   { id: 'distro', from: 'dal distro', name: 'Case distro', short: 'DISTRO', kg: 35, w: 2, h: 2, frag: 'bassa', tape: '#ff4fb4' },
   { id: 'stativi', from: 'dagli stativi', name: 'Borsa stativi', short: 'STATIVI', kg: 22, w: 4, h: 1, frag: 'bassa', tape: '#eaff2b', soft: true },
   { id: 'top1', from: 'dalla cassa top', name: 'Top 1', short: 'TOP 1', kg: 20, w: 2, h: 2, frag: 'media', tape: '#4fb7ff' },
@@ -204,10 +216,23 @@ const CASES = [
   { id: 'valigetta', from: 'dalla valigetta', name: 'Valigetta regia', short: 'PC', kg: 8, w: 2, h: 1, frag: 'altissima', tape: '#49e07a' },
   { id: 'par', from: 'dal case PAR', name: 'Case PAR', short: 'PAR ×4', kg: 25, w: 2, h: 2, frag: 'alta', tape: '#eaff2b' },
   { id: 'ricambio', from: 'dal case ricambi', name: 'Case ricambi', short: 'RICAMBI', kg: 18, w: 2, h: 2, frag: 'media', tape: '#ff4fb4' },
+  { id: 'cavo', from: 'dal rotolo di cavo', name: 'Cavo dimenticato', short: 'CAVO', kg: 4, w: 1, h: 1, frag: 'bassa', tape: '#eaff2b', soft: true, late: true },
   { id: 'leggio', from: 'dal leggio', name: 'Leggio della scuola', short: 'LEGGIO', kg: 6, w: 2, h: 1, frag: 'legno', school: true },
   { id: 'scopa', from: 'dalla scopa', name: 'Scopa di Gerry', short: 'SCOPA', kg: 2, w: 4, h: 1, frag: 'legno', school: true }
 ];
-const OURS = CASES.filter(d => !d.school).length;
+// i case del service: i 12 del livello più il cavo dimenticato, che Gerry
+// porta fuori a metà carico (si conta da quando arriva)
+const OURS_ALL = CASES.filter(d => !d.school).length;
+const oursCount = () => OURS_ALL - (G.cavoSaid ? 0 : 1);
+// l'ordine del capo: domani questi si scaricano per primi, vanno vicino al portellone
+const FIRST_OUT = ['par', 'valigetta'];
+const DOOR_ROWS = 3;
+const nearDoor = p => inVan(p) && p.r + p.h - 1 >= ROWS - DOOR_ROWS;
+const orderOk = () => FIRST_OUT.every(id => nearDoor(G.pieces.find(p => p.def.id === id)));
+const CAVO_AFTER = 8;
+// in secondi di gioco (240 = 23:30): Gerry agita le chiavi, la luce salta e torna, il caffè
+const T_KEYS = 80, T_DARK = 96, T_LIGHT = 160, T_COFFEE = 120;
+const TORCH = 3.2;               // raggio della torcia di Macio, in quadretti            // Gerry arriva col cavo quando nel furgone ci sono tanti case
 const MACIO_SAYS = {
   corrente: 'Il baule CORRENTE. Settanta chili, mettilo bene che non lo rialzo.',
   segnale: 'Baule SEGNALE, tutti i cavi arrotolati. Più o meno.',
@@ -240,6 +265,8 @@ function tone (f, dur, type, gain) {
     o.connect(g); g.connect(AC.destination); o.start(t); o.stop(t + dur);
   } catch (e) { /* niente audio */ }
 }
+// il mazzo di chiavi di Gerry
+function jingle () { for (let i = 0; i < 4; i++) setTimeout(() => tone(1800 + Math.random() * 900, 0.08, 'triangle', 0.05), i * 70); }
 const SFX = { place: () => tone(180, 0.12, 'triangle', 0.25), bad: () => tone(110, 0.15, 'square', 0.08), bang: k => tone(70 + 40 * Math.random(), 0.25, 'sawtooth', 0.12 + 0.2 * k), strap: () => tone(520, 0.08, 'square', 0.06) };
 
 /* ---------------- stato ---------------- */
@@ -249,16 +276,17 @@ let G = null;
 
 function shuffle (a) { for (let i = a.length - 1; i > 0; i--) { const j = Math.floor(Math.random() * (i + 1)); [a[i], a[j]] = [a[j], a[i]]; } return a; }
 function newGame () {
-  const pieces = CASES.map((d, i) => ({ i, def: d, w: d.w, h: d.h, loc: 'queue', slot: -1, c: 0, r: 0, hp: 100, notes: [] }));
+  const pieces = CASES.map((d, i) => ({ i, def: d, w: d.w, h: d.h, loc: 'queue', slot: -1, c: 0, r: 0, hp: 100, notes: [], brake: false }));
   // l'ordine di Macio: a caso, ma la roba della scuola non arriva per prima
-  const ours = shuffle(pieces.filter(p => !p.def.school).map(p => p.i));
+  const q = shuffle(pieces.filter(p => !p.def.school && !p.def.late).map(p => p.i));
   const school = pieces.filter(p => p.def.school).map(p => p.i);
-  ours.splice(3 + Math.floor(Math.random() * 3), 0, school[0]);
-  ours.splice(8 + Math.floor(Math.random() * 3), 0, school[1]);
-  G = { mode: 'load', pieces, queue: ours, slots: Array(SLOTS).fill(null), arriving: null, wait: 0.6,
+  q.splice(3 + Math.floor(Math.random() * 3), 0, school[0]);
+  q.splice(8 + Math.floor(Math.random() * 3), 0, school[1]);
+  G = { mode: 'load', pieces, queue: q, cavoSaid: false, keysSaid: false, dark: false, darkDone: false, torch: null, slots: Array(SLOTS).fill(null), arriving: null, wait: 0.6,
     straps: new Set(), time: 0, departAt: null, paused: true, drag: null, sel: null, drive: null, shake: 0, bangs: [], lateSaid: false, departClock: null };
+  $('end').hidden = true;
   updateHud();
-  say('MACIO', 'Io porto fuori i case, tu li incastri. Il furgone è piccolo, eh.');
+  say('MACIO', 'Io porto fuori i case, tu li incastri. Il capo dice che domani PAR e valigetta del PC si scaricano per primi: mettili vicino al portellone.');
 }
 
 /* ---------------- griglia ---------------- */
@@ -276,6 +304,8 @@ function fits (p, c, r, w, h) {
 const strapped = p => { for (let y = p.r; y < p.r + p.h; y++) if (G.straps.has(y)) return true; return false; };
 // un case slegato che ha spazio libero accanto: in viaggio scivolerà
 const canSlide = p => [[1, 0], [-1, 0], [0, 1], [0, -1]].some(([dx, dy]) => fits(p, p.c + dx, p.r + dy, p.w, p.h));
+// ruote senza freno: Macio i case con le ruote li porta fuori sfrenati
+const rolling = p => !!p.def.wheels && !p.brake;
 const atRisk = () => G.pieces.filter(p => inVan(p) && !strapped(p) && canSlide(p));
 const ourInVan = () => G.pieces.filter(p => inVan(p) && !p.def.school).length;
 
@@ -387,6 +417,19 @@ function drawVan () {
   ctx.strokeStyle = 'rgba(255,255,255,.05)'; ctx.lineWidth = 1;
   for (let c = 1; c < COLS; c++) { const a = toScreen(c, 0), b = toScreen(c, ROWS); ctx.beginPath(); ctx.moveTo(a.x, a.y); ctx.lineTo(b.x, b.y); ctx.stroke(); }
   for (let r = 1; r < ROWS; r++) { const a = toScreen(0, r), b = toScreen(COLS, r); ctx.beginPath(); ctx.moveTo(a.x, a.y); ctx.lineTo(b.x, b.y); ctx.stroke(); }
+  // le ultime file: l'ordine del capo per domani
+  if (G.mode === 'load' || G.mode === 'strap') {
+    const z = cellRect(0, ROWS - DOOR_ROWS, COLS, DOOR_ROWS);
+    ctx.fillStyle = 'rgba(234,255,43,.05)'; ctx.fillRect(z.x, z.y, z.w, z.h);
+    ctx.save(); ctx.fillStyle = 'rgba(234,255,43,.35)'; ctx.font = '700 ' + Math.round(Math.max(9, cs * 0.3)) + 'px "Barlow Condensed", sans-serif'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+    const m = toScreen(COLS / 2, ROWS - DOOR_ROWS + 0.35), txt = 'PAR E PC: DOMANI ESCONO PRIMA';
+    // la scritta si stringe fino a stare nella larghezza del vano
+    const fw = ctx.measureText(txt).width, room = COLS * cs * 0.9;
+    if (fw > room) ctx.font = '700 ' + Math.max(7, Math.floor(Math.max(9, cs * 0.3) * room / fw)) + 'px "Barlow Condensed", sans-serif';
+    if (v) ctx.fillText(txt, m.x, m.y);
+    else { ctx.translate(m.x, m.y); ctx.rotate(-Math.PI / 2); ctx.fillText(txt, 0, 0); }
+    ctx.restore();
+  }
   // passaruota
   ctx.fillStyle = '#3c3e46';
   for (const [c, r] of ARCH) { const R = cellRect(c, r, 1, 1); ctx.fillRect(R.x, R.y, R.w, R.h); }
@@ -419,6 +462,25 @@ function drawStraps () {
     const m = toScreen(COLS * 0.72, r + 0.5);
     ctx.fillStyle = '#c0c3ca'; ctx.fillRect(m.x - L.cs * 0.22, m.y - L.cs * 0.18, L.cs * 0.44, L.cs * 0.36);
   }
+}
+// il bollino della ruota, nell'angolo in basso a sinistra del case
+function wheelBadge (p, R) {
+  const r = Math.max(9, Math.min(L.cs * 0.36, Math.min(R.w, R.h) * 0.3));
+  return { x: R.x + r + 3, y: R.y + R.h - r - 3, r };
+}
+function wheelAt (x, y) {
+  for (const p of G.pieces) {
+    if (!p.def.wheels || !inVan(p)) continue;
+    const b = wheelBadge(p, pieceRect(p));
+    if (Math.hypot(x - b.x, y - b.y) <= Math.max(b.r + 4, 16)) return p;
+  }
+  return null;
+}
+function toggleBrake (p) {
+  p.brake = !p.brake;
+  SFX.strap();
+  say('MACIO', p.brake ? 'Freno tirato sul ' + p.def.short + ': le ruote non girano più.' : 'Freno tolto: il ' + p.def.short + ' adesso rotola.', p.brake ? 'ok' : '');
+  updateHud();
 }
 function drawPiece (p, R, opts) {
   const d = p.def, cs = L.cs, k = Math.min(R.w, R.h);
@@ -465,6 +527,15 @@ function drawPiece (p, R, opts) {
   // danni: bordo del colore dello stato
   if (p.hp < 100) {
     ctx.strokeStyle = STATE_COLOR[stateOf(p.hp)]; ctx.lineWidth = 3; rr(R.x - 1, R.y - 1, R.w + 2, R.h + 2, 5); ctx.stroke();
+  }
+  // ruote: grigia se libera (rotola), rossa con la P se frenata. Si tocca per frenare
+  if (p.def.wheels && p.loc === 'van') {
+    const b = wheelBadge(p, R);
+    ctx.fillStyle = p.brake ? '#e0503f' : '#1a1b20'; ctx.beginPath(); ctx.arc(b.x, b.y, b.r, 0, Math.PI * 2); ctx.fill();
+    ctx.strokeStyle = p.brake ? '#ffd2cb' : '#c0c3ca'; ctx.lineWidth = Math.max(1.5, b.r * 0.18); ctx.stroke();
+    ctx.fillStyle = p.brake ? '#fff' : '#c0c3ca'; ctx.font = '700 ' + Math.round(b.r * 1.1) + 'px Inter, sans-serif'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+    if (p.brake) ctx.fillText('P', b.x, b.y + 1);
+    else { ctx.beginPath(); ctx.arc(b.x, b.y, b.r * 0.32, 0, Math.PI * 2); ctx.fill(); for (let a = 0; a < 6; a++) { ctx.beginPath(); ctx.moveTo(b.x, b.y); ctx.lineTo(b.x + Math.cos(a) * b.r * 0.75, b.y + Math.sin(a) * b.r * 0.75); ctx.stroke(); } }
   }
   // con le cinghie: lucchetto su chi è legato, bordo rosso su chi può scivolare
   if (opts && opts.lock) {
@@ -514,6 +585,16 @@ function drawSide () {
   ctx.strokeStyle = '#7d7570'; ctx.lineWidth = Math.max(2, gs * 0.3); ctx.beginPath(); ctx.arc(gx, gy, gs * 0.7, Math.PI * 0.9, Math.PI * 2.1, true); ctx.stroke();
   ctx.fillStyle = '#d6926c'; ctx.beginPath(); ctx.arc(gx, gy + gs * 0.15, gs * 0.2, 0, Math.PI * 2); ctx.fill();
   ctx.fillStyle = '#cfe0f1'; ctx.font = '600 ' + Math.round(Math.max(9, cs * 0.28)) + 'px Inter, sans-serif'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+  if (G.keysSaid && G.mode === 'load') {
+    // il mazzo di chiavi: più è tardi, più lo agita
+    const amp = Math.min(1, G.time / GAME_SECONDS), a = Math.sin(performance.now() / (120 - 60 * amp)) * 0.6 * amp;
+    const kx = gx + gs * 1.5, ky = gy + gs * 0.6;
+    ctx.save(); ctx.translate(kx, ky); ctx.rotate(a);
+    ctx.strokeStyle = '#d9b44a'; ctx.lineWidth = Math.max(1.5, gs * 0.12);
+    ctx.beginPath(); ctx.arc(0, 0, gs * 0.3, 0, Math.PI * 2); ctx.stroke();
+    for (const k of [-0.5, 0, 0.5]) { ctx.beginPath(); ctx.moveTo(0, gs * 0.3); ctx.lineTo(k * gs * 0.6, gs * 1.1); ctx.stroke(); }
+    ctx.restore();
+  }
   ctx.fillText('Gerry: roba', gx, S.y + S.h * 0.8); ctx.fillText('della scuola', gx, S.y + S.h * 0.8 + cs * 0.34);
   // Macio che arriva dalla palestra col prossimo case
   if (G.arriving) {
@@ -530,13 +611,93 @@ function drawSide () {
     else drawMacio(L.slots[0].x + L.slots[0].w - cs * 0.5, L.sideLabelY + cs * 0.05, cs * 0.4);
   }
 }
+/* ---------------- il viaggio: la strada sotto il furgone ----------------
+   Le strisce scorrono all'indietro, il furgone si piega in curva, il gatto
+   attraversa davanti alla cabina e il dosso passa sotto le ruote. */
+function along (k, side) {
+  // un punto della strada: k quadretti davanti alla cabina (negativo = dietro), side di lato
+  return toScreen(COLS / 2 + side, -L.CAB - k);
+}
+function drawRoad () {
+  const D = G.drive, cs = L.cs;
+  ctx.fillStyle = '#26272c'; ctx.fillRect(0, 0, L.W, L.H);
+  const span = Math.max(L.W, L.H) / cs + 8, period = 4, o = (D.off % period);
+  // strisce di mezzeria a sinistra del furgone, bordi tratteggiati e lampioni
+  for (let k = -span; k < span; k += period) {
+    const kk = k - o;
+    for (const [side, len, wd, col] of [[-COLS / 2 - 1.2, 1.8, 0.16, '#d9d4c7'], [COLS / 2 + 1.2, 1.8, 0.1, '#6b6d74']]) {
+      const a = along(kk, side), b = along(kk - len, side);
+      ctx.strokeStyle = col; ctx.lineWidth = Math.max(2, cs * wd); ctx.beginPath(); ctx.moveTo(a.x, a.y); ctx.lineTo(b.x, b.y); ctx.stroke();
+    }
+  }
+  for (let k = -span; k < span; k += period * 2.5) {
+    const a = along(k - (D.off % (period * 2.5)), COLS / 2 + 2.6);
+    ctx.fillStyle = 'rgba(242,197,61,.18)'; ctx.beginPath(); ctx.arc(a.x, a.y, cs * 1.2, 0, Math.PI * 2); ctx.fill();
+    ctx.fillStyle = '#c9c4b5'; ctx.beginPath(); ctx.arc(a.x, a.y, cs * 0.18, 0, Math.PI * 2); ctx.fill();
+  }
+  const e = D.e;
+  if (!e || D.intro <= 0 && !D.frames) return;
+  const t = D.intro > 0 ? 1 - D.intro / INTRO : 1;
+  if (e.cause === 'gatto') {
+    // il gatto attraversa davanti alla cabina, da destra a sinistra
+    const c = along(0.5, COLS * 0.9 - t * COLS * 1.8);
+    drawCat(c.x, c.y, cs * 0.55);
+    if (D.intro > 0) { ctx.fillStyle = '#ffd65a'; ctx.font = '700 ' + Math.round(cs * 0.55) + 'px "Barlow Condensed", sans-serif'; ctx.textAlign = 'center'; ctx.fillText('MIAO!', c.x, c.y - cs * 0.7); }
+  }
+  if (e.cause === 'dosso' && D.intro > 0) {
+    // il dosso arriva da davanti e passa sotto il furgone
+    const k = 4 - t * (ROWS + L.CAB + 4);
+    const a = along(k, -COLS / 2 - 0.6), b = along(k, COLS / 2 + 0.6);
+    ctx.strokeStyle = '#f2c53d'; ctx.lineWidth = cs * 0.5; ctx.setLineDash([cs * 0.4, cs * 0.4]); ctx.beginPath(); ctx.moveTo(a.x, a.y); ctx.lineTo(b.x, b.y); ctx.stroke(); ctx.setLineDash([]);
+  }
+  if ((e.cause === 'destra' || e.cause === 'sinistra') && D.intro > 0) {
+    const a = along(3.5, 0);
+    ctx.save(); ctx.fillStyle = '#2f6fb0'; ctx.beginPath(); ctx.arc(a.x, a.y, cs * 0.6, 0, Math.PI * 2); ctx.fill();
+    ctx.fillStyle = '#fff'; ctx.font = '700 ' + Math.round(cs * 0.75) + 'px Inter, sans-serif'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+    // la freccia del cartello, girata come il furgone
+    const dir = e.cause === 'destra' ? 1 : -1, arrow = L.o === 'v' ? (dir > 0 ? '↱' : '↰') : (dir > 0 ? '⬏' : '⬎');
+    ctx.fillText(L.o === 'v' ? arrow : (dir > 0 ? '↑' : '↓'), a.x, a.y + 1); ctx.restore();
+  }
+}
+function drawCat (x, y, s) {
+  ctx.save(); ctx.translate(x, y);
+  ctx.fillStyle = '#e08a2e';
+  ctx.beginPath(); ctx.ellipse(0, 0, s * 0.7, s * 0.38, 0, 0, Math.PI * 2); ctx.fill();
+  ctx.beginPath(); ctx.arc(-s * 0.7, -s * 0.1, s * 0.3, 0, Math.PI * 2); ctx.fill();
+  ctx.beginPath(); ctx.moveTo(-s * 0.9, -s * 0.3); ctx.lineTo(-s * 0.82, -s * 0.55); ctx.lineTo(-s * 0.7, -s * 0.35); ctx.fill();
+  ctx.beginPath(); ctx.moveTo(-s * 0.62, -s * 0.35); ctx.lineTo(-s * 0.5, -s * 0.55); ctx.lineTo(-s * 0.45, -s * 0.28); ctx.fill();
+  ctx.strokeStyle = '#e08a2e'; ctx.lineWidth = s * 0.14; ctx.beginPath(); ctx.moveTo(s * 0.65, 0); ctx.quadraticCurveTo(s * 1.1, -s * 0.1, s * 1.05, -s * 0.5); ctx.stroke();
+  ctx.fillStyle = '#141519'; ctx.beginPath(); ctx.arc(-s * 0.8, -s * 0.13, s * 0.05, 0, Math.PI * 2); ctx.fill();
+  ctx.restore();
+}
+// la luce del cortile è saltata: si vede solo dove punta la torcia di Macio
+function drawDark () {
+  const t = G.torch || { x: L.vanX + L.vw / 2, y: L.vanY + L.vh / 2 }, r = TORCH * L.cs, D = 'rgba(6,6,9,.8)';
+  const g = ctx.createRadialGradient(t.x, t.y, r * 0.55, t.x, t.y, r);
+  g.addColorStop(0, 'rgba(6,6,9,0)'); g.addColorStop(1, D);
+  ctx.fillStyle = g; ctx.fillRect(t.x - r, t.y - r, 2 * r, 2 * r);
+  ctx.fillStyle = D;
+  ctx.fillRect(0, 0, L.W, Math.max(0, t.y - r)); ctx.fillRect(0, t.y + r, L.W, L.H);
+  ctx.fillRect(0, t.y - r, Math.max(0, t.x - r), 2 * r); ctx.fillRect(t.x + r, t.y - r, L.W, 2 * r);
+}
 function draw () {
   if (!L) return;
   ctx.setTransform(DPR, 0, 0, DPR, 0, 0);
   ctx.clearRect(0, 0, L.W, L.H);
   ctx.save();
+  if (G.mode === 'drive') drawRoad();
   if (G.shake > 0 && !RFX) ctx.translate((Math.random() - 0.5) * G.shake, (Math.random() - 0.5) * G.shake);
+  if (G.mode === 'drive' && G.drive.tilt && !RFX) {
+    // in curva il furgone si piega un po'
+    const cx = L.vanX + L.vw / 2, cy = L.vanY + L.vh / 2;
+    ctx.translate(cx, cy); ctx.rotate(G.drive.tilt * 0.07); ctx.translate(-cx, -cy);
+  }
   drawVan();
+  if (G.mode === 'drive') {
+    // Macio al volante
+    const m = toScreen(COLS * 0.72, -L.CAB * 0.45);
+    drawMacio(m.x, m.y, L.cs * 0.45);
+  }
   // in modalità cinghie, la fila sotto il dito
   if (G.mode === 'strap' && G.hoverRow != null) {
     const R = cellRect(0, G.hoverRow, COLS, 1); ctx.fillStyle = 'rgba(242,165,65,.14)'; ctx.fillRect(R.x, R.y, R.w, R.h);
@@ -551,7 +712,7 @@ function draw () {
     ctx.beginPath(); ctx.arc(a.x, a.y, L.cs * 0.28, 0, Math.PI * 2); ctx.stroke();
     ctx.beginPath(); ctx.moveTo(a.x - L.cs * 0.4, a.y); ctx.lineTo(a.x + L.cs * 0.4, a.y); ctx.moveTo(a.x, a.y - L.cs * 0.4); ctx.lineTo(a.x, a.y + L.cs * 0.4); ctx.stroke();
   }
-  drawSide();
+  if (G.mode !== 'drive') drawSide();
   for (const p of G.pieces) if (p.loc === 'slot' && (!G.drag || G.drag.p !== p)) drawPiece(p, pieceRect(p), { sel: G.sel === p });
   // botte della prova su strada
   for (const b of G.bangs) {
@@ -559,6 +720,7 @@ function draw () {
     ctx.textAlign = 'center'; ctx.fillText(b.txt, b.x, b.y - (1 - b.t) * L.cs);
   }
   ctx.restore();
+  if (G.dark && (G.mode === 'load' || G.mode === 'strap')) drawDark();
   // il case trascinato, con l'ombra dove andrebbe
   if (G.drag && G.drag.moved) {
     const d = G.drag, p = d.p, spot = dropSpot(d);
@@ -578,7 +740,7 @@ function updateHud () {
   $('clock').textContent = clockText(G.departAt != null ? G.departAt : G.time);
   $('clock-box').classList.toggle('late', G.time > GAME_SECONDS);
   const n = ourInVan();
-  $('h-in').textContent = n + '/' + OURS;
+  $('h-in').textContent = n + '/' + oursCount();
   const b = balance(); $('h-bal').textContent = b.label; $('h-bal').className = b.label === '—' ? '' : b.ok ? 'ok' : 'bad';
   $('h-straps-box').hidden = G.mode !== 'strap' && G.mode !== 'drive';
   $('h-straps').textContent = G.straps.size + '/' + STRAPS;
@@ -589,7 +751,7 @@ function updateHud () {
   else if (G.mode === 'strap') { next.textContent = 'Si parte!'; next.disabled = false; }
   else { next.textContent = 'In viaggio…'; next.disabled = true; }
 }
-const readyToStrap = () => ourInVan() === OURS && !G.queue.length && !G.arriving;
+const readyToStrap = () => G.cavoSaid && ourInVan() === OURS_ALL && !G.queue.length && !G.arriving;
 let sayTimer = null;
 function say (who, text, kind, sticky) {
   $('say-who').textContent = who;
@@ -660,6 +822,8 @@ function pointerPos (ev) { const b = cv.getBoundingClientRect(); return { x: ev.
 cv.addEventListener('pointerdown', ev => {
   if (!G || G.paused) return;
   const { x, y } = pointerPos(ev);
+  G.torch = { x, y };
+  if ((G.mode === 'strap' || G.mode === 'load') && ev.button !== 2) { const w = wheelAt(x, y); if (w) { toggleBrake(w); return; } }
   if (G.mode === 'strap') { toggleStrap(x, y); return; }
   if (G.mode !== 'load' || G.drag) return;
   if (ev.button === 2) return;
@@ -674,6 +838,7 @@ cv.addEventListener('pointerdown', ev => {
 cv.addEventListener('pointermove', ev => {
   if (!G) return;
   const { x, y } = pointerPos(ev);
+  G.torch = { x, y };
   if (G.mode === 'strap') { const c = toCell(x, y); G.hoverRow = c.c >= -0.5 && c.c <= COLS + 0.5 && c.r >= 0 && c.r < ROWS ? Math.floor(c.r) : null; return; }
   const d = G.drag;
   if (!d || d.id !== ev.pointerId) return;
@@ -733,10 +898,11 @@ function toggleStrap (x, y) {
 }
 // cosa dice Macio con le cinghie: quanti case scivolerebbero ancora
 function strapHint (first) {
-  const n = atRisk().length, left = STRAPS - G.straps.size;
+  const n = atRisk().length, left = STRAPS - G.straps.size, free = G.pieces.filter(p => inVan(p) && rolling(p) && !strapped(p)).length;
   const head = first ? 'Tutto dentro! Ora le cinghie: tocca una fila del furgone e la lego da una sponda all\'altra. ' : '';
   say('MACIO', head + (n ? (n === 1 ? 'Un case col segno rosso può scivolare' : n + ' case col segno rosso possono scivolare') + ': legali o parti così. Cinghie rimaste: ' + left + '.'
-    : 'Niente col segno rosso: non si muove niente. Si può partire!'), n ? '' : 'ok');
+    : 'Niente col segno rosso: non si muove niente. Si può partire!')
+    + (free ? ' ' + (free === 1 ? 'Un case ha' : free + ' case hanno') + ' le ruote senza freno: tocca la ruota.' : ''), n ? '' : 'ok');
 }
 $('b-next').addEventListener('click', () => {
   if (G.mode === 'load' && readyToStrap()) {
@@ -753,12 +919,14 @@ $('b-back').addEventListener('click', () => { G.mode = 'load'; G.straps.clear();
    passaruota o un altro case. Il colpo rovina chi sbatte e chi viene preso,
    in base ai chili, alla corsa fatta e alla fragilità. */
 function startDrive () {
+  G.dark = false;
+  draw(); snapVan();
   G.mode = 'drive';
   G.departAt = G.time;
   G.late = G.time > GAME_SECONDS;
   G.bal = balance();
   G.events = DRIVE.map(e => ({ ...e, s: e.s && !G.bal.ok ? e.s + 1 : e.s }));
-  G.drive = { k: -1, frames: null, f: 0, t: 0, anim: null, wait: 0.8 };
+  G.drive = { k: -1, frames: null, f: 0, t: 0, anim: null, wait: 0.8, intro: 0, e: null, speed: 0, off: 0, tilt: 0 };
   say('MACIO', 'Si parte! Guido io.' + (G.bal.ok ? '' : ' Però il furgone tira ' + (G.bal.label === 'Dietro' ? 'dietro' : G.bal.label.toLowerCase()) + '…'));
   updateHud();
 }
@@ -779,7 +947,9 @@ function simulateEvent (e) {
   const frames = [], bangs = [];
   const st = new Map(loose.map(p => [p, { slid: 0, done: false }]));
   const ahead = p => e.dx ? (e.dx > 0 ? p.c : -p.c) : (e.dy > 0 ? p.r : -p.r);
-  for (let step = 0; step < e.s; step++) {
+  for (let step = 0; step < e.s + ROLL_EXTRA; step++) {
+    // oltre la spinta normale continuano solo le ruote senza freno
+    for (const p of loose) if (step >= e.s && !rolling(p)) st.get(p).done = true;
     const order = loose.filter(p => !st.get(p).done).sort((a, b) => ahead(b) - ahead(a));
     if (!order.length) break;
     for (const p of order) {
@@ -797,6 +967,7 @@ function simulateEvent (e) {
         for (const v of victims) hit(v, run * p.def.kg / 40 * FRAG[v.def.frag] * HIT.victim / victims.size, 'preso ' + p.def.from + ' in ' + ev);
         hit(p, self * HIT.self, 'sbattuto in ' + ev);
       } else hit(p, self * HIT.wall, 'contro la sponda in ' + ev);
+      if (rolling(p) && s.slid > e.s && !p.notes.includes('senza freno')) p.notes.push('senza freno');
       bangs.push(p);
     }
     frames.push(new Map(loose.map(p => [p, { c: p.c, r: p.r }])));
@@ -804,21 +975,31 @@ function simulateEvent (e) {
   // chi scivola fino in fondo senza sbattere si ferma da solo (poco male)
   return { frames, bangs };
 }
+// prima di ogni spinta si vede perché (il gatto, la curva, il dosso): poi i case scivolano
+const INTRO = 1.0;
 function tickDrive (dt) {
   const D = G.drive;
+  // la strada scorre: veloce in viaggio, ferma dopo la frenata
+  const target = D.e && D.e.cause === 'gatto' && (D.intro > 0 || D.frames) ? 0 : D.e && D.e.cause === 'via' && D.intro > 0 ? 3 : 8;
+  D.speed += (target - D.speed) * Math.min(1, dt * (target < D.speed ? 4 : 1.5));
+  D.off += D.speed * dt;
+  const tiltTo = D.e && (D.intro > 0 || D.frames) ? (D.e.cause === 'destra' ? 1 : D.e.cause === 'sinistra' ? -1 : 0) : 0;
+  D.tilt += (tiltTo - D.tilt) * Math.min(1, dt * 3);
+  if (D.intro > 0) {
+    D.intro -= dt;
+    if (D.intro <= 0) runEvent(D);
+    return;
+  }
   if (D.wait > 0) { D.wait -= dt; return; }
   if (!D.frames) {
     D.k++;
     if (D.k >= G.events.length) { finish(); return; }
-    const e = G.events[D.k];
-    // si parte dalle posizioni attuali e si anima verso i fotogrammi calcolati
-    const start = new Map(G.pieces.filter(inVan).map(p => [p, { c: p.c, r: p.r }]));
-    const res = simulateEvent(e);
-    D.start = start; D.frames = res.frames; D.bangs = res.bangs; D.f = 0; D.t = 0;
-    say('MACIO', e.say, '', false);
-    $('h-in').textContent = e.name.toUpperCase();
-    if (e.bump) { G.shake = 10; for (const p of res.bangs) bangAt(p, 'TUNF'); D.frames = null; D.wait = 1.1; D.anim = null; return; }
-    if (!D.frames.length) { D.frames = null; D.wait = 0.9; D.anim = null; return; }
+    D.e = G.events[D.k];
+    D.intro = INTRO;
+    say('MACIO', D.e.say, '', false);
+    $('h-in').textContent = D.e.name.toUpperCase();
+    if (D.e.cause === 'gatto') tone(900, 0.3, 'sine', 0.06);
+    return;
   }
   const STEPT = 0.11;
   D.t += dt;
@@ -827,9 +1008,18 @@ function tickDrive (dt) {
   D.anim = new Map();
   for (const [p, b] of to) { const a = from.get(p) || b; D.anim.set(p, { c: a.c + (b.c - a.c) * u, r: a.r + (b.r - a.r) * u }); }
   if (D.t >= D.frames.length * STEPT) {
-    D.anim = null; D.frames = null; D.wait = 0.9;
+    D.anim = null; D.frames = null; D.wait = 0.7;
     if (D.bangs.length) { G.shake = 8; for (const p of D.bangs) bangAt(p, 'BANG'); }
   }
+}
+// la spinta vera: si parte dalle posizioni attuali e si anima verso i fotogrammi calcolati
+function runEvent (D) {
+  const e = D.e;
+  const start = new Map(G.pieces.filter(inVan).map(p => [p, { c: p.c, r: p.r }]));
+  const res = simulateEvent(e);
+  D.start = start; D.frames = res.frames; D.bangs = res.bangs; D.f = 0; D.t = 0;
+  if (e.bump) { G.shake = 10; for (const p of res.bangs) bangAt(p, 'TUNF'); D.frames = null; D.wait = 1.0; D.anim = null; return; }
+  if (!D.frames.length) { D.frames = null; D.wait = 0.8; D.anim = null; }
 }
 function bangAt (p, txt) {
   const R = cellRect(p.c, p.r, p.w, p.h);
@@ -842,15 +1032,18 @@ const REP_BY_STARS = [-3, -1, 0, 1, 3, 5];
 function finish () {
   G.mode = 'end';
   const ours = G.pieces.filter(p => !p.def.school);
+  const left = ours.filter(p => !inVan(p));
   const st = ours.map(p => stateOf(p.hp));
   const rotti = st.filter(s => s === 'rotto').length, dif = st.filter(s => s === 'difettoso').length, amm = st.filter(s => s === 'ammaccato').length;
   const taken = G.pieces.filter(p => p.def.school && inVan(p));
-  let stars = 5 - 2 * rotti - dif - (amm >= 2 ? 1 : 0) - (G.bal.ok ? 0 : 1) - (taken.length ? 1 : 0) - (G.late ? 1 : 0);
+  const order = orderOk(), coffee = G.departAt <= T_COFFEE;
+  // l'ordine del capo rimedia a un errore (ma non va oltre le 5 stelle)
+  let stars = 5 - 2 * rotti - dif - (amm >= 2 ? 1 : 0) - (G.bal.ok ? 0 : 1) - (taken.length ? 1 : 0) - (G.late ? 1 : 0) - 2 * left.length + (order ? 1 : 0);
   stars = Math.max(0, Math.min(5, stars));
   const rep = REP_BY_STARS[stars];
   const beers = stars === 5 ? 1 : 0;
   const result = {
-    skipped: false, stars, rep, beers, late: G.late, depart: clockText(G.departAt), balance: G.bal.label, straps: G.straps.size,
+    skipped: false, stars, rep, beers, late: G.late, order, coffee, depart: clockText(G.departAt), balance: G.bal.label, straps: G.straps.size,
     states: Object.fromEntries(ours.map(p => [p.def.id, stateOf(p.hp)])),
     damaged: ours.filter(p => p.hp < 70).map(p => p.def.name), taken: taken.map(p => p.def.name)
   };
@@ -859,8 +1052,10 @@ function finish () {
   if (taken.length) notes.push('Ti sei portato via ' + taken.map(p => p.def.id === 'scopa' ? 'la scopa di Gerry' : 'il leggio della scuola').join(' e ') + ': domani chiamano il service.');
   if (!G.bal.ok) notes.push('Furgone sbilanciato (' + G.bal.label.toLowerCase() + '): in curva ha sbandato di più. I pesanti vanno verso la cabina e al centro.');
   if (G.late) notes.push('Partiti dopo le 23:30: Gerry ha dovuto riaprire il cancello.');
+  notes.push(order ? 'PAR e PC vicino al portellone, come voleva il capo: una stella in più.' : 'Il capo voleva PAR e PC vicino al portellone: domani li cercherà sotto a tutto.');
   if (!rotti && !dif && !amm) notes.push('Niente si è mosso più del dovuto. Carico da manuale.');
   if (beers) notes.push('Il capo è contento: una birra per te. 🍺');
+  if (coffee) notes.push('Partiti prima delle 23:15: Gerry ti offre un caffè dalla macchinetta della sala professori. ☕');
   const rows = ours.slice().sort((a, b) => a.hp - b.hp).map(p => {
     const s = stateOf(p.hp);
     return '<tr><td>' + p.def.name + '</td><td><span class="pill p-' + s + '">' + STATE_LABEL[s] + '</span></td><td><small>' + (p.notes.length ? p.notes.join(', ') : strapped(p) ? 'legato, non si è mosso' : '—') + '</small></td></tr>';
@@ -868,14 +1063,42 @@ function finish () {
   $('end').innerHTML = '<div class="bolla">'
     + '<header><div><h2>Bolla di carico</h2><small>Festa della scuola · partenza alle ' + result.depart + (SERVICE ? ' · ' + escapeHtml(SERVICE) : '') + '</small></div>'
     + '<span class="stars" aria-label="' + stars + ' stelle su 5">' + '★'.repeat(stars) + '☆'.repeat(5 - stars) + '</span></header>'
-    + '<div class="sum"><div><span>Integri</span><b>' + st.filter(s => s === 'integro').length + '/' + OURS + '</b></div><div><span>Assetto</span><b>' + G.bal.label + '</b></div><div><span>Cinghie</span><b>' + G.straps.size + '/' + STRAPS + '</b></div><div><span>Reputazione</span><b>' + (rep > 0 ? '+' : '') + rep + '</b></div></div>'
+    + '<div class="sum"><div><span>Integri</span><b>' + st.filter(s => s === 'integro').length + '/' + OURS_ALL + '</b></div><div><span>Assetto</span><b>' + G.bal.label + '</b></div><div><span>Cinghie</span><b>' + G.straps.size + '/' + STRAPS + '</b></div><div><span>Reputazione</span><b>' + (rep > 0 ? '+' : '') + rep + '</b></div></div>'
     + '<div class="tw"><table><thead><tr><th>Case</th><th>Stato</th><th>Cosa è successo</th></tr></thead><tbody>' + rows + '</tbody></table></div>'
     + (notes.length ? '<ul class="notes">' + notes.map(n => '<li>' + n + '</li>').join('') + '</ul>' : '')
+    + photoChat(stars, taken)
     + '<div class="row">' + (EMBED ? '<button class="primary" id="btn-home">Si torna a casa</button>' : '<button class="primary" id="btn-again">Rigioca</button>') + '</div></div>';
   $('end').hidden = false;
   if (EMBED) $('btn-home').addEventListener('click', () => sendResult(G.result));
   else $('btn-again').addEventListener('click', () => { $('end').hidden = true; newGame(); G.paused = false; });
   updateHud();
+}
+/* la foto al capo: Macio fotografa il furgone prima di chiudere il
+   portellone e la manda; il capo risponde in base a com'è andata */
+const BOSS_SAYS = [
+  'Chiamami. Anzi no, non chiamarmi.',
+  'Domani si fa l\'inventario. Insieme. Alle 7.',
+  'Ho visto la foto. Ho pianto. Non di gioia.',
+  'Sembra caricato da Macio. Ah, l\'hai caricato tu?',
+  'Bene dai. Domani però niente sorprese.',
+  'Questo è un furgone o un cubo di Rubik? Bravo, la birra domani la offro io.'
+];
+let vanShot = '';
+function snapVan () {
+  // la foto: solo il furgone, rimpicciolita
+  try {
+    const k = 200 / Math.max(L.vw, L.vh), c = document.createElement('canvas');
+    c.width = Math.round(L.vw * k); c.height = Math.round(L.vh * k);
+    c.getContext('2d').drawImage(cv, (L.vanX - 6) * DPR, (L.vanY - 6) * DPR, (L.vw + 12) * DPR, (L.vh + 12) * DPR, 0, 0, c.width, c.height);
+    vanShot = c.toDataURL('image/jpeg', 0.7);
+  } catch (e) { vanShot = ''; }
+}
+function photoChat (stars, taken) {
+  let reply = BOSS_SAYS[stars];
+  if (taken.length) reply = 'Perché nel furgone c\'è ' + (taken.some(p => p.def.id === 'scopa') ? 'una scopa' : 'un leggio') + '? ' + reply;
+  return '<div class="chat"><small>Chat «' + escapeHtml(BOSS) + '» · ' + clockText(G.departAt) + '</small>'
+    + '<div class="msg me">' + (vanShot ? '<img src="' + vanShot + '" alt="Foto del furgone carico">' : '') + 'Furgone carico, partiamo! (foto di Macio)</div>'
+    + '<div class="msg boss"><b>' + escapeHtml(BOSS) + '</b>' + escapeHtml(reply) + '</div></div>';
 }
 function escapeHtml (s) { return String(s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]); }
 
@@ -884,6 +1107,15 @@ function tick (dt) {
   if (G.mode === 'load' || G.mode === 'strap') {
     G.time += dt;
     if (G.time > GAME_SECONDS && !G.lateSaid) { G.lateSaid = true; say('GERRY', 'Sono le 23:30, io devo chiudere il cancello! Sbrigatevi!', 'bad', true); }
+    if (G.time > T_KEYS && !G.keysSaid) { G.keysSaid = true; say('GERRY', '*dlin dlin* Io le chiavi le ho già in mano, eh.', '', true); jingle(); }
+    if (G.time > T_DARK && !G.dark && !G.darkDone) { G.dark = true; say('MACIO', 'È saltata la luce del cortile! Ti faccio luce io con la torcia: segue il tuo dito.', 'bad', true); tone(60, 0.4, 'square', 0.1); }
+    if (G.time > T_LIGHT && G.dark) { G.dark = false; G.darkDone = true; say('GERRY', 'Ho riacceso. Sono le 23:20, e io a mezzanotte dormo.', '', true); jingle(); }
+  }
+  if (G.mode === 'load' && !G.cavoSaid && ourInVan() >= CAVO_AFTER) {
+    G.cavoSaid = true;
+    G.queue.unshift(G.pieces.find(p => p.def.late).i);
+    say('GERRY', 'Ehi, voi! Vi siete dimenticati un cavo in palestra. Ve lo porta Macio.', '', true);
+    updateHud();
   }
   if (G.mode === 'load') {
     if (G.arriving) {
@@ -892,7 +1124,7 @@ function tick (dt) {
         const p = G.pieces[G.arriving.i];
         p.loc = 'slot'; p.slot = G.arriving.slot; G.slots[p.slot] = p.i;
         G.arriving = null; G.wait = 0.5;
-        say('MACIO', MACIO_SAYS[p.def.id]);
+        say('MACIO', MACIO_SAYS[p.def.id] + (p.def.wheels ? ' Ha le ruote: nel furgone tocca la ruota per tirare il freno.' : ''));
         if (!G.queue.length) say('MACIO', MACIO_SAYS[p.def.id] + ' Era l\'ultimo!');
       }
     } else if (G.queue.length) {

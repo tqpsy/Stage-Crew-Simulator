@@ -15,7 +15,7 @@ const { chromium } = require(process.env.PLAYWRIGHT_PATH || 'playwright');
 const path = require('path');
 // un carico completo e stretto (7 × 11 quadretti, passaruota compresi)
 const SOL = { corrente: [0, 0, 4, 2], segnale: [4, 0, 2, 4], sub1: [0, 2, 3, 3], sub2: [3, 4, 3, 3], rack: [1, 5, 2, 2], distro: [1, 7, 2, 2],
-  stativi: [6, 0, 1, 4], top1: [3, 7, 2, 2], top2: [0, 9, 2, 2], valigetta: [3, 2, 1, 2], par: [2, 9, 2, 2], ricambio: [4, 9, 2, 2] };
+  stativi: [6, 0, 1, 4], top1: [3, 7, 2, 2], top2: [0, 9, 2, 2], valigetta: [5, 7, 1, 2], par: [2, 9, 2, 2], ricambio: [4, 9, 2, 2], cavo: [6, 4, 1, 1] };
 (async () => {
   const b = await chromium.launch();
   const problems = [];
@@ -85,13 +85,45 @@ const SOL = { corrente: [0, 0, 4, 2], segnale: [4, 0, 2, 4], sub1: [0, 2, 3, 3],
       G.mode = 'strap'; if (legato) G.straps.add(9);
       startDrive(); G.drive.wait = 0;
       for (let i = 0; i < 3000 && G.mode !== 'end'; i++) tick(0.05);
-      return { bad, pc: G.result && G.result.states.valigetta, stars: G.result && G.result.stars };
+      return { bad, pc: G.result && G.result.states.valigetta };
     }, [SOL, legato]);
     const loose = await prova(false), tied = await prova(true);
     check(!loose.bad.length && !tied.bad.length, 'la prova parte da case sovrapposti: ' + loose.bad.concat(tied.bad));
     check(loose.pc && loose.pc !== 'integro', 'la valigetta slegata col corridoio davanti è arrivata ' + loose.pc);
     check(tied.pc === 'integro', 'la valigetta legata è arrivata ' + tied.pc);
-    check(tied.stars > loose.stars, 'legare non dà più stelle (' + tied.stars + ' contro ' + loose.stars + ')');
+
+    // il freno: un sub sfrenato rotola più lontano in frenata; il tocco sulla ruota lo frena
+    const roll = await at(() => {
+      const out = {};
+      for (const brake of [false, true]) {
+        newGame(); const G = __carico(); G.queue = [];
+        for (const q of G.pieces) q.loc = 'gerry';
+        const sb = G.pieces.find(x => x.def.id === 'sub1'); sb.loc = 'van'; [sb.c, sb.r] = [2, 8]; sb.brake = brake;
+        simulateEvent(DRIVE[0]); out[brake] = 8 - sb.r;
+      }
+      return out;
+    });
+    check(roll.false === roll.true + 3, 'il sub senza freno non rotola più lontano: ' + JSON.stringify(roll));
+    await at(() => { newGame(); const G = __carico(); G.paused = false; G.queue = []; for (const q of G.pieces) q.loc = 'gerry'; const r = G.pieces.find(x => x.def.id === 'rack'); r.loc = 'van'; [r.c, r.r] = [2, 4]; });
+    const wb = await at(() => { const q = __carico().pieces.find(x => x.def.id === 'rack'), b = wheelBadge(q, pieceRect(q)), c = cv.getBoundingClientRect(); return [c.left + b.x, c.top + b.y]; });
+    await p.mouse.click(...wb);
+    check(await at(() => __carico().pieces.find(x => x.def.id === 'rack').brake), 'un tocco sulla ruota non tira il freno');
+    check(await at(() => { const q = __carico().pieces.find(x => x.def.id === 'rack'); return q.c === 2 && q.r === 4 && q.w === 2; }), 'il tocco sulla ruota ha anche spostato o girato il case');
+
+    // il cavo dimenticato: con 8 case dentro Gerry lo porta, e prima non si passa alle cinghie
+    const cavo = await at(() => {
+      newGame(); const G = __carico(); G.paused = false;
+      const list = ['corrente', 'segnale', 'sub1', 'sub2', 'rack', 'distro', 'stativi', 'top1'];
+      const SOL = { corrente: [0, 0, 4, 2], segnale: [4, 0, 2, 4], sub1: [0, 2, 3, 3], sub2: [3, 4, 3, 3], rack: [1, 5, 2, 2], distro: [1, 7, 2, 2], stativi: [6, 0, 1, 4], top1: [3, 7, 2, 2] };
+      for (const id of list) { const q = G.pieces.find(x => x.def.id === id); G.queue = G.queue.filter(i => i !== q.i); q.loc = 'van'; [q.c, q.r, q.w, q.h] = SOL[id]; }
+      const before = G.cavoSaid; tick(0.01);
+      return { before, after: G.cavoSaid, next: G.pieces[G.queue[0]].def.id, said: document.getElementById('say-who').textContent, n: document.getElementById('h-in').textContent };
+    });
+    check(!cavo.before && cavo.after && cavo.next === 'cavo' && cavo.said === 'GERRY' && cavo.n === '8/13', 'il cavo dimenticato non arriva: ' + JSON.stringify(cavo));
+    // l'ordine del capo: PAR e PC nelle ultime tre file
+    const ord = await at(() => { const G = __carico(); const pa = G.pieces.find(x => x.def.id === 'par'), pc = G.pieces.find(x => x.def.id === 'valigetta');
+      pa.loc = 'van'; [pa.c, pa.r, pa.w, pa.h] = [2, 9, 2, 2]; pc.loc = 'van'; [pc.c, pc.r, pc.w, pc.h] = [3, 2, 1, 2]; const a = orderOk(); [pc.c, pc.r] = [5, 7]; return [a, orderOk()]; });
+    check(!ord[0] && ord[1], 'l\'ordine del capo non si riconosce: ' + ord);
     await p.close();
   }
 
@@ -123,7 +155,7 @@ const SOL = { corrente: [0, 0, 4, 2], segnale: [4, 0, 2, 4], sub1: [0, 2, 3, 3],
     check((await frame.evaluate(() => SERVICE)) === (await ev(() => serviceName())).slice(0, 28), 'sul furgone non c\'è il nome del service');
     await frame.click('#btn-start');
     await frame.evaluate(SOL => {
-      const G = __carico(); G.queue = []; G.arriving = null; G.slots.fill(null);
+      const G = __carico(); G.queue = []; G.arriving = null; G.slots.fill(null); G.cavoSaid = true;
       for (const q of G.pieces) { const s = SOL[q.def.id]; if (s) { q.loc = 'van'; [q.c, q.r, q.w, q.h] = s; } else q.loc = 'gerry'; }
       updateHud();
     }, SOL);
@@ -132,7 +164,7 @@ const SOL = { corrente: [0, 0, 4, 2], segnale: [4, 0, 2, 4], sub1: [0, 2, 3, 3],
     await frame.click('#b-next');
     await frame.waitForSelector('#end:not([hidden])', { timeout: 20000 });
     const res = await frame.evaluate(() => __carico().result);
-    check(res.stars === 5, 'il carico stretto e legato non prende 5 stelle: ' + res.stars);
+    check(res.stars === 5 && res.order, 'il carico stretto, legato e in ordine non prende 5 stelle: ' + JSON.stringify(res));
     await frame.click('#btn-home');
     await p.waitForFunction(() => !document.querySelector('#carico-frame'));
     const c = await ev(() => Profile.data.carico);

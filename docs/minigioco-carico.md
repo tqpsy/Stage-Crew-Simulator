@@ -53,6 +53,37 @@ Non è lo scarico al contrario: lì contano fisica e percorso, qui contano
      quelli fragili.
    Un carico stretto non scivola. Le cinghie servono dove resta spazio.
 
+8. **Il freno.** Sub, rack e i due bauli hanno le ruote, e Macio li porta
+   fuori sfrenati. Nel furgone si tocca il bollino della ruota nell'angolo
+   del case (diventa rosso con la P). Un case con le ruote senza freno e
+   slegato in viaggio rotola per 3 quadretti in più.
+9. **L'ordine del capo.** Domani PAR e valigetta del PC si scaricano per
+   primi: vanno nelle ultime tre file, vicino al portellone (sono segnate
+   sul pianale). Se ci sono, si guadagna una stella, che rimedia a un errore
+   ma non porta oltre le 5. Lì dietro però saltano sul dosso: vanno legati.
+10. **Il cavo dimenticato.** Quando nel furgone ci sono 8 case, Gerry arriva
+    con un rotolo di cavo lasciato in palestra (1 quadretto). Va caricato
+    anche lui: si contano 13 case.
+11. **Gerry con le chiavi.** Alle 23:10 Gerry inizia ad agitare le chiavi, e
+    più passa il tempo più le agita. Se si parte prima delle 23:15 offre un
+    caffè (solo una nota nella bolla e nel riassunto).
+12. **Al buio.** Dalle 23:12 alle 23:20 salta la luce del cortile: si vede
+    solo il cerchio della torcia di Macio, che segue il dito o il mouse.
+
+## Il viaggio
+
+La strada scorre sotto il furgone, con Macio al volante. Prima di ogni
+spinta si vede perché arriva: un gatto attraversa (frenata), il cartello
+della curva (il furgone si piega), il dosso giallo che passa sotto le ruote.
+Poi i case scivolano. Con «Effetti ridotti» niente scossoni né inclinazione.
+
+## La foto al capo
+
+Prima di partire Macio fotografa il furgone e la manda al capo (il nome
+arriva dal gioco). Nella bolla c'è la chat: la foto e la risposta del capo,
+una frase per ogni numero di stelle, più una domanda se nel furgone c'è la
+scopa o il leggio.
+
 ## Punteggio
 
 Si parte da 5 stelle e si perdono così:
@@ -65,6 +96,8 @@ Si parte da 5 stelle e si perdono così:
 | assetto sbagliato | −1 |
 | roba della scuola nel furgone | −1 |
 | partiti dopo le 23:30 | −1 |
+| un case del service lasciato a terra | −2 |
+| PAR e PC vicino al portellone | +1 (fino a 5) |
 
 | Stelle | 0 | 1 | 2 | 3 | 4 | 5 |
 |---|---|---|---|---|---|---|
@@ -99,6 +132,8 @@ sopra la scena.
 - Test: `tests/carico.js` (la pagina da sola e dentro il gioco).
 
 ## Da provare
+
+- Case uno sopra l'altro (i leggeri sopra i pesanti): per il camion.
 
 - Se tre cinghie sono troppe o troppo poche.
 - L'ordine di Macio: oggi è a caso. Un ordine "cattivo" (i sub per ultimi)

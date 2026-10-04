@@ -3695,7 +3695,9 @@ function openCarico () {
   f.className = 'minigame-frame';
   f.title = 'Il carico';
   const logo = serviceLogo();
-  f.src = 'carico.html?embed=1&service=' + encodeURIComponent(serviceName()) + '&bg=' + encodeURIComponent(logo.bg) + '&fg=' + encodeURIComponent(logo.fg) + minigameQuery();
+  const info = Profile.data.serviceInfo;
+  f.src = 'carico.html?embed=1&service=' + encodeURIComponent(serviceName()) + '&bg=' + encodeURIComponent(logo.bg) + '&fg=' + encodeURIComponent(logo.fg)
+    + (info && info.boss ? '&boss=' + encodeURIComponent(info.boss) : '') + minigameQuery();
   f.addEventListener('load', () => { try { f.contentWindow.focus(); } catch (e) { /* niente fuoco: si tocca */ } });
   document.body.appendChild(f);
 }
@@ -3712,7 +3714,7 @@ function finishCarico (r) {
   const stars = skipped ? 0 : Math.max(0, Math.min(5, num(r.stars, 0)));
   const list = v => Array.isArray(v) ? v.filter(x => typeof x === 'string').slice(0, 14) : [];
   Profile.data.carico = { skipped, stars, rep: skipped ? 0 : Math.max(-5, Math.min(5, num(r.rep, 0))), beers: skipped ? 0 : Math.max(0, Math.min(1, num(r.beers, 0))),
-    depart: skipped ? null : String(r.depart || '23:00').slice(0, 5), late: !skipped && !!r.late, damaged: skipped ? [] : list(r.damaged), taken: skipped ? [] : list(r.taken) };
+    depart: skipped ? null : String(r.depart || '23:00').slice(0, 5), late: !skipped && !!r.late, order: !skipped && !!r.order, coffee: !skipped && !!r.coffee, damaged: skipped ? [] : list(r.damaged), taken: skipped ? [] : list(r.taken) };
   const c = Profile.data.carico;
   Profile.data.beers = (Profile.data.beers || 0) + c.beers;
   const rep = skipped ? 0 : addReputation(c.rep, 'Carico del furgone a fine serata', 'L' + LEVEL_ID + ':carico');
@@ -3730,6 +3732,7 @@ function caricoSummary () {
   return '★'.repeat(c.stars) + '☆'.repeat(5 - c.stars) + ' · partiti alle ' + c.depart + (c.late ? ' (dopo la chiusura)' : '')
     + (c.damaged.length ? ' · rovinati: ' + c.damaged.join(', ') : ' · tutto integro')
     + (c.taken.length ? ' · portati via per sbaglio: ' + c.taken.join(', ') : '')
+    + (c.order ? ' · PAR e PC al portellone' : '') + (c.coffee ? ' · caffè di Gerry' : '')
     + (c.beers ? ' · 🍺 +' + c.beers : '') + ' · reputazione ' + (c.rep >= 0 ? '+' : '') + c.rep + '.';
 }
 
