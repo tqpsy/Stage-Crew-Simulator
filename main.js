@@ -1665,7 +1665,7 @@ const SAVE_FILE_KIND = 'stage-crew-simulator';   // firma del file esportato
 const SHARED_KEYS = ['settings', 'records', 'usedServices'];
 
 function defaultProfile () {
-  return { v: SAVE_VERSION, player: '', service: '', serviceInfo: null, usedServices: [], settings: { volume: 0.8, reducedFx: false, skipShow: false, skipScarico: false, testMusic: true, bossTips: true, tapeMarks: true, traceSignal: true }, tutorSeen: {}, logo: null, level: null, scarico: null, cavi: null, preside: null, cambioDj: null, dj: null, beers: 0, assistant: defaultAssistant(), fatigue: 0, records: {}, reputation: { total: 0, earned: {}, log: [] }, levelsSeen: 1, savedAt: 0 };
+  return { v: SAVE_VERSION, player: '', service: '', serviceInfo: null, usedServices: [], settings: { volume: 0.8, reducedFx: false, skipShow: false, skipScarico: false, testMusic: true, bossTips: true, tapeMarks: true, traceSignal: true }, tutorSeen: {}, logo: null, level: null, scarico: null, cavi: null, preside: null, cambioDj: null, dj: null, carico: null, beers: 0, assistant: defaultAssistant(), fatigue: 0, records: {}, reputation: { total: 0, earned: {}, log: [] }, levelsSeen: 1, savedAt: 0 };
 }
 // l'assistente della serata (dal livello 2, vedi ASSISTANTS): chi è e
 // quanti favori ha già fatto nel set in corso. Le partite salvate prima
@@ -2413,7 +2413,8 @@ const LEVELS = [
       { title: 'Messa in sicurezza dei cavi', done: s => !!s.cavi },
       { title: 'Discorso del preside', done: s => !!s.preside },
       { title: 'Cambio palco per il DJ', done: s => !!(s.cambioDj && s.cambioDj.done) },
-      { title: 'DJ set', done: s => !!s.dj }
+      { title: 'DJ set', done: s => !!s.dj },
+      { title: 'Carico del furgone', done: s => !!s.carico }
     ] },
   { id: 2, name: 'Sagra in piazza', venue: 'Piazza con i sampietrini', vehicle: 'camion', rep: 20 },
   { id: 3, name: 'Matrimonio in villa', venue: 'Giardino di una villa, sotto la pioggia', vehicle: 'camion', rep: 60 },
@@ -2697,6 +2698,7 @@ function startNewGame (player, offer, offers) {
   Profile.data.caviGiri = 0;
   Profile.data.preside = null;
   Profile.data.dj = null;
+  Profile.data.carico = null;
   Profile.data.cambioDj = null;
   // uno show del DJ ancora aperto o in arrivo della partita vecchia
   clearTimeout(djTimer);
@@ -2893,7 +2895,7 @@ const SCHEDULE = [
   { time: '21:10', title: 'Cambio palco: arriva il DJ', text: 'DJ Inestimabile porta la sua consolle: corrente, uscite nella DI e dalla DI al mixer. Il microfono resta dov\'è, per Musa Esistenziale. Il pubblico aspetta: non metterci troppo.', phase: 'cambio-dj', rep: REP.changeDone },
   { time: '21:15', title: 'Notte fuori controllo', text: 'DJ Inestimabile in consolle e Musa Esistenziale al microfono: mixer DJ → DI → mixer di sala, il microfono del vocalist, luci colorate al drop. E tanti guasti da inseguire.', poster: 'img/locandina-dj.svg', phase: 'dj' },
   { time: '22:00', title: 'Dante unplugged', text: 'Voce e chitarra (via DI). Gli ingressi non bastano: cambio palco e via il DJ.' },
-  { time: '23:00', title: 'Smontaggio', text: 'Tutto nei case e i case nel furgone. Si torna a casa.' }
+  { time: '23:00', title: 'Smontaggio e carico', text: 'Tutto nei case e i case nel furgone: Macio li porta fuori, tu li incastri e li leghi con tre cinghie. Gerry chiude il cancello alle 23:30.', phase: 'carico' }
 ];
 const collaudoDone = () => ('L' + LEVEL_ID + ':collaudo') in Profile.data.reputation.earned;
 function schedulePhaseState (phase) {
@@ -2905,6 +2907,8 @@ function schedulePhaseState (phase) {
   if (phase === 'preside') return presideDone() ? 'done' : caviDone() ? 'now' : 'next';
   if (phase === 'cambio-dj') return cambioDjDone() ? 'done' : presideDone() ? 'now' : 'next';
   if (phase === 'dj') return djDone() ? 'done' : cambioDjDone() ? 'now' : 'next';
+  // il carico chiude la serata: oggi dopo il DJ set (il karaoke, quando c'è, va prima)
+  if (phase === 'carico') return caricoDone() ? 'done' : djDone() ? 'now' : 'next';
   return collaudoDone() ? 'done' : 'next';
 }
 const SCHEDULE_STATE_LABEL = { done: 'Fatto', now: 'Adesso', next: 'Da fare', soon: 'In arrivo' };
@@ -2929,6 +2933,7 @@ function renderSchedule () {
         : s.phase === 'preside' && presideDone() ? presideSummary()
         : s.phase === 'cambio-dj' && cambioDjDone() ? cambioSummary()
         : s.phase === 'dj' && djDone() ? djSummary()
+        : s.phase === 'carico' && caricoDone() ? caricoSummary()
         : s.phase === 'montaggio' ? s.text.replace('i PAR', parsRequired() + ' PAR') : s.text) + '</small>'
       + (s.poster ? '<button class="sched-poster" type="button" data-poster="' + s.poster + '">🎟️ Guarda la locandina</button>' : '')
       + '</span>'
@@ -2945,8 +2950,9 @@ function openSchedule (first) {
   // dopo il collaudo la scaletta porta alla posa dei cavi, poi al discorso
   // del preside, poi al cambio palco per il DJ
   scheduleNext = first ? null : schedulePhaseState('cavi') === 'now' ? 'cavi' : schedulePhaseState('preside') === 'now' ? 'preside'
-    : schedulePhaseState('cambio-dj') === 'now' && !cambioDj() ? 'cambio-dj' : schedulePhaseState('dj') === 'now' ? 'dj' : null;
-  el('#schedule-go').textContent = first ? 'Al lavoro!' : { cavi: 'Chiama Gerry', preside: 'Il preside sale sul palco', 'cambio-dj': 'Inizia il cambio palco', dj: 'Via al DJ set' }[scheduleNext] || 'Torna al palco';
+    : schedulePhaseState('cambio-dj') === 'now' && !cambioDj() ? 'cambio-dj' : schedulePhaseState('dj') === 'now' ? 'dj'
+    : schedulePhaseState('carico') === 'now' ? 'carico' : null;
+  el('#schedule-go').textContent = first ? 'Al lavoro!' : { cavi: 'Chiama Gerry', preside: 'Il preside sale sul palco', 'cambio-dj': 'Inizia il cambio palco', dj: 'Via al DJ set', carico: 'Carica il furgone' }[scheduleNext] || 'Torna al palco';
   el('#schedule-modal').classList.add('show');
   setSceneInput(false);
 }
@@ -3359,8 +3365,9 @@ function caviSummary () {
    una volta sola, birre, stanchezza a fine discorso. */
 let presideOpen = false, presideTimer = null;
 let djOpen = false;              // lo spettacolo del DJ (openDj, più sotto)
+let caricoOpen = false;          // il carico del furgone (openCarico, più sotto)
 const presideDone = () => !!Profile.data.preside;
-const minigameOpen = () => scaricoOpen || gerryOpen || presideOpen || djOpen;
+const minigameOpen = () => scaricoOpen || gerryOpen || presideOpen || djOpen || caricoOpen;
 // una finestra del gioco sopra la scena (menù, scaletta, pannello posteriore, baule)
 const panelOpen = () => scheduleOpen || menuOpen || !!rearPanelId || !!openCaseName;
 // qualcosa copre la scena: i tocchi non le arrivano finché non si chiude tutto
@@ -3670,6 +3677,62 @@ function djSummary () {
     + (who ? ' · ' + who : '') + (p.beers ? ' · 🍺 +' + p.beers : '') + ' · reputazione ' + (p.rep >= 0 ? '+' : '') + p.rep + '.';
 }
 
+/* ---------------- il carico del furgone (23:00) ----------------
+   Minigioco a sé (carico.html, vedi docs/minigioco-carico.md), in un iframe
+   sopra il gioco dopo il DJ set, dalla scaletta o dal foglio. Macio porta
+   fuori i case, il tecnico li incastra nel furgone, li lega con tre cinghie
+   e si parte: quello che è slegato scivola e sbatte. L'esito torna al gioco:
+   reputazione una volta sola (la calcola la pagina dalle stelle) e birre. */
+const caricoDone = () => !!Profile.data.carico;
+function openCarico () {
+  if (caricoOpen || caricoDone() || !djDone() || minigameOpen()) return;
+  caricoOpen = true;
+  setSceneInput(false);
+  sceneKeyboard(false);
+  if (window.__scene) window.__scene.stopFx();
+  const f = document.createElement('iframe');
+  f.id = 'carico-frame';
+  f.className = 'minigame-frame';
+  f.title = 'Il carico';
+  const logo = serviceLogo();
+  f.src = 'carico.html?embed=1&service=' + encodeURIComponent(serviceName()) + '&bg=' + encodeURIComponent(logo.bg) + '&fg=' + encodeURIComponent(logo.fg) + minigameQuery();
+  f.addEventListener('load', () => { try { f.contentWindow.focus(); } catch (e) { /* niente fuoco: si tocca */ } });
+  document.body.appendChild(f);
+}
+window.addEventListener('message', ev => {
+  const d = ev.data;
+  if (caricoOpen && d && d.type === 'carico-fine' && fromFrame(ev, 'carico-frame')) finishCarico(d.result || { skipped: true });
+});
+function finishCarico (r) {
+  const f = el('#carico-frame');
+  if (f) f.remove();
+  caricoOpen = false;
+  const skipped = !!r.skipped;
+  const num = (v, d) => Number.isFinite(+v) ? Math.round(+v) : d;
+  const stars = skipped ? 0 : Math.max(0, Math.min(5, num(r.stars, 0)));
+  const list = v => Array.isArray(v) ? v.filter(x => typeof x === 'string').slice(0, 14) : [];
+  Profile.data.carico = { skipped, stars, rep: skipped ? 0 : Math.max(-5, Math.min(5, num(r.rep, 0))), beers: skipped ? 0 : Math.max(0, Math.min(1, num(r.beers, 0))),
+    depart: skipped ? null : String(r.depart || '23:00').slice(0, 5), late: !skipped && !!r.late, damaged: skipped ? [] : list(r.damaged), taken: skipped ? [] : list(r.taken) };
+  const c = Profile.data.carico;
+  Profile.data.beers = (Profile.data.beers || 0) + c.beers;
+  const rep = skipped ? 0 : addReputation(c.rep, 'Carico del furgone a fine serata', 'L' + LEVEL_ID + ':carico');
+  Profile.save();
+  sceneKeyboard(true);
+  if (!sceneCovered()) setSceneInput(true);
+  applySettings();
+  showToast(skipped ? 'Carico saltato: il furgone è partito, ma la reputazione non cambia.'
+    : 'Furgone carico, si torna a casa. ' + '★'.repeat(stars) + '☆'.repeat(5 - stars) + (rep ? ' Reputazione ' + (rep > 0 ? '+' : '') + rep + '.' : '') + (c.beers ? ' 🍺 +' + c.beers + '.' : ''), skipped || stars >= 3 ? 'ok' : undefined);
+  updateFoglio();
+}
+function caricoSummary () {
+  const c = Profile.data.carico;
+  if (c.skipped) return 'Saltato: niente reputazione.';
+  return '★'.repeat(c.stars) + '☆'.repeat(5 - c.stars) + ' · partiti alle ' + c.depart + (c.late ? ' (dopo la chiusura)' : '')
+    + (c.damaged.length ? ' · rovinati: ' + c.damaged.join(', ') : ' · tutto integro')
+    + (c.taken.length ? ' · portati via per sbaglio: ' + c.taken.join(', ') : '')
+    + (c.beers ? ' · 🍺 +' + c.beers : '') + ' · reputazione ' + (c.rep >= 0 ? '+' : '') + c.rep + '.';
+}
+
 el('#cambio-go').addEventListener('click', () => { SFX.button(); closeCambioCard(); });
 el('#cambio-close').addEventListener('click', () => { SFX.button(); closeCambioCard(); });
 
@@ -3679,7 +3742,7 @@ el('#schedule-go').addEventListener('click', () => {
   SFX.button();
   const next = scheduleNext;
   closeSchedule();
-  if (next === 'cavi') openCavi(); else if (next === 'preside') openPreside(); else if (next === 'cambio-dj') startCambioDj(); else if (next === 'dj') openDj();
+  if (next === 'cavi') openCavi(); else if (next === 'preside') openPreside(); else if (next === 'cambio-dj') startCambioDj(); else if (next === 'dj') openDj(); else if (next === 'carico') openCarico();
 });
 el('#schedule-close').addEventListener('click', () => { SFX.button(); closeSchedule(); });
 el('#schedule-modal').addEventListener('click', ev => { if (ev.target.id === 'schedule-modal') closeSchedule(); });
@@ -5577,7 +5640,9 @@ function updateFoglio () {
     icon = '🎧 ';
     head = 'DJ set finito';
     body = '<p class="fg-note">Il bidello ha cacciato via i musicisti. Ora si può ripristinare il palco per l\'ultima band (Dante unplugged, alle 22:00: arriva presto).</p>'
-      + '<p class="fg-note">' + escapeHtml(djSummary()) + '</p>';
+      + '<p class="fg-note">' + escapeHtml(djSummary()) + '</p>'
+      + (caricoDone() ? '<p class="fg-note">Carico: ' + escapeHtml(caricoSummary()) + '</p>'
+        : '<button type="button" class="fg-go" id="foglio-carico">Smonta e carica il furgone</button>');
   } else if (caviDone() && !presideDone()) {
     // il discorso del preside: pronto se il microfono è cablato
     const missing = presideReady();
@@ -5604,6 +5669,8 @@ function updateFoglio () {
   if (pr) pr.addEventListener('click', () => { SFX.button(); openPreside(); });
   const dg = el('#foglio-dj');
   if (dg) dg.addEventListener('click', () => { SFX.button(); openDj(); });
+  const cg = el('#foglio-carico');
+  if (cg) cg.addEventListener('click', () => { SFX.button(); openCarico(); });
 }
 
 // cambio di scheda verso una chiusa: si spiega perché

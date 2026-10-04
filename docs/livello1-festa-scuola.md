@@ -13,7 +13,7 @@ Il livello è una serata divisa in fasi, sbloccate una dopo l'altra:
 | 1 | **Discorso del preside** | Test impianto superato | microfono su asta sul palco, XLR fino al mixer, canale aperto e udibile |
 | 2 | **DJ set** | discorso finito | consolle DJ (mixer DJ + 2 piatti) alimentata; uscita del mixer DJ → DI → XLR → mixer di sala |
 | 3 | **Karaoke di Macio** (deciso, al posto del cantante) | DJ cacciato da Gerry | da progettare: vedi *Dopo il DJ: il karaoke di Macio* |
-| 4 | **Carico del furgone** (deciso) | fine serata | minigioco puzzle, da progettare |
+| 4 | **Carico del furgone** | fine serata (oggi dopo il DJ set) | `carico.html`: incastrare i case nel furgone, tre cinghie, la prova su strada. Vedi `docs/minigioco-carico.md` |
 
 Ogni fase si chiude con un proprio test: se passa parte un'**animazione di 10 secondi**
 che mostra cosa succede (il preside parla e il pubblico applaude, la gente balla
@@ -399,9 +399,10 @@ fase escono di scena, a meno di ripensarci. Le voci *cantante* qui sotto
 appunti finché il karaoke non ha il suo design. Anche la scaletta
 (`SCHEDULE`, «22:00 cantante») cambierà quando il karaoke entra nel gioco.
 
-Dopo il karaoke la serata chiude col **carico del furgone**: un minigioco
-puzzle a sé, unico nel suo genere, da provare con un prototipo (vedi
-`docs/minigioco-scarico.md`, *Da decidere*).
+Dopo il karaoke la serata chiude col **carico del furgone** (`carico.html`):
+Macio porta fuori i case, tu li incastri nel furgone a quadretti, li leghi
+con tre cinghie e si parte; frenata, curve e dosso fanno scivolare quello
+che è slegato. Regole in `docs/minigioco-carico.md`.
 
 ## Personaggi (proposta)
 

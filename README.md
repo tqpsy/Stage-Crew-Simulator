@@ -55,6 +55,7 @@ giro di Gerry alle 20:00). Il discorso del preside (21:00,
 conseguenze della posa, pagina da sola).
 Lo spettacolo del DJ (21:15, `dj.html`, dopo il cambio palco) ha
 `tests/spettacolo-dj.js` (la pagina da sola) e `tests/dj-gioco.js` (dentro
-il gioco). `tests/robustezza.js` prova frecce e WASD, la ripresa di una
+il gioco). Il carico del furgone (23:00, `carico.html`, dopo il DJ set) ha
+`tests/carico.js`. `tests/robustezza.js` prova frecce e WASD, la ripresa di una
 partita con uno schermo diverso, Annulla dopo il reset, i file importati e
 volume ed «Effetti ridotti» nei minigiochi.
