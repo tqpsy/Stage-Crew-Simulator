@@ -66,8 +66,7 @@ Uguale al capo del livello 1:
   malus) e **niente rewind** del DJ (non hai perso note);
 - se ci vai tu, l'assistente ti dà il **cambio alle luci**: prende le note
   in automatico e ne manca una ogni `missEvery`, e ogni nota mancata azzera la
-  combo. Se stai via troppo (30 s, come il capo) torna alle luci e il guasto lo
-  finisci con la pista che scorre.
+  combo. Come il capo, resta alle luci finché non torni.
 
 Diverso dal capo:
 - **Non fa il tutor**: nessun consiglio prima degli errori di procedura

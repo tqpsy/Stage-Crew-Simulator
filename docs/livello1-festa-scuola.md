@@ -148,7 +148,7 @@ Test: `tests/aiuti.js`.
 **Fatto: scaletta della serata.** A ogni nuova partita, prima del montaggio, si
 apre il foglio di lavoro (cliente, luogo, service, tecnico) con gli orari della
 serata: 16:00 scarico, 16:30 montaggio, 19:30 test impianto, 20:30 porte,
-21:00 preside, 21:10 cambio palco, 21:15 DJ, 22:00 cantante, 23:00 smontaggio. Ogni voce ha il suo
+21:00 preside, 21:10 cambio palco, 21:15 DJ, 23:00 smontaggio. Ogni voce ha il suo
 stato (fatto / adesso / da fare / in arrivo); si riapre dal tasto 📋 in testata.
 Le fasi di spettacolo, quando arriveranno nel gioco, si agganciano qui
 (`SCHEDULE` in `main.js`).
@@ -341,8 +341,8 @@ scegliere chi va a sistemarli.
 
 - **Il capo alle luci è peggio di te**: prende le note in automatico ma ne
   manca una su tre e la combo si azzera.
-- **Il capo si spazientisce**: se stai via troppo (proposta: 30 s) torna lui
-  alle luci e il guasto lo finisci con la pista che scorre; reputazione ridotta.
+- **Il capo non si spazientisce** (deciso): se vai tu al guasto, resta lui
+  alle luci finché non torni, senza limite di tempo.
 - **La birra ha un costo vero**: è una birra in meno contro la stanchezza.
   Senza birre in tasca la scelta non c'è: ci vai tu.
 - Il capo solo per i guasti grossi (fase che scatta, PAR senza DMX); i
@@ -393,11 +393,12 @@ nuovo, a metà fra il discorso del preside (microfono, voce, larsen, il
 pubblico che reagisce) e il DJ Hero (pista a tempo di musica). Deve essere
 qualcosa di unico, non una copia dei due.
 
-Prende il posto della fase del cantante con chitarra: Dante e la sua
-fase escono di scena, a meno di ripensarci. Le voci *cantante* qui sotto
+È un'**improvvisazione**: la serata era una discoteca a scuola, solo DJ
+set, quindi né la locandina né la scaletta annunciano Macio (e Dante non
+c'è più). Il karaoke arriva a sorpresa, per salvare la serata. Prende il
+posto della fase del cantante con chitarra; le voci *cantante* qui sotto
 (ingressi del mixer, richieste extra, fasi di spettacolo) restano come
-appunti finché il karaoke non ha il suo design. Anche la scaletta
-(`SCHEDULE`, «22:00 cantante») cambierà quando il karaoke entra nel gioco.
+appunti finché il karaoke non ha il suo design.
 
 Dopo il karaoke la serata chiude col **carico del furgone** (`carico.html`):
 Macio porta fuori i case, tu li incastri nel furgone a quadretti, li leghi

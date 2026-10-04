@@ -58,8 +58,8 @@ cura sbagliata del PAR costa un secondo e mezzo.
 
 - Al Quadro ogni fase regge 3,6 kW: la ciabattina (3,4 kW) su L1 col finale
   non ci sta; riarmare con la ciabattina ancora su L2 fa riscattare.
-- Il capo si spazientisce dopo 30 s: torni alle luci e finisci il Quadro da
-  un riquadro sul palco, reputazione 0.
+- Il capo non si spazientisce (deciso): resta alle luci finché non torni.
+  Oltre i 15 s la fase riarmata vale reputazione 0.
 - Senza birre il capo non si paga; al massimo due favori per set.
 - **Rewind**: tornando alle luci il DJ fa lo scratch e riporta il brano
   indietro del tempo in cui sei stato via (fino a 8 battute, a battiti
