@@ -193,7 +193,8 @@ const N = parseInt(process.argv[2] || '40', 10), SEED0 = parseInt(process.argv[3
         // il test reagisce con l'effetto dell'impianto toccato
         const e = pick(gameState.edges.filter(x => (gameState.placed[x.a] || {}).type !== 'mic'));   // il microfono non conta per il Test impianto
         S.selectedEdgeId = e.id; S.deleteSelectedEdge();
-        expectMsg = POWER_CABLE_IDS.has(e.signal) ? /^Scintille/ : e.signal === 'dmx' ? /^Le luci vanno in tilt/ : /^L'impianto gracchia/;
+        // senza tensione (allaccio staccato o salvavita scattato) niente scintille
+        expectMsg = POWER_CABLE_IDS.has(e.signal) ? (quadroLive() ? /^Scintille/ : /^Tutto spento/) : e.signal === 'dmx' ? /^Le luci vanno in tilt/ : /^L'impianto gracchia/;
       }
       else if (m === 'stereo') {
         gameState.edges.filter(e => e.a === SC && e.signal === 'jack').forEach(e => { S.selectedEdgeId = e.id; S.deleteSelectedEdge(); });
