@@ -133,7 +133,9 @@ function quadroFrame (x, y) {
   const d = (TILE_W * CELL - QUADRO_ISO.B) / 2 - 0.5;
   // verso il muro di fondo: +a sul pavimento; verso quello laterale: -b
   const back = cy < CARICO_ROWS + CELL, side = !back && cx < CELL;
-  const dx = back ? d * 0.5 : side ? -d * 0.5 : 0, dy = -QUADRO_ISO.Z / 2 - (back || side ? d * ISO_K : 0);
+  let dx = back ? d * 0.5 : side ? -d * 0.5 : 0, dy = -QUADRO_ISO.Z / 2 - (back || side ? d * ISO_K : 0);
+  // nell'angolo si accosta anche alla parete laterale
+  if (back && cx < CELL) { const e = (TILE_W * CELL - QUADRO_ISO.A) / 2 - 0.5; dx -= e * 0.5; dy -= e * ISO_K; }
   const P = (a, b, z = 0) => { const p = P0(a, b, z); return { x: p.x + dx, y: p.y + dy }; };
   P.A = P0.A; P.B = P0.B; P.Z = P0.Z; P.k = P0.k;
   return P;
@@ -188,14 +190,15 @@ function tavoloSlotOffset (type) {
   return { x: q.x, y: q.y - TAVOLO_ITEM_Z[type] / 2 };
 }
 const CTRL_ISO  = isoFrame(56, 34, 10);   // consolle luci da tavolo, piano inclinato
-// quadro di distribuzione 3F+N 16A da evento, in scala con gli altri pezzi
-// (102 unità = 1 m): 48 cm di fronte, 27 di fondo, 50 di altezza coi pattini
-const QUADRO_ISO = isoFrame(49, 28, 51); // prese sul fronte b=B
-const QUADRO_PHASE_A = [9.5, 24.5, 39.5]; // prese CEE 16A L1-L3 lungo il fronte
+// combinazione prese da evento in gomma piena, come le EverGUM di Mennekes,
+// in scala con gli altri pezzi (102 unità = 1 m): 32 cm di fronte, 30 di
+// fondo, 33 di altezza, impilabile, maniglia sul tetto
+const QUADRO_ISO = isoFrame(33, 31, 34); // prese sul fronte b=B
+const QUADRO_PHASE_A = [6, 16.5, 27];     // prese CEE 16A L1-L3 lungo il fronte
 // moduli su guida DIN dietro la finestra del fronte: centro lungo a e
 // mezza larghezza; generale e salvavita a sinistra, poi un magnetotermico
 // sopra ogni presa
-const QUADRO_MODULES = [['main', 8.5, 4], ['rcd', 17.5, 4], ['L1', 27, 2.75], ['L2', 33.5, 2.75], ['L3', 40, 2.75]];
+const QUADRO_MODULES = [['main', 5.2, 2.7], ['rcd', 11, 2.7], ['L1', 17.4, 1.9], ['L2', 21.7, 1.9], ['L3', 26, 1.9]];
 const ALL_ISO   = isoFrame(26, 26, 30);   // cassetta dell'allaccio della venue
 const CIAB_ISO  = isoFrame(104, 16, 8);   // ciabatta civile: barra lunga e bassa, 3 prese sul piano
 const CIABCEE_ISO = isoFrame(134, 16, 8); // ciabatta con spina CEE: 4 prese
@@ -381,10 +384,10 @@ const COMPONENT_TYPES = {
     label: 'QUADRO', category: 'power', powerW: 0, zone: 'backstage', shape: 'quadro',
     // cabinet bianco/metallo, come un vero armadio elettrico da evento —
     // non più una scatola tinta a caso (vedi drawComponentBody per i dettagli).
-    body: { w: 42, h: 80, oy: -24, fill: 0xe9eaed, accent: 0x4a4f5a },
+    body: { w: 36, h: 60, oy: -20, fill: 0xe9eaed, accent: 0x4a4f5a },
     // prese sul fronte +b del disegno; si gira verso il palco (vedi quadroFront)
     frame: QUADRO_ISO, front: '+b',
-    ledIso: [3, 28, 47.7],
+    ledIso: [28, 27, 34],
     // 3 prese, una per fase (L1/L2/L3): a differenza degli altri componenti,
     // ogni presa può ricevere PIÙ cavi (multi:true) — non è il singolo cavo a
     // contare, ma il carico totale che finisce su quella fase (vedi
@@ -397,10 +400,10 @@ const COMPONENT_TYPES = {
       // fronte (faccia b=B), ognuna sotto il proprio interruttore
       // (girato contro la parete di fondo l'ingresso passa sul fianco a=A,
       // l'unico che resta in vista: vedi drawComponentBody)
-      { id: 'in',    signal: 'cee_tri',  dir: 'in',  iso: [0, 14, 17], isoTurned: [QUADRO_ISO.A, 14, 17] },
-      { id: 'out_1', signal: 'cee_mono', dir: 'out', iso: [QUADRO_PHASE_A[0], 28, 15], phase: 'L1', multi: true },
-      { id: 'out_2', signal: 'cee_mono', dir: 'out', iso: [QUADRO_PHASE_A[1], 28, 15], phase: 'L2', multi: true },
-      { id: 'out_3', signal: 'cee_mono', dir: 'out', iso: [QUADRO_PHASE_A[2], 28, 15], phase: 'L3', multi: true }
+      { id: 'in',    signal: 'cee_tri',  dir: 'in',  iso: [0, 15.5, 13], isoTurned: [QUADRO_ISO.A, 15.5, 13] },
+      { id: 'out_1', signal: 'cee_mono', dir: 'out', iso: [QUADRO_PHASE_A[0], 31, 9.5], phase: 'L1', multi: true },
+      { id: 'out_2', signal: 'cee_mono', dir: 'out', iso: [QUADRO_PHASE_A[1], 31, 9.5], phase: 'L2', multi: true },
+      { id: 'out_3', signal: 'cee_mono', dir: 'out', iso: [QUADRO_PHASE_A[2], 31, 9.5], phase: 'L3', multi: true }
     ]
   },
   allaccio: {
@@ -4225,7 +4228,7 @@ const REAR_PANELS = {
   controller: { style: 'desk', accent: true, power: true, serial: 'DMX CONTROLLER  ·  2 UNIVERSI  ·  1024 CH',
     sections: [['DMX OUT', [['dmx_1', 'UNIVERSO 1'], ['dmx_2', 'UNIVERSO 2']]], ['POWER', [['power', 'POWER IN']]]] },
   // sopra le protezioni su guida DIN, sotto ingresso e prese
-  quadro: { style: 'white', serial: 'QUADRO DI DISTRIBUZIONE  ·  3F+N 16A  ·  IP44',
+  quadro: { style: 'cabinet', serial: 'COMBINAZIONE PRESE IN GOMMA  ·  3F+N 16A  ·  IP44',
     rows: [
       [['__PROT__', []]],
       [['INGRESSO', [['in', '400V TRIFASE']]], ['USCITE 230V', [['out_1', 'L1'], ['out_2', 'L2'], ['out_3', 'L3']]]]
@@ -7126,19 +7129,19 @@ class StageScene extends Phaser.Scene {
     QUADRO_MODULES.forEach(([key, a, hw]) => {
       const on = !!prot[key];
       const c = on ? 0x49b06a : (prot.tripped[key] ? 0xe0503f : 0x2a2c32);
-      const lw = hw - 1.2;
-      const [z0, z1] = on ? [37.8, 41.4] : [34.2, 37.8];
+      const lw = hw - 0.8;
+      const [z0, z1] = on ? [25.6, 28.4] : [22.8, 25.6];
       k.quadB(B, a - lw, a + lw, z0, z1, c);
-      k.quadB(B, a - lw, a + lw, on ? z1 - 0.9 : z0, on ? z1 : z0 + 0.9, 0xffffff, 0.45);   // punta della leva
+      k.quadB(B, a - lw, a + lw, on ? z1 - 0.7 : z0, on ? z1 : z0 + 0.7, 0xffffff, 0.45);   // punta della leva
     });
-    // vetrino fumé dello sportello, con un riflesso
-    k.quadB(B, 3, QUADRO_ISO.A - 3, 30, 45, 0x9fb7c9, 0.1);
-    const r0 = P(QUADRO_ISO.A * 0.55, B, 45), r1 = P(QUADRO_ISO.A * 0.55 + 7, B, 30);
+    // coperchio trasparente incernierato, con un riflesso
+    k.quadB(B, 2, QUADRO_ISO.A - 2, 20, 30.5, 0x9fb7c9, 0.12);
+    const r0 = P(QUADRO_ISO.A * 0.55, B, 30.5), r1 = P(QUADRO_ISO.A * 0.55 + 5, B, 20);
     g.lineStyle(1, 0xffffff, 0.18); g.lineBetween(r0.x, r0.y, r1.x, r1.y);
     // barra subito sotto ogni presa di fase
-    const barW = 6, barH = 2;
+    const barW = 5, barH = 1.5;
     def.ports.filter(p => p.phase).forEach(p => {
-      const q = qv.portPos[p.id], barY = q.dy + 6;
+      const q = qv.portPos[p.id], barY = q.dy + 4;
       const frac = Math.min(1, loads[p.phase] / PHASE_BUDGET_W);
       const color = frac >= 1 ? 0xe0503f : (frac >= 0.75 ? 0xf2a541 : 0x49b06a);
       g.fillStyle(0x000000, 0.6);
@@ -7402,51 +7405,48 @@ class StageScene extends Phaser.Scene {
         break;
       }
       case 'quadro': {
-        // quadro di distribuzione da evento in lamiera grigio chiaro, su due
-        // pattini: sul fronte la finestra col vetrino e i moduli su guida DIN
-        // (generale, salvavita, un magnetotermico per fase; le leve le
-        // disegna updateQuadroPhaseBars), sotto le prese CEE 16A blu con lo
-        // sportellino; sul fianco l'ingresso CEE rosso, sopra le maniglie
+        // combinazione prese da evento in gomma piena nera (tipo EverGUM):
+        // spigoli smussati e piedini per impilarle, maniglia sul tetto; sul
+        // fronte, sotto il coperchio trasparente con la chiusura inox, i
+        // moduli su guida DIN (generale, salvavita, un magnetotermico per
+        // fase: le leve le disegna updateQuadroPhaseBars) e sotto le tre
+        // prese CEE 16A blu col coperchietto; sul fianco l'ingresso rosso
         const P = frame || rotFrame(QUADRO_ISO, rot), k = this.isoKit(g, P);
         const { A, B, Z } = P;
         // fianco con l'ingresso: a=0, o a=A se girato (l'altro è nascosto)
         const sa = rot ? A : 0;
-        const skid = { top: 0x3a3d45, left: 0x26282e, right: 0x17181c };
-        k.box(2, A - 2, 2, 6, 0, 4, skid); k.box(2, A - 2, B - 6, B - 2, 0, 4, skid); // pattini
-        k.box(0, A, 0, B, 4, Z, { top: 0xe4e5e2, left: 0xcfd1cd, right: 0xbcbfbb });
-        k.quadB(B, 1, A - 1, 5, Z - 1, 0xc6c9c5);                      // pannello frontale imbullonato
-        [[2, 6.5], [A - 2, 6.5], [2, Z - 2], [A - 2, Z - 2]].forEach(([a, z]) => k.discB(B, a, z, 0.6, 0x7d828c));
-        // finestra: telaio scuro, fondo, guida DIN e moduli bianchi
-        k.quadB(B, 3, A - 3, 30, 45, 0x4a4d56);
-        k.quadB(B, 4, A - 4, 31, 44, 0x2a2c32);
-        k.quadB(B, 4, A - 4, 37, 38.5, 0x8a8e98);
+        const rubber = { top: 0x34363c, left: 0x24262b, right: 0x1a1b1f };
+        [[3, 3], [A - 3, 3], [3, B - 3], [A - 3, B - 3]].forEach(([a, b]) => k.box(a - 2, a + 2, b - 2, b + 2, 0, 2, ISO_BLACK)); // piedini
+        k.box(0, A, 0, B, 2, Z - 2, rubber);
+        k.box(1.5, A - 1.5, 1.5, B - 1.5, Z - 2, Z, rubber);           // tetto smussato
+        // incavo sul tetto per impilarle e maniglia stampata
+        k.quadZ(Z, 6, A - 6, 6, B - 6, 0x2a2c31);
+        k.box(9, 12, B / 2 - 2, B / 2 + 2, Z, Z + 3.5, ISO_BLACK);
+        k.box(A - 12, A - 9, B / 2 - 2, B / 2 + 2, Z, Z + 3.5, ISO_BLACK);
+        k.box(9, A - 9, B / 2 - 2, B / 2 + 2, Z + 3.5, Z + 5, ISO_BLACK);
+        // nervature di gomma sul fronte, ai lati
+        [0.8, A - 0.8].forEach(a => k.quadB(B, a - 0.5, a + 0.5, 3, Z - 3, 0x2e3035));
+        // vano interruttori: fondo, guida DIN e moduli bianchi
+        k.quadB(B, 2, A - 2, 20, 30.5, 0x3a3d45);
+        k.quadB(B, 2.6, A - 2.6, 20.6, 29.9, 0x1d1e22);
+        k.quadB(B, 2.6, A - 2.6, 25, 26.2, 0x8a8e98);
         QUADRO_MODULES.forEach(([key, a, hw]) => {
-          k.quadB(B, a - hw + 0.3, a + hw - 0.3, 32.5, 43, 0xf2f2ef);
-          k.quadB(B, a - hw + 0.9, a + hw - 0.9, 34, 41.6, 0xd5d7da);  // incavo della leva
+          k.quadB(B, a - hw + 0.2, a + hw - 0.2, 21.4, 29.2, 0xf2f2ef);
+          k.quadB(B, a - hw + 0.6, a + hw - 0.6, 22.6, 28.6, 0xd5d7da); // incavo della leva
         });
-        k.discB(B, 17.5 + 2.6, 42, 0.7, 0xf2c53d);                        // tasto T del salvavita
-        // targhetta delle linee sopra la finestra
-        k.quadB(B, 3, A - 3, 46, 49.5, 0xf7f7f4);
-        // triangolo di pericolo tra la finestra e le prese
-        const t0 = P(3.5, B, 24.5), t1 = P(9.5, B, 24.5), t2 = P(6.5, B, 29);
-        g.fillStyle(0xf2c53d, 1); g.fillTriangle(t0.x, t0.y, t1.x, t1.y, t2.x, t2.y);
-        g.lineStyle(0.6, 0x1c1d22, 1); g.strokeTriangle(t0.x, t0.y, t1.x, t1.y, t2.x, t2.y);
-        // prese CEE 16A blu con lo sportellino a molla sopra
+        k.discB(B, 11 + 1.9, 28.6, 0.5, 0xf2c53d);                     // tasto T del salvavita
+        k.quadB(B, A / 2 - 3, A / 2 + 3, 30.8, 32, 0xc9ccd1);          // chiusura rapida inox
+        // targhetta delle linee sopra le prese
+        k.quadB(B, 1.5, A - 1.5, 16.6, 18.8, 0xf7f7f4);
+        // prese CEE 16A blu col coperchietto a molla
         QUADRO_PHASE_A.forEach(a => {
-          k.quadB(B, a - 6.5, a + 6.5, 7, 23, 0xb3b6b2);
-          k.discB(B, a, 15, 5.5, 0x1d4a9a); k.discB(B, a, 15, 4.3, 0x2f6fd6);
-          k.quadB(B, a - 5.5, a + 5.5, 20.5, 22.5, 0x3a7fe0);
+          k.discB(B, a, 9.5, 4, 0x1d4a9a); k.discB(B, a, 9.5, 3.1, 0x2f6fd6);
+          k.quadB(B, a - 3.6, a + 3.6, 13.2, 14.6, 0x3a7fe0);
         });
-        // fianco: feritoie e ingresso CEE 32A rosso
-        for (let z = 36; z <= 45; z += 3) k.quadA(sa, 4, B - 4, z, z + 1, 0x8a8e98);
-        k.quadA(sa, 6, B - 6, 8, 26, 0xc4c7c3);
-        k.discA(sa, 14, 17, 6.5, 0x9e2820); k.discA(sa, 14, 17, 5.2, 0xd6392f);
-        // due maniglie di trasporto sul tetto
-        [10, A - 10].forEach(a => {
-          k.box(a - 1, a + 1, 5, 7, Z, Z + 4, ISO_BLACK);
-          k.box(a - 1, a + 1, B - 7, B - 5, Z, Z + 4, ISO_BLACK);
-          k.box(a - 1, a + 1, 5, B - 5, Z + 4, Z + 5.5, ISO_BLACK);
-        });
+        // fianco: nervature e ingresso CEE 32A rosso
+        for (let z = 22; z <= 30; z += 2.5) k.quadA(sa, 4, B - 4, z, z + 0.8, 0x2e3035);
+        k.discA(sa, 15.5, 13, 5.2, 0x9e2820); k.discA(sa, 15.5, 13, 4.2, 0xd6392f);
+        k.quadA(sa, 11, 20, 18.8, 20.3, 0xd6392f);                      // coperchietto dell'ingresso
         break;
       }
       case 'allaccio': {
@@ -7873,9 +7873,9 @@ class StageScene extends Phaser.Scene {
     if (isRealQuadro) {
       phaseBars = this.add.graphics();
       c.add(phaseBars);
-      // sigla della fase sulla targhetta, sopra il suo magnetotermico
+      // sigla della fase sulla targhetta, sopra la sua presa
       QUADRO_MODULES.filter(([key]) => key[0] === 'L').forEach(([key, a]) => {
-        const at = frame(a, QUADRO_ISO.B, 47.8);
+        const at = frame(QUADRO_PHASE_A[+key[1] - 1], QUADRO_ISO.B, 17.7);
         const tag = this.add.text(at.x, at.y, key, {
           fontFamily: 'Inter, sans-serif', fontSize: '3px', fontStyle: 'bold', color: '#1c1d22', resolution: 8
         }).setOrigin(0.5);
