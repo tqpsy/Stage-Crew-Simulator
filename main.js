@@ -1665,7 +1665,7 @@ const SAVE_FILE_KIND = 'stage-crew-simulator';   // firma del file esportato
 const SHARED_KEYS = ['settings', 'records', 'usedServices'];
 
 function defaultProfile () {
-  return { v: SAVE_VERSION, player: '', service: '', serviceInfo: null, usedServices: [], settings: { volume: 0.8, reducedFx: false, skipShow: false, skipScarico: false, testMusic: true, bossTips: true, tapeMarks: true, traceSignal: true }, tutorSeen: {}, logo: null, level: null, scarico: null, cavi: null, preside: null, cambioDj: null, dj: null, beers: 0, assistant: defaultAssistant(), fatigue: 0, records: {}, reputation: { total: 0, earned: {}, log: [] }, levelsSeen: 1, savedAt: 0 };
+  return { v: SAVE_VERSION, player: '', service: '', serviceInfo: null, usedServices: [], settings: { volume: 0.8, reducedFx: false, skipShow: false, skipScarico: false, testMusic: true, bossTips: true, tapeMarks: true, traceSignal: true }, tutorSeen: {}, logo: null, level: null, scarico: null, cavi: null, preside: null, cambioDj: null, dj: null, karaoke: null, beers: 0, assistant: defaultAssistant(), fatigue: 0, records: {}, reputation: { total: 0, earned: {}, log: [] }, levelsSeen: 1, savedAt: 0 };
 }
 // l'assistente della serata (dal livello 2, vedi ASSISTANTS): chi è e
 // quanti favori ha già fatto nel set in corso. Le partite salvate prima
@@ -2413,7 +2413,8 @@ const LEVELS = [
       { title: 'Messa in sicurezza dei cavi', done: s => !!s.cavi },
       { title: 'Discorso del preside', done: s => !!s.preside },
       { title: 'Cambio palco per il DJ', done: s => !!(s.cambioDj && s.cambioDj.done) },
-      { title: 'DJ set', done: s => !!s.dj }
+      { title: 'DJ set', done: s => !!s.dj },
+      { title: 'Karaoke di Macio', done: s => !!s.karaoke }
     ] },
   { id: 2, name: 'Sagra in piazza', venue: 'Piazza con i sampietrini', vehicle: 'camion', rep: 20 },
   { id: 3, name: 'Matrimonio in villa', venue: 'Giardino di una villa, sotto la pioggia', vehicle: 'camion', rep: 60 },
@@ -2698,10 +2699,14 @@ function startNewGame (player, offer, offers) {
   Profile.data.preside = null;
   Profile.data.dj = null;
   Profile.data.cambioDj = null;
-  // uno show del DJ ancora aperto o in arrivo della partita vecchia
+  Profile.data.karaoke = null;
+  // uno show del DJ o un karaoke ancora aperto o in arrivo della partita vecchia
   clearTimeout(djTimer);
   if (el('#dj-frame')) el('#dj-frame').remove();
   djOpen = false;
+  clearTimeout(karaokeTimer);
+  if (el('#karaoke-frame')) el('#karaoke-frame').remove();
+  karaokeOpen = false;
   Profile.data.beers = 0;
   Profile.data.assistant = defaultAssistant();   // il nuovo tecnico non ha ancora nessuno
   Profile.data.fatigue = 0;      // la serata comincia: tecnico riposato
@@ -2882,7 +2887,8 @@ function renderLevels () {
    serata dal carico allo smontaggio. Si apre all'inizio di una nuova
    partita (prima di mettere mano ai cavi) e si riapre dal tasto 📋.
    Le fasi senza "phase" non sono ancora nel gioco: si vedono come
-   "in arrivo", così il giocatore sa dove va a finire la serata. */
+   "in arrivo", così il giocatore sa dove va a finire la serata. Quelle
+   "fuori programma" non sono sul foglio: compaiono solo quando arrivano. */
 const SCHEDULE = [
   { time: '16:00', title: 'Arrivo e scarico', text: 'Il furgone accosta al cortile: tu e Macio portate i case nella palestra prima delle 16:30.', phase: 'scarico' },
   { time: '16:30', title: 'Montaggio impianto', text: 'Corrente dal Quadro, PC → scheda → mixer → finale → casse, i PAR in DMX dalla consolle.', phase: 'montaggio' },
@@ -2892,7 +2898,7 @@ const SCHEDULE = [
   { time: '21:00', title: 'Discorso del Preside Tramp', text: 'Microfono su asta sul palco, cablato a un ingresso MIC del mixer: ricordati quale. Vuole essere sentito fino al parcheggio.', phase: 'preside' },
   { time: '21:10', title: 'Cambio palco: arriva il DJ', text: 'DJ Inestimabile porta la sua consolle: corrente, uscite nella DI e dalla DI al mixer. Il microfono resta dov\'è, per Musa Esistenziale. Il pubblico aspetta: non metterci troppo.', phase: 'cambio-dj', rep: REP.changeDone },
   { time: '21:15', title: 'Notte fuori controllo', text: 'DJ Inestimabile in consolle e Musa Esistenziale al microfono: mixer DJ → DI → mixer di sala, il microfono del vocalist, luci colorate al drop. E tanti guasti da inseguire.', poster: 'img/locandina-dj.svg', phase: 'dj' },
-  { time: '22:00', title: 'Dante unplugged', text: 'Voce e chitarra (via DI). Gli ingressi non bastano: cambio palco e via il DJ.' },
+  { time: '22:00', title: 'Fuori programma: il karaoke di Macio', text: 'Gerry ha cacciato il DJ. Macio prende il microfono e salva la serata con una canzone scritta lì per lì: tu mandi avanti il testo e tieni la sua voce nel verde.', phase: 'karaoke', surprise: true },
   { time: '23:00', title: 'Smontaggio', text: 'Tutto nei case e i case nel furgone. Si torna a casa.' }
 ];
 const collaudoDone = () => ('L' + LEVEL_ID + ':collaudo') in Profile.data.reputation.earned;
@@ -2905,6 +2911,7 @@ function schedulePhaseState (phase) {
   if (phase === 'preside') return presideDone() ? 'done' : caviDone() ? 'now' : 'next';
   if (phase === 'cambio-dj') return cambioDjDone() ? 'done' : presideDone() ? 'now' : 'next';
   if (phase === 'dj') return djDone() ? 'done' : cambioDjDone() ? 'now' : 'next';
+  if (phase === 'karaoke') return karaokeDone() ? 'done' : djDone() ? 'now' : 'next';
   return collaudoDone() ? 'done' : 'next';
 }
 const SCHEDULE_STATE_LABEL = { done: 'Fatto', now: 'Adesso', next: 'Da fare', soon: 'In arrivo' };
@@ -2918,7 +2925,7 @@ function renderSchedule () {
     ['Tecnico', playerName()]
   ];
   el('#schedule-info').innerHTML = rows.map(([k, v]) => '<dt>' + k + '</dt><dd>' + escapeHtml(v) + '</dd>').join('');
-  el('#schedule-list').innerHTML = SCHEDULE.map(s => {
+  el('#schedule-list').innerHTML = SCHEDULE.filter(s => !s.surprise || djDone()).map(s => {
     const st = schedulePhaseState(s.phase);
     return '<li class="sched-row ' + st + '">'
       + '<span class="sched-time">' + (s.phase === 'montaggio' && scaricoDone() ? montaggioTime() : s.time) + '</span>'
@@ -2929,6 +2936,7 @@ function renderSchedule () {
         : s.phase === 'preside' && presideDone() ? presideSummary()
         : s.phase === 'cambio-dj' && cambioDjDone() ? cambioSummary()
         : s.phase === 'dj' && djDone() ? djSummary()
+        : s.phase === 'karaoke' && karaokeDone() ? karaokeSummary()
         : s.phase === 'montaggio' ? s.text.replace('i PAR', parsRequired() + ' PAR') : s.text) + '</small>'
       + (s.poster ? '<button class="sched-poster" type="button" data-poster="' + s.poster + '">🎟️ Guarda la locandina</button>' : '')
       + '</span>'
@@ -2945,8 +2953,9 @@ function openSchedule (first) {
   // dopo il collaudo la scaletta porta alla posa dei cavi, poi al discorso
   // del preside, poi al cambio palco per il DJ
   scheduleNext = first ? null : schedulePhaseState('cavi') === 'now' ? 'cavi' : schedulePhaseState('preside') === 'now' ? 'preside'
-    : schedulePhaseState('cambio-dj') === 'now' && !cambioDj() ? 'cambio-dj' : schedulePhaseState('dj') === 'now' ? 'dj' : null;
-  el('#schedule-go').textContent = first ? 'Al lavoro!' : { cavi: 'Chiama Gerry', preside: 'Il preside sale sul palco', 'cambio-dj': 'Inizia il cambio palco', dj: 'Via al DJ set' }[scheduleNext] || 'Torna al palco';
+    : schedulePhaseState('cambio-dj') === 'now' && !cambioDj() ? 'cambio-dj' : schedulePhaseState('dj') === 'now' ? 'dj'
+    : schedulePhaseState('karaoke') === 'now' ? 'karaoke' : null;
+  el('#schedule-go').textContent = first ? 'Al lavoro!' : { cavi: 'Chiama Gerry', preside: 'Il preside sale sul palco', 'cambio-dj': 'Inizia il cambio palco', dj: 'Via al DJ set', karaoke: 'Macio prende il microfono' }[scheduleNext] || 'Torna al palco';
   el('#schedule-modal').classList.add('show');
   setSceneInput(false);
 }
@@ -3359,8 +3368,9 @@ function caviSummary () {
    una volta sola, birre, stanchezza a fine discorso. */
 let presideOpen = false, presideTimer = null;
 let djOpen = false;              // lo spettacolo del DJ (openDj, più sotto)
+let karaokeOpen = false;         // il karaoke di Macio (openKaraoke, più sotto)
 const presideDone = () => !!Profile.data.preside;
-const minigameOpen = () => scaricoOpen || gerryOpen || presideOpen || djOpen;
+const minigameOpen = () => scaricoOpen || gerryOpen || presideOpen || djOpen || karaokeOpen;
 // una finestra del gioco sopra la scena (menù, scaletta, pannello posteriore, baule)
 const panelOpen = () => scheduleOpen || menuOpen || !!rearPanelId || !!openCaseName;
 // qualcosa copre la scena: i tocchi non le arrivano finché non si chiude tutto
@@ -3658,9 +3668,11 @@ function finishDj (r) {
   applySettings();
   const p = Profile.data.dj;
   showToast(skipped ? 'DJ set saltato: la musica c\'è stata lo stesso, ma la reputazione non cambia.'
-    : 'Il bidello ha cacciato via i musicisti. Ora si può ripristinare il palco per l\'ultima band. Pubblico al ' + p.grad + '%.' + (rep ? ' Reputazione ' + (rep > 0 ? '+' : '') + rep + '.' : '')
-      + (beers ? ' 🍺 +' + beers + '.' : ''), skipped || p.grad >= 40 ? 'ok' : undefined);
+    : 'Il bidello ha cacciato via i musicisti. Pubblico al ' + p.grad + '%.' + (rep ? ' Reputazione ' + (rep > 0 ? '+' : '') + rep + '.' : '')
+      + (beers ? ' 🍺 +' + beers + '.' : '') + ' La palestra fischia: Macio prende il microfono, «Ci penso io!»', skipped || p.grad >= 40 ? 'ok' : undefined);
   updateFoglio();
+  // fuori programma: Macio sale sul palco appena letto il messaggio
+  karaokeSoon(Math.max(3200, el('#toast').textContent.length * 60) + 300);
 }
 function djSummary () {
   const p = Profile.data.dj;
@@ -3668,6 +3680,85 @@ function djSummary () {
   const who = { tu: 'la fase l\'hai riarmata tu', capo: 'la fase l\'ha riarmata il capo (una birra)', gerry: 'la fase l\'ha riarmata Gerry' }[p.fase];
   return '★'.repeat(p.stars) + '☆'.repeat(5 - p.stars) + ' · pubblico al ' + p.grad + '%' + (p.larsens ? ' · larsen: ' + p.larsens : ' · niente larsen')
     + (who ? ' · ' + who : '') + (p.beers ? ' · 🍺 +' + p.beers : '') + ' · reputazione ' + (p.rep >= 0 ? '+' : '') + p.rep + '.';
+}
+
+/* ---------------- il karaoke di Macio (fuori programma, dopo il DJ) ----------------
+   Gerry ha cacciato il DJ: Macio, il collega dello scarico, salva la serata
+   con un karaoke improvvisato (karaoke.html, in un iframe sopra il gioco).
+   Non è sul foglio né sulla locandina: arriva da solo dopo il DJ set, o dalla
+   scaletta e dal foglio. Serve il microfono ancora collegato al mixer
+   acceso. La pagina riceve birre, stanchezza, nome del capo e canale del
+   microfono; l'esito torna al gioco: reputazione una volta sola, birre,
+   stanchezza. Dopo viene il carico del furgone (non ancora nel gioco). */
+let karaokeTimer = null;
+const karaokeDone = () => !!Profile.data.karaoke;
+// cosa manca perché Macio possa cantare (null se è tutto pronto)
+function karaokeReady () {
+  if (!micChannel()) return 'il microfono non è più collegato: un XLR dal microfono a un ingresso MIC (1-4) del mixer.';
+  const mx = placedOfType('mixer')[0];
+  if (!mx || !isRunning(mx.id)) return 'il mixer è spento: accendi l\'impianto.';
+  return null;
+}
+function openKaraoke () {
+  clearTimeout(karaokeTimer);
+  if (karaokeOpen || karaokeDone() || !djDone() || minigameOpen()) return;
+  const missing = karaokeReady();
+  if (missing) { showToast('Macio aspetta col microfono in mano: ' + missing); updateFoglio(); return; }
+  karaokeOpen = true;
+  setSceneInput(false);
+  sceneKeyboard(false);
+  if (window.__scene) window.__scene.stopFx();
+  const f = document.createElement('iframe');
+  f.id = 'karaoke-frame';
+  f.className = 'minigame-frame';
+  f.title = 'Il karaoke di Macio';
+  f.allow = 'autoplay';
+  f.src = 'karaoke.html?embed=1' + minigameQuery();
+  f.addEventListener('load', () => { try { f.contentWindow.focus(); } catch (e) { /* niente fuoco: si tocca */ } });
+  document.body.appendChild(f);
+}
+function karaokeSoon (ms) {
+  clearTimeout(karaokeTimer);
+  karaokeTimer = setTimeout(() => {
+    if (!panelOpen() && !cambioCardOpen) openKaraoke();
+  }, ms || 3000);
+}
+window.addEventListener('message', ev => {
+  const d = ev.data, f = el('#karaoke-frame');
+  if (!karaokeOpen || !d || !f || ev.source !== f.contentWindow) return;
+  if (d.type === 'karaoke-pronto') {
+    const info = Profile.data.serviceInfo;
+    f.contentWindow.postMessage({ type: 'karaoke-dati', beers: Profile.data.beers || 0, boss: info && info.boss ? info.boss : '', mic: micChannel() || 0, fatigue: fatigue() }, '*');
+  }
+  if (d.type === 'karaoke-fine') finishKaraoke(d.result || { skipped: true });
+});
+function finishKaraoke (r) {
+  const f = el('#karaoke-frame');
+  if (f) f.remove();
+  karaokeOpen = false;
+  const skipped = !!r.skipped;
+  const num = (v, d) => Number.isFinite(+v) ? Math.round(+v) : d;
+  const beers = skipped ? 0 : Math.max(0, num(r.beers, 0)), drunk = skipped ? 0 : Math.max(0, num(r.drunk, 0));
+  Profile.data.karaoke = { skipped, grad: skipped ? 0 : num(r.grad, 0), rep: skipped ? 0 : num(r.rep, 0), beers, drunk,
+    stars: skipped ? 0 : Math.max(0, Math.min(5, num(r.stars, 0))), larsens: skipped ? 0 : Math.max(0, num(r.larsens, 0)) };
+  Profile.data.beers = Math.max(0, (Profile.data.beers || 0) - drunk + beers);
+  if (!skipped && Number.isFinite(+r.fatigue)) setFatigue(+r.fatigue);
+  const rep = skipped ? 0 : addReputation(Profile.data.karaoke.rep, 'Il karaoke di Macio alla festa della scuola', 'L' + LEVEL_ID + ':karaoke');
+  Profile.save();
+  sceneKeyboard(true);
+  if (!sceneCovered()) setSceneInput(true);
+  applySettings();
+  const p = Profile.data.karaoke;
+  showToast(skipped ? 'Karaoke saltato: Macio ha cantato lo stesso, ma la reputazione non cambia.'
+    : (p.grad >= 45 ? 'Macio ha salvato la serata!' : 'Macio ci ha provato.') + ' Pubblico al ' + p.grad + '%.' + (rep ? ' Reputazione ' + (rep > 0 ? '+' : '') + rep + '.' : '')
+      + (beers ? ' 🍺 +' + beers + '.' : '') + ' Ora si smonta e si carica il furgone.', skipped || p.grad >= 40 ? 'ok' : undefined);
+  updateFoglio();
+}
+function karaokeSummary () {
+  const p = Profile.data.karaoke;
+  if (p.skipped) return 'Saltato: niente reputazione.';
+  return '★'.repeat(p.stars) + '☆'.repeat(5 - p.stars) + ' · pubblico al ' + p.grad + '%' + (p.larsens ? ' · larsen: ' + p.larsens : ' · niente larsen')
+    + (p.beers ? ' · 🍺 +' + p.beers : '') + ' · reputazione ' + (p.rep >= 0 ? '+' : '') + p.rep + '.';
 }
 
 el('#cambio-go').addEventListener('click', () => { SFX.button(); closeCambioCard(); });
@@ -3679,7 +3770,7 @@ el('#schedule-go').addEventListener('click', () => {
   SFX.button();
   const next = scheduleNext;
   closeSchedule();
-  if (next === 'cavi') openCavi(); else if (next === 'preside') openPreside(); else if (next === 'cambio-dj') startCambioDj(); else if (next === 'dj') openDj();
+  if (next === 'cavi') openCavi(); else if (next === 'preside') openPreside(); else if (next === 'cambio-dj') startCambioDj(); else if (next === 'dj') openDj(); else if (next === 'karaoke') openKaraoke();
 });
 el('#schedule-close').addEventListener('click', () => { SFX.button(); closeSchedule(); });
 el('#schedule-modal').addEventListener('click', ev => { if (ev.target.id === 'schedule-modal') closeSchedule(); });
@@ -5573,11 +5664,19 @@ function updateFoglio () {
     head = 'Prossimo: Notte fuori controllo';
     body = '<p class="fg-note">DJ Inestimabile e Musa Esistenziale sono pronti. Tu vai alla consolle luci: le memorie si suonano a tempo col brano.</p>'
       + '<button type="button" class="fg-go" id="foglio-dj">Via al DJ set</button>';
-  } else if (djDone()) {
-    icon = '🎧 ';
-    head = 'DJ set finito';
-    body = '<p class="fg-note">Il bidello ha cacciato via i musicisti. Ora si può ripristinare il palco per l\'ultima band (Dante unplugged, alle 22:00: arriva presto).</p>'
-      + '<p class="fg-note">' + escapeHtml(djSummary()) + '</p>';
+  } else if (djDone() && !karaokeDone()) {
+    // fuori programma: il karaoke di Macio, col microfono che c'è già
+    const missing = karaokeReady();
+    icon = '🎤 ';
+    head = 'Fuori programma: il karaoke di Macio';
+    body = '<p class="fg-note">' + escapeHtml('Il bidello ha cacciato via i musicisti e la palestra fischia. Macio: «Ci penso io!». '
+      + (missing ? 'Prima però: ' + missing : 'Il microfono è sul CH ' + micChannel() + '.')) + '</p>'
+      + (missing ? '' : '<button type="button" class="fg-go" id="foglio-karaoke">Macio prende il microfono</button>');
+  } else if (karaokeDone()) {
+    icon = '🎤 ';
+    head = 'Serata finita';
+    body = '<p class="fg-note">' + escapeHtml('Karaoke di Macio: ' + karaokeSummary()) + '</p>'
+      + '<p class="fg-note">Ora si smonta e si carica il furgone (arriva presto).</p>';
   } else if (caviDone() && !presideDone()) {
     // il discorso del preside: pronto se il microfono è cablato
     const missing = presideReady();
@@ -5604,6 +5703,8 @@ function updateFoglio () {
   if (pr) pr.addEventListener('click', () => { SFX.button(); openPreside(); });
   const dg = el('#foglio-dj');
   if (dg) dg.addEventListener('click', () => { SFX.button(); openDj(); });
+  const kg = el('#foglio-karaoke');
+  if (kg) kg.addEventListener('click', () => { SFX.button(); openKaraoke(); });
 }
 
 // cambio di scheda verso una chiusa: si spiega perché

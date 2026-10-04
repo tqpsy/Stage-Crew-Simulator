@@ -875,7 +875,7 @@
   }
 
 /* lo scarico: minigioco a tutto schermo sopra il gioco (scarico.html) */
-#scarico-frame,#cavi-frame,#preside-frame,#dj-frame{position:fixed;inset:0;width:100%;height:100%;border:0;z-index:1000;background:#141519}
+#scarico-frame,#cavi-frame,#preside-frame,#dj-frame,#karaoke-frame{position:fixed;inset:0;width:100%;height:100%;border:0;z-index:1000;background:#141519}
 
 /* pezzo arrivato difettoso dallo scarico: riquadro nel pannello e nel baule */
 .fault-box{display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin:8px 0;padding:10px 12px;border:2px solid #f2843d;border-radius:10px;background:rgba(242,132,61,.12);font-size:14px;line-height:1.4}

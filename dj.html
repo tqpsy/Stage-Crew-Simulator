@@ -456,7 +456,7 @@
       </div>
     </div>
     <div id="toast"></div>
-    <div class="stage-msg" id="stage-msg" hidden>Il bidello ha cacciato via i musicisti. Ora si può ripristinare il palco per l'ultima band.</div>
+    <div class="stage-msg" id="stage-msg" hidden>Il bidello ha cacciato via i musicisti. La palestra fischia: Macio prende il microfono.</div>
     <div id="pausa" hidden>PAUSA</div>
   </div>
 
@@ -535,7 +535,7 @@
       </div>
       <div><div class="tag">Obiettivo 3 · fine</div><h2 id="outro-title">Che notte!</h2></div>
     </div>
-    <p class="outro-msg" id="outro-msg">Il bidello ha cacciato via i musicisti. Ora si può ripristinare il palco per l'ultima band.</p>
+    <p class="outro-msg" id="outro-msg">Il bidello ha cacciato via i musicisti. La palestra fischia: Macio prende il microfono.</p>
     <div class="stars" id="r-stars"></div>
     <div class="results">
       <div><b id="r-grad">0%</b><span>Pubblico</span></div>
@@ -1512,7 +1512,7 @@
     S.repParts.forEach(([what, v]) => notes.push(what + (v ? ` (${v > 0 ? '+' : ''}${v})` : '') + '.'));
     const rep = REPS.set + Math.round((R.grad - 60) / 10) + S.repParts.reduce((a, p) => a + p[1], 0);
     result = { type: 'dj', grad: R.grad, rep, beers, drunk: S.drunk, larsens: S.larsens, stars: R.stars, acc: Math.round(R.acc * 100),
-      msg: 'Il bidello ha cacciato via i musicisti. Ora si può ripristinare il palco per l\'ultima band.', maxCombo: R.maxCombo, score: R.score, favours: S.favours, fase: S.big ? S.big.who || 'gerry' : null, rewinds: S.rewinds, notes };
+      msg: 'Il bidello ha cacciato via i musicisti. La palestra fischia: Macio prende il microfono.', maxCombo: R.maxCombo, score: R.score, favours: S.favours, fase: S.big ? S.big.who || 'gerry' : null, rewinds: S.rewinds, notes };
     $('#outro-title').textContent = S.auto ? 'Così fa il capo.' : R.grad >= 75 ? 'La palestra è venuta giù!' : R.grad >= 45 ? 'Si è ballato.' : 'Il pubblico è andato al bar.';
     $('#r-stars').innerHTML = '★'.repeat(R.stars) + '<i>' + '★'.repeat(5 - R.stars) + '</i>';
     $('#r-grad').textContent = R.grad + '%';

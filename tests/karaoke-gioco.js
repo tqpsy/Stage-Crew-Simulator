@@ -1,11 +1,13 @@
-/* Lo spettacolo del DJ dentro il gioco: montaggio collaudato, posa e
-   discorso finiti, cambio palco promosso (con lo stativo luci del DJ). Il DJ set (dj.html) si apre da solo
-   in un iframe dopo il cambio, con le birre in tasca, il nome del capo e i
-   PAR montati. L'esito torna al gioco: reputazione una volta sola, birre
-   bevute, pagate al capo e guadagnate, scaletta e foglio aggiornati (poi
-   tocca al karaoke di Macio: tests/karaoke-gioco.js), niente secondo set. Saltarlo non dà reputazione.
+/* Il karaoke di Macio dentro il gioco: montaggio collaudato, posa,
+   discorso e cambio palco fatti, DJ set finito (Gerry ha cacciato il DJ).
+   Prima il karaoke non c'è sulla scaletta (è fuori programma); finito il DJ
+   set compare come «adesso», il foglio lo propone e si apre da solo in un
+   iframe con le birre in tasca e il canale del microfono. L'esito torna al
+   gioco: reputazione una volta sola, birre, stanchezza, scaletta e foglio
+   aggiornati, niente secondo karaoke. Senza microfono collegato Macio
+   aspetta; saltarlo non dà reputazione.
 
-   Uso:  node tests/dj-gioco.js
+   Uso:  node tests/karaoke-gioco.js
    Richiede Playwright. Senza rete, PHASER_PATH=/percorso/phaser.min.js. */
 const { chromium } = require(process.env.PLAYWRIGHT_PATH || 'playwright');
 const path = require('path');
@@ -16,6 +18,8 @@ const path = require('path');
   if (process.env.PHASER_PATH) await p.route('**/phaser.min.js', r => r.fulfill({ path: process.env.PHASER_PATH, contentType: 'application/javascript' }));
   await p.route(/fonts\./, r => r.abort());
   await p.route(/posa-cavi\.html/, r => r.fulfill({ body: '<!doctype html><title>posa</title>', contentType: 'text/html' }));
+  // lo show del DJ ha i suoi test: qui si chiude da fuori
+  await p.route(/dj\.html/, r => r.fulfill({ body: '<!doctype html><title>dj</title>', contentType: 'text/html' }));
   const errs = []; p.on('pageerror', e => errs.push(e.message));
   const problems = [];
   const check = (ok, what) => { if (!ok) problems.push(what); };
@@ -111,84 +115,83 @@ const path = require('path');
     S.runCambioTest();
     return { done: cambioDjDone(), fails: window.__fails.slice() };
   });
+  // il DJ set finito: Gerry ha cacciato il DJ
+  const djFinito = () => ev(() => {
+    djOpen = true;
+    finishDj({ type: 'dj', grad: 70, rep: 6, beers: 1, drunk: 0, stars: 4, larsens: 0, fase: 'tu' });
+  });
+  const rows = () => ev(() => { renderSchedule(); return [...document.querySelectorAll('#schedule-list .sched-row')].map(r => r.className.split(' ')[1] + ':' + r.querySelector('b').textContent); });
   const frame = async () => {
-    await p.waitForSelector('#dj-frame', { timeout: 12000 });
-    const h = await p.$('#dj-frame');
+    await p.waitForSelector('#karaoke-frame', { timeout: 15000 });
+    const h = await p.$('#karaoke-frame');
     const f = await h.contentFrame();
-    await f.waitForFunction(() => window.__dj && !document.querySelector('#start').disabled, null, { timeout: 10000 });
+    await f.waitForFunction(() => window.__karaoke && !document.querySelector('#start').disabled, null, { timeout: 10000 });
     return f;
   };
 
   await open();
   await nuovaSerata();
-  await ev(() => { Profile.data.beers = 3; });
-  const c = await cambio();
-  check(c.done && !c.fails.length, 'cambio palco non promosso: ' + JSON.stringify(c));
-  const sched = await ev(() => { renderSchedule(); return [...document.querySelectorAll('#schedule-list .sched-row')].map(r => r.className.split(' ')[1] + ':' + r.querySelector('b').textContent); });
-  check(sched.includes('now:Notte fuori controllo'), 'dopo il cambio lo show non è «adesso»: ' + sched.join(' | '));
-  check(await ev(() => /Notte fuori controllo/.test(el('#foglio .fg-head').textContent) && !!el('#foglio-dj')), 'il foglio non propone il DJ set');
+  await ev(() => { Profile.data.beers = 2; });
+  await cambio();
+  const prima = await rows();
+  check(!prima.some(r => /karaoke/i.test(r)) && !prima.some(r => /Dante/.test(r)), 'prima del DJ il karaoke è già sulla scaletta (o c\'è ancora Dante): ' + prima.join(' | '));
+  await djFinito();
+  const dopo = await rows();
+  check(dopo.includes('now:Fuori programma: il karaoke di Macio'), 'finito il DJ il karaoke non è «adesso»: ' + dopo.join(' | '));
+  check(await ev(() => /karaoke di Macio/.test(el('#foglio .fg-head').textContent) && !!el('#foglio-karaoke')), 'il foglio non propone il karaoke');
 
-  // ---- lo show si apre da solo, coi dati del montaggio
+  // ---- si apre da solo, coi dati del gioco
   const f = await frame();
-  const dati = await f.evaluate(() => ({ beers: __dj.state().beers, pars: [...document.querySelectorAll('#pars text')].map(t => t.textContent).filter(t => /PAR|par/.test(t) || t.length > 1), skip: !document.querySelector('#skip').hidden, demo: !document.querySelector('#demo').hidden }));
-  check(dati.beers === 3, 'le birre in tasca non arrivano allo show: ' + dati.beers);
-  check(dati.skip && !dati.demo, 'nel gioco: salta sì, demo no ' + JSON.stringify(dati));
-  check(await ev(() => minigameOpen() && djOpen), 'con lo show aperto il gioco non lo sa');
+  const dati = await f.evaluate(() => ({ beers: __karaoke.state().beers, skip: !document.querySelector('#skip').hidden, demo: !document.querySelector('#demo').hidden }));
+  check(dati.beers === 3 && dati.skip && !dati.demo, 'dati nel karaoke: ' + JSON.stringify(dati));
+  check(await ev(() => minigameOpen() && karaokeOpen), 'con il karaoke aperto il gioco non lo sa');
 
-  // si gioca col capo alle luci (orologio finto): guasti gestiti, poi «Torna al palco»
-  await f.evaluate(() => { __dj.virtual(true); __dj.start(true); });
-  await f.evaluate(() => { for (let i = 0; i < 40 && !__dj.state().over; i++) __dj.advance(5); });
-  const res = await f.evaluate(() => __dj.result());
-  check(res && res.type === 'dj' && res.fase === 'tu', 'esito dello show: ' + JSON.stringify(res));
+  await f.evaluate(() => { __karaoke.virtual(true); __karaoke.start(true); });
+  await f.evaluate(() => { for (let i = 0; i < 40 && !__karaoke.state().over; i++) __karaoke.advance(5); });
+  const res = await f.evaluate(() => __karaoke.result());
+  check(res && res.type === 'karaoke' && res.stars === 5, 'esito del karaoke: ' + JSON.stringify(res));
   const rep0 = await ev(() => reputation());
   await f.waitForSelector('#outro:not([hidden])');
   check(await f.textContent('#again') === 'Torna al palco', 'nel gioco il tasto finale non torna al palco');
   await f.click('#again');
-  await p.waitForFunction(() => !document.querySelector('#dj-frame'));
-  const g = await ev(() => ({ dj: Profile.data.dj, rep: reputation(), beers: Profile.data.beers, open: djOpen, toast: el('#toast').textContent, earned: Object.keys(Profile.data.reputation.earned).filter(k => /:dj$/.test(k)) }));
-  check(g.dj && g.dj.grad === res.grad && g.dj.stars === res.stars && g.dj.fase === 'tu', 'esito non salvato: ' + JSON.stringify(g.dj));
-  check(g.rep === rep0 + res.rep && g.earned.length === 1, 'reputazione dello show: ' + rep0 + ' -> ' + g.rep + ' (esito ' + res.rep + ')');
-  check(g.beers === 3 - res.drunk + res.beers, 'birre dopo lo show: ' + g.beers + ' (esito ' + JSON.stringify({ drunk: res.drunk, beers: res.beers }) + ')');
-  check(!g.open && /cacciato via i musicisti.*Macio/.test(g.toast), 'dopo lo show: ' + JSON.stringify({ open: g.open, toast: g.toast }));
-  const sched2 = await ev(() => { renderSchedule(); return el('#schedule-list').textContent; });
-  check(/done/.test(await ev(() => document.querySelectorAll('#schedule-list .sched-row')[7].className)) && /★/.test(sched2), 'la scaletta non segna il DJ set fatto: ' + sched2);
-  check(await ev(() => /karaoke di Macio/.test(el('#foglio .fg-head').textContent)), 'dopo il DJ set il foglio non propone il karaoke di Macio');
-  // niente secondo set, e la reputazione non raddoppia
-  await ev(() => openDj());
-  check(!(await p.$('#dj-frame')) && await ev(() => reputation()) === g.rep, 'il DJ set si rifà');
+  await p.waitForFunction(() => !document.querySelector('#karaoke-frame'));
+  const g = await ev(() => ({ k: Profile.data.karaoke, rep: reputation(), beers: Profile.data.beers, fat: fatigue(), open: karaokeOpen, toast: el('#toast').textContent, earned: Object.keys(Profile.data.reputation.earned).filter(k => /:karaoke$/.test(k)) }));
+  check(g.k && g.k.grad === res.grad && g.k.stars === res.stars, 'esito non salvato: ' + JSON.stringify(g.k));
+  check(g.rep === rep0 + res.rep && g.earned.length === 1, 'reputazione del karaoke: ' + rep0 + ' -> ' + g.rep + ' (esito ' + res.rep + ')');
+  check(g.beers === 3 - res.drunk + res.beers, 'birre dopo il karaoke: ' + g.beers);
+  check(Math.round(g.fat) === res.fatigue, 'stanchezza dopo il karaoke: ' + g.fat + ' / ' + res.fatigue);
+  check(!g.open && /salvato la serata/.test(g.toast), 'dopo il karaoke: ' + g.toast);
+  const fine = await rows();
+  check(fine.includes('done:Fuori programma: il karaoke di Macio'), 'la scaletta non segna il karaoke fatto: ' + fine.join(' | '));
+  check(await ev(() => /Serata finita/.test(el('#foglio .fg-head').textContent)), 'il foglio non dice serata finita');
+  check(await ev(() => LEVELS[0].phases.some(ph => /Karaoke/.test(ph.title) && ph.done(Profile.data))), 'il karaoke non è tra le fasi del livello');
+  await ev(() => openKaraoke());
+  check(!(await p.$('#karaoke-frame')) && await ev(() => reputation()) === g.rep, 'il karaoke si rifà');
 
   // ---- ricarica: resta fatto
   await ev(() => Profile.flush());
   await open();
   await p.click('#menu-resume');
-  check(await ev(() => djDone() && Profile.data.dj.fase === 'tu'), 'dopo la ricarica lo show non risulta fatto');
+  check(await ev(() => karaokeDone() && Profile.data.karaoke.stars === 5), 'dopo la ricarica il karaoke non risulta fatto');
 
-  // ---- seconda serata: la birra pagata al capo, poi saltarlo non dà reputazione
-  await nuovaSerata();
-  await ev(() => { Profile.data.beers = 1; });
-  await cambio();
-  const f2 = await frame();
-  await f2.evaluate(() => { __dj.virtual(true); __dj.start(false); });
-  await f2.evaluate(() => { const M = __dj.mappa; __dj.advance(M.t0 + 17 * 4 * 60 / M.bpm + 0.2 - __dj.state().t); document.querySelector('#opt-capo').click(); });
-  await f2.evaluate(() => { for (let i = 0; i < 40 && !__dj.state().over; i++) __dj.advance(5); });
-  const r2 = await f2.evaluate(() => __dj.result());
-  await f2.waitForSelector('#outro:not([hidden])');
-  await f2.click('#again');
-  await p.waitForFunction(() => !document.querySelector('#dj-frame'));
-  const g2 = await ev(() => ({ beers: Profile.data.beers, dj: Profile.data.dj }));
-  check(r2.fase === 'capo' && g2.dj.fase === 'capo' && g2.beers === 1 - 1 - r2.drunk + r2.beers, 'birra pagata al capo: ' + JSON.stringify({ r2, g2 }));
-
+  // ---- seconda serata: senza microfono Macio aspetta, poi saltarlo non dà reputazione
   await nuovaSerata();
   await cambio();
+  await ev(() => { const mic = placedOfType('mic')[0].id; gameState.edges = gameState.edges.filter(e => e.a !== mic && e.b !== mic); });
+  await djFinito();
+  await p.waitForFunction(() => /Macio aspetta/.test(el('#toast').textContent), null, { timeout: 15000 }).catch(() => {});
+  const senza = await ev(() => ({ frame: !!el('#karaoke-frame'), toast: el('#toast').textContent, foglio: el('#foglio').textContent, go: !!el('#foglio-karaoke') }));
+  check(!senza.frame && /Macio aspetta/.test(senza.toast) && /microfono/.test(senza.foglio) && !senza.go, 'senza microfono: ' + JSON.stringify(senza));
+  await ev(() => { window.__wire('xlr', placedOfType('mic')[0].id, 'out', placedOfType('mixer')[0].id, 'in_1'); openKaraoke(); });
   const f3 = await frame();
   const rep3 = await ev(() => reputation());
   await f3.click('#skip');
-  await p.waitForFunction(() => !document.querySelector('#dj-frame'));
-  const g3 = await ev(() => ({ dj: Profile.data.dj, rep: reputation(), toast: el('#toast').textContent }));
-  check(g3.dj && g3.dj.skipped && g3.rep === rep3 && /saltato/.test(g3.toast), 'show saltato: ' + JSON.stringify(g3));
+  await p.waitForFunction(() => !document.querySelector('#karaoke-frame'));
+  const g3 = await ev(() => ({ k: Profile.data.karaoke, rep: reputation(), toast: el('#toast').textContent }));
+  check(g3.k && g3.k.skipped && g3.rep === rep3 && /saltato/.test(g3.toast), 'karaoke saltato: ' + JSON.stringify(g3));
 
   check(errs.length === 0, 'errori JS: ' + errs.join(' | '));
   await b.close();
   if (problems.length) { console.log('PROBLEMI:\n- ' + problems.join('\n- ')); process.exit(1); }
-  console.log('dj-gioco: tutto ok');
+  console.log('karaoke-gioco: tutto ok');
 })();

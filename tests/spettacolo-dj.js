@@ -125,7 +125,7 @@ const path = require('path');
   // in fondo il messaggio per il prossimo cambio palco, sul palco e nella scheda finale
   await ev(() => __dj.advance(4.9));
   st = await ev(() => ({ msg: !document.querySelector('#stage-msg').hidden && document.querySelector('#stage-msg').textContent, over: __dj.state().over }));
-  check(st.msg && /cacciato via i musicisti.*ultima band/.test(st.msg) && !st.over, 'manca il messaggio finale sul palco: ' + JSON.stringify(st));
+  check(st.msg && /cacciato via i musicisti.*Macio/.test(st.msg) && !st.over, 'manca il messaggio finale sul palco: ' + JSON.stringify(st));
   await ev(() => __dj.advance(3));
   let R = await ev(() => ({ r: __dj.result(), s: (({ miss, stray, perfect, lost, dropHeld, drops, holdsBroken, over, rewinds, larsens }) => ({ miss, stray, perfect, lost, dropHeld, drops, holdsBroken, over, rewinds, larsens }))(__dj.state()) }));
   check(R.s.over && R.r, 'la demo non finisce');
@@ -136,7 +136,7 @@ const path = require('path');
   check(R.s.larsens === 0 && R.r.beers === 2, 'la demo: larsen o birre sbagliati ' + JSON.stringify(R.r));
   check(R.r.rep === 5 + 4 + 1 + 5 + 3 + 1 + 1, 'reputazione della demo: ' + R.r.rep);
   await p.waitForSelector('#outro:not([hidden])', { timeout: 3000 }).catch(() => problems.push('niente scheda finale'));
-  check(/cacciato via i musicisti/.test(await p.textContent('#outro-msg')) && /ultima band/.test(R.r.msg || ''), 'la scheda finale non dice che si ripristina il palco');
+  check(/cacciato via i musicisti/.test(await p.textContent('#outro-msg')) && /Macio/.test(R.r.msg || ''), 'la scheda finale non dice che si ripristina il palco');
 
   // ---- guasti a mano: fader DJ a tempo, poi il guasto grosso: ci vai tu ----
   await open();

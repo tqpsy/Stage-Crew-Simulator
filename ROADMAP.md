@@ -123,12 +123,12 @@ cambiano da una fase all'altra.
   Il discorso resta col suo palco disegnato di fronte, non va
   nell'isometrico (deciso); lo stesso vale per il DJ set e il cantante. Il microfono va bene su qualsiasi ingresso MIC,
   purché cablato.
-- Dopo il DJ set (deciso, da progettare): Gerry ha cacciato il DJ e
-  **Macio** improvvisa un **karaoke**, un minigioco nuovo a metà fra il
-  discorso del preside e il DJ Hero. Prende il posto del cantante con
-  chitarra. Poi a fine serata il **carico del furgone**, un minigioco
-  puzzle unico nel suo genere, da provare. Design in
-  `docs/livello1-festa-scuola.md`.
+- Dopo il DJ set (fatto): Gerry ha cacciato il DJ e **Macio** improvvisa
+  un **karaoke** (`karaoke.html`): il tecnico manda avanti il testo a mano,
+  sillaba per sillaba, e tiene la voce stonata di Macio nella zona verde.
+  Prende il posto del cantante con chitarra. Da fare: a fine serata il
+  **carico del furgone**, un minigioco puzzle unico nel suo genere, da
+  provare. Design in `docs/livello1-festa-scuola.md`.
 
 ## Show del DJ set
 
