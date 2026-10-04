@@ -9239,7 +9239,7 @@ class StageScene extends Phaser.Scene {
     if (!miss && !result.overPhase && !result.overBudget) {
       gameState.giro++;
       gameState.giroFails[giro] = 0;
-      SFX.success();
+      this.giroCascade(g.id);
       const next = GIRI[gameState.giro];
       const msg = {
         corrente: 'Prova corrente superata: il Quadro è sotto tensione.',
@@ -9278,6 +9278,21 @@ class StageScene extends Phaser.Scene {
     if (g.id === 'corrente') { showToast('Niente corrente: ' + hint + exact, 'bad'); this.fxSparks(); }
     else if (g.id === 'audio') { showToast('Le casse restano mute: ' + hint + exact, 'bad'); this.fxCrackle(); }
     else { showToast('Le luci non rispondono: ' + hint + exact, 'bad'); this.fxLightsTilt(); }
+  }
+
+  /* prova di un giro superata: la sua catena si accende un pezzo alla volta
+     (verde e il suo suono di avvio), nell'ordine del segnale, poi il jingle */
+  giroCascade (id) {
+    const types = { corrente: [['quadro'], ['ciabatta', 'ciabatta_cee']], audio: TRACE_AUDIO.map(t => [t]), luci: [['controller'], ['par']] }[id] || [];
+    const steps = types.map(ts => Object.values(gameState.placed).filter(c => ts.includes(c.type) && this.compVisuals[c.id])).filter(l => l.length);
+    this.fxStart();
+    const STEP = 170;
+    steps.forEach((list, i) => this.fxLater(i * STEP, () => {
+      list.forEach(c => { const v = this.compVisuals[c.id]; this.fxHold(v); this.setGlow(v, true, 0x49b06a); });
+      SFX.wake(list[0].type);
+    }));
+    this.fxLater(steps.length * STEP, () => SFX.success());
+    this.fxLater(steps.length * STEP + 900, () => this.stopFx());
   }
 
   /* ---------------- PRONTI: la prova del cambio palco per il DJ ----------------
@@ -9869,15 +9884,27 @@ class StageScene extends Phaser.Scene {
       this.fxLater(2600, () => { this.stopFx(); this.afterShow(); });
       return;
     }
-    const BPM = 120, BEATS = 14, BEAT_MS = 60000 / BPM;
-    const T_LIGHTS = 1300, T_BEAT = 2300, T_END = T_BEAT + BEATS * BEAT_MS, T_DAY = T_END + 250;
+    /* l'impianto prende vita un pezzo alla volta, nell'ordine in cui il
+       segnale lo attraversa: corrente (quadro e ciabatte), poi la catena
+       audio dal PC alle casse, poi la consolle luci. Ogni pezzo esce dal
+       buio col suo suono di accensione; poi si accendono i PAR e parte il
+       beat. È la ricompensa del montaggio: si vede cosa si è costruito. */
+    const CHAIN = [['quadro', 'ciabatta', 'ciabatta_cee'], ...TRACE_AUDIO.map(t => [t]), ['controller']]
+      .map(types => Object.values(gameState.placed).filter(c => types.includes(c.type) && this.compVisuals[c.id] && (c.type === 'quadro' || isRunning(c.id))))
+      .filter(list => list.length);
+    const T_CHAIN = 1300, STEP = 280;
+    const BPM = 120, BEATS = 12, BEAT_MS = 60000 / BPM;
+    const T_LIGHTS = T_CHAIN + CHAIN.length * STEP + 150, T_BEAT = T_LIGHTS + 1000, T_END = T_BEAT + BEATS * BEAT_MS, T_DAY = T_END + 250;
 
     // la telecamera va sul palco per lo show e poi torna dov'era
     const cam = this.cameras.main;
     const view = { x: cam.midPoint.x, y: cam.midPoint.y, z: cam.zoom };
     const stage = gridToScreen(STAGE_ORIGIN_X + STAGE_W / 2, STAGE_ORIGIN_Y + STAGE_H / 2 + 1);
-    cam.pan(stage.x, stage.y, 1200, 'Sine.easeInOut');
-    cam.zoomTo(Math.max(view.z, SHOW_ZOOM), 1200, 'Sine.easeInOut');
+    // prima si guarda l'impianto accendersi, poi si va sul palco per il beat
+    this.fxLater(Math.max(0, T_LIGHTS - 500), () => {
+      cam.pan(stage.x, stage.y, 1200, 'Sine.easeInOut');
+      cam.zoomTo(Math.max(view.z, SHOW_ZOOM), 1200, 'Sine.easeInOut');
+    });
     this.fxLater(T_DAY, () => {
       cam.pan(view.x, view.y, 800, 'Sine.easeInOut', true);
       cam.zoomTo(view.z, 800, 'Sine.easeInOut', true);
@@ -9893,6 +9920,37 @@ class StageScene extends Phaser.Scene {
       .setScrollFactor(0).setDepth(40).setAlpha(0));
     this.fxTween({ targets: night, alpha: 0.84, duration: 1200, ease: 'Sine.InOut' });
     this.fxTween({ targets: night, alpha: 0, delay: T_DAY, duration: 700, ease: 'Sine.InOut' });
+
+    // l'accensione a catena: il pezzo sale sopra il buio, un anello verde si
+    // allarga e si sente il suo avvio; in alto la scritta del giro
+    const rings = this.fxObj(this.add.graphics().setDepth(47).setBlendMode(Phaser.BlendModes.ADD));
+    const ringList = [];
+    const label = this.fxObj(this.add.text(GAME_W / 2, GAME_H / 2, '', {
+      fontFamily: 'Barlow Condensed, sans-serif', fontSize: '44px', fontStyle: 'bold', color: '#49b06a', stroke: '#141519', strokeThickness: 6
+    }).setOrigin(0.5).setScrollFactor(0).setDepth(100).setAlpha(0));
+    const say = text => { this.tweens.killTweensOf(label); label.setText(text).setAlpha(1).setScale(1 / cam.zoom).setPosition(GAME_W / 2, GAME_H / 2 - GAME_H * 0.3 / cam.zoom); this.fxTween({ targets: label, alpha: 0, delay: 650, duration: 300 }); };
+    CHAIN.forEach((list, i) => this.fxLater(T_CHAIN + i * STEP, () => {
+      list.forEach(c => {
+        const v = this.compVisuals[c.id], d0 = v.container.depth;
+        v.container.setDepth(41 + v.container.y / 10000);
+        this.fx.restore.push(() => { if (v.container.scene) v.container.setDepth(d0); });
+        ringList.push({ x: v.container.x, y: v.container.y, k: 0 });
+      });
+      const t = list[0].type;
+      if (t === 'quadro') { SFX.breaker(true); say('CORRENTE ✓'); }
+      else SFX.wake(t);
+      if (t === TRACE_AUDIO.filter(x => CHAIN.some(l => l[0].type === x)).pop()) say('AUDIO ✓');
+    }));
+    this.fxLater(T_LIGHTS + 400, () => say('LUCI ✓'));
+    this.fxEvery(33, Math.ceil((T_LIGHTS + 600) / 33), () => {
+      rings.clear();
+      ringList.forEach(r => {
+        r.k = Math.min(1, r.k + 0.06);
+        if (r.k >= 1) return;
+        rings.lineStyle(3, 0x49b06a, 1 - r.k);
+        rings.strokeEllipse(r.x, r.y, 40 + r.k * 110, 22 + r.k * 55);
+      });
+    });
 
     const beams = this.fxObj(this.add.graphics().setDepth(45).setBlendMode(Phaser.BlendModes.ADD));
     const waves = this.fxObj(this.add.graphics().setDepth(46));
@@ -9933,7 +9991,7 @@ class StageScene extends Phaser.Scene {
     });
 
     // il beat: suono e movimento vanno insieme
-    this.fxLater(T_BEAT, () => { this.fx.stops.push(SFX.beat(BPM, BEATS)); });
+    this.fxLater(T_BEAT, () => { this.fx.stops.push(SFX.beat(BPM, BEATS)); say('SI VA IN SCENA!'); this.shake(250, 0.006); });
     this.fxLater(T_BEAT + 50, () => this.fxEvery(BEAT_MS, BEATS, n => {
       st.kick = 1; st.beat = n + 1;
       if (n % 4 === 0 && !reducedFx()) st.flash = 1;
