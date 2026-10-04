@@ -110,10 +110,16 @@ function rotFrame (base, k) {
 function orientK (def, x, y) {
   if (!def.front) return 0;
   const { cx, cy } = screenToCell(x, y);
-  const want = isFohCell(cx, cy) ? '-a' : '+b';
+  const want = def.shape === 'quadro' ? quadroFront(cx) : isFohCell(cx, cy) ? '-a' : '+b';
   if (def.front === want) return 0;
   return def.front === '+b' ? 1 : 3;
 }
+
+/* il Quadro si appoggia di schiena alla parete che ha dietro, con le prese
+   verso il palco: contro la parete laterale (gx = 0) le prese guardano +gx
+   (+b, il disegno); altrove sta di schiena alla parete dietro al palco e
+   le prese guardano il palco (-a, girato di un quarto) */
+function quadroFront (cx) { return cx < CELL ? '+b' : '-a'; }
 
 // posizione di una porta ancorata a un punto del solido
 function isoPort (P, a, b, z) {
@@ -352,7 +358,9 @@ const COMPONENT_TYPES = {
     // cabinet bianco/metallo, come un vero armadio elettrico da evento —
     // non più una scatola tinta a caso (vedi drawComponentBody per i dettagli).
     body: { w: 76, h: 94, fill: 0xe9eaed, accent: 0x4a4f5a },
-    ledPos: QUADRO_ISO(4, 34, 43),
+    // prese sul fronte +b del disegno; si gira verso il palco (vedi quadroFront)
+    frame: QUADRO_ISO, front: '+b',
+    ledIso: [4, 34, 43],
     // 3 prese, una per fase (L1/L2/L3): a differenza degli altri componenti,
     // ogni presa può ricevere PIÙ cavi (multi:true) — non è il singolo cavo a
     // contare, ma il carico totale che finisce su quella fase (vedi
@@ -363,10 +371,12 @@ const COMPONENT_TYPES = {
       // valle (PowerCON o Schuko) richiede l'adattatore giusto in scheda Cavi.
       // ingresso trifase sul fianco (faccia a=0), le 3 prese in fila sul
       // fronte (faccia b=B), ognuna sotto il proprio interruttore
-      { id: 'in',    signal: 'cee_tri',  dir: 'in',  ...isoPort(QUADRO_ISO, 0, 17, 14) },
-      { id: 'out_1', signal: 'cee_mono', dir: 'out', ...isoPort(QUADRO_ISO, QUADRO_PHASE_A[0], 34, 12), phase: 'L1', multi: true },
-      { id: 'out_2', signal: 'cee_mono', dir: 'out', ...isoPort(QUADRO_ISO, QUADRO_PHASE_A[1], 34, 12), phase: 'L2', multi: true },
-      { id: 'out_3', signal: 'cee_mono', dir: 'out', ...isoPort(QUADRO_ISO, QUADRO_PHASE_A[2], 34, 12), phase: 'L3', multi: true }
+      // (girato contro la parete di fondo l'ingresso passa sul fianco a=A,
+      // l'unico che resta in vista: vedi drawComponentBody)
+      { id: 'in',    signal: 'cee_tri',  dir: 'in',  iso: [0, 17, 14], isoTurned: [QUADRO_ISO.A, 17, 14] },
+      { id: 'out_1', signal: 'cee_mono', dir: 'out', iso: [QUADRO_PHASE_A[0], 34, 12], phase: 'L1', multi: true },
+      { id: 'out_2', signal: 'cee_mono', dir: 'out', iso: [QUADRO_PHASE_A[1], 34, 12], phase: 'L2', multi: true },
+      { id: 'out_3', signal: 'cee_mono', dir: 'out', iso: [QUADRO_PHASE_A[2], 34, 12], phase: 'L3', multi: true }
     ]
   },
   allaccio: {
@@ -6889,19 +6899,20 @@ class StageScene extends Phaser.Scene {
     def.ports.filter(p => p.phase).forEach(p => {
       const a = QUADRO_PHASE_A[['L1', 'L2', 'L3'].indexOf(p.phase)];
       const c = prot[p.phase] ? 0x49b06a : (prot.tripped[p.phase] ? 0xe0503f : 0x6a6e78);
-      const pts = [[a - 3, 26.5], [a + 3, 26.5], [a + 3, 29], [a - 3, 29]].map(([aa, z]) => QUADRO_ISO(aa, QUADRO_ISO.B, z));
+      const P = rotFrame(QUADRO_ISO, qv.rot);
+      const pts = [[a - 3, 26.5], [a + 3, 26.5], [a + 3, 29], [a - 3, 29]].map(([aa, z]) => P(aa, QUADRO_ISO.B, z));
       g.fillStyle(c, 1); g.fillPoints(pts, true);
     });
     // barra subito sotto ogni presa di fase
     const barW = 14, barH = 4;
     def.ports.filter(p => p.phase).forEach(p => {
-      const barY = p.dy + 7;
+      const q = qv.portPos[p.id], barY = q.dy + 7;
       const frac = Math.min(1, loads[p.phase] / PHASE_BUDGET_W);
       const color = frac >= 1 ? 0xe0503f : (frac >= 0.75 ? 0xf2a541 : 0x49b06a);
       g.fillStyle(0x000000, 0.6);
-      g.fillRect(p.dx - barW / 2, barY, barW, barH);
+      g.fillRect(q.dx - barW / 2, barY, barW, barH);
       g.fillStyle(color, 1);
-      g.fillRect(p.dx - barW / 2, barY, barW * frac, barH);
+      g.fillRect(q.dx - barW / 2, barY, barW * frac, barH);
     });
   }
 
@@ -7162,8 +7173,10 @@ class StageScene extends Phaser.Scene {
         // armadio di distribuzione bianco da evento: striscia di sicurezza,
         // finestra con un interruttore per fase sopra ogni presa CEE,
         // maniglia sul fianco
-        const P = QUADRO_ISO, k = this.isoKit(g, P);
+        const P = rotFrame(QUADRO_ISO, rot), k = this.isoKit(g, P);
         const { A, B, Z } = P;
+        // fianco con sportello e ingresso: a=0, o a=A se girato (l'altro è nascosto)
+        const sa = rot ? A : 0, sd = rot ? -0.1 : 0.1;
         k.box(0, A, 0, B, 0, Z, { top: 0xf3f4f6, left: 0xd9dbdf, right: 0xc7cad0 });
         k.quadB(B, 2, A - 2, Z - 5, Z - 2, 0xf2c53d);                   // striscia gialla/nera
         g.lineStyle(1, 0x1c1d22, 0.8);
@@ -7180,9 +7193,9 @@ class StageScene extends Phaser.Scene {
         QUADRO_PHASE_A.forEach(a => {                                  // prese CEE blu
           k.discB(B, a, 12, 7.5, 0x1d4a9a); k.discB(B, a, 12, 6, 0x2f6fd6);
         });
-        k.quadA(0, 5, 29, 4, 36, 0xcfd2d6);                             // sportello laterale
-        k.discA(0, 17, 14, 7.5, 0x9e2820); k.discA(0, 17, 14, 6, 0xd6392f); // ingresso CEE rosso
-        k.box(0, 0.1, 25, 28, 28, 34, ISO_GREY);                        // maniglia
+        k.quadA(sa, 5, 29, 4, 36, 0xcfd2d6);                            // sportello laterale
+        k.discA(sa, 17, 14, 7.5, 0x9e2820); k.discA(sa, 17, 14, 6, 0xd6392f); // ingresso CEE rosso
+        k.box(Math.min(sa, sa + sd), Math.max(sa, sa + sd), 25, 28, 28, 34, ISO_GREY); // maniglia
         k.quadZ(Z, 6, A - 6, 4, B - 4, 0xe6e8eb);
         break;
       }
@@ -7538,7 +7551,7 @@ class StageScene extends Phaser.Scene {
     const frame = def.frame ? rotFrame(def.frame, rot) : null;
     const portPos = {};
     def.ports.forEach(p => {
-      const q = (frame && p.iso) ? frame(...p.iso) : { x: p.dx, y: p.dy };
+      const q = (frame && p.iso) ? frame(...(rot && p.isoTurned || p.iso)) : { x: p.dx, y: p.dy };
       portPos[p.id] = { dx: Math.round(q.x), dy: Math.round(q.y) };
     });
     const ledPos = (frame && def.ledIso) ? frame(...def.ledIso) : def.ledPos;
@@ -7612,7 +7625,7 @@ class StageScene extends Phaser.Scene {
       c.add(phaseBars);
       // sigla della fase nella finestra degli interruttori, sopra la presa
       def.ports.filter(p => p.phase).forEach(p => {
-        const at = QUADRO_ISO(QUADRO_PHASE_A[['L1', 'L2', 'L3'].indexOf(p.phase)], QUADRO_ISO.B, 34.5);
+        const at = frame(QUADRO_PHASE_A[['L1', 'L2', 'L3'].indexOf(p.phase)], QUADRO_ISO.B, 34.5);
         const tag = this.add.text(at.x, at.y, p.phase, {
           fontFamily: 'Inter, sans-serif', fontSize: '8px', fontStyle: 'bold', color: '#eee9df'
         }).setOrigin(0.5);
@@ -8745,6 +8758,7 @@ class StageScene extends Phaser.Scene {
     if (def.front && orientK(def, pos.x, pos.y) !== this.compVisuals[id].rot) {
       this.compVisuals[id].container.destroy();
       this.compVisuals[id] = this.buildComponentVisual(id, def, pos.x, pos.y);
+      if (comp.type === 'quadro') this.updateQuadroVisual();
     }
 
     mountedAll(comp).forEach(child => {
