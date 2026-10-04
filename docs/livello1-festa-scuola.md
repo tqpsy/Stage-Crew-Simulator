@@ -403,10 +403,10 @@ che legge: se la sillaba non arriva in tempo si perde («ehm», «boh»).
   arrivano da destra e si tocca **AVANTI** (Spazio) quando sono sulla
   riga. Le sillabe lunghe in fondo a ogni verso si **tengono premute**.
   Lo schermo del karaoke in alto si colora man mano, come un karaoke vero.
-- **Macio è stonato**: a tratti stona (le note ♭ ♯ escono dalla bocca).
-  Il fader **VOCE MACIO** va tenuto nella **zona verde**: alta quando è
-  intonato (sennò non si sente), bassa quando stona (sennò il pubblico si
-  tappa le orecchie). La zona si sposta **un tempo prima**, così si vede
+- **Macio si gasa e urla**: canta intonato, ma a tratti si esalta e urla
+  nel microfono («!!» dalla bocca spalancata). Il fader **VOCE MACIO** va
+  tenuto nella **zona verde**: alta quando canta normale (sennò non si
+  sente), bassa quando urla (sennò il pubblico si tappa le orecchie). La zona si sposta **un tempo prima**, così si vede
   arrivare. Nei ritornelli più lo abbassi, più si sente il pubblico che
   canta.
 - **Il larsen**: due volte Macio va verso una cassa e scende la **zona
@@ -426,12 +426,13 @@ che legge: se la sillaba non arriva in tempo si perde («ehm», «boh»).
 diritti). 100 BPM, 38 battute (circa un minuto e mezzo): intro parlata,
 strofa, ritornello, seconda strofa, ritornello finale. La base (batteria,
 basso, accordi Do-Sol-La-Fa) e il coro del pubblico sono suonati dal codice
-con Web Audio. La **voce di Macio** ha l'**accento barese** (non il
-dialetto: le «a» aperte, «Salvièmo la serèta»): una voce italiana maschile
-sintetica dice ogni verso e il vocoder WORLD fa cantare ogni sillaba sulla
-sua nota, un'ottava sotto, con vibrato, già stonata dove Macio stona. Dice
-anche le frasi dell'intro, «Ehm…» quando si perde una sillaba e «Grazie
-palestra! Uè!» alla fine. Sta in `karaoke-voce.js` (un mp3 in base64, così
+con Web Audio. La **voce di Macio** ha l'**accento di Chieti** (Macio è di Chieti; non
+il dialetto: «spèndo», «quando», «cando», «anghe», «inzième»): una voce
+italiana maschile sintetica dice ogni verso e il vocoder WORLD fa cantare
+ogni sillaba sulla sua nota, un'ottava sotto, **intonata giusta** (controllata
+nota per nota), con un vibrato leggero; dove urla è solo più forte. Dice
+anche le frasi dell'intro, «Ehm…» quando si perde una sillaba e «Grazie a
+tutti, vajù!» alla fine. Sta in `karaoke-voce.js` (un mp3 in base64, così
 funziona anche aprendo `index.html` dal disco), generato da
 `strumenti/voce-macio.py`. Se manca, canta il suono sintetico.
 

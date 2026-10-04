@@ -125,7 +125,8 @@ cambiano da una fase all'altra.
   purché cablato.
 - Dopo il DJ set (fatto): Gerry ha cacciato il DJ e **Macio** improvvisa
   un **karaoke** (`karaoke.html`): il tecnico manda avanti il testo a mano,
-  sillaba per sillaba, e tiene la voce stonata di Macio nella zona verde.
+  sillaba per sillaba, e tiene la voce di Macio (accento di Chieti) nella
+  zona verde.
   Prende il posto del cantante con chitarra. Da fare: a fine serata il
   **carico del furgone**, un minigioco puzzle unico nel suo genere, da
   provare. Design in `docs/livello1-festa-scuola.md`.

@@ -1,14 +1,14 @@
 """La voce di Macio per il karaoke (karaoke.html): una voce italiana maschile
 sintetica (Piper it_IT-riccardo, via sherpa-onnx) dice ogni sillaba con
-l'accento barese, il vocoder WORLD la fa cantare ogni
+l'accento di Chieti, il vocoder WORLD la fa cantare ogni
 sillaba sulla sua nota, lunga quanto la nota (un'ottava sotto la melodia,
-con vibrato, e stonata dove Macio stona). Escono un mp3 con tutte le
+intonata giusta, con vibrato; dove Macio si gasa canta più forte). Escono un mp3 con tutte le
 sillabe una dopo l'altra e karaoke-voce.js con l'mp3 in base64 e dove sta
 ogni sillaba.
 
 Uso:  python3 strumenti/voce-macio.py canzone.json cartella-del-modello
   canzone.json: le note di karaoke.html (window.__karaoke.notes, beat,
-  stona), vedi tests/karaoke.js per come aprire la pagina.
+  urla), vedi tests/karaoke.js per come aprire la pagina.
   cartella-del-modello: vits-piper-it_IT-riccardo-x_low scompattato, da
   github.com/k2-fsa/sherpa-onnx/releases/download/tts-models/
 Richiede: numpy, pyworld, sherpa-onnx, soundfile, ffmpeg."""
@@ -19,31 +19,28 @@ song = json.load(open(sys.argv[1]))
 mdir = sys.argv[2]
 OUT_JS = os.path.join(os.path.dirname(__file__), '..', 'karaoke-voce.js')
 
-# l'accento barese, non il dialetto: la «a» accentata si apre verso la «è»
-# («Bèri»), le doppie si sentono di più. Ogni verso come lo dice Macio.
-BARESE = {
-  'Gerry ha spento tutto quanto': 'Gèrri ha spènto tùtto quènto',
-  'e il digei è già sul bus': 'e il digèi è gè sul bùss',
-  'la palestra aspetta un canto': 'la palèstra aspètta un cènto',
-  'passami il microfono!': 'pèssami il micròfono!',
-  'Salviamo la serata': 'Salvièmo la serèta',
-  'Cantate insieme a me': 'Cantète insième a mè',
-  'anche se sono stonato': 'ènche se sòno stonèto',
-  'stasera la star è me!': 'stasèra la stèr è mè!',
-  'stasera la star è meee!': 'stasèra la stèr è mèèè!',
-  'Ho scaricato il furgone': 'Ho scarichèto il furgòne',
-  'ho portato su il baule': 'ho portèto su il baùle',
-  'ora canto la canzone': 'òra cènto la canzòne',
-  'con la voce di un maiale': 'con la vòce di un maièle',
+# l'accento di Chieti, non il dialetto: dopo la «n» la «t» diventa «d»
+# («quando», «cando»), la «c» dura diventa «g» («anghe») e la «s» diventa «z»
+# («inzieme»); le vocali accentate aperte. Ogni verso come lo dice Macio.
+ACCENTO = {
+  'Gerry ha spento tutto quanto': 'Gèrry ha spèndo tutto quando',
+  'la palestra aspetta un canto': 'la palèstra aspètta un cando',
+  'passami il microfono!': 'pàssami il micròfono!',
+  'Cantate insieme a me': 'Candate inzième a me',
+  'anche se sono stonato': 'anghe se sono stonato',
+  'stasera la star è me!': 'stasèra la star è me!',
+  'stasera la star è meee!': 'stasèra la star è me!',
+  'ora canto la canzone': 'òra cando la canzone',
+  'con la voce di un maiale': 'con la voce di un maiale',
 }
 # le frasi parlate (intro, sbagli, fine)
 PARLATO = {
-  'prova': 'Pròva... pròva... si sènte?',
-  'scritta': "Questa l'ho scrìtta adèsso!",
-  'testo': 'Tècnico, mèndami il tèsto!',
+  'prova': 'Pròva... pròva... si sènde?',
+  'scritta': "Questa l'ho scritta adèsso!",
+  'testo': 'Tècnico, mandami il tèsto!',
   'ehm': 'Ehm...',
-  'fiato': 'Mi è finìto il fièto!',
-  'grazie': 'Gràzie palèstra! Uè!',
+  'fiato': 'Mi è finito il fiato!',
+  'grazie': 'Grazie a tutti, vajù!',
 }
 
 tts = sherpa_onnx.OfflineTts(sherpa_onnx.OfflineTtsConfig(model=sherpa_onnx.OfflineTtsModelConfig(
@@ -108,47 +105,65 @@ def sing (f0, sp, ap, a, b, peak, midi, dur, sr):
   voiced = f0[idx] > 0
   hz = 440 * 2 ** ((midi - 69) / 12)
   tt = np.arange(len(idx)) * FP / 1000
-  vib = 1 + 0.018 * np.sin(2 * np.pi * 5.3 * tt) * np.clip((tt - 0.25) / 0.3, 0, 1)
-  glide = 2 ** (-0.6 * np.exp(-tt / 0.05) / 12)          # entra da sotto, come si canta
-  nf0 = np.where(voiced, hz * vib * glide, 0.0)
+  vib = 1 + 0.012 * np.sin(2 * np.pi * 5.3 * tt) * np.clip((tt - 0.25) / 0.3, 0, 1)
+  nf0 = np.where(voiced, hz * vib, 0.0)
   y = pw.synthesize(np.ascontiguousarray(nf0), np.ascontiguousarray(sp[idx]), np.ascontiguousarray(ap[idx]), sr, FP)
   fade = min(len(y), int(sr * 0.03))
   y[-fade:] *= np.linspace(1, 0, fade)
   y[:int(sr * 0.004)] *= np.linspace(0, 1, int(sr * 0.004))
   return y
 
-def stona_at (t):
-  for a, b, s in song['stona']:
-    if a * song['beat'] * 4 <= t < b * song['beat'] * 4: return s
-  return 0
+def forte_at (t):
+  """Dove Macio si gasa e urla nel microfono: due volte più forte."""
+  for a, b, *_ in song['urla']:
+    if a * song['beat'] * 4 <= t < b * song['beat'] * 4: return 2.0
+  return 1.0
 
 clips, pieces, pos, SR = {}, [], 0, None
-def add (key, y, sr):
+def add (key, y, sr, norm=True):
+  """Un pezzo in fila agli altri. Le frasi parlate si normalizzano da sole;
+  le sillabe cantate tutte insieme, così resta la differenza del forte."""
   global pos, SR
   SR = SR or sr
-  y = y / max(1e-6, np.abs(y).max()) * 0.8
+  if norm: y = y / max(1e-6, np.abs(y).max()) * 0.6
   clips[key] = [round(pos / sr, 4), round(len(y) / sr, 4)]
   pieces.append(y); pieces.append(np.zeros(int(sr * 0.05)))
   pos += len(y) + int(sr * 0.05)
+
+def trim (x, sr):
+  """Via il silenzio prima e dopo."""
+  w = int(sr * 0.01)
+  en = np.array([np.abs(x[i:i + w]).max() for i in range(0, len(x) - w, w)])
+  on = np.where(en > en.max() * 0.06)[0]
+  a, b = (on[0], on[-1] + 1) if len(on) else (0, len(en))
+  return x[max(0, a * w - w):min(len(x), b * w + w)]
 
 lines = {}
 for n in song['notes']: lines.setdefault(n['line'], []).append(n)
 for li, ns in sorted(lines.items()):
   # il verso detto tutto di fila (suona naturale), poi diviso nelle sue sillabe
   text = ''.join(n['text'] for n in ns).strip()
-  x, sr = say(BARESE.get(text, text), SPEED)
+  x, sr = say(ACCENTO.get(text, text), SPEED)
   f0, sp, ap = analyze(x, sr)
   bounds, peaks = nuclei(sp, f0, len(ns))
   for k, n in enumerate(ns):
     dur = n['len'] if n['hold'] else min(n['len'], song['beat'] * 0.9)
-    y = sing(f0, sp, ap, bounds[k], bounds[k + 1], peaks[k], n['midi'] - 12 + stona_at(n['t']), dur, sr)
-    add(n['i'], y, sr)
-  print('verso', li, text, '->', BARESE.get(text, text))
+    if (f0[bounds[k]:bounds[k + 1]] > 0).sum() >= 8:
+      y = sing(f0, sp, ap, bounds[k], bounds[k + 1], peaks[k], n['midi'] - 12, dur, sr)
+    else:
+      # il taglio ha preso solo consonanti: la sillaba si dice da sola
+      x1 = trim(say(n['text'].strip(), SPEED)[0], sr)
+      g0, gs, ga = analyze(x1, sr)
+      vi = np.where(g0 > 0)[0]
+      y = sing(g0, gs, ga, 0, len(g0), int(vi[0]) + 2 if len(vi) else 0, n['midi'] - 12, dur, sr)
+    add(n['i'], y / max(1e-6, np.abs(y).max()) * 0.45 * forte_at(n['t']), sr, False)
+  print('verso', li, text, '->', ACCENTO.get(text, text))
 for k, text in PARLATO.items():
   x, sr = say(text, 0.95)
   add(k, x, sr)
 
 audio = np.concatenate(pieces)
+audio = audio / max(1e-6, np.abs(audio).max()) * 0.95
 with tempfile.TemporaryDirectory() as d:
   import soundfile as sf
   wav, mp3 = os.path.join(d, 'v.wav'), os.path.join(d, 'v.mp3')

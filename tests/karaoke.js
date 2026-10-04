@@ -3,7 +3,7 @@
    testo che si legge giusto), poi gioca con un orologio finto:
    - la demo arriva in fondo con tutte le sillabe, voce sempre nel verde,
      niente larsen, cinque stelle;
-   - la zona verde scende un tempo prima che Macio stoni e risale dopo;
+   - la zona verde scende un tempo prima che Macio urli e risale dopo;
      quando va verso una cassa scende la zona rossa e, a voce alta, parte
      il larsen (una volta, poi c'è un attimo di tregua);
    - chi non tocca niente perde tutte le sillabe e il pubblico;
@@ -62,12 +62,12 @@ const path = require('path');
 
   // ---- le zone ----
   const z = await ev(() => {
-    const K = __karaoke, B = K.bar, BEAT = K.beat, [a, , ] = K.stona[1], [wa] = K.walk[0];
+    const K = __karaoke, B = K.bar, BEAT = K.beat, [a, , ] = K.urla[1], [wa] = K.walk[0];
     const zt = t => K.zoneTarget(t);
     return { tune: zt(5 * B), before: zt(a * B - BEAT * 0.5), off: zt(a * B + 0.5), walk: zt(wa * B + 1), walkFree: zt(4 * B) };
   });
-  check(z.tune.lo > 0.5 && z.off.hi < 0.45, 'zona verde: intonato ' + JSON.stringify(z.tune) + ', stonato ' + JSON.stringify(z.off));
-  check(z.before.hi < 0.45, 'la zona non scende un tempo prima che Macio stoni: ' + JSON.stringify(z.before));
+  check(z.tune.lo > 0.5 && z.off.hi < 0.45, 'zona verde: normale ' + JSON.stringify(z.tune) + ', urla ' + JSON.stringify(z.off));
+  check(z.before.hi < 0.45, 'la zona non scende un tempo prima che Macio urli: ' + JSON.stringify(z.before));
   check(z.walk.red < 0.6 && z.walkFree.red > 0.9 && z.walk.hi < z.walk.red, 'zona rossa del larsen: ' + JSON.stringify(z));
 
   // ---- chi non tocca niente ----

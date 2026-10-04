@@ -8,7 +8,7 @@
      il DJ e Macio, il collega dello scarico, salva la serata cantando una
      canzone scritta lì per lì. Non c'è un programma di karaoke: il testo lo
      manda avanti il tecnico, sillaba per sillaba a tempo, e intanto tiene la
-     voce di Macio nella zona verde (quando stona si abbassa e canta il
+     voce di Macio nella zona verde (quando si gasa e urla si abbassa e canta il
      pubblico, quando va verso le casse c'è il larsen). Stessi colori e
      caratteri del gioco. Nel gioco si apre in un iframe con ?embed=1. */
   :root{
@@ -222,8 +222,8 @@
         <path id="bub-bg" d="M0 0" fill="#f4f1ea" stroke="#141519" stroke-width="1.5"/>
         <text id="bub-t" font-family="Inter, sans-serif" font-size="9" font-weight="700" fill="#141519" text-anchor="middle"></text>
       </g>
-      <!-- note stonate che escono dalla bocca -->
-      <g id="notes-off" opacity="0" font-size="14" font-weight="700" fill="#e0503f" font-family="Inter, sans-serif"><text id="off-1">♭</text><text id="off-2">♯</text></g>
+      <!-- quando si gasa urla: i segni che escono dalla bocca -->
+      <g id="notes-off" opacity="0" font-size="14" font-weight="700" fill="#e0503f" font-family="Inter, sans-serif"><text id="off-1">!!</text><text id="off-2">♪</text></g>
       <!-- Gerry alla fine, dalla porta -->
       <g id="gerry-g" transform="translate(430 70)"><svg width="58" height="81" viewBox="0 0 100 140" overflow="visible"><use href="#gerry"/></svg></g>
       <rect x="0" y="150" width="400" height="12" fill="#2b2320"/>
@@ -260,7 +260,7 @@
     <p>Gerry ha cacciato il DJ e la palestra fischia. Macio, il collega dello scarico, prende il microfono: «Ci penso io!». La canzone l'ha scritta adesso su un tovagliolo e non c'è un programma di karaoke: il testo sul portatile lo mandi avanti tu, a mano.</p>
     <ul>
       <li>Tocca <b>AVANTI</b> quando la sillaba arriva sulla riga: Macio canta quella. Le sillabe lunghe <b>tienile premute</b>.</li>
-      <li>Macio è <b>stonato</b>. Tieni la sua voce nella <b>zona verde</b>: quando stona la zona scende, abbassalo e lascia cantare il pubblico.</li>
+      <li>Tieni la voce di Macio nella <b>zona verde</b>. Quando si gasa <b>urla</b> nel microfono: la zona scende, abbassalo e lascia cantare il pubblico.</li>
       <li>Se va verso le casse scende la <b>zona rossa</b>: lì sopra c'è il <b>larsen</b>.</li>
       <li>Tastiera: <b>Spazio</b> per avanti, <b>↑ ↓</b> per la voce, B per la birra.</li>
     </ul>
@@ -345,11 +345,12 @@
   const VOWEL = s => { const m = s.toLowerCase().match(/[aeiouèé](?=[^aeiouèé]*$)/); return m ? m[0].replace(/[èé]/, 'e') : 'a'; };
   const GIBBERISH = ['ehm', 'boh', 'na', 'uh', 'mmh', 'là'];
 
-  /* Quando Macio stona (battute, semitoni): la zona verde scende un tempo prima.
+  /* Quando Macio si gasa e urla nel microfono (battute): la zona verde scende
+     un tempo prima. La voce resta intonata, solo più forte.
      Quando va verso una cassa: scende la zona rossa del larsen. */
-  const STONA = [[7, 8.5, 1.2], [18.4, 20, 1.8], [24.5, 27, -1.4], [34.2, 37, 2]];
+  const URLA = [[7, 8.5], [18.4, 20], [24.5, 27], [34.2, 37]];
   const WALK = [[14, 16.5, 1], [29, 31.5, -1]];       // 1 = verso la cassa di destra
-  const ZONE_TUNE = [0.58, 0.84], ZONE_OFF = [0.18, 0.40], RED_FREE = 0.95, RED_WALK = 0.55;
+  const ZONE_TUNE = [0.58, 0.84], ZONE_LOUD = [0.18, 0.40], RED_FREE = 0.95, RED_WALK = 0.55;
   const PERFECT0 = 0.08, GOOD0 = 0.16;
   const REPS = { base: 5, larsen: -3 };
   const BUBBLES = [[-1.6, 'Prova… prova… si sente?', 2.4, 'prova'], [1.2, 'Questa l\'ho scritta adesso!', 2.6, 'scritta'], [4.6, 'Tecnico, mandami il testo!', 2.6, 'testo']];
@@ -387,7 +388,7 @@
       fader: 0.5, zlo: ZONE_TUNE[0], zhi: ZONE_TUNE[1], red: RED_FREE,
       inZone: 0, voiceTime: 0, lowTime: 0, highTime: 0,
       over_red: 0, larsens: 0, larsenCool: 0, larsenOn: 0, repParts: [],
-      off: 0, macioX: 169, mouth: 0, bub: null, sec: null, phones: 0, end: null
+      loud: 0, macioX: 169, mouth: 0, bub: null, sec: null, phones: 0, end: null
     };
   }
   const k = () => diff === 'facile' ? 1.35 : 1;
@@ -395,12 +396,12 @@
   const windows = () => { const f = (1 - S.fatigue / 250) * k(); return [PERFECT0 * f, GOOD0 * f]; };
 
   /* ---------- la zona verde e quella rossa ---------- */
-  // quanto stona Macio adesso (semitoni): i tratti scritti più un po' di deriva
-  const offAt = t => { const s = inSeg(STONA, t); return s ? s[2] : 0; };
+  // Macio urla adesso? (1 sì, 0 no)
+  const loudAt = t => inSeg(URLA, t) ? 1 : 0;
   function zoneTarget (t) {
     const ahead = t + BEAT;               // la zona si muove un tempo prima: si vede arrivare
-    const off = inSeg(STONA, ahead) || inSeg(STONA, t);
-    let [lo, hi] = off ? ZONE_OFF : ZONE_TUNE;
+    const loud = inSeg(URLA, ahead) || inSeg(URLA, t);
+    let [lo, hi] = loud ? ZONE_LOUD : ZONE_TUNE;
     const walk = inSeg(WALK, ahead) || inSeg(WALK, t);
     const red = walk ? RED_WALK : RED_FREE;
     if (hi > red - 0.03) { hi = red - 0.03; lo = Math.min(lo, hi - 0.2); }
@@ -464,7 +465,7 @@
         const d = ac.createDelay(0.3), dg = ac.createGain(); d.delayTime.value = 0.11; dg.gain.value = 0.18; g.connect(d).connect(dg).connect(bus === 'out' ? out : voiceBus);
         g.gain.setValueAtTime(0.9, t0);
         src.start(t0, at, dur);
-        return { stop () { const t = ac.currentTime; g.gain.cancelScheduledValues(t); g.gain.setValueAtTime(g.gain.value, t); g.gain.linearRampToValueAtTime(0, t + 0.06); try { src.stop(t + 0.07); } catch (e) {} }, bend () {} };
+        return { stop () { const t = ac.currentTime; g.gain.cancelScheduledValues(t); g.gain.setValueAtTime(g.gain.value, t); g.gain.linearRampToValueAtTime(0, t + 0.06); try { src.stop(t + 0.07); } catch (e) {} } };
       },
       now () { return ac ? ac.currentTime : 0; },
       suspend () { if (ac) ac.suspend().catch(() => {}); },
@@ -489,7 +490,7 @@
         g.gain.setValueAtTime(0.0001, t0); g.gain.exponentialRampToValueAtTime(0.5, t0 + 0.03);
         const stop = (when) => { const t = Math.max(ac.currentTime, when || 0); g.gain.cancelScheduledValues(t); g.gain.setValueAtTime(g.gain.value || 0.5, t); g.gain.exponentialRampToValueAtTime(0.0001, t + 0.09); os.forEach(o => o.stop(t + 0.12)); lfo.stop(t + 0.12); };
         if (dur) stop(t0 + dur);
-        return { stop: () => stop(0), bend (m) { os.forEach(o => o.frequency.setTargetAtTime(hz(m), ac.currentTime, 0.05)); } };
+        return { stop: () => stop(0) };
       },
       // il pubblico che canta: tante voci, un'ottava sotto e all'unisono
       chorus (midi, dur) {
@@ -551,13 +552,13 @@
     S.macioX += (goal - S.macioX) * Math.min(1, 0.03 + (S.running ? 0.02 : 0));
     const bob = S.running && t > 0 && !S.end ? Math.sin(t / BEAT * Math.PI) * 1.5 : 0;
     $('#macio-g').setAttribute('transform', `translate(${S.macioX.toFixed(1)} ${(62 + bob).toFixed(1)})`);
-    // la bocca: aperta quando canta, a «o» quando stona
+    // la bocca: aperta quando canta, spalancata quando urla
     S.mouth = Math.max(0, S.mouth - 0.08);
     const m = S.voice ? 1 : S.mouth;
-    $('#mouth').setAttribute('ry', (1.2 + m * 5).toFixed(2));
-    $('#mouth').setAttribute('rx', (8 - m * (Math.abs(S.off) > 0.5 ? 3 : 1.5)).toFixed(2));
-    $('#sweat').setAttribute('opacity', Math.abs(S.off) > 0.5 || S.larsenOn > 0 ? 1 : 0);
-    const offVis = Math.abs(S.off) > 0.5 && (S.voice || S.mouth > 0.3);
+    $('#mouth').setAttribute('ry', (1.2 + m * (S.loud ? 7 : 5)).toFixed(2));
+    $('#mouth').setAttribute('rx', (8 - m * 1.5).toFixed(2));
+    $('#sweat').setAttribute('opacity', S.loud || S.larsenOn > 0 ? 1 : 0);
+    const offVis = S.loud && (S.voice || S.mouth > 0.3);
     $('#notes-off').setAttribute('opacity', offVis ? 0.95 : 0);
     if (offVis) {
       const ph = (t * 1.3) % 1;
@@ -579,7 +580,7 @@
       $('#bub-bg').setAttribute('d', `M${x - w / 2} ${y - 11} h${w} a6 6 0 0 1 6 6 v10 a6 6 0 0 1 -6 6 h${-w / 2 + 6} l-6 8 v-8 h${-w / 2} a6 6 0 0 1 -6 -6 v-10 a6 6 0 0 1 6 -6 z`);
       $('#bub-t').setAttribute('x', x + 3); $('#bub-t').setAttribute('y', y + 3); $('#bub-t').textContent = b.text;
     }
-    // il pubblico: salta al ritornello, si tappa le orecchie quando stona forte,
+    // il pubblico: salta al ritornello, si tappa le orecchie quando urla troppo forte,
     // telefoni accesi nel ritornello finale
     const ears = S.highTimeNow, sing = sectionAt(t) === 'RITORNELLO' && S.grad >= 45;
     people.forEach((o, i) => {
@@ -686,9 +687,8 @@
   function breakCombo () { S.combo = 0; S.mult = 1; }
   function sing (n, dur) {
     if (S.voice) S.voice.stop();
-    // la voce vera (già intonata, o stonata dove Macio stona); se non c'è, il suono sintetico
-    S.voice = (audio.voice ? audio.clip(n.i) : audio.sing(n.midi, S.off, n.vowel, dur)) || null;
-    S.voiceMidi = n.midi;
+    // la voce vera (già intonata, più forte dove urla); se non c'è, il suono sintetico
+    S.voice = (audio.voice ? audio.clip(n.i) : audio.sing(n.midi, 0, n.vowel, dur)) || null;
     S.mouth = 1;
     if (dur && S.voice) { const v = S.voice; setTimeout(() => { if (S.voice === v) S.voice = null; }, dur * 1000); }
   }
@@ -790,8 +790,7 @@
     // la zona si sposta morbida verso dove deve andare
     const z = zoneTarget(t), r = Math.min(1, dt * 4);
     S.zlo += (z.lo - S.zlo) * r; S.zhi += (z.hi - S.zhi) * r; S.red += (z.red - S.red) * r;
-    S.off = offAt(t) + Math.sin(t * 0.9) * 0.15;
-    if (S.voice) S.voice.bend(S.voiceMidi + S.off);
+    S.loud = loudAt(t);
     if (S.auto) autoplay(t);
     const [, GOOD] = windows();
     for (const n of S.notes) {
@@ -807,7 +806,7 @@
     S.highTimeNow = false;
     if (voc && t > 0) {
       S.voiceTime += dt;
-      const off = Math.abs(S.off) > 0.5;
+      const off = S.loud;
       if (S.fader >= S.zlo - 0.02 && S.fader <= S.zhi + 0.02) { S.inZone += dt; S.grad = clamp(S.grad + dt * 0.8); }
       else if (S.fader < S.zlo) { S.lowTime += dt; S.grad = clamp(S.grad - dt * 1.6); }
       else { S.highTime += dt; S.grad = clamp(S.grad - dt * (off ? 2.4 : 1.2)); S.highTimeNow = off; }
@@ -833,7 +832,7 @@
     if (!S.end && t >= LINES[LINES.length - 1].t1 + BEAT) {
       S.end = { t };
       audio.cheer(2.5);
-      bubble('Grazie palestra! Uè!', 2.5, 'grazie');
+      bubble('Grazie a tutti, vajù!', 2.5, 'grazie');
       if (S.grad >= 45) toast('MA-CIO! MA-CIO! La palestra canta con lui.', 'ok'); else toast('Qualche applauso, qualcuno è già al bar.');
     }
     if (S.end && t >= S.end.t + 3.5) { finish(); }
@@ -960,7 +959,7 @@
   resize(); paint();
   // per i test (tests/karaoke.js, tests/karaoke-gioco.js): orologio finto, stato e comandi
   window.__karaoke = {
-    state: () => S, notes: NOTES, lines: LINES, beat: BEAT, bar: BAR, dur: DUR, stona: STONA, walk: WALK,
+    state: () => S, notes: NOTES, lines: LINES, beat: BEAT, bar: BAR, dur: DUR, urla: URLA, walk: WALK,
     start, press, release, setFader, drinkBeer, results, result: () => result, windows, zoneTarget, togglePause,
     virtual (on) { clock.virtual = on; },
     advance (sec, fps = 60) {
