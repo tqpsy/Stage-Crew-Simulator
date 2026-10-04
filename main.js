@@ -2332,11 +2332,14 @@ let gameActive = false;
 function freshStats () { return { playMs: 0, tests: 0, failedTests: 0 }; }
 gameState.stats = freshStats();
 
+// un cavo senza la linea disegnata (_pts), che si ricalcola: non va salvata
+function edgeData (e) { const { _pts, ...rest } = e; return rest; }
+
 function saveLevel () {
   if (!gameActive) return;
   Profile.data.level = {
     id: LEVEL_ID,
-    placed: gameState.placed, edges: gameState.edges, stock: gameState.stock,
+    placed: gameState.placed, edges: gameState.edges.map(edgeData), stock: gameState.stock,
     nextIndex: gameState.nextIndex, edgeSeq: gameState.edgeSeq,
     trips: gameState.trips || 0, rcdTrips: gameState.rcdTrips || 0,
     procErrors: gameState.procErrors || [], stats: gameState.stats,
@@ -5509,6 +5512,8 @@ const ORIGIN_Y = Math.round((GAME_H - (VENUE_W + VENUE_H) * TILE_H / 2) / 2);
 
 const ZOOM_MIN = 0.5, ZOOM_MAX = 4;
 const DEFAULT_ZOOM = 1.05;
+// passi di Annulla tenuti in memoria (ogni passo è una fotografia di tutto il montaggio)
+const HISTORY_MAX = 200;
 // pixel di schermo per unità di mondo a cui si avvicina la scena quando un
 // tocco cade in mezzo a più dispositivi (su telefono a zoom base è ≈ 0,3)
 const CROWD_SCALE = 0.6;
@@ -5583,6 +5588,25 @@ function footCells (gx, gy, f) {
 function compCenter (c) {
   const f = c.foot || [1, 1];
   return { gx: c.gx + f[0] * CELL / 2, gy: c.gy + f[1] * CELL / 2 };
+}
+// il quadro della palestra è appeso alla parete dietro al palco
+function allaccioPos () { return gridToScreen(3.3, CARICO_ROWS + 0.25); }
+/* le coordinate di schermo dei pezzi dipendono dall'altezza del canvas, misurata
+   all'apertura della pagina (telefono dritto o girato, finestra del computer):
+   una partita salvata con un'altra misura le ha spostate, quindi alla ripresa
+   si rifanno dalla griglia (pezzi a terra), dalla parete (quadro della palestra)
+   e dalla base (pezzi montati, anche uno sopra l'altro) */
+function alignScreens (placed) {
+  Object.values(placed).forEach(c => {
+    if (c.type === 'allaccio') c.screen = allaccioPos();
+    else if (c.gx != null) { const m = compCenter(c); c.screen = gridToScreen(m.gx, m.gy); }
+  });
+  for (let pass = 0; pass < 3; pass++) {
+    Object.values(placed).forEach(c => {
+      const m = MOUNTS[c.type], base = m && placed[c[m.back]];
+      if (base && base.screen) c.screen = { x: base.screen.x + (m.offsetX ? m.offsetX() : 0), y: base.screen.y + m.offsetY() };
+    });
+  }
 }
 
 function isStageCoreCell (cx, cy) {
@@ -6625,8 +6649,7 @@ class StageScene extends Phaser.Scene {
   }
 
   drawAllaccio () {
-    // il quadro della palestra è appeso alla parete dietro al palco
-    const pos = gridToScreen(3.3, CARICO_ROWS + 0.25);
+    const pos = allaccioPos();
     const def = COMPONENT_TYPES.allaccio;
     const visual = this.buildComponentVisual('allaccio', def, pos.x, pos.y);
     this.compVisuals['allaccio'] = visual;
@@ -9227,6 +9250,8 @@ class StageScene extends Phaser.Scene {
 
   /* ---------------- reset ---------------- */
   resetLevel (quiet) {
+    // giro e conti di prima: un Annulla subito dopo il reset li rimette
+    const before = { giro: gameState.giro || 0, giroFails: (gameState.giroFails || [0, 0, 0]).slice(), stats: { ...freshStats(), ...gameState.stats }, trips: gameState.trips || 0, rcdTrips: gameState.rcdTrips || 0, procErrors: (gameState.procErrors || []).slice() };
     this.stopFx();
     this.clearEdgeSelection();
     this.clearMoveSelection();
@@ -9264,6 +9289,15 @@ class StageScene extends Phaser.Scene {
     this.updateQuadroVisual();
     if (!quiet) showToast('Livello resettato.');
     this.pushHistory();
+    this.history[this.historyIndex].resetFrom = before;
+  }
+  // giro e conti che un reset azzera: tornano con l'Annulla, si riazzerano col Ripeti
+  applyResetCounters (c) {
+    gameState.giro = c.giro; gameState.giroFails = c.giroFails.slice();
+    gameState.stats = { ...c.stats };
+    gameState.trips = c.trips; gameState.rcdTrips = c.rcdTrips; gameState.procErrors = c.procErrors.slice();
+    updateGiroUI();
+    saveLevel();
   }
 
   /* ---------------- cronologia: indietro/avanti tramite snapshot dello stato ----------------
@@ -9274,11 +9308,13 @@ class StageScene extends Phaser.Scene {
     this.history = (this.history || []).slice(0, this.historyIndex + 1);
     this.history.push({
       placed: JSON.parse(JSON.stringify(gameState.placed)),
-      edges: JSON.parse(JSON.stringify(gameState.edges)),
+      edges: JSON.parse(JSON.stringify(gameState.edges.map(edgeData))),
       stock: { ...gameState.stock },
       nextIndex: { ...gameState.nextIndex },
       edgeSeq: gameState.edgeSeq
     });
+    // gli ultimi HISTORY_MAX passi bastano: la memoria non cresce per tutta la partita
+    if (this.history.length > HISTORY_MAX) this.history.splice(0, this.history.length - HISTORY_MAX);
     this.historyIndex = this.history.length - 1;
     this.updateHistoryButtons();
     saveLevel();
@@ -9286,14 +9322,18 @@ class StageScene extends Phaser.Scene {
 
   undo () {
     if (this.historyIndex <= 0) return;
+    const from = this.history[this.historyIndex];
     this.historyIndex--;
     this.restoreSnapshot(this.history[this.historyIndex]);
+    if (from.resetFrom) this.applyResetCounters(from.resetFrom);
   }
 
   redo () {
     if (this.historyIndex >= this.history.length - 1) return;
     this.historyIndex++;
-    this.restoreSnapshot(this.history[this.historyIndex]);
+    const to = this.history[this.historyIndex];
+    this.restoreSnapshot(to);
+    if (to.resetFrom) this.applyResetCounters({ giro: 0, giroFails: [0, 0, 0], stats: freshStats(), trips: 0, rcdTrips: 0, procErrors: [] });
   }
 
   restoreSnapshot (snap) {
@@ -9308,6 +9348,7 @@ class StageScene extends Phaser.Scene {
     this.occupied = {}; this.blockSceneryCells();
 
     gameState.placed = JSON.parse(JSON.stringify(snap.placed));
+    alignScreens(gameState.placed);
     gameState.edges = JSON.parse(JSON.stringify(snap.edges));
     gameState.stock = { ...snap.stock };
     // partita salvata prima di un pezzo nuovo (es. il tavolo regia): la sua
