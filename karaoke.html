@@ -294,6 +294,8 @@
   </div>
 </div>
 
+<!-- la voce di Macio (sillabe cantate e frasi parlate): se manca, canta il suono sintetico -->
+<script src="karaoke-voce.js"></script>
 <script>
 (() => {
   const $ = s => document.querySelector(s);
@@ -350,7 +352,7 @@
   const ZONE_TUNE = [0.58, 0.84], ZONE_OFF = [0.18, 0.40], RED_FREE = 0.95, RED_WALK = 0.55;
   const PERFECT0 = 0.08, GOOD0 = 0.16;
   const REPS = { base: 5, larsen: -3 };
-  const BUBBLES = [[-1.6, 'Prova… prova… si sente?', 2.4], [1.2, 'Questa l\'ho scritta adesso!', 2.6], [4.6, 'Tecnico, mandami il testo!', 2.6]];
+  const BUBBLES = [[-1.6, 'Prova… prova… si sente?', 2.4, 'prova'], [1.2, 'Questa l\'ho scritta adesso!', 2.6, 'scritta'], [4.6, 'Tecnico, mandami il testo!', 2.6, 'testo']];
 
   const NOTES = [], LINES = [];
   VERSI.forEach(([bar, syl, durs, degs], li) => {
@@ -408,7 +410,8 @@
 
   /* ---------- audio: la base suonata dal codice, la voce di Macio, il pubblico ---------- */
   const audio = (() => {
-    let ac = null, out, music, voiceBus, crowdBus, larsenG, noiseBuf, sched = 0;
+    let ac = null, out, music, voiceBus, crowdBus, larsenG, noiseBuf, sched = 0, voiceBuf = null;
+    const VOCE = window.MACIO_VOCE || null;
     const hz = m => 440 * Math.pow(2, (m - 69) / 12);
     const FORM = { a: [800, 1200], e: [500, 1800], i: [320, 2300], o: [500, 900], u: [350, 700] };
     function env (g, t0, a, peak, d) { g.gain.setValueAtTime(0.0001, t0); g.gain.exponentialRampToValueAtTime(peak, t0 + a); g.gain.exponentialRampToValueAtTime(0.0001, t0 + d); }
@@ -441,6 +444,27 @@
         const d = noiseBuf.getChannelData(0); for (let i = 0; i < d.length; i++) d[i] = Math.random() * 2 - 1;
         // il larsen: un fischio che c'è sempre, a volume zero finché non serve
         const lo = ac.createOscillator(); lo.frequency.value = 2750; larsenG = ac.createGain(); larsenG.gain.value = 0; lo.connect(larsenG).connect(out); lo.start();
+        // la voce di Macio: l'mp3 in base64 di karaoke-voce.js
+        if (VOCE && VOCE.mp3) {
+          try {
+            const bin = atob(VOCE.mp3), buf = new Uint8Array(bin.length);
+            for (let i = 0; i < bin.length; i++) buf[i] = bin.charCodeAt(i);
+            ac.decodeAudioData(buf.buffer).then(b => { voiceBuf = b; }).catch(() => {});
+          } catch (e) { /* si canta col suono sintetico */ }
+        }
+      },
+      get voice () { return !!voiceBuf; },
+      // un pezzo della voce di Macio (una sillaba cantata o una frase), con
+      // un attimo di riverbero finto (un'eco corta e bassa)
+      clip (key, bus) {
+        if (!ac || !voiceBuf || !VOCE.clips[key]) return null;
+        const [at, dur] = VOCE.clips[key], t0 = ac.currentTime;
+        const src = ac.createBufferSource(), g = ac.createGain();
+        src.buffer = voiceBuf; src.connect(g).connect(bus === 'out' ? out : voiceBus);
+        const d = ac.createDelay(0.3), dg = ac.createGain(); d.delayTime.value = 0.11; dg.gain.value = 0.18; g.connect(d).connect(dg).connect(bus === 'out' ? out : voiceBus);
+        g.gain.setValueAtTime(0.9, t0);
+        src.start(t0, at, dur);
+        return { stop () { const t = ac.currentTime; g.gain.cancelScheduledValues(t); g.gain.setValueAtTime(g.gain.value, t); g.gain.linearRampToValueAtTime(0, t + 0.06); try { src.stop(t + 0.07); } catch (e) {} }, bend () {} };
       },
       now () { return ac ? ac.currentTime : 0; },
       suspend () { if (ac) ac.suspend().catch(() => {}); },
@@ -514,7 +538,11 @@
     people.push({ g, arms, phone, x, y, keen: Math.random(), sway: rnd(0, 6) });
   }
   const MACIO_HOME = 169;
-  function bubble (text, dur) { S.bub = { text, until: S.t + (dur || 1.6) }; }
+  function bubble (text, dur, say) {
+    S.bub = { text, until: S.t + (dur || 1.6) };
+    // la frase detta da Macio (con la voce vera), non troppo spesso
+    if (say && S.t - (S.saidAt || -9) > 1.5) { S.saidAt = S.t; audio.clip(say, 'out'); }
+  }
   function drawStage () {
     const t = S.t;
     // Macio va verso una cassa e torna
@@ -658,7 +686,8 @@
   function breakCombo () { S.combo = 0; S.mult = 1; }
   function sing (n, dur) {
     if (S.voice) S.voice.stop();
-    S.voice = audio.sing(n.midi, S.off, n.vowel, dur) || null;
+    // la voce vera (già intonata, o stonata dove Macio stona); se non c'è, il suono sintetico
+    S.voice = (audio.voice ? audio.clip(n.i) : audio.sing(n.midi, S.off, n.vowel, dur)) || null;
     S.voiceMidi = n.midi;
     S.mouth = 1;
     if (dur && S.voice) { const v = S.voice; setTimeout(() => { if (S.voice === v) S.voice = null; }, dur * 1000); }
@@ -696,7 +725,7 @@
     if (S.voice) { S.voice.stop(); S.voice = null; }
     if (judgedNow() < n.end - BEAT * 0.25) {
       n.state = 'broken'; S.holdsBroken++; breakCombo(); S.grad = clamp(S.grad - 1.5);
-      judge('MOLLATA', '#e0503f'); bubble('Mi è finito il fiato!', 1.2);
+      judge('MOLLATA', '#e0503f'); bubble('Mi è finito il fiato!', 1.2, 'fiato');
     } else finishHold(n);
   }
   function finishHold (n) {
@@ -769,7 +798,7 @@
       if (n.t > t) break;
       if (n.state === 'wait' && t - n.t > GOOD) {
         n.state = 'miss'; n.gib = GIBBERISH[n.i % GIBBERISH.length]; S.miss++; breakCombo(); S.grad = clamp(S.grad - 1.5);
-        judge('PERSA', '#e0503f'); audio.mumble(); S.mouth = 0.6;
+        judge('PERSA', '#e0503f'); if (audio.voice) bubble('Ehm…', 1, 'ehm'); else audio.mumble(); S.mouth = 0.6;
       }
       if (n.state === 'holding' && t >= n.end) finishHold(n);
     }
@@ -800,11 +829,11 @@
     if (finale(t) && S.grad >= 50) S.phones = Math.min(1, S.phones + dt * 0.25);
     const crowd = sec === 'RITORNELLO' ? (S.grad / 100) * (0.35 + (1 - S.fader) * 0.5) * (finale(t) ? 1.4 : 1) : 0;
     audio.levels(0.2 + S.fader * 0.9, crowd, S.larsenOn * 0.18);
-    BUBBLES.forEach(b => { if (!b.shown && t >= b[0]) { b.shown = true; bubble(b[1], b[2]); } });
+    BUBBLES.forEach(b => { if (!b.shown && t >= b[0]) { b.shown = true; bubble(b[1], b[2], b[3]); } });
     if (!S.end && t >= LINES[LINES.length - 1].t1 + BEAT) {
       S.end = { t };
       audio.cheer(2.5);
-      bubble('Grazie palestraaa!', 2.5);
+      bubble('Grazie palestra! Uè!', 2.5, 'grazie');
       if (S.grad >= 45) toast('MA-CIO! MA-CIO! La palestra canta con lui.', 'ok'); else toast('Qualche applauso, qualcuno è già al bar.');
     }
     if (S.end && t >= S.end.t + 3.5) { finish(); }

@@ -425,8 +425,15 @@ che legge: se la sillaba non arriva in tempo si perde («ehm», «boh»).
 **La canzone**: «Salviamo la serata», testo e musica originali (niente
 diritti). 100 BPM, 38 battute (circa un minuto e mezzo): intro parlata,
 strofa, ritornello, seconda strofa, ritornello finale. La base (batteria,
-basso, accordi Do-Sol-La-Fa), la voce di Macio e il coro del pubblico sono
-suonati dal codice con Web Audio: niente file audio.
+basso, accordi Do-Sol-La-Fa) e il coro del pubblico sono suonati dal codice
+con Web Audio. La **voce di Macio** ha l'**accento barese** (non il
+dialetto: le «a» aperte, «Salvièmo la serèta»): una voce italiana maschile
+sintetica dice ogni verso e il vocoder WORLD fa cantare ogni sillaba sulla
+sua nota, un'ottava sotto, con vibrato, già stonata dove Macio stona. Dice
+anche le frasi dell'intro, «Ehm…» quando si perde una sillaba e «Grazie
+palestra! Uè!» alla fine. Sta in `karaoke-voce.js` (un mp3 in base64, così
+funziona anche aprendo `index.html` dal disco), generato da
+`strumenti/voce-macio.py`. Se manca, canta il suono sintetico.
 
 **Nel gioco**: finito il DJ set, il messaggio dice che Macio prende il
 microfono e il karaoke si apre da solo (o dal foglio, «Macio prende il
