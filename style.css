@@ -254,11 +254,13 @@
 
   /* notifica: una scheda discreta con un'icona, non un allarme.
      Il rosso resta solo per i guasti veri (classe .bad) */
+  /* in basso, sopra le barre del cavo in mano (bottom lo sposta placeToast):
+     in alto copriva il palco proprio mentre si collega */
   #toast{
     --toast-accent:#4aa3ff;
     position:absolute;
-    top:12px; left:50%;
-    transform:translate(-50%,-16px);
+    bottom:12px; left:50%;
+    transform:translate(-50%,16px);
     display:flex;
     align-items:flex-start;
     gap:10px;
@@ -288,6 +290,16 @@
     font:700 12px/20px var(--font-ui);
     text-align:center;
   }
+  #toast-msg{ flex:1 1 auto; align-self:center; }
+  /* la X resta l'unica parte toccabile: il resto lascia passare i tocchi */
+  #toast-x{
+    flex:0 0 28px; height:28px; margin:-4px -8px -4px 0;
+    background:none; border:none; border-radius:6px; padding:0;
+    color:var(--text-muted); font:400 20px/28px var(--font-ui); cursor:pointer;
+  }
+  #toast-x::before{ content:'\00d7'; }
+  #toast-x:hover{ color:var(--text-main); background:rgba(255,255,255,.08); }
+  #toast.show #toast-x{ pointer-events:auto; }
   #toast.show{ opacity:1; transform:translate(-50%,0); }
   #toast.ok{ --toast-accent:var(--green); }
   #toast.ok::before{ content:'\2713'; }
