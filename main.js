@@ -170,12 +170,12 @@ function tavoloSlotOffset (type) {
   return { x: q.x, y: q.y - TAVOLO_ITEM_Z[type] / 2 };
 }
 const CTRL_ISO  = isoFrame(56, 34, 10);   // consolle luci da tavolo, piano inclinato
-const QUADRO_ISO = isoFrame(140, 34, 46); // armadio di distribuzione su pattini, prese sul fronte b=B
-const QUADRO_PHASE_A = [62, 88, 114];     // posizione lungo il fronte di prese/interruttori L1-L3
+const QUADRO_ISO = isoFrame(112, 34, 46); // armadio di distribuzione su pattini, prese sul fronte b=B
+const QUADRO_PHASE_A = [50, 72, 94];       // posizione lungo il fronte di prese/interruttori L1-L3
 // moduli su guida DIN dietro la finestra del fronte: centro lungo a e
 // mezza larghezza; generale e salvavita a sinistra, poi un magnetotermico
 // sopra ogni presa
-const QUADRO_MODULES = [['main', 14, 8], ['rcd', 34, 8], ['L1', 62, 6], ['L2', 88, 6], ['L3', 114, 6]];
+const QUADRO_MODULES = [['main', 11, 6.5], ['rcd', 27, 6.5], ['L1', 50, 5], ['L2', 72, 5], ['L3', 94, 5]];
 const ALL_ISO   = isoFrame(26, 26, 30);   // cassetta dell'allaccio della venue
 const CIAB_ISO  = isoFrame(104, 16, 8);   // ciabatta civile: barra lunga e bassa, 3 prese sul piano
 const CIABCEE_ISO = isoFrame(134, 16, 8); // ciabatta con spina CEE: 4 prese
@@ -361,7 +361,7 @@ const COMPONENT_TYPES = {
     label: 'QUADRO', category: 'power', powerW: 0, zone: 'backstage', shape: 'quadro',
     // cabinet bianco/metallo, come un vero armadio elettrico da evento —
     // non più una scatola tinta a caso (vedi drawComponentBody per i dettagli).
-    body: { w: 88, h: 94, fill: 0xe9eaed, accent: 0x4a4f5a },
+    body: { w: 76, h: 94, fill: 0xe9eaed, accent: 0x4a4f5a },
     // prese sul fronte +b del disegno; si gira verso il palco (vedi quadroFront)
     frame: QUADRO_ISO, front: '+b',
     ledIso: [4, 34, 43],
@@ -7221,7 +7221,7 @@ class StageScene extends Phaser.Scene {
           k.quadB(B, a - hw + 1.5, a + hw - 1.5, 25, 35, 0xd5d7da);  // incavo della leva
         });
         // pulsante T di prova del salvavita
-        k.discB(B, 34 + 6, 33.5, 1.3, 0xf2c53d);
+        k.discB(B, 27 + 4, 33.5, 1.1, 0xf2c53d);
         // etichette delle linee sopra la finestra
         k.quadB(B, 3, A - 3, 39, 44.5, 0xf7f7f4);
         // prese CEE 16A blu con lo sportellino a molla sopra
@@ -7231,18 +7231,18 @@ class StageScene extends Phaser.Scene {
           k.quadB(B, a - 7.5, a + 7.5, 19, 21.5, 0x3a7fe0);
         });
         // targa e triangolo di pericolo sotto generale e salvavita
-        k.quadB(B, 8, 44, 9, 19, 0xf7f7f4);
-        const t0 = P(12, B, 10.5), t1 = P(22, B, 10.5), t2 = P(17, B, 18);
+        k.quadB(B, 6, 36, 9, 19, 0xf7f7f4);
+        const t0 = P(8, B, 10.5), t1 = P(17, B, 10.5), t2 = P(12.5, B, 17.5);
         g.fillStyle(0xf2c53d, 1); g.fillTriangle(t0.x, t0.y, t1.x, t1.y, t2.x, t2.y);
         g.lineStyle(0.8, 0x1c1d22, 1); g.strokeTriangle(t0.x, t0.y, t1.x, t1.y, t2.x, t2.y);
-        [13.5, 16].forEach(z => { const l0 = P(26, B, z), l1 = P(41, B, z); g.lineStyle(1, 0x5f646d, 0.8); g.lineBetween(l0.x, l0.y, l1.x, l1.y); });
+        [13.5, 16].forEach(z => { const l0 = P(20, B, z), l1 = P(33, B, z); g.lineStyle(1, 0x5f646d, 0.8); g.lineBetween(l0.x, l0.y, l1.x, l1.y); });
         // fianco: feritoie, sportello, ingresso CEE 32A rosso e maniglia
         for (let z = 30; z <= 40; z += 3) k.quadA(sa, 4, 30, z, z + 1.2, 0x8a8e98);
         k.quadA(sa, 5, 29, 6, 26, 0xc4c7c3);
         k.discA(sa, 17, 15, 7.5, 0x9e2820); k.discA(sa, 17, 15, 6, 0xd6392f); // ingresso CEE rosso
         k.box(Math.min(sa, sa + sd), Math.max(sa, sa + sd), 25, 28, 18, 24, ISO_GREY); // maniglia
         // due maniglie di trasporto sul tetto
-        [16, A - 16].forEach(a => {
+        [14, A - 14].forEach(a => {
           k.box(a - 1.5, a + 1.5, 6, 9, Z, Z + 5, ISO_BLACK);
           k.box(a - 1.5, a + 1.5, B - 9, B - 6, Z, Z + 5, ISO_BLACK);
           k.box(a - 1.5, a + 1.5, 6, B - 6, Z + 5, Z + 7, ISO_BLACK);
