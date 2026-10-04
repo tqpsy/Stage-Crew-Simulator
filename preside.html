@@ -382,7 +382,9 @@
   const rnd = (a, b) => a + Math.random() * (b - a);
   const pick = a => a[Math.floor(Math.random() * a.length)];
   const clamp = v => Math.max(0, Math.min(100, v));
-  const EMBED = new URLSearchParams(location.search).has('embed');
+  const QS = new URLSearchParams(location.search), EMBED = QS.has('embed');
+  // volume (0-1) e «Effetti ridotti» delle impostazioni del gioco, dall'indirizzo dell'iframe
+  const VOL = QS.has('vol') && Number.isFinite(+QS.get('vol')) ? Math.max(0, Math.min(1, +QS.get('vol'))) : 1;
   const store = { get (k, d) { try { const v = localStorage.getItem(k); return v == null ? d : JSON.parse(v); } catch (e) { return d; } }, set (k, v) { try { localStorage.setItem(k, JSON.stringify(v)); } catch (e) {} } };
 
   const DURATION = 90;            // secondi reali = 15 minuti di discorso
@@ -1092,25 +1094,26 @@
 
   /* ---------- suoni sintetizzati (partono solo dopo il tocco su Inizia) ---------- */
   const sfx = (() => {
-    let ac, hum, humG, ringO, ringG, musO, musG, noiseBuf, buzO, buzG;
+    let ac, out, hum, humG, ringO, ringG, musO, musG, noiseBuf, buzO, buzG;
     const env = (g, a, peak, rel, t0) => { g.gain.setValueAtTime(0.0001, t0); g.gain.exponentialRampToValueAtTime(peak, t0 + a); g.gain.exponentialRampToValueAtTime(0.0001, t0 + a + rel); };
-    const tone = (f, dur, type, vol) => { if (!ac) return; const o = ac.createOscillator(), g = ac.createGain(); o.type = type || 'sine'; o.frequency.value = f; o.connect(g).connect(ac.destination); env(g, 0.01, vol || 0.15, dur, ac.currentTime); o.start(); o.stop(ac.currentTime + dur + 0.05); };
-    const noise = (dur, vol, fl) => { if (!ac) return; const s = ac.createBufferSource(); s.buffer = noiseBuf; const f = ac.createBiquadFilter(); f.type = 'bandpass'; f.frequency.value = fl || 1500; const g = ac.createGain(); s.connect(f).connect(g).connect(ac.destination); env(g, 0.3, vol, dur, ac.currentTime); s.start(); s.stop(ac.currentTime + dur + 0.4); };
-    const osc = (type, f, dest) => { const o = ac.createOscillator(); o.type = type; o.frequency.value = f; const g = ac.createGain(); g.gain.value = 0; o.connect(g).connect(dest || ac.destination); o.start(); return [o, g]; };
+    const tone = (f, dur, type, vol) => { if (!ac) return; const o = ac.createOscillator(), g = ac.createGain(); o.type = type || 'sine'; o.frequency.value = f; o.connect(g).connect(out); env(g, 0.01, vol || 0.15, dur, ac.currentTime); o.start(); o.stop(ac.currentTime + dur + 0.05); };
+    const noise = (dur, vol, fl) => { if (!ac) return; const s = ac.createBufferSource(); s.buffer = noiseBuf; const f = ac.createBiquadFilter(); f.type = 'bandpass'; f.frequency.value = fl || 1500; const g = ac.createGain(); s.connect(f).connect(g).connect(out); env(g, 0.3, vol, dur, ac.currentTime); s.start(); s.stop(ac.currentTime + dur + 0.4); };
+    const osc = (type, f, dest) => { const o = ac.createOscillator(); o.type = type; o.frequency.value = f; const g = ac.createGain(); g.gain.value = 0; o.connect(g).connect(dest || out); o.start(); return [o, g]; };
     let humOn = false;
     return {
       init () {
         if (ac) return;
         try { ac = new (window.AudioContext || window.webkitAudioContext)(); } catch (e) { return; }
+        out = ac.createGain(); out.gain.value = VOL; out.connect(ac.destination);
         noiseBuf = ac.createBuffer(1, ac.sampleRate * 2, ac.sampleRate);
         const d = noiseBuf.getChannelData(0); for (let i = 0; i < d.length; i++) d[i] = Math.random() * 2 - 1;
-        const f = ac.createBiquadFilter(); f.type = 'bandpass'; f.frequency.value = 700; f.Q.value = 2; f.connect(ac.destination);
+        const f = ac.createBiquadFilter(); f.type = 'bandpass'; f.frequency.value = 700; f.Q.value = 2; f.connect(out);
         [hum, humG] = osc('sawtooth', 120, f);
         [ringO, ringG] = osc('sine', 2750);
-        const lp = ac.createBiquadFilter(); lp.type = 'lowpass'; lp.frequency.value = 500; lp.connect(ac.destination);
+        const lp = ac.createBiquadFilter(); lp.type = 'lowpass'; lp.frequency.value = 500; lp.connect(out);
         [musO, musG] = osc('square', 110, lp);
         // ronzio di rete: 50 Hz con le armoniche, basso e sporco
-        const bl = ac.createBiquadFilter(); bl.type = 'lowpass'; bl.frequency.value = 320; bl.connect(ac.destination);
+        const bl = ac.createBiquadFilter(); bl.type = 'lowpass'; bl.frequency.value = 320; bl.connect(out);
         [buzO, buzG] = osc('sawtooth', 50, bl);
       },
       buzz (level) { if (!ac) return; buzG.gain.setTargetAtTime(level * 0.09, ac.currentTime, 0.1); },
@@ -1156,7 +1159,7 @@
     $('#again').textContent = 'Torna al palco';
     window.addEventListener('message', e => {
       const d = e.data;
-      if (!d || d.type !== 'preside-dati') return;
+      if (!d || d.type !== 'preside-dati' || e.source !== window.parent) return;
       configure(d);
       $('#start').disabled = false;
     });

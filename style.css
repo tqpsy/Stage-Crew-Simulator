@@ -598,9 +598,6 @@
     opacity:.8;
   }
 
-  .port-legend .pl-in{ color:#49b06a; font-weight:600; }
-  .port-legend .pl-out{ color:#f2a541; font-weight:600; }
-
   .piece{
     display:flex;
     flex-direction:column;
@@ -648,54 +645,6 @@
     opacity:.92;
     filter:drop-shadow(0 6px 14px rgba(0,0,0,.55));
   }
-
-  /* Cavi "a tendina": raggruppati per Trifase/Monofase/Segnale e chiusi di
-     default, così la scheda Cavi occupa poco spazio finché non serve aprirli
-     (un solo gruppo alla volta, come una fisarmonica). */
-  .cable-groups{ align-items:flex-start; }
-  .cable-group{ display:flex; flex-direction:column; }
-  .cable-group-toggle{
-    display:flex; align-items:center; gap:6px;
-    background:none; border:none;
-    font-family:var(--font-display);
-    font-size:12.5px;
-    letter-spacing:.04em;
-    text-transform:uppercase;
-    color:var(--text-muted);
-    padding:4px 2px;
-    cursor:pointer;
-  }
-  .cable-group-toggle:hover{ color:var(--text-main); }
-  .cable-group-toggle .chev{ font-size:9px; transition:transform .15s ease; display:inline-block; }
-  .cable-group.open .cable-group-toggle{ color:var(--amber); }
-  .cable-group.open .cable-group-toggle .chev{ transform:rotate(90deg); }
-  .cable-group-body{
-    display:none;
-    flex-wrap:wrap;
-    gap:8px;
-    padding:2px 2px 4px;
-  }
-  .cable-group.open .cable-group-body{ display:flex; }
-
-  .cable-btn{
-    display:flex;
-    align-items:center;
-    gap:9px;
-    background:var(--bg-panel-raised);
-    border:2px solid var(--hairline);
-    border-radius:6px;
-    padding:7px 12px;
-    cursor:pointer;
-    color:var(--text-main);
-    font-family:var(--font-ui);
-    font-size:12.5px;
-    font-weight:600;
-  }
-  .cable-btn .lead{
-    width:30px; height:6px; border-radius:3px;
-  }
-  .cable-btn.active{ border-color:var(--amber); background:#2c2620; }
-  .cable-btn:hover{ border-color:var(--text-muted); }
 
   #run-bar{
     display:flex;

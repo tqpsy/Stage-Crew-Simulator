@@ -141,7 +141,6 @@ const TOP_POLE  = 18;                     // px: palo tra sub e testa
 const PAR_ISO   = isoFrame(38, 34, 42);   // PAR LED su staffa (lente sulla faccia a=0)
 const STAND_ISO = isoFrame(46, 46, 3);    // stativo luci: treppiede a terra
 const STAND_POLE = 64;                    // px: asta dello stativo fino alla barra a T
-const AMP_ISO   = isoFrame(80, 46, 16);   // finale 2U, pannello frontale sulla faccia b=B
 const RACK_ISO  = isoFrame(96, 60, 30);   // flight case rack 2U del finale, fronte sulla faccia b=B
 /* tavolo regia (la plancia): lungo il fianco del palco (a), il tecnico sta sul
    lato +b e guarda il palco. Sopra mixer, consolle luci, PC e scheda audio;
@@ -824,8 +823,7 @@ const gameState = {
   selectedCable: null,
   pendingPort: null,      // { componentId, portId }
   selectedPieceType: null, // tipo di pezzo "armato" in attesa di un tocco sulla pedana
-  visibleSignals: { powercon: true, xlr: true, speakon: true, dmx: true, schuko: true, cee_tri: true, cee_mono: true, jack: true, usbc: true },
-  tested: false
+  visibleSignals: { powercon: true, xlr: true, speakon: true, dmx: true, schuko: true, cee_tri: true, cee_mono: true, jack: true, usbc: true }
 };
 
 function totalPowerUsedW () {
@@ -1090,7 +1088,6 @@ const SWITCHABLE = new Set(['sub', 'mixer', 'ampli', 'controller', 'pc', 'ciabat
 // multiplo del loro consumo (si caricano i condensatori dell'alimentatore)
 const INRUSH_FACTOR = { ampli: 5, sub: 4 };
 const INRUSH_MS = 700;
-const PROTECTIONS = ['main', 'rcd', 'L1', 'L2', 'L3'];
 
 // kW con la virgola decimale, all'italiana
 function fmtKW (w, digits) { return (w / 1000).toFixed(digits).replace('.', ','); }
@@ -1473,12 +1470,6 @@ function portHasConnection (componentId, portId) {
   );
 }
 
-// "a; b; c e altri 2"
-function listShort (items, max) {
-  if (items.length <= max) return items.join('; ');
-  return items.slice(0, max).join('; ') + ' e altri ' + (items.length - max);
-}
-
 function runValidation () {
   const expected = buildExpectedConnections();
   const failedComponents = new Set();
@@ -1542,12 +1533,14 @@ function updatePowerMeter () {
   fill.classList.toggle('over', usedKw > POWER_LIMIT_KW);
 }
 
-function updateConnectionCounter () {
+// views: false quando foglio e flusso del segnale li ha appena ridisegnati refreshLive
+function updateConnectionCounter (views = true) {
   const result = runValidation();
   const val = el('#conn-val');
   if (val) val.textContent = `${result.madeCount} / ${result.totalCount}`;
   const fill = el('#conn-fill');
   if (fill) fill.style.width = Math.min(100, (result.madeCount / result.totalCount) * 100) + '%';
+  if (!views) return;
   if (typeof updateFoglio === 'function') updateFoglio();
   if (window.__scene) window.__scene.updateSignalFlow();
 }
@@ -1739,6 +1732,19 @@ function fillSlot (s, root) {
 function exportSlotFile (slot) {
   return JSON.stringify({ kind: SAVE_FILE_KIND, v: SAVE_VERSION, exportedAt: Date.now(), slot: slotPart(slot) }, null, 1);
 }
+// il montaggio di un file importato: solo pezzi e cavi che il gioco conosce,
+// con i campi che servono a disegnarli (un tipo sconosciuto romperebbe la scena)
+function validLevel (lv) {
+  const num = v => typeof v === 'number' && Number.isFinite(v);
+  const placed = Object.entries(lv.placed);
+  const pieceOk = ([id, c]) => c && typeof c === 'object' && c.id === id && COMPONENT_TYPES[c.type]
+    && (c.gx == null || (num(c.gx) && num(c.gy))) && (!c.cells || (Array.isArray(c.cells) && c.cells.every(k => typeof k === 'string')))
+    && c.screen && num(c.screen.x) && num(c.screen.y);
+  const edgeOk = e => e && typeof e === 'object' && lv.placed[e.a] && lv.placed[e.b]
+    && typeof e.aPort === 'string' && typeof e.bPort === 'string' && CABLE_TYPES[e.signal];
+  return placed.every(pieceOk) && lv.edges.every(edgeOk);
+}
+
 function readSlotFile (text) {
   let d;
   try { d = JSON.parse(text); } catch (e) { return { error: 'Il file non è un salvataggio di Stage Crew Simulator.' }; }
@@ -1749,7 +1755,7 @@ function readSlotFile (text) {
   else if (d.v >= 1 && d.v <= 4 && !d.kind) { const one = upgradeSingle(d); slot = one && slotPart(one); }
   const ok = slot && typeof slot === 'object' && typeof (slot.service || '') === 'string' && typeof (slot.player || '') === 'string'
     && (!slot.reputation || typeof slot.reputation.total === 'number')
-    && (!slot.level || (typeof slot.level === 'object' && typeof slot.level.placed === 'object' && Array.isArray(slot.level.edges)));
+    && (!slot.level || (typeof slot.level === 'object' && slot.level.placed && typeof slot.level.placed === 'object' && Array.isArray(slot.level.edges) && validLevel(slot.level)));
   if (!ok || !slotUsed(slot)) return { error: 'Il file è rovinato o non contiene una partita.' };
   // il file può venire da chiunque: logo e service solo con valori ammessi
   // (i colori del logo finiscono dentro l'SVG)
@@ -2332,11 +2338,14 @@ let gameActive = false;
 function freshStats () { return { playMs: 0, tests: 0, failedTests: 0 }; }
 gameState.stats = freshStats();
 
+// un cavo senza la linea disegnata (_pts), che si ricalcola: non va salvata
+function edgeData (e) { const { _pts, ...rest } = e; return rest; }
+
 function saveLevel () {
   if (!gameActive) return;
   Profile.data.level = {
     id: LEVEL_ID,
-    placed: gameState.placed, edges: gameState.edges, stock: gameState.stock,
+    placed: gameState.placed, edges: gameState.edges.map(edgeData), stock: gameState.stock,
     nextIndex: gameState.nextIndex, edgeSeq: gameState.edgeSeq,
     trips: gameState.trips || 0, rcdTrips: gameState.rcdTrips || 0,
     procErrors: gameState.procErrors || [], stats: gameState.stats,
@@ -2886,7 +2895,7 @@ function closeSchedule () {
   scheduleOpen = false;
   el('#schedule-modal').classList.remove('show');
   if (scheduleFirst) { if (scaricoDone()) showToast(montaggioMessage(), 'ok'); else openScarico(); }
-  setTimeout(() => { if (!scheduleOpen && !minigameOpen() && !cambioCardOpen && !rearPanelId && !openCaseName && !menuOpen) setSceneInput(true); }, 0);
+  setTimeout(() => { if (!sceneCovered()) setSceneInput(true); }, 0);
   scheduleFirst = false;
 }
 
@@ -2899,6 +2908,10 @@ function closeSchedule () {
    saltare (dalle impostazioni o dalla sua schermata iniziale): tutto arriva
    sano, ma niente birre. */
 let scaricoOpen = false;
+// volume ed «Effetti ridotti» delle impostazioni, passati ai minigiochi nell'indirizzo dell'iframe
+function minigameQuery () { return '&vol=' + settings().volume + (reducedFx() ? '&rfx=1' : ''); }
+// un messaggio vale solo se arriva davvero dall'iframe di quel minigioco
+const fromFrame = (ev, id) => { const f = el('#' + id); return !!f && ev.source === f.contentWindow; };
 const scaricoDone = () => !!Profile.data.scarico;
 function openScarico () {
   if (scaricoOpen) return;
@@ -2910,13 +2923,13 @@ function openScarico () {
   f.id = 'scarico-frame';
   f.title = 'Lo scarico';
   const logo = serviceLogo();
-  f.src = 'scarico.html?embed=1&service=' + encodeURIComponent(serviceName()) + '&bg=' + encodeURIComponent(logo.bg) + '&fg=' + encodeURIComponent(logo.fg);
+  f.src = 'scarico.html?embed=1&service=' + encodeURIComponent(serviceName()) + '&bg=' + encodeURIComponent(logo.bg) + '&fg=' + encodeURIComponent(logo.fg) + minigameQuery();
   f.addEventListener('load', () => { try { f.contentWindow.focus(); } catch (e) { /* niente fuoco: si clicca */ } });
   document.body.appendChild(f);
 }
 window.addEventListener('message', ev => {
   const d = ev.data;
-  if (scaricoOpen && d && d.type === 'scarico-fine') finishScarico(d.result || { skipped: true });
+  if (scaricoOpen && d && d.type === 'scarico-fine' && fromFrame(ev, 'scarico-frame')) finishScarico(d.result || { skipped: true });
 });
 function finishScarico (r) {
   const f = el('#scarico-frame');
@@ -2941,7 +2954,7 @@ function finishScarico (r) {
   whenScene(scene => {
     scene.resetLevel(true);          // la dotazione senza i pezzi rotti
     sceneKeyboard(true);
-    if (!scheduleOpen && !menuOpen && !rearPanelId && !openCaseName) setSceneInput(true);
+    if (!sceneCovered()) setSceneInput(true);
     applySettings();
     showToast(montaggioMessage(), 'ok');
   });
@@ -3190,7 +3203,7 @@ function closeGerry () {
   if (!gerryOpen) return;
   gerryOpen = false;
   el('#gerry-modal').classList.remove('show');
-  setTimeout(() => { if (!scheduleOpen && !menuOpen && !rearPanelId && !openCaseName) setSceneInput(true); }, 0);
+  setTimeout(() => { if (!sceneCovered()) setSceneInput(true); }, 0);
 }
 el('#gerry-fix').addEventListener('click', () => {
   SFX.button();
@@ -3208,7 +3221,7 @@ function finishCavi (r) {
   const rep = stars ? addReputation(REP.cavi[stars], 'Posa dei cavi alla festa della scuola', 'L' + LEVEL_ID + ':cavi') : 0;
   Profile.save();
   sceneKeyboard(true);
-  if (!scheduleOpen && !menuOpen && !rearPanelId && !openCaseName) setSceneInput(true);
+  if (!sceneCovered()) setSceneInput(true);
   applySettings();
   whenScene(scene => scene.redrawEdges());   // i cavi seguono le pieghe della posa
   const missing = presideReady();
@@ -3283,6 +3296,10 @@ let presideOpen = false, presideTimer = null;
 let djOpen = false;              // lo spettacolo del DJ (openDj, più sotto)
 const presideDone = () => !!Profile.data.preside;
 const minigameOpen = () => scaricoOpen || gerryOpen || presideOpen || djOpen;
+// una finestra del gioco sopra la scena (menù, scaletta, pannello posteriore, baule)
+const panelOpen = () => scheduleOpen || menuOpen || !!rearPanelId || !!openCaseName;
+// qualcosa copre la scena: i tocchi non le arrivano finché non si chiude tutto
+const sceneCovered = () => panelOpen() || minigameOpen() || cambioCardOpen;
 // cosa manca perché il preside possa parlare (null se è tutto pronto)
 function presideReady () {
   const asta = placedOfType('asta')[0], mic = placedOfType('mic').find(m => mountBase(m));
@@ -3312,7 +3329,7 @@ function openPreside () {
   f.id = 'preside-frame';
   f.className = 'minigame-frame';
   f.title = 'Il discorso del preside';
-  f.src = 'preside.html?embed=1';
+  f.src = 'preside.html?embed=1' + minigameQuery();
   f.addEventListener('load', () => { try { f.contentWindow.focus(); } catch (e) { /* niente fuoco: si tocca */ } });
   document.body.appendChild(f);
 }
@@ -3321,7 +3338,7 @@ function openPreside () {
 function presideSoon () {
   clearTimeout(presideTimer);
   presideTimer = setTimeout(() => {
-    if (!scheduleOpen && !menuOpen && !rearPanelId && !openCaseName && !presideReady()) openPreside();
+    if (!panelOpen() && !presideReady()) openPreside();
   }, 3000);
 }
 // un XLR appena collegato può rendere pronto il microfono (l'avviso arriva
@@ -3333,7 +3350,7 @@ function presideMicHint () {
 }
 window.addEventListener('message', ev => {
   const d = ev.data, f = el('#preside-frame');
-  if (!presideOpen || !d || !f) return;
+  if (!presideOpen || !d || !f || ev.source !== f.contentWindow) return;
   if (d.type === 'preside-pronto') f.contentWindow.postMessage({ type: 'preside-dati', wired: micChannel(), left: caviLeftovers(), beers: Profile.data.beers || 0, fatigue: fatigue(), pars: presidePars() }, '*');
   if (d.type === 'preside-fine') finishPreside(d.result || { skipped: true });
 });
@@ -3352,7 +3369,7 @@ function finishPreside (r) {
   const rep = skipped ? 0 : addReputation(Profile.data.preside.rep, 'Discorso del preside alla festa della scuola', 'L' + LEVEL_ID + ':preside');
   Profile.save();
   sceneKeyboard(true);
-  if (!scheduleOpen && !menuOpen && !rearPanelId && !openCaseName) setSceneInput(true);
+  if (!sceneCovered()) setSceneInput(true);
   applySettings();
   const p = Profile.data.preside;
   showToast(skipped ? 'Discorso saltato: il preside ha parlato lo stesso, ma la reputazione non cambia.'
@@ -3484,7 +3501,7 @@ function closeCambioCard () {
   if (!cambioCardOpen) return;
   cambioCardOpen = false;
   el('#cambio-modal').classList.remove('show');
-  if (!scheduleOpen && !menuOpen && !rearPanelId && !openCaseName) setSceneInput(true);
+  if (!sceneCovered()) setSceneInput(true);
   updateGiroUI();
   const tab = document.querySelector('.tab-btn[data-tab="dj"]');
   if (tab && gameState.stock.dj > 0) tab.click();
@@ -3538,7 +3555,7 @@ function openDj () {
   f.className = 'minigame-frame';
   f.title = 'Notte fuori controllo';
   f.allow = 'autoplay';
-  f.src = 'dj.html?embed=1';
+  f.src = 'dj.html?embed=1' + minigameQuery();
   f.addEventListener('load', () => { try { f.contentWindow.focus(); } catch (e) { /* niente fuoco: si tocca */ } });
   document.body.appendChild(f);
 }
@@ -3546,15 +3563,15 @@ function openDj () {
 function djSoon (ms) {
   clearTimeout(djTimer);
   djTimer = setTimeout(() => {
-    if (!scheduleOpen && !menuOpen && !rearPanelId && !openCaseName && !cambioCardOpen) openDj();
+    if (!panelOpen() && !cambioCardOpen) openDj();
   }, ms || 3000);
 }
 window.addEventListener('message', ev => {
   const d = ev.data, f = el('#dj-frame');
-  if (!djOpen || !d || !f) return;
+  if (!djOpen || !d || !f || ev.source !== f.contentWindow) return;
   if (d.type === 'dj-pronto') {
     const info = Profile.data.serviceInfo;
-    f.contentWindow.postMessage({ type: 'dj-dati', beers: Profile.data.beers || 0, boss: info && info.boss ? info.boss : '', pars: presidePars().map(p => p.label) }, '*');
+    f.contentWindow.postMessage({ type: 'dj-dati', beers: Profile.data.beers || 0, boss: info && info.boss ? info.boss : '', pars: presidePars().map(p => p.label), fatigue: fatigue() }, '*');
   }
   if (d.type === 'dj-fine') finishDj(d.result || { skipped: true });
 });
@@ -3572,7 +3589,7 @@ function finishDj (r) {
   const rep = skipped ? 0 : addReputation(Profile.data.dj.rep, 'Notte fuori controllo: le luci del DJ set', 'L' + LEVEL_ID + ':dj');
   Profile.save();
   sceneKeyboard(true);
-  if (!scheduleOpen && !menuOpen && !rearPanelId && !openCaseName) setSceneInput(true);
+  if (!sceneCovered()) setSceneInput(true);
   applySettings();
   const p = Profile.data.dj;
   showToast(skipped ? 'DJ set saltato: la musica c\'è stata lo stesso, ma la reputazione non cambia.'
@@ -4908,7 +4925,7 @@ function closeRearPanel () {
   el('#rear-modal').classList.remove('show');
   // riattivato al giro successivo: il rilascio del tocco che ha chiuso il
   // popup non deve arrivare alla scena
-  setTimeout(() => { if (!rearPanelId && !openCaseName) setSceneInput(true); }, 0);
+  setTimeout(() => { if (!sceneCovered()) setSceneInput(true); }, 0);
 }
 el('#rear-close').addEventListener('click', closeRearPanel);
 el('#rear-trace').addEventListener('click', () => {
@@ -5102,7 +5119,7 @@ function openCase (name) {
 function closeCase () {
   openCaseName = null;
   el('#case-modal').classList.remove('show');
-  setTimeout(() => { if (!openCaseName && !rearPanelId) setSceneInput(true); }, 0);
+  setTimeout(() => { if (!sceneCovered()) setSceneInput(true); }, 0);
 }
 el('#case-close').addEventListener('click', closeCase);
 el('#case-modal').addEventListener('click', ev => { if (ev.target.id === 'case-modal') closeCase(); });
@@ -5509,6 +5526,8 @@ const ORIGIN_Y = Math.round((GAME_H - (VENUE_W + VENUE_H) * TILE_H / 2) / 2);
 
 const ZOOM_MIN = 0.5, ZOOM_MAX = 4;
 const DEFAULT_ZOOM = 1.05;
+// passi di Annulla tenuti in memoria (ogni passo è una fotografia di tutto il montaggio)
+const HISTORY_MAX = 200;
 // pixel di schermo per unità di mondo a cui si avvicina la scena quando un
 // tocco cade in mezzo a più dispositivi (su telefono a zoom base è ≈ 0,3)
 const CROWD_SCALE = 0.6;
@@ -5583,6 +5602,25 @@ function footCells (gx, gy, f) {
 function compCenter (c) {
   const f = c.foot || [1, 1];
   return { gx: c.gx + f[0] * CELL / 2, gy: c.gy + f[1] * CELL / 2 };
+}
+// il quadro della palestra è appeso alla parete dietro al palco
+function allaccioPos () { return gridToScreen(3.3, CARICO_ROWS + 0.25); }
+/* le coordinate di schermo dei pezzi dipendono dall'altezza del canvas, misurata
+   all'apertura della pagina (telefono dritto o girato, finestra del computer):
+   una partita salvata con un'altra misura le ha spostate, quindi alla ripresa
+   si rifanno dalla griglia (pezzi a terra), dalla parete (quadro della palestra)
+   e dalla base (pezzi montati, anche uno sopra l'altro) */
+function alignScreens (placed) {
+  Object.values(placed).forEach(c => {
+    if (c.type === 'allaccio') c.screen = allaccioPos();
+    else if (c.gx != null) { const m = compCenter(c); c.screen = gridToScreen(m.gx, m.gy); }
+  });
+  for (let pass = 0; pass < 3; pass++) {
+    Object.values(placed).forEach(c => {
+      const m = MOUNTS[c.type], base = m && placed[c[m.back]];
+      if (base && base.screen) c.screen = { x: base.screen.x + (m.offsetX ? m.offsetX() : 0), y: base.screen.y + m.offsetY() };
+    });
+  }
 }
 
 function isStageCoreCell (cx, cy) {
@@ -6625,8 +6663,7 @@ class StageScene extends Phaser.Scene {
   }
 
   drawAllaccio () {
-    // il quadro della palestra è appeso alla parete dietro al palco
-    const pos = gridToScreen(3.3, CARICO_ROWS + 0.25);
+    const pos = allaccioPos();
     const def = COMPONENT_TYPES.allaccio;
     const visual = this.buildComponentVisual('allaccio', def, pos.x, pos.y);
     this.compVisuals['allaccio'] = visual;
@@ -7599,7 +7636,6 @@ class StageScene extends Phaser.Scene {
 
     this.updateQuadroVisual();
     setCircuitStatus('untested');
-    gameState.tested = false;
     this.pushHistory();
     tireOut(FATIGUE.perAction);
     SFX.place();
@@ -7662,7 +7698,6 @@ class StageScene extends Phaser.Scene {
 
     this.updateQuadroVisual();
     setCircuitStatus('untested');
-    gameState.tested = false;
     SFX.place();
     showToast(m.done(base.id), 'ok');
     this.pushHistory();
@@ -7746,7 +7781,6 @@ class StageScene extends Phaser.Scene {
     this.highlightPending(pending.componentId, pending.portId, false);
     gameState.pendingPort = null;
     setCircuitStatus('untested');
-    gameState.tested = false;
     this.pushHistory();
     tireOut(FATIGUE.perAction);
     if (edge.signal === 'xlr') presideMicHint();
@@ -7804,7 +7838,7 @@ class StageScene extends Phaser.Scene {
     if (this.lay || this.layGraphics) this.drawLay();
     this.updateConnectionBadges();
     this.refreshLive();
-    updateConnectionCounter();
+    updateConnectionCounter(false);
     this.updateQuadroVisual();
     const modal = el('#quadro-modal');
     if (modal && modal.classList.contains('show')) renderQuadroModal();
@@ -7898,7 +7932,6 @@ class StageScene extends Phaser.Scene {
     this.selectedEdgeId = null;
     this.redrawEdges();
     setCircuitStatus('untested');
-    gameState.tested = false;
     if (!arced) showToast('Cavo eliminato.', 'ok');
     this.pushHistory();
   }
@@ -8297,7 +8330,7 @@ class StageScene extends Phaser.Scene {
     const done = id => {
       menu.classList.remove('show');
       ids.forEach(i => { const v = this.compVisuals[i]; if (v && i !== this.assemblyId) this.setGlow(v, false); });
-      setTimeout(() => { if (!rearPanelId && !openCaseName) setSceneInput(true); }, 0);
+      setTimeout(() => { if (!sceneCovered()) setSceneInput(true); }, 0);
       if (id) openRearPanel(id);
     };
     box.querySelectorAll('.pick-opt').forEach(b => b.addEventListener('click', ev => { ev.stopPropagation(); SFX.button(); done(b.dataset.id); }));
@@ -8447,7 +8480,6 @@ class StageScene extends Phaser.Scene {
     this.updateQuadroVisual();
     this.redrawEdges();
     setCircuitStatus('untested');
-    gameState.tested = false;
     SFX.remove();
     showToast(name + ' tolto e rimesso tra i pezzi' + (lost ? ', insieme ai suoi ' + lost + ' cavi' : '') + '.', 'ok');
     this.pushHistory();
@@ -8500,7 +8532,6 @@ class StageScene extends Phaser.Scene {
     this.clearMoveSelection();
     this.redrawEdges();
     setCircuitStatus('untested');
-    gameState.tested = false;
     SFX.place();
     showToast('Dispositivo spostato.', 'ok');
     this.pushHistory();
@@ -8616,7 +8647,6 @@ class StageScene extends Phaser.Scene {
   runSystemTest () {
     this.stopFx();
     const result = runValidation();
-    gameState.tested = true;
     Object.values(this.compVisuals).forEach(v => this.setGlow(v, false));
     this.refreshLive();
 
@@ -9227,6 +9257,8 @@ class StageScene extends Phaser.Scene {
 
   /* ---------------- reset ---------------- */
   resetLevel (quiet) {
+    // giro e conti di prima: un Annulla subito dopo il reset li rimette
+    const before = { giro: gameState.giro || 0, giroFails: (gameState.giroFails || [0, 0, 0]).slice(), stats: { ...freshStats(), ...gameState.stats }, trips: gameState.trips || 0, rcdTrips: gameState.rcdTrips || 0, procErrors: (gameState.procErrors || []).slice() };
     this.stopFx();
     this.clearEdgeSelection();
     this.clearMoveSelection();
@@ -9247,7 +9279,6 @@ class StageScene extends Phaser.Scene {
     gameState.selectedCable = null;
     gameState.pendingPort = null;
     closeRearPanel();
-    gameState.tested = false;
     gameState.trips = 0; gameState.rcdTrips = 0; gameState.procErrors = []; gameState.inrush = [];
     gameState.stats = freshStats();
     gameState.giro = 0; gameState.giroFails = [0, 0, 0];
@@ -9264,6 +9295,15 @@ class StageScene extends Phaser.Scene {
     this.updateQuadroVisual();
     if (!quiet) showToast('Livello resettato.');
     this.pushHistory();
+    this.history[this.historyIndex].resetFrom = before;
+  }
+  // giro e conti che un reset azzera: tornano con l'Annulla, si riazzerano col Ripeti
+  applyResetCounters (c) {
+    gameState.giro = c.giro; gameState.giroFails = c.giroFails.slice();
+    gameState.stats = { ...c.stats };
+    gameState.trips = c.trips; gameState.rcdTrips = c.rcdTrips; gameState.procErrors = c.procErrors.slice();
+    updateGiroUI();
+    saveLevel();
   }
 
   /* ---------------- cronologia: indietro/avanti tramite snapshot dello stato ----------------
@@ -9274,11 +9314,13 @@ class StageScene extends Phaser.Scene {
     this.history = (this.history || []).slice(0, this.historyIndex + 1);
     this.history.push({
       placed: JSON.parse(JSON.stringify(gameState.placed)),
-      edges: JSON.parse(JSON.stringify(gameState.edges)),
+      edges: JSON.parse(JSON.stringify(gameState.edges.map(edgeData))),
       stock: { ...gameState.stock },
       nextIndex: { ...gameState.nextIndex },
       edgeSeq: gameState.edgeSeq
     });
+    // gli ultimi HISTORY_MAX passi bastano: la memoria non cresce per tutta la partita
+    if (this.history.length > HISTORY_MAX) this.history.splice(0, this.history.length - HISTORY_MAX);
     this.historyIndex = this.history.length - 1;
     this.updateHistoryButtons();
     saveLevel();
@@ -9286,14 +9328,18 @@ class StageScene extends Phaser.Scene {
 
   undo () {
     if (this.historyIndex <= 0) return;
+    const from = this.history[this.historyIndex];
     this.historyIndex--;
     this.restoreSnapshot(this.history[this.historyIndex]);
+    if (from.resetFrom) this.applyResetCounters(from.resetFrom);
   }
 
   redo () {
     if (this.historyIndex >= this.history.length - 1) return;
     this.historyIndex++;
-    this.restoreSnapshot(this.history[this.historyIndex]);
+    const to = this.history[this.historyIndex];
+    this.restoreSnapshot(to);
+    if (to.resetFrom) this.applyResetCounters({ giro: 0, giroFails: [0, 0, 0], stats: freshStats(), trips: 0, rcdTrips: 0, procErrors: [] });
   }
 
   restoreSnapshot (snap) {
@@ -9308,6 +9354,7 @@ class StageScene extends Phaser.Scene {
     this.occupied = {}; this.blockSceneryCells();
 
     gameState.placed = JSON.parse(JSON.stringify(snap.placed));
+    alignScreens(gameState.placed);
     gameState.edges = JSON.parse(JSON.stringify(snap.edges));
     gameState.stock = { ...snap.stock };
     // partita salvata prima di un pezzo nuovo (es. il tavolo regia): la sua
@@ -9334,7 +9381,6 @@ class StageScene extends Phaser.Scene {
     updateStockUI();
     updatePowerMeter();
     setCircuitStatus('untested');
-    gameState.tested = false;
     this.updateHistoryButtons();
     this.updateSignalFlow();
     saveLevel();

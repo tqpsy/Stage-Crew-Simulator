@@ -557,7 +557,9 @@
   const rnd = (a, b) => a + Math.random() * (b - a);
   const clamp = (v, a = 0, b = 100) => Math.max(a, Math.min(b, v));
   const store = { get (k, d) { try { const v = localStorage.getItem(k); return v == null ? d : JSON.parse(v); } catch (e) { return d; } }, set (k, v) { try { localStorage.setItem(k, JSON.stringify(v)); } catch (e) {} } };
-  const EMBED = new URLSearchParams(location.search).has('embed');
+  const QS = new URLSearchParams(location.search), EMBED = QS.has('embed');
+  // volume (0-1) e «Effetti ridotti» delle impostazioni del gioco, dall'indirizzo dell'iframe
+  const VOL = QS.has('vol') && Number.isFinite(+QS.get('vol')) ? Math.max(0, Math.min(1, +QS.get('vol'))) : 1;
 
   const M = window.DJ_MAPPA;
   const BEAT = 60 / M.bpm, BAR = BEAT * 4;
@@ -598,9 +600,11 @@
   const mouthAt = t => { const i = Math.floor(t * 25); return i >= 0 && i < M.bocca.length ? +M.bocca[i] / 9 : 0; };
 
   let diff = store.get('dj-diff', 'normale');
-  let realStrobe = store.get('dj-strobe', false);
+  // con «Effetti ridotti» lo strobo parte morbido (si può sempre riaccendere)
+  let realStrobe = QS.has('rfx') ? false : store.get('dj-strobe', false);
   let lag = store.get('dj-lag', 0);
   let pocket = 2, boss = 'il capo', pars = ['PAR 1', 'PAR 2', 'PAR 3', 'PAR 4'];
+  let tired = 30;   // stanchezza all'inizio, 0-100 (nel gioco quella del tecnico)
   let S;
 
   function buildNotes () {
@@ -615,7 +619,7 @@
       running: false, paused: false, auto: !!auto, over: false, sent: false,
       t: -2, grad: 60, score: 0, combo: 0, maxCombo: 0, mult: 1,
       perfect: 0, good: 0, miss: 0, lost: 0, stray: 0, holdsBroken: 0,
-      fatigue: 30, beers: pocket, drunk: 0, favours: 0,
+      fatigue: tired, beers: pocket, drunk: 0, favours: 0,
       notes, specials: [],
       down: [false, false, false], holding: [null, null, null],
       colori: 0, chase: 0, chaseIdx: 0, strobe: 0, flash: 0, lastQ: -1,
@@ -634,6 +638,7 @@
   /* ---------- il tempo del brano: l'audio comanda, il resto lo segue ---------- */
   const song = $('#song');
   song.src = M.file;
+  song.volume = VOL;
   const clock = {
     virtual: false, vt: -2, startPerf: 0, base: 0, basePerf: 0, lastA: -1,
     now () {
@@ -1553,21 +1558,22 @@
 
   /* ---------- suoni: solo effetti brevi, la musica è il brano ---------- */
   const sfx = (() => {
-    let ac, noiseBuf;
+    let ac, out, noiseBuf;
     const noise = (dur, vol, fl, type) => {
       if (!ac) return;
       const s = ac.createBufferSource(); s.buffer = noiseBuf;
       const f = ac.createBiquadFilter(); f.type = type || 'bandpass'; f.frequency.value = fl;
-      const g = ac.createGain(); s.connect(f).connect(g).connect(ac.destination);
+      const g = ac.createGain(); s.connect(f).connect(g).connect(out);
       const t0 = ac.currentTime; g.gain.setValueAtTime(0.0001, t0); g.gain.exponentialRampToValueAtTime(vol, t0 + 0.02); g.gain.exponentialRampToValueAtTime(0.0001, t0 + dur);
       s.start(); s.stop(t0 + dur + 0.1);
       return f;
     };
-    const tone = (f, dur, type, vol) => { if (!ac) return; const o = ac.createOscillator(), g = ac.createGain(); o.type = type || 'sine'; o.frequency.value = f; o.connect(g).connect(ac.destination); const t0 = ac.currentTime; g.gain.setValueAtTime(0.0001, t0); g.gain.exponentialRampToValueAtTime(vol || 0.15, t0 + 0.01); g.gain.exponentialRampToValueAtTime(0.0001, t0 + dur); o.start(); o.stop(t0 + dur + 0.05); return o; };
+    const tone = (f, dur, type, vol) => { if (!ac) return; const o = ac.createOscillator(), g = ac.createGain(); o.type = type || 'sine'; o.frequency.value = f; o.connect(g).connect(out); const t0 = ac.currentTime; g.gain.setValueAtTime(0.0001, t0); g.gain.exponentialRampToValueAtTime(vol || 0.15, t0 + 0.01); g.gain.exponentialRampToValueAtTime(0.0001, t0 + dur); o.start(); o.stop(t0 + dur + 0.05); return o; };
     return {
       init () {
         if (ac) return;
         try { ac = new (window.AudioContext || window.webkitAudioContext)(); } catch (e) { return; }
+        out = ac.createGain(); out.gain.value = VOL; out.connect(ac.destination);
         noiseBuf = ac.createBuffer(1, ac.sampleRate * 2, ac.sampleRate);
         const d = noiseBuf.getChannelData(0); for (let i = 0; i < d.length; i++) d[i] = Math.random() * 2 - 1;
       },
@@ -1582,7 +1588,7 @@
         [[110, 'sawtooth', 0.12], [55, 'sine', 0.25]].forEach(([f0, type, vol]) => {
           const o = ac.createOscillator(), g = ac.createGain();
           o.type = type; o.frequency.setValueAtTime(f0, t0); o.frequency.exponentialRampToValueAtTime(f0 * 0.25, t0 + 0.7);
-          o.connect(g).connect(ac.destination);
+          o.connect(g).connect(out);
           g.gain.setValueAtTime(vol, t0); g.gain.exponentialRampToValueAtTime(0.0001, t0 + 0.8);
           o.start(t0); o.stop(t0 + 0.85);
         });
@@ -1592,7 +1598,7 @@
         if (!ac) return;
         const t0 = ac.currentTime, f = ac.createBiquadFilter(), g = ac.createGain();
         f.type = 'bandpass'; f.frequency.value = 380; f.Q.value = 2.5;
-        f.connect(g).connect(ac.destination);
+        f.connect(g).connect(out);
         g.gain.setValueAtTime(0.0001, t0); g.gain.exponentialRampToValueAtTime(0.16, t0 + 0.5);
         g.gain.setValueAtTime(0.16, t0 + dur - 1); g.gain.exponentialRampToValueAtTime(0.0001, t0 + dur);
         for (let i = 0; i < 10; i++) {
@@ -1613,7 +1619,7 @@
         const f0 = 2200 + Math.random() * 700;
         o.frequency.setValueAtTime(f0 * 0.8, t0); o.frequency.linearRampToValueAtTime(f0 * 1.15, t0 + 0.15); o.frequency.linearRampToValueAtTime(f0, t0 + 0.45); o.frequency.linearRampToValueAtTime(f0 * 0.7, t0 + 0.7);
         lfo.frequency.value = 9; lg.gain.value = 40; lfo.connect(lg).connect(o.frequency);
-        o.connect(g).connect(ac.destination);
+        o.connect(g).connect(out);
         g.gain.setValueAtTime(0.0001, t0); g.gain.exponentialRampToValueAtTime(0.07, t0 + 0.05); g.gain.setValueAtTime(0.07, t0 + 0.5); g.gain.exponentialRampToValueAtTime(0.0001, t0 + 0.75);
         o.start(t0); lfo.start(t0); o.stop(t0 + 0.8); lfo.stop(t0 + 0.8);
       },
@@ -1622,7 +1628,7 @@
         if (!ac) return;
         const t0 = ac.currentTime, f = ac.createBiquadFilter(), g = ac.createGain();
         f.type = 'bandpass'; f.frequency.value = 520; f.Q.value = 3;
-        f.connect(g).connect(ac.destination);
+        f.connect(g).connect(out);
         g.gain.setValueAtTime(0.0001, t0); g.gain.exponentialRampToValueAtTime(0.18, t0 + 0.25); g.gain.exponentialRampToValueAtTime(0.0001, t0 + 2.2);
         for (let i = 0; i < 9; i++) {
           const o = ac.createOscillator(); o.type = 'sawtooth';
@@ -1633,7 +1639,7 @@
       },
       clack () { tone(90, 0.12, 'square', 0.25); noise(0.08, 0.2, 1200); },
       crackle () { noise(0.05, 0.12, 4000, 'highpass'); },
-      larsen () { if (!ac) return; const o = ac.createOscillator(), g = ac.createGain(); o.frequency.value = 2750; o.connect(g).connect(ac.destination); const t0 = ac.currentTime; g.gain.setValueAtTime(0.001, t0); g.gain.exponentialRampToValueAtTime(0.2, t0 + 0.4); g.gain.exponentialRampToValueAtTime(0.001, t0 + 2.2); o.start(); o.stop(t0 + 2.3); },
+      larsen () { if (!ac) return; const o = ac.createOscillator(), g = ac.createGain(); o.frequency.value = 2750; o.connect(g).connect(out); const t0 = ac.currentTime; g.gain.setValueAtTime(0.001, t0); g.gain.exponentialRampToValueAtTime(0.2, t0 + 0.4); g.gain.exponentialRampToValueAtTime(0.001, t0 + 2.2); o.start(); o.stop(t0 + 2.3); },
       scratch () {
         if (!ac) return;
         const f = noise(0.6, 0.25, 900);
@@ -1667,8 +1673,9 @@
     $('#again').textContent = 'Torna al palco';
     window.addEventListener('message', e => {
       const d = e.data;
-      if (!d || d.type !== 'dj-dati') return;
+      if (!d || d.type !== 'dj-dati' || e.source !== window.parent) return;
       pocket = Math.max(0, Math.floor(d.beers) || 0);
+      if (Number.isFinite(+d.fatigue)) tired = Math.max(0, Math.min(100, +d.fatigue));
       if (d.boss) boss = String(d.boss);
       if (Array.isArray(d.pars) && d.pars.length) pars = d.pars.slice(0, 4).map(String);
       paintParLabels();

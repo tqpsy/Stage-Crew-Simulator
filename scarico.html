@@ -205,6 +205,8 @@ const SERVICE = (QS.get('service') || '').slice(0, 28);
 // colori del marchio del service (livrea del furgone); solo #rgb/#rrggbb
 const hexOr = (v, d) => /^#[0-9a-f]{3,6}$/i.test(v || '') ? v : d;
 const LIVERY = { bg: hexOr(QS.get('bg'), '#1c1d22'), fg: hexOr(QS.get('fg'), '#f2a541') };
+// volume (0-1) e «Effetti ridotti» delle impostazioni del gioco, dall'indirizzo dell'iframe
+const VOL = QS.has('vol') && Number.isFinite(+QS.get('vol')) ? Math.max(0, Math.min(1, +QS.get('vol'))) : 1;
 function sendResult (result) { try { parent.postMessage({ type: 'scarico-fine', result }, '*'); } catch (e) { /* niente genitore */ } }
 if (EMBED) {
   const skip = document.getElementById('btn-skip');
@@ -314,7 +316,11 @@ function fmtClock (t) {
    --------------------------------------------------------------------- */
 const AU = {
   ctx: null, last: 0,
-  init () { try { this.ctx = this.ctx || new (window.AudioContext || window.webkitAudioContext)(); } catch (e) { this.ctx = null; } },
+  init () {
+    if (this.ctx) return;
+    try { this.ctx = new (window.AudioContext || window.webkitAudioContext)(); } catch (e) { this.ctx = null; return; }
+    this.out = this.ctx.createGain(); this.out.gain.value = VOL; this.out.connect(this.ctx.destination);
+  },
   noise (dur, freq, type, gain) {
     const c = this.ctx; if (!c) return;
     const n = Math.floor(c.sampleRate * dur), buf = c.createBuffer(1, n, c.sampleRate), d = buf.getChannelData(0);
@@ -322,14 +328,14 @@ const AU = {
     const s = c.createBufferSource(); s.buffer = buf;
     const f = c.createBiquadFilter(); f.type = type; f.frequency.value = freq;
     const g = c.createGain(); g.gain.value = gain;
-    s.connect(f); f.connect(g); g.connect(c.destination); s.start();
+    s.connect(f); f.connect(g); g.connect(this.out); s.start();
   },
   tone (f1, f2, dur, gain, type) {
     const c = this.ctx; if (!c) return;
     const o = c.createOscillator(), g = c.createGain();
     o.type = type || 'triangle'; o.frequency.setValueAtTime(f1, c.currentTime); o.frequency.exponentialRampToValueAtTime(f2, c.currentTime + dur);
     g.gain.setValueAtTime(gain, c.currentTime); g.gain.exponentialRampToValueAtTime(0.001, c.currentTime + dur);
-    o.connect(g); g.connect(c.destination); o.start(); o.stop(c.currentTime + dur);
+    o.connect(g); g.connect(this.out); o.start(); o.stop(c.currentTime + dur);
   },
   thud (v) { const now = performance.now(); if (now - this.last < 70) return; this.last = now; this.noise(0.18, 180 + v * 60, 'lowpass', clamp(v / 5, 0.08, 0.6)); },
   crack () { this.noise(0.12, 2500, 'highpass', 0.35); this.tone(2400, 900, 0.1, 0.08, 'square'); },

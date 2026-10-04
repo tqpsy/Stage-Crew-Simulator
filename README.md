@@ -3,7 +3,8 @@
 Simulatore di cablaggio per stage show: sei un tecnico di un service e devi
 scaricare, montare e collegare l'impianto audio e luci prima dello spettacolo.
 
-Si gioca nel browser: basta aprire `index.html`.
+Si gioca nel browser: basta aprire `index.html`. Serve la connessione a
+internet, perché Phaser, Matter.js (lo scarico) e i caratteri arrivano da CDN.
 
 ## Schermi supportati
 
@@ -32,7 +33,14 @@ bassa e la partita non si riesce a completare.
 
 ## Test
 
-I test sono in `tests/` e richiedono Playwright. Esempio:
+I test sono in `tests/` e richiedono Playwright. Per lanciarli tutti, con
+il riepilogo finale:
+
+```
+sh tests/tutti.sh
+```
+
+Uno solo, per esempio la partita col telefono a 360 × 640:
 
 ```
 node tests/partita-telefono.js 360 640
@@ -47,4 +55,6 @@ giro di Gerry alle 20:00). Il discorso del preside (21:00,
 conseguenze della posa, pagina da sola).
 Lo spettacolo del DJ (21:15, `dj.html`, dopo il cambio palco) ha
 `tests/spettacolo-dj.js` (la pagina da sola) e `tests/dj-gioco.js` (dentro
-il gioco).
+il gioco). `tests/robustezza.js` prova frecce e WASD, la ripresa di una
+partita con uno schermo diverso, Annulla dopo il reset, i file importati e
+volume ed «Effetti ridotti» nei minigiochi.
