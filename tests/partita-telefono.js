@@ -147,6 +147,48 @@ const OUT = process.env.SHOTS || null;
   log.push('giro luci: ' + (taps - t1) + ' tocchi; contatore ' + await p.evaluate(() => el('#conn-val').textContent) + ', cavi=' + await p.evaluate(() => gameState.edges.length));
   log.push('scatti=' + await p.evaluate(() => (gameState.trips || 0) + '/' + (gameState.rcdTrips || 0)) + ' pops=' + await p.evaluate(() => (gameState.procErrors || []).length));
   await shot('cavi');
+  // regia e backstage fitti: ogni cavo si deve poter prendere col dito, al
+  // primo tocco o dal menu "Quale?" (anche quelli che passano accanto ai
+  // dispositivi)
+  const edgeIds = await p.evaluate(() => gameState.edges.map(e => e.id));
+  let viaMenu = 0, zooms = 0;
+  for (const id of edgeIds) {
+    await p.evaluate(() => { window.__scene.clearEdgeSelection(); window.__scene.resetView(); });
+    // il punto del cavo più "libero" (dove un giocatore lo toccherebbe)
+    const pt = await p.evaluate(id => { const s = window.__scene, e = gameState.edges.find(x => x.id === id);
+      let best = null;
+      for (let i = 0; e._pts && i < e._pts.length - 1; i++) for (let t = 0.1; t < 1; t += 0.1) {
+        const x = e._pts[i].x + (e._pts[i + 1].x - e._pts[i].x) * t, y = e._pts[i].y + (e._pts[i + 1].y - e._pts[i].y) * t;
+        const cam = s.cameras.main, r = s.game.canvas.getBoundingClientRect();
+        const px = r.left + (x - cam.worldView.x) * cam.zoom * r.width / GAME_W, py = r.top + (y - cam.worldView.y) * cam.zoom * r.height / GAME_H;
+        const hit = document.elementFromPoint(px, py);
+        const near = s.edgesNear(x, y, TOUCH_SLOP_PX);
+        if (!(hit && hit.tagName === 'CANVAS' && near.some(c => c.edge.id === id && c.px < 3))) continue;
+        const n = near.length + s.devicesNear(x, y, TOUCH_SLOP_PX).length;
+        if (!best || n < best.n) best = { n, wx: x, wy: y };
+      }
+      return best; }, id);
+    if (!pt) { problems.push('cavo ' + id + ': nessun punto toccabile'); continue; }
+    await tapAt(await w2p(pt.wx, pt.wy));
+    if (await p.evaluate(() => el('#pick-menu').classList.contains('show'))) {
+      viaMenu++;
+      // troppi cavi lì: si ingrandisce e si ritocca lo stesso punto
+      if (!(await p.locator('#pick-menu .pick-opt[data-edge="' + id + '"]').count())) {
+        zooms++; await tapSel('#pick-menu .pick-zoom'); await p.waitForTimeout(120);
+        await tapAt(await w2p(pt.wx, pt.wy));
+      }
+      const opt = p.locator('#pick-menu.show .pick-opt[data-edge="' + id + '"]');
+      if (await opt.count()) await opt.tap();
+      else if (await p.evaluate(() => el('#pick-menu').classList.contains('show'))) { problems.push('cavo ' + id + ' non nel menu Quale? nemmeno ingrandendo'); await p.evaluate(() => el('#pick-menu').click()); }
+      await p.waitForTimeout(120);
+    }
+    if (await p.evaluate(() => window.__scene.selectedEdgeId) !== id) {
+      problems.push('cavo ' + id + ' non selezionabile col dito');
+      await p.evaluate(() => { closeRearPanel(); });
+    }
+  }
+  await p.evaluate(() => { window.__scene.clearEdgeSelection(); window.__scene.resetView(); });
+  log.push('cavi presi col dito: ' + edgeIds.length + ' (dal Quale?: ' + viaMenu + ', ingrandendo: ' + zooms + ')');
   await tapSel('#run-btn');
   log.push('TEST: ' + await toast() + ' | ' + await p.evaluate(() => el('#circuit-text').textContent));
   // il collaudo riuscito entra nei record, per i futuri highscore

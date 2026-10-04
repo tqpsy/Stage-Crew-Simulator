@@ -4272,10 +4272,19 @@ function renderRearPanel () {
     el('#rear-title').textContent = compLabel(id) + '  —  la regia da dietro';
     el('#rear-trace').hidden = true;
     box.classList.add('table-view');
-    box.innerHTML = devs.map(d => '<div class="rear-block" data-id="' + d.id + '"><div class="rear-block-head">'
+    // indice in alto: un tocco porta al pannello; in verde quelli con una
+    // presa libera adatta al cavo in mano (come in scena)
+    const ok = new Set(window.__scene ? window.__scene.compatibleTargets() : []);
+    box.innerHTML = (devs.length > 1 ? '<div class="rear-jump">' + devs.map(d => '<button class="rear-jump-btn' + (ok.has(d.id) ? ' ok' : '')
+      + '" data-id="' + d.id + '">' + escapeHtml(compLabel(d.id)) + '</button>').join('') + '</div>' : '') + devs.map(d => '<div class="rear-block" data-id="' + d.id + '"><div class="rear-block-head">'
       + escapeHtml(compLabel(d.id)) + (d.type === 'ampli' ? ' · nel rack sotto il piano' : '') + '</div>'
       + rearPanelSvg(d.id) + '</div>').join('');
     devs.forEach(d => bindRearSvg(box.querySelector('.rear-block[data-id="' + d.id + '"]'), d.id));
+    box.querySelectorAll('.rear-jump-btn').forEach(b => b.addEventListener('click', () => {
+      const blk = box.querySelector('.rear-block[data-id="' + b.dataset.id + '"]');
+      const bar = box.querySelector('.rear-jump');
+      if (blk) box.scrollTo({ top: blk.offsetTop - box.offsetTop - (bar ? bar.offsetHeight + 6 : 0), behavior: 'smooth' });
+    }));
     renderRearHand();
     return;
   }
@@ -5353,6 +5362,9 @@ const ORIGIN_Y = Math.round((GAME_H - (VENUE_W + VENUE_H) * TILE_H / 2) / 2);
 
 const ZOOM_MIN = 0.5, ZOOM_MAX = 4;
 const DEFAULT_ZOOM = 1.05;
+// "Quale?": cose entro PICK_TIE_PX (pixel di schermo) dalla più vicina sono
+// ambigue; al massimo PICK_MAX voci; "Ingrandisci qui" moltiplica lo zoom
+const PICK_TIE_PX = 8, PICK_ON_CABLE_PX = 5, PICK_MAX = 8, PICK_ZOOM_STEP = 2, PICK_ZOOM_MIN = 2.2;
 const SHOW_ZOOM = 2;         // zoom dello show finale: palco e Pit a tutto schermo
 const PLATFORM_HEIGHT = 26; // px: altezza visiva della pedana rialzata
 
@@ -5610,7 +5622,7 @@ class StageScene extends Phaser.Scene {
      pan (tasto destro o trascinamento sul vuoto), frecce/WASD ---------------- */
   setupCameraControls () {
     this.input.on('wheel', (pointer, gameObjects, deltaX, deltaY) => {
-      this.adjustZoom(deltaY > 0 ? -0.12 : 0.12);
+      this.adjustZoom(deltaY > 0 ? -0.12 : 0.12, pointer.x, pointer.y);
     });
 
     this.game.canvas.addEventListener('contextmenu', e => e.preventDefault());
@@ -5649,7 +5661,7 @@ class StageScene extends Phaser.Scene {
       const p1 = this.input.pointer1, p2 = this.input.pointer2;
       if (p1 && p2 && p1.isDown && p2.isDown) {
         const dist = Phaser.Math.Distance.Between(p1.x, p1.y, p2.x, p2.y);
-        if (this.lastPinchDist) this.adjustZoom((dist - this.lastPinchDist) * 0.004);
+        if (this.lastPinchDist) this.adjustZoom((dist - this.lastPinchDist) * 0.004, (p1.x + p2.x) / 2, (p1.y + p2.y) / 2);
         this.lastPinchDist = dist;
       } else {
         this.lastPinchDist = null;
@@ -5684,9 +5696,20 @@ class StageScene extends Phaser.Scene {
     if (dx || dy) { cam.scrollX += dx; cam.scrollY += dy; }
   }
 
-  adjustZoom (delta) {
+  /* zoom; con un punto dello schermo (rotellina, pizzico) quel punto resta
+     fermo sotto il cursore o tra le dita, così ci si avvicina a ciò che si
+     guarda (la regia, il backstage) invece che al centro */
+  adjustZoom (delta, sx, sy) {
     const cam = this.cameras.main;
+    const before = sx != null ? cam.getWorldPoint(sx, sy) : null;
     cam.setZoom(Phaser.Math.Clamp(cam.zoom + delta, ZOOM_MIN, ZOOM_MAX));
+    if (before) {
+      cam.preRender();
+      const after = cam.getWorldPoint(sx, sy);
+      cam.scrollX += before.x - after.x;
+      cam.scrollY += before.y - after.y;
+    }
+    if (this.selectedEdgeId != null) this.refreshEdgeDeleteButton();
   }
 
   resetView () {
@@ -5732,19 +5755,9 @@ class StageScene extends Phaser.Scene {
       // e un tocco sul pavimento vuoto chiude montaggio e cavo in attesa
       if (gameState.selectedPieceType) { this.placeArmedPieceAt(pointer.worldX, pointer.worldY); return; }
       if (this.assemblyId) { this.exitAssembly(); return; }
-      // sul telefono i dispositivi sono piccoli: un tocco che li sfiora apre
-      // comunque il pannello di quello più vicino
-      if (this.devicesNear(pointer.worldX, pointer.worldY, TOUCH_SLOP_PX).length) {
-        this.clearEdgeSelection();
-        this.openPanelAt(pointer.worldX, pointer.worldY, null);
-        return;
-      }
-      const hitEdge = this.findEdgeAt(pointer.worldX, pointer.worldY);
-      if (hitEdge) {
-        if (this.selectedEdgeId === hitEdge.id) this.clearEdgeSelection();
-        else this.selectEdge(hitEdge);
-        return;
-      }
+      // sul telefono dispositivi e cavi sono piccoli: un tocco che li sfiora
+      // prende quello più vicino; se è a metà tra più cose, "Quale?"
+      if (this.pickNear(pointer.worldX, pointer.worldY)) return;
       this.clearEdgeSelection();
       this.cancelPending();
     });
@@ -7200,7 +7213,8 @@ class StageScene extends Phaser.Scene {
 
   redrawEdges () {
     this.edgeGraphics.clear();
-    const anySelected = this.selectedEdgeId != null;
+    // in evidenza: il cavo selezionato, o quelli elencati dal "Quale?"
+    const focus = this.pickEdgeIds || (this.selectedEdgeId != null ? new Set([this.selectedEdgeId]) : null);
     gameState.edges.forEach(e => {
       const cableKind = CABLE_TYPES[e.signal];
       if (!gameState.visibleSignals[cableKind.layer]) { e._pts = null; return; }
@@ -7214,7 +7228,7 @@ class StageScene extends Phaser.Scene {
       const width = isSelected ? 5 : 3;
       // con un cavo selezionato, tutti gli altri si "spengono" per farlo
       // risaltare nella matassa; senza selezione restano tutti a piena vista
-      const alpha = anySelected ? (isSelected ? 1 : 0.16) : 1;
+      const alpha = focus ? (focus.has(e.id) ? 1 : 0.16) : 1;
       const route = caviRoute(e);
       const pts = route ? [from, ...route, to]
         : (zoneA === 'stage' && zoneB === 'stage') ? [from, to]
@@ -7280,16 +7294,31 @@ class StageScene extends Phaser.Scene {
   }
 
   /* ---------------- selezione ed eliminazione di un cavo ---------------- */
-  findEdgeAt (wx, wy) {
-    let best = null, bestDist = 12;
+  /* cavi vicini a un punto del mondo, dal più vicino: distanza in pixel di
+     schermo, entro slopPx (minimo 12 unità di mondo, come una volta), così a
+     qualunque zoom il dito prende un cavo che sfiora */
+  edgesNear (wx, wy, slopPx) {
+    const k = this.screenScale();
+    const out = [];
     gameState.edges.forEach(e => {
       if (!e._pts) return;
+      let best = Infinity, at = null;
       for (let i = 0; i < e._pts.length - 1; i++) {
-        const d = pointToSegmentDistance(wx, wy, e._pts[i].x, e._pts[i].y, e._pts[i + 1].x, e._pts[i + 1].y);
-        if (d < bestDist) { bestDist = d; best = e; }
+        const a = e._pts[i], b = e._pts[i + 1];
+        const d = pointToSegmentDistance(wx, wy, a.x, a.y, b.x, b.y);
+        if (d < best) {
+          const dx = b.x - a.x, dy = b.y - a.y, l2 = dx * dx + dy * dy;
+          const t = l2 ? Phaser.Math.Clamp(((wx - a.x) * dx + (wy - a.y) * dy) / l2, 0, 1) : 0;
+          best = d; at = { x: a.x + t * dx, y: a.y + t * dy };
+        }
       }
+      if (best < Math.max(12, slopPx / k)) out.push({ edge: e, px: best * k, at });
     });
-    return best;
+    return out.sort((x, y) => x.px - y.px);
+  }
+  // pixel CSS per unità di mondo, con lo zoom attuale
+  screenScale () {
+    return this.cameras.main.zoom * (this.game.canvas.getBoundingClientRect().width / GAME_W);
   }
 
   selectEdge (edge) {
@@ -7312,7 +7341,8 @@ class StageScene extends Phaser.Scene {
     const edge = gameState.edges.find(e => e.id === this.selectedEdgeId);
     if (!edge || !edge._pts) { this.selectedEdgeId = null; return; }
     const mid = pointAlongPolyline(edge._pts, 0.5);
-    const btn = this.add.container(mid.x, mid.y).setDepth(60);
+    // come la ✕ del montaggio: resta toccabile (≈26px) a qualunque zoom
+    const btn = this.add.container(mid.x, mid.y).setDepth(60).setScale(Math.max(1, 13 / (11 * this.screenScale())));
     const bg = this.add.circle(0, 0, 11, 0x1c1d22, 1).setStrokeStyle(2, 0xf2a541, 1);
     const txt = this.add.text(0, 0, '✕', { fontFamily: 'Inter, sans-serif', fontSize: '13px', color: '#f2a541', fontStyle: 'bold' }).setOrigin(0.5);
     btn.add(bg); btn.add(txt);
@@ -7434,31 +7464,120 @@ class StageScene extends Phaser.Scene {
     const close = c.filter(x => x.id !== first.id && (
       first.edge > 0 ? x.edge - first.edge < 6 : (x.edge === 0 && x.center < first.center * 1.35 + 4)));
     if (!close.length) { openRearPanel(first.id); return true; }
-    this.showPickMenu([first, ...close].slice(0, 4).map(x => x.id), wx, wy);
+    this.showPickMenu([first, ...close].slice(0, 4).map(x => ({ id: x.id })), wx, wy);
     return true;
   }
-  showPickMenu (ids, wx, wy) {
+
+  /* tocco sul pavimento accanto a dispositivi e cavi: in regia e dietro le
+     quinte sono fitti, e il dispositivo vicino non deve "rubare" il tocco al
+     cavo che passa lì. Si prende la cosa più vicina; se altre sono quasi
+     alla stessa distanza, "Quale?" le elenca tutte (cavi compresi). */
+  pickNear (wx, wy, pressedId) {
+    const devs = this.devicesNear(wx, wy, TOUCH_SLOP_PX);
+    let cables = this.edgesNear(wx, wy, TOUCH_SLOP_PX);
+    // tocco sul disegno di un dispositivo: vince lui, a meno che il dito
+    // non sia proprio sopra un cavo che ci passa davanti
+    if (pressedId) cables = cables.filter(c => c.px < PICK_ON_CABLE_PX);
+    if (!devs.length && !cables.length) return pressedId ? this.openPanelAt(wx, wy, pressedId) : false;
+    if (!cables.length) { this.clearEdgeSelection(); return this.openPanelAt(wx, wy, pressedId || null); }
+    const items = [...devs.map(d => ({ id: d.id, d: d.edge })), ...cables.map(c => ({ edge: c.edge, at: c.at, d: c.px }))]
+      .sort((a, b) => a.d - b.d);
+    const best = items[0];
+    const close = items.filter(x => x !== best && x.d - best.d < PICK_TIE_PX);
+    if (close.length) { this.showPickMenu([best, ...close].slice(0, PICK_MAX), wx, wy); return true; }
+    if (best.id) { this.clearEdgeSelection(); return this.openPanelAt(wx, wy, pressedId || null); }
+    if (this.selectedEdgeId === best.edge.id) this.clearEdgeSelection();
+    else this.selectEdge(best.edge);
+    return true;
+  }
+
+  /* "Quale?": dispositivi ({id}) e cavi ({edge, at}) a portata del dito. I
+     cavi in lista si accendono (gli altri si spengono) con un numero sul
+     cavo uguale a quello nel menu. Se lo zoom è basso, "Ingrandisci qui"
+     avvicina la telecamera a quel punto. */
+  showPickMenu (items, wx, wy) {
     const cam = this.cameras.main, rc = this.game.canvas.getBoundingClientRect();
     const px = rc.left + (wx - cam.worldView.x) * cam.zoom * rc.width / GAME_W;
     const py = rc.top + (wy - cam.worldView.y) * cam.zoom * rc.height / GAME_H;
+    const ids = items.filter(x => x.id).map(x => x.id);
+    const cables = items.filter(x => x.edge);
     ids.forEach(id => { const v = this.compVisuals[id]; if (v) this.setGlow(v, true, 0x4aa3ff); });
+    this.showPickTags(cables);
+    const canZoom = cam.zoom < ZOOM_MAX - 0.01;
     const menu = el('#pick-menu');
     const box = menu.querySelector('.pick-box');
-    box.innerHTML = '<div class="pick-title">Quale?</div>' + ids.map(id =>
-      `<button class="pick-opt" data-id="${id}">${escapeHtml(compLabel(id))}</button>`).join('');
+    box.innerHTML = '<div class="pick-title">Quale?</div>' + items.map(x => x.id
+      ? `<button class="pick-opt" data-id="${x.id}">${escapeHtml(compLabel(x.id))}</button>`
+      : `<button class="pick-opt pick-cable" data-edge="${x.edge.id}"><span class="pick-num" style="border-color:${hex(CABLE_TYPES[x.edge.signal].color)}">${cables.indexOf(x) + 1}</span>`
+        + `<span>Cavo ${escapeHtml(cableName(x.edge.signal))}<small>${escapeHtml(compLabel(x.edge.a))} → ${escapeHtml(compLabel(x.edge.b))}</small></span></button>`).join('')
+      + (canZoom ? '<button class="pick-opt pick-zoom">🔍 Ingrandisci qui</button>' : '');
     menu.classList.add('show');
     setSceneInput(false);
     const bw = box.offsetWidth, bh = box.offsetHeight;
     box.style.left = Math.max(8, Math.min(window.innerWidth - bw - 8, px - bw / 2)) + 'px';
-    box.style.top = Math.max(8, Math.min(window.innerHeight - bh - 8, py - bh - 18)) + 'px';
-    const done = id => {
+    // sopra il dito se c'è posto, altrimenti sotto: non copre il punto
+    // toccato né i numeri sui cavi intorno
+    const ys = [py, ...(this.pickTags || []).map(t => rc.top + (t.y - cam.worldView.y) * cam.zoom * rc.height / GAME_H)];
+    const top = Math.min(...ys) - 18, bottom = Math.max(...ys) + 18;
+    box.style.top = (top - bh >= 8 ? top - bh : Math.max(8, Math.min(window.innerHeight - bh - 8, bottom))) + 'px';
+    const done = act => {
       menu.classList.remove('show');
       ids.forEach(i => { const v = this.compVisuals[i]; if (v && i !== this.assemblyId) this.setGlow(v, false); });
+      this.showPickTags(null);
       setTimeout(() => { if (!rearPanelId && !openCaseName) setSceneInput(true); }, 0);
-      if (id) openRearPanel(id);
+      if (act) act();
     };
-    box.querySelectorAll('.pick-opt').forEach(b => b.addEventListener('click', ev => { ev.stopPropagation(); SFX.button(); done(b.dataset.id); }));
+    box.querySelectorAll('.pick-opt').forEach(b => b.addEventListener('click', ev => {
+      ev.stopPropagation(); SFX.button();
+      if (b.dataset.id) done(() => openRearPanel(b.dataset.id));
+      else if (b.dataset.edge) {
+        const e = gameState.edges.find(x => String(x.id) === b.dataset.edge);
+        done(() => { if (e) this.selectEdge(e); });
+      } else done(() => this.zoomAt(wx, wy, PICK_ZOOM_STEP));
+    }));
     menu.onclick = ev => { if (ev.target === menu) done(null); };
+  }
+
+  // numeri sui cavi del "Quale?" (null li toglie): sempre leggibili, a
+  // qualunque zoom, nel punto del cavo più vicino al dito
+  showPickTags (cables) {
+    if (this.pickTags) { this.pickTags.forEach(t => t.destroy()); this.pickTags = null; }
+    const had = !!this.pickEdgeIds;
+    this.pickEdgeIds = cables && cables.length ? new Set(cables.map(c => c.edge.id)) : null;
+    if (had || this.pickEdgeIds) this.redrawEdges();
+    if (!this.pickEdgeIds) return;
+    const s = 1 / this.screenScale();
+    // ogni numero sul suo cavo, il più vicino possibile al dito ma senza
+    // sovrapporsi agli altri (i cavi fitti corrono vicini)
+    const placed = [], gap = 26 * s;
+    const spots = cables.map(c => {
+      const pts = c.edge._pts, samples = [];
+      for (let i = 0; i < pts.length - 1; i++) {
+        const a = pts[i], b = pts[i + 1], n = Math.max(1, Math.ceil(Math.hypot(b.x - a.x, b.y - a.y) / (4 * s)));
+        for (let j = 0; j < n; j++) samples.push({ x: a.x + (b.x - a.x) * j / n, y: a.y + (b.y - a.y) * j / n });
+      }
+      samples.push(pts[pts.length - 1]);
+      const pick = samples.map(p => ({ p, d: Math.hypot(p.x - c.at.x, p.y - c.at.y) }))
+        .sort((m, n) => m.d - n.d)
+        .find(({ p }) => placed.every(q => Math.hypot(p.x - q.x, p.y - q.y) >= gap));
+      const at = pick ? pick.p : c.at;
+      placed.push(at);
+      return at;
+    });
+    this.pickTags = cables.map((c, i) => {
+      const t = this.add.container(spots[i].x, spots[i].y).setDepth(65).setScale(s);
+      t.add(this.add.circle(0, 0, 11, 0x1c1d22, 1).setStrokeStyle(2.5, CABLE_TYPES[c.edge.signal].color, 1));
+      t.add(this.add.text(0, 0, String(i + 1), { fontFamily: 'Inter, sans-serif', fontSize: '13px', fontStyle: 'bold', color: '#ffffff' }).setOrigin(0.5));
+      return t;
+    });
+  }
+
+  // zoom verso un punto del mondo, che finisce al centro dello schermo
+  zoomAt (wx, wy, factor) {
+    const cam = this.cameras.main;
+    cam.setZoom(Phaser.Math.Clamp(Math.max(cam.zoom * factor, PICK_ZOOM_MIN), ZOOM_MIN, ZOOM_MAX));
+    cam.centerOn(wx, wy);
+    this.refreshEdgeDeleteButton();
   }
 
   onDevicePress (id, pointer) {
@@ -7514,7 +7633,7 @@ class StageScene extends Phaser.Scene {
     if (pr.moved) return;
     // tocco breve: pannello posteriore (o "Quale?" se il tocco è ambiguo)
     if (this.assemblyId) this.exitAssembly();
-    this.openPanelAt(pr.wx, pr.wy, pr.id);
+    this.pickNear(pr.wx, pr.wy, pr.id);
   }
 
   /* modalità montaggio: il dispositivo ondeggia e mostra la ✕ per toglierlo;
