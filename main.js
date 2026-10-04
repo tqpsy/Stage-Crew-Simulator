@@ -5108,7 +5108,7 @@ function tapDevice (compId) {
     const n = gameState.edges.length;
     rearPanelId = id;
     el('#rear-detail').innerHTML = '';
-    onRearPortClick(id, port);
+    onRearPortClick(id, port, true);
     if (gameState.edges.length > n) return;
     rearPanelId = null;
     // non collegato (un connettore scivolato, il capo che avvisa): il
@@ -5134,7 +5134,7 @@ function chainNext (edge) {
   scene.redrawEdges();
 }
 const CIABATTE_FINITE = 'Ciabatte finite: non ne servono altre. Le prese del Quadro accettano più cavi, e con gli adattatori del baule (CEE / Schuko, CEE / PowerCON) ci colleghi qualunque spina.';
-function onRearPortClick (compId, portId) {
+function onRearPortClick (compId, portId, viaTap) {
   const scene = window.__scene;
   if (!scene) return;
   const p = getPortDef(compId, portId);
@@ -5147,8 +5147,10 @@ function onRearPortClick (compId, portId) {
     if (!rearIsTable()) closeRearPanel();
     return;
   }
-  // il capo pronto della catena non va in questa presa: si riparte da qui
-  if (pending && pending.auto && !isPendingPort && !portTakesPending(compId, portId)) {
+  // il capo pronto della catena si collega solo toccando il dispositivo
+  // dopo (tapDevice): una presa scelta nel pannello fa ripartire da qui,
+  // così ampli → SUB 1 e poi ampli → SUB 2 non lega il LINK del SUB 1
+  if (pending && pending.auto && !isPendingPort && (!viaTap || !portTakesPending(compId, portId))) {
     scene.cancelPending();
     pending = null; isPendingPort = false;
   }

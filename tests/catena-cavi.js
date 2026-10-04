@@ -92,15 +92,20 @@ const OUT = process.env.SHOTS || null;
     openRearPanel(PAR[0]); onRearPortClick(PAR[0], 'power_thru');
     tapDevice(PAR[1]);
     const chained = gameState.pendingPort && gameState.pendingPort.portId === 'power_thru' && gameState.pendingPort.componentId === PAR[1];
-    S.endLay(true);
+    // dal pannello, una presa scelta a mano riparte da lì (non lega il THRU)
+    const n0 = gameState.edges.length;
+    openRearPanel(PAR[2]); onRearPortClick(PAR[2], 'power_in');
+    const q = gameState.pendingPort;
+    const fresh = gameState.edges.length === n0 && !!q && q.componentId === PAR[2] && q.portId === 'power_in' && !q.auto;
+    S.cancelPending(); S.endLay(true);
     selectCable('xlr');
     const dropped = !gameState.pendingPort;
     // col cavo pronto, il pannello di un altro dispositivo riparte da lì
     selectCable('powercon'); openRearPanel(PAR[0]); onRearPortClick(PAR[0], 'power_thru');
     closeRearPanel(); S.endLay(true);
-    return { chained, dropped, n: gameState.edges.length };
+    return { chained, fresh, dropped, n: gameState.edges.length };
   }, ids);
-  check(four.chained && four.dropped, 'catena PowerCON o cambio di cavo: ' + JSON.stringify(four));
+  check(four.chained && four.fresh && four.dropped, 'catena PowerCON o cambio di cavo: ' + JSON.stringify(four));
 
   // 5) più prese adatte (il mixer ha tanti ingressi XLR): si apre il pannello
   const five = await ev(({ MX, SUB }) => {

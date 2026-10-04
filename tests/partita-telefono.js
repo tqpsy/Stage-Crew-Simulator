@@ -20,7 +20,7 @@ const OUT = process.env.SHOTS || null;
   await p.goto('file://' + path.join(__dirname, '..', 'index.html'));
   await p.waitForFunction(() => window.__scene, null, { timeout: 20000 });
   await p.waitForTimeout(300);
-  let taps = 0, menus = 0, zoomResets = 0, lays = 0; const log = []; const problems = [];
+  let taps = 0, menus = 0, zoomResets = 0, lays = 0, quicks = 0, chained = 0; const log = []; const problems = [];
   // menù iniziale: nome del tecnico, un service tra i tre e via
   await p.locator('#player-input').fill('Tecnico Telefono');
   taps++; await p.locator('#service-offers .offer-card').first().tap();
@@ -70,7 +70,9 @@ const OUT = process.env.SHOTS || null;
     }
   };
   const devPt = async id => { const c = await p.evaluate(id => { const v = window.__scene.compVisuals[id].container; return { x: v.x, y: v.y }; }, id); return w2p(c.x, c.y); };
-  const openDev = async id => {
+  // quick: con un cavo in mano il tocco può collegare subito (una sola presa adatta)
+  const openDev = async (id, quick) => {
+    const n0 = await p.evaluate(() => gameState.edges.length);
     const pre = await p.evaluate(() => ({ input: window.__scene.input.enabled, modal: el('#rear-modal').classList.contains('show'), casem: el('#case-modal').classList.contains('show'), cam: [window.__scene.cameras.main.zoom, Math.round(window.__scene.cameras.main.scrollX), Math.round(window.__scene.cameras.main.scrollY)] }));
     const dp = await devPt(id);
     const hit = await p.evaluate(([x, y]) => { const e = document.elementFromPoint(x, y); return e ? (e.id || e.className || e.tagName) : null; }, [dp.x, dp.y]);
@@ -80,6 +82,7 @@ const OUT = process.env.SHOTS || null;
     const menu = await p.evaluate(() => { const m = document.getElementById('pick-menu'); return m && m.classList.contains('show') ? [...m.querySelectorAll('.pick-opt')].map(b => b.dataset.id) : null; });
     if (menu) { menus++; if (!menu.includes(id)) problems.push('menu Quale? senza ' + id + ': ' + menu); await tapSel('#pick-menu .pick-opt[data-id="' + (menu.includes(id) ? id : menu[0]) + '"]'); }
     const opened = await p.evaluate(() => el('#rear-modal').classList.contains('show') && rearPanelId);
+    if (quick && !opened && await p.evaluate(() => gameState.edges.length) === n0 + 1) return 'quick';
     if (opened !== id) { problems.push('tocco su ' + id + ' ha aperto ' + opened + ' pre=' + JSON.stringify(pre) + ' pt=' + JSON.stringify(dp) + ' el=' + hit + ' dopo=' + JSON.stringify(await p.evaluate(() => ({ input: window.__scene.input.enabled, asm: window.__scene.assemblyId, toast: el('#toast').textContent, pend: gameState.pendingPort })))); if (opened) await p.evaluate(() => closeRearPanel()); await p.evaluate(id => openRearPanel(id), id); }
   };
   const port = async (id, pid) => { await openDev(id); await tapSel('#rear-svg .rp-port[data-port="' + pid + '"]'); };
@@ -89,13 +92,25 @@ const OUT = process.env.SHOTS || null;
     const cs = await p.evaluate(c => Object.keys(CABLE_CASES).find(k => CABLE_CASES[k].items.some(i => i.cable === c)), cable);
     await tapSel('.case-btn[data-case="' + cs + '"]'); await tapSel('#case-svg .cc-coil[data-cable="' + cable + '"]');
   };
+  const layShown = () => p.evaluate(() => el('#lay-bar').classList.contains('show'));
   const wire = async (cable, a, ap, bb, bp) => {
     const n = await p.evaluate(() => gameState.edges.length);
     if (cable) await take(cable);
-    await port(a, ap); await port(bb, bp);
+    // catena: il cavo è già pronto nel THRU del dispositivo di prima
+    const ready = await p.evaluate(([a, ap]) => { const q = gameState.pendingPort; return !!q && q.componentId === a && q.portId === ap; }, [a, ap]);
+    if (ready) chained++;
+    else {
+      if (await layShown()) { lays++; await tapSel('#lay-done'); }
+      await port(a, ap);
+    }
+    if (await openDev(bb, true) === 'quick') quicks++;
+    else await tapSel('#rear-svg .rp-port[data-port="' + bp + '"]');
     const n2 = await p.evaluate(() => gameState.edges.length);
-    // il cavo collegato resta in mano da stendere: qui va bene com'è
-    if (await p.evaluate(() => el('#lay-bar').classList.contains('show'))) { lays++; await tapSel('#lay-done'); }
+    const last = await p.evaluate(() => { const e = gameState.edges[gameState.edges.length - 1]; return e && [e.a, e.aPort, e.b, e.bPort].join('.'); });
+    if (n2 === n + 1 && !last.includes(bb + '.' + bp)) problems.push('collegato alla presa sbagliata: ' + last + ' invece di ' + bb + '.' + bp);
+    // il cavo collegato resta in mano da stendere: qui va bene com'è (con
+    // la catena pronta si tocca direttamente il prossimo)
+    if (await layShown() && !(await p.evaluate(() => gameState.pendingPort && gameState.pendingPort.auto))) { lays++; await tapSel('#lay-done'); }
     if (await p.evaluate(() => el('#rear-modal').classList.contains('show'))) { problems.push('pannello rimasto aperto dopo ' + a + '->' + bb); await p.evaluate(() => closeRearPanel()); }
     if (n2 !== n + 1) { problems.push('cavo ' + cable + ' ' + a + '.' + ap + ' -> ' + bb + '.' + bp + ' NON collegato: ' + await toast()); await shot('fail-' + a + '-' + bb); }
   };
@@ -179,7 +194,7 @@ const OUT = process.env.SHOTS || null;
   const rep = await p.evaluate(() => reputation());
   log.push('reputazione: ' + rep);
   if (rep !== 5 || !/Reputazione \+5\./.test(await toast())) problems.push('reputazione del collaudo sbagliata: ' + rep);
-  log.push('TOTALE tocchi: ' + taps + ' (menu Quale?: ' + menus + ', ritorni alla vista intera: ' + zoomResets + ', cavi stesi con Fatto: ' + lays + ')');
+  log.push('TOTALE tocchi: ' + taps + ' (menu Quale?: ' + menus + ', ritorni alla vista intera: ' + zoomResets + ', cavi stesi con Fatto: ' + lays + ', collegati al volo: ' + quicks + ', in catena: ' + chained + ')');
   await shot('fine');
   console.log(log.join('\n')); console.log('PROBLEMI:', JSON.stringify(problems, null, 1)); console.log('ERRORI JS:', errs);
   await b.close();
