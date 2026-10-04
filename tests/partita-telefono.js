@@ -57,7 +57,8 @@ const OUT = process.env.SHOTS || null;
   };
   const tapAt = async pt => { taps++; await p.touchscreen.tap(pt.x, pt.y); await p.waitForTimeout(120); };
   const tapSel = async sel => { taps++; await p.locator(sel).first().tap(); await p.waitForTimeout(120); };
-  const tab = async t => { if (!(await p.evaluate(t => document.querySelector('.tab-btn[data-tab="' + t + '"]').classList.contains('active'), t))) await tapSel('.tab-btn[data-tab="' + t + '"]'); };
+  // la scheda si tocca se non è quella attiva o se il suo cassetto è chiuso
+  const tab = async t => { if (!(await p.evaluate(t => document.querySelector('.tab-btn[data-tab="' + t + '"]').classList.contains('active') && el('#toolbar').classList.contains('open'), t))) await tapSel('.tab-btn[data-tab="' + t + '"]'); };
   const cell = async (gx, gy) => { const w = await p.evaluate(([a, b]) => gridToScreen(a + .5, b + .5), [gx, gy]); return w2p(w.x, w.y); };
   const place = async (tabName, type, cells) => {
     await tab(tabName); await tapSel('.piece[data-type="' + type + '"]');

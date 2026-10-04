@@ -115,6 +115,8 @@ const offCell = l => l.filter(c => Math.abs(c.x - c.wx) > 1 || Math.abs(c.y - c.
       const w = gridToScreen(4.75, 2.75); window.__scene.placeComponentAt('quadro', w.x, w.y);
       gameState.giro = 2; gameState.giroFails = [1, 0, 0]; gameState.stats.tests = 3; gameState.trips = 1; updateGiroUI();
     });
+    // il reset sta nel menù (☰ → Ricomincia il livello)
+    await p.locator('#menu-btn').click();
     await p.locator('#reset-btn').click();
     await p.waitForTimeout(150);
     const zero = await p.evaluate(() => ({ giro: gameState.giro, tests: gameState.stats.tests, pezzi: Object.keys(gameState.placed).length }));
