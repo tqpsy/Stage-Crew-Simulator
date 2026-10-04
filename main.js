@@ -1266,6 +1266,7 @@ function applyPowerAction (action) {
   if (ampsOn && mixerFlip) {
     gameState.procErrors = gameState.procErrors || [];
     gameState.procErrors.push('pop');
+    tireOut(FATIGUE.scare);
     showToast('TUMP! Mixer acceso o spento con i finali già accesi: il colpo è finito nelle casse. I finali si accendono per ultimi e si spengono per primi.', 'bad');
     if (scene) scene.popSpeakers();
     SFX.tump();
@@ -1295,6 +1296,7 @@ function checkOverloads () {
   const byPeak = tripped.every(ph => steady[ph] <= PHASE_BUDGET_W);
   tripped.forEach(ph => { prot[ph] = false; prot.tripped[ph] = true; });
   gameState.trips = (gameState.trips || 0) + tripped.length;
+  tireOut(FATIGUE.scare * tripped.length);
   SFX.trip();
   const kw = tripped.map(ph => ph + ' ' + fmtKW(loads[ph], 1) + ' kW').join(', ');
   showToast(byPeak
@@ -1326,6 +1328,7 @@ function checkLiveCableChange (edge) {
   prot.rcd = false;
   prot.tripped.rcd = true;
   gameState.rcdTrips = (gameState.rcdTrips || 0) + 1;
+  tireOut(FATIGUE.scare);
   SFX.rcd();
   showToast('Salvavita scattato: hai collegato o scollegato un cavo di corrente sotto carico, con un apparecchio acceso. Spegni prima di staccare o attaccare, poi riarma il salvavita dal Quadro.', 'bad');
   if (window.__scene) {
@@ -2564,7 +2567,7 @@ function assistantFavor (fault) {
      del guasto più corto: li calcola preside.html dalla stanchezza che
      riceve, e alla fine la restituisce.
    Nuova partita = tecnico riposato. */
-const FATIGUE = { max: 100, perMinute: 1, perAction: 0.25, beer: 30, slipFrom: 70, slipMax: 0.15, confirmMs: 4000 };
+const FATIGUE = { max: 100, perMinute: 1, perAction: 0.25, scare: 4, failedTest: 2, beer: 30, slipFrom: 70, slipMax: 0.15, confirmMs: 4000 };
 const fatigue = () => Profile.data.fatigue || 0;
 // quiet: senza salvare subito (il tempo che passa ogni secondo si salva con
 // la prossima azione o all'uscita dalla pagina)
@@ -2620,6 +2623,7 @@ setInterval(() => {
 
 function applySettings () {
   SFX.setVolume(settings().volume);
+  document.body.classList.toggle('rfx', reducedFx());
   paintBeerBtn();
   const tag = el('#service-tag');
   if (tag) tag.textContent = gameActive || Profile.data.service
@@ -4118,7 +4122,7 @@ el('#player-input').addEventListener('input', ev => { draft.player = ev.target.v
 el('#settings-back').addEventListener('click', () => { SFX.button(); Profile.flush(); showMenuPage('main'); });
 el('#set-volume').addEventListener('input', ev => { settings().volume = ev.target.value / 100; SFX.setVolume(settings().volume); Profile.save(); });
 el('#set-volume').addEventListener('change', () => SFX.button());
-el('#set-reduced').addEventListener('change', ev => { settings().reducedFx = ev.target.checked; Profile.save(); });
+el('#set-reduced').addEventListener('change', ev => { settings().reducedFx = ev.target.checked; Profile.save(); applySettings(); });
 el('#set-skipshow').addEventListener('change', ev => { settings().skipShow = ev.target.checked; Profile.save(); });
 el('#set-skipscarico').addEventListener('change', ev => { settings().skipScarico = ev.target.checked; Profile.save(); });
 el('#set-bosstips').addEventListener('change', ev => { settings().bossTips = ev.target.checked; Profile.save(); });
@@ -5956,6 +5960,7 @@ function updateGiroUI () {
 // aperto di partenza solo sugli schermi larghi: su tablet e telefoni
 // coprirebbe le celle dove vanno i pezzi (si apre toccandolo)
 let foglioOpen = window.innerWidth >= 1100;
+let foglioSeen = null;   // le voci già spuntate del giro in corso (per il ✓ delle nuove)
 function updateFoglio () {
   const box = el('#foglio');
   if (!box) return;
@@ -6011,6 +6016,18 @@ function updateFoglio () {
     head = 'Montaggio finito · Test impianto';
     body = '<p class="fg-note">Tutti i giri sono passati. Il collaudo prova tutto insieme: se hai toccato qualcosa nel frattempo, lo scopre.</p>';
   }
+  // pronto per la prova: il pulsante si illumina; ogni voce appena spuntata
+  // fa comparire un ✓ verde sui suoi pezzi (non al caricamento o al cambio di giro)
+  const checks = giro < GIRO_COLLAUDO ? giroChecks(giro) : cambioDjOn() ? cambioChecks() : null;
+  const runBtn = el('#run-btn');
+  if (runBtn) runBtn.classList.toggle('ready', checks ? checks.every(x => x.ok) : !collaudoDone() && gameActive);
+  if (checks) {
+    const key = giro < GIRO_COLLAUDO ? 'g' + giro : 'cambio';
+    const okNow = new Set(checks.filter(x => x.ok).map(x => x.what));
+    if (foglioSeen && foglioSeen.key === key && gameActive && window.__scene)
+      checks.filter(x => x.ok && !foglioSeen.ok.has(x.what)).forEach(x => window.__scene.floatCheck(x.ids || []));
+    foglioSeen = { key, ok: okNow };
+  } else foglioSeen = null;
   box.innerHTML = '<button class="fg-head" id="foglio-toggle">' + icon + head + '<span class="fg-caret">' + (foglioOpen ? '▾' : '▸') + '</span></button>'
     + (patience ? '<div class="fg-patience">' + patienceHtml() + '</div>' : '')
     + (foglioOpen ? '<div class="fg-body">' + (giro < GIRO_COLLAUDO || !caviDone() ? '<div class="fg-steps">' + steps + '</div>' : '') + body + '</div>' : '');
@@ -9254,7 +9271,7 @@ class StageScene extends Phaser.Scene {
       updateGiroUI();
       return;
     }
-    gameState.stats.failedTests++;
+    gameState.stats.failedTests++; tireOut(FATIGUE.failedTest);
     const n = ++gameState.giroFails[giro];
     const boss = bossName();
     let hint;
@@ -9278,6 +9295,18 @@ class StageScene extends Phaser.Scene {
     if (g.id === 'corrente') { showToast('Niente corrente: ' + hint + exact, 'bad'); this.fxSparks(); }
     else if (g.id === 'audio') { showToast('Le casse restano mute: ' + hint + exact, 'bad'); this.fxCrackle(); }
     else { showToast('Le luci non rispondono: ' + hint + exact, 'bad'); this.fxLightsTilt(); }
+  }
+
+  // una voce del foglio appena spuntata: un ✓ verde sale dai suoi pezzi
+  floatCheck (ids) {
+    ids.slice(0, 3).forEach(id => {
+      const v = this.compVisuals[id];
+      if (!v) return;
+      const t = this.add.text(v.container.x, v.container.y - 40, '✓', {
+        fontFamily: 'Barlow Condensed, sans-serif', fontSize: '34px', fontStyle: 'bold', color: '#49b06a', stroke: '#141519', strokeThickness: 5
+      }).setOrigin(0.5).setDepth(60);
+      this.tweens.add({ targets: t, y: t.y - 36, alpha: { from: 1, to: 0 }, duration: 900, ease: 'Quad.Out', onComplete: () => t.destroy() });
+    });
   }
 
   /* prova di un giro superata: la sua catena si accende un pezzo alla volta
@@ -9308,7 +9337,7 @@ class StageScene extends Phaser.Scene {
     const miss = cambioChecks().find(x => !x.ok);
     gameState.stats.tests++;
     if (!miss) { finishCambioDj(); return; }
-    gameState.stats.failedTests++;
+    gameState.stats.failedTests++; tireOut(FATIGUE.failedTest);
     const n = c.fails = (c.fails || 0) + 1;
     Profile.save();
     const hint = {
@@ -9370,7 +9399,7 @@ class StageScene extends Phaser.Scene {
        primo collegamento che manca dell'impianto che ha fallito, se no la
        prima voce che non va nel suo giro (quadro armato, accesi, stereo…). */
     const fail = (kind, hint) => {
-      gameState.stats.failedTests++;
+      gameState.stats.failedTests++; tireOut(FATIGUE.failedTest);
       const n = gameState.giroFails[GIRO_COLLAUDO] = (gameState.giroFails[GIRO_COLLAUDO] || 0) + 1;
       const giro = { power: 0, audio: 1, lights: 2 }[kind];
       const miss = result.overPhase || result.overBudget ? null

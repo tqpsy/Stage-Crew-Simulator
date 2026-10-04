@@ -194,6 +194,9 @@ errori. Si recupera bevendo una birra.
   suggerimento del tasto e nel messaggio quando lo si tocca.
 - **Sale** di 1 per ogni minuto di gioco (conta come il tempo di gioco: non
   col menù aperto) e di 0,25 per ogni pezzo posato e ogni cavo collegato.
+  Gli errori mettono tensione: +4 per ogni protezione che scatta (magnetotermico
+  o salvavita) e ogni colpo nelle casse, +2 per ogni prova fallita. Così gli
+  errori del montaggio rendono più difficili gli show, che ricevono la stanchezza.
 - **Scende** di 30 bevendo una birra dal tasto 🍺. Serve un secondo tocco
   di conferma: la birra bevuta esce dal punteggio finale. Senza birre, o da
   riposati, non si beve.

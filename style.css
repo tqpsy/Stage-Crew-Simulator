@@ -1057,6 +1057,11 @@ body.drawer-open #toast{ position:fixed; bottom:auto; top:calc(var(--hud-h) + 16
   border:6px solid #6e737c; box-shadow:0 0 0 1px #9aa0aa, inset 0 -4px 0 rgba(0,0,0,.2), 0 0 18px rgba(242,165,65,.4), 0 6px 16px rgba(0,0,0,.6); }
 #run-btn:active{ transform:translateY(2px); box-shadow:0 0 0 1px #9aa0aa, 0 3px 8px rgba(0,0,0,.6); }
 #toolbar.open #run-bar{ display:none; }
+/* tutte le voci del foglio a posto: il pulsante chiama la prova */
+#run-btn.ready{ border-color:#49b06a; animation:run-ready 1.1s ease-in-out infinite; }
+@keyframes run-ready{ 50%{ box-shadow:0 0 0 1px #9aa0aa, 0 0 0 8px rgba(73,176,106,.35), 0 0 26px rgba(73,176,106,.7), 0 6px 16px rgba(0,0,0,.6); } }
+@media (prefers-reduced-motion:reduce){ #run-btn.ready{ animation:none; } }
+body.rfx #run-btn.ready{ animation:none; }
 
 /* ---------- telefono ---------- */
 @media (max-width:699px){
