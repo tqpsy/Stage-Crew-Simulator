@@ -1560,11 +1560,6 @@ function setCircuitStatus (state) {
 
 let toastTimer = null;
 let toastHeld = false;
-// l'avviso sta in basso, appena sopra la barra del cavo in mano se c'è
-function placeToast () {
-  const bars = ['#cable-banner', '#lay-bar'].map(el).filter(b => b && b.classList.contains('show'));
-  el('#toast').style.bottom = (12 + Math.max(0, ...bars.map(b => b.offsetHeight + 8))) + 'px';
-}
 function hideToast () {
   clearTimeout(toastTimer);
   el('#toast').classList.remove('show');
@@ -1573,7 +1568,6 @@ function showToast (msg, kind) {
   const toast = el('#toast');
   toastHeld = false; toast.classList.remove('hold');
   el('#toast-msg').textContent = msg;
-  placeToast();
   // di base è un avviso neutro; 'ok' per i successi, 'bad' solo per i guasti veri
   toast.classList.remove('ok', 'bad', 'boss');
   if (kind === 'ok' || kind === 'bad' || kind === 'boss') toast.classList.add(kind);
@@ -1594,9 +1588,6 @@ function releaseToast () {
   showToast(toast.textContent, ['ok', 'bad', 'boss'].find(k => toast.classList.contains(k)));
 }
 el('#toast-x').addEventListener('click', hideToast);
-// le barre in basso compaiono e spariscono: l'avviso aperto le segue
-new MutationObserver(() => { if (el('#toast').classList.contains('show')) placeToast(); })
-  .observe(el('#stage-wrap'), { subtree: true, attributes: true, attributeFilter: ['class'] });
 
 function updateStockUI () {
   // la potenza impegnata segue i pezzi posati: si aggiorna a ogni posa
