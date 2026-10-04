@@ -75,6 +75,11 @@
   .mute-btn{width:100%;min-height:70px;border-radius:10px;border:2px solid var(--red);background:#4a1c17;color:#fff;font-family:var(--display);font-size:20px;letter-spacing:.05em;padding:6px}
   .mute-btn[aria-pressed=true]{background:var(--red)}
   .pop.par{width:min(236px,calc(100vw - 32px));border-color:var(--red)}
+  .pop.par{overflow-y:auto;gap:4px}
+  .pop.par .x{position:absolute;right:6px;top:6px;margin:0}
+  .pop.par{position:relative}
+  .pop.par .act{padding:6px 4px;grid-column:span 3;text-align:center}
+  .pop.par .act[data-k^=a]{grid-column:span 2}
   .pop .act{background:#15161a;border:1px solid var(--hairline);border-radius:8px;padding:8px;font-size:13px;font-weight:600;text-align:left}
   .pop .act:disabled{opacity:.4}
   .pop .x{justify-self:end;background:none;border:0;color:var(--muted);font-size:16px;padding:0 4px;margin-top:-4px}
@@ -434,13 +439,13 @@
       <rect id="strobe" width="400" height="250" fill="#fff" opacity="0" pointer-events="none"/>
       <rect id="dark" width="400" height="250" fill="#000" opacity="0" pointer-events="none"/>
     </svg>
-    <button class="chip" id="dmx-chip" hidden>PAR 4 senza DMX: tocca per sistemarlo</button>
+    <button class="chip" id="dmx-chip" hidden>PAR 4 non risponde: tocca per controllarlo</button>
     <div id="pops">
       <div class="pop par" id="pop-par" hidden>
         <button class="x" id="par-close" aria-label="Chiudi">✕</button>
-        <b>PAR 4 non sente la consolle</b>
+        <b>PAR 4 non risponde</b>
         <small id="par-clue"></small>
-        <div id="par-acts" style="display:grid;gap:6px"></div>
+        <div id="par-acts" style="display:grid;grid-template-columns:repeat(6,1fr);gap:5px"></div>
       </div>
       <div class="pop mute" id="pop-mute" hidden>
         <b>Musa va verso la cassa!</b>
@@ -508,7 +513,7 @@
     </div>
     <ul>
       <li>I guasti piccoli arrivano come <b>note speciali</b>: tira giù il fader che va in rosso, dai il <b>MUTE</b> quando Musa va verso la cassa.</li>
-      <li>Se un PAR perde il DMX la sua corsia diventa grigia: <b>tocca il PAR</b> e sistemalo quando puoi.</li>
+      <li>Se un PAR non risponde la sua corsia diventa grigia: <b>tocca il PAR</b>, guarda display e spia DMX e capisci cos'è. Puoi farlo subito o in un momento calmo.</li>
       <li>Per un guasto grosso scegli chi ci va: <b>tu</b>, <b>il capo</b> per una 🍺, o <b>Gerry</b>. Se ci vai tu, al ritorno il DJ fa il <b>rewind</b>.</li>
       <li>Più va avanti il pezzo, più le note corrono e si fanno fitte.</li>
       <li>Tastiera: <b>D F J</b>, M per il mute, V per il fader, B per la birra.</li>
@@ -1046,7 +1051,9 @@
     if (id === 'mangia') { S.micHot = true; S.mic = 1; f.sp = addSpecial('fader-mic'); showFader('mic'); toast('Musa si mangia il microfono: la voce satura!', 'bad'); }
     if (id === 'larsen') { S.musaGo = 0.01; f.sp = addSpecial('mute'); $('#pop-mute').hidden = false; toast('Musa scende verso la cassa col microfono!', 'bad'); }
     if (id === 'dmx') {
-      S.dmxDead = true; f.cause = Math.random() < 0.5 ? 'cavo' : 'indirizzo';
+      // tre cause possibili, a caso: si capiscono solo guardando il PAR
+      S.dmxDead = true; f.cause = PAR_CAUSES[Math.floor(Math.random() * PAR_CAUSES.length)];
+      f.shown = ['001', '007', '013'][Math.floor(Math.random() * 3)];   // l'indirizzo sbagliato sul display
       $('#dmx-chip').hidden = false; sfx.miss(); toast('PAR 4 non risponde più: la corsia CHASE è spenta.', 'bad'); paintPads();
     }
     if (id === 'fase') {
@@ -1106,27 +1113,37 @@
     tr.addEventListener('pointercancel', () => { drag = false; });
   })();
 
-  // il PAR senza DMX: si guarda, si capisce e si sistema, mentre la pista va
+  /* il PAR che non risponde: il gioco non dice la causa, mostra quello che
+     vede un tecnico davanti al faro (display, spia DMX, ventola) e il patch
+     sheet. Da lì si ragiona: display spento = niente corrente; display
+     acceso ma spia DMX spenta = il segnale non arriva (cavo); spia accesa
+     ma indirizzo diverso dal patch = indirizzo sbagliato. */
+  const PAR_CAUSES = ['cavo', 'indirizzo', 'corrente'];
+  const PAR_FIX = { cavo: 'plug', indirizzo: 'a010', corrente: 'power' };
   function openParPanel () {
     const f = S.faults.dmx;
     if (!f || f.state !== 'on' || !S.running) return;
     $('#pop-par').hidden = false;
-    $('#par-clue').innerHTML = f.cause === 'cavo'
-      ? 'Il connettore DMX penzola dal retro del PAR 4. Il display dice <b>A-010</b>.'
-      : 'Il cavo DMX è infilato. Il display dice <b>A-001</b>. Gli altri PAR: 001, 004, 007.';
-    const acts = [['plug', 'Rinfila il connettore DMX'], ['a001', 'Indirizzo 001'], ['a010', 'Indirizzo 010'], ['a013', 'Indirizzo 013']];
+    const look = {
+      cavo: ['A-010', 'spenta', 'gira'],
+      indirizzo: ['A-' + (f.shown || '001'), 'accesa', 'gira'],
+      corrente: ['spento', 'spenta', 'ferma']
+    }[f.cause];
+    $('#par-clue').innerHTML = `Display: <b>${look[0]}</b> · spia DMX: <b>${look[1]}</b> · ventola: <b>${look[2]}</b><br>`
+      + '<span style="opacity:.75">Patch: 001 · 004 · 007 · <b>PAR 4 = 010</b>. Spia DMX accesa = il segnale arriva.</span>';
+    const acts = [['plug', 'Rinfila DMX'], ['power', 'Rinfila PowerCON'], ['a001', '001'], ['a010', '010'], ['a013', '013']];
     $('#par-acts').innerHTML = acts.map(([k, l]) => `<button class="act" data-k="${k}">${l}</button>`).join('');
     $('#par-acts').querySelectorAll('button').forEach(b => b.onclick = () => fixPar(b.dataset.k));
   }
   function fixPar (k) {
     const f = S.faults.dmx;
     if (!f || f.state !== 'on') return;
-    const right = f.cause === 'cavo' ? k === 'plug' : k === 'a010';
+    const right = k === PAR_FIX[f.cause];
     // una prova sbagliata costa un secondo e mezzo prima della prossima
     if (f.lockUntil && S.t < f.lockUntil) { toast('Aspetta: stai ancora provando.'); return; }
     if (!right) {
       S.grad = clamp(S.grad - 1); f.lockUntil = S.t + 1.5;
-      toast(f.cause === 'cavo' ? 'Non cambia niente: il PAR non riceve proprio il segnale.' : 'Non risponde: su quell\'indirizzo c\'è un altro PAR (o nessuno).', 'bad');
+      toast(k === 'plug' || k === 'power' ? 'Era già infilato bene: non cambia niente.' : 'Non cambia niente: guarda di nuovo display e spia.', 'bad');
       return;
     }
     S.dmxDead = false; $('#dmx-chip').hidden = true; $('#pop-par').hidden = true; paintPads();
@@ -1321,7 +1338,7 @@
     if (g && g.state === 'on' && t >= g.sp.t - BEAT) setFader('dj', 0.6);
     if (m && m.state === 'on' && t >= m.sp.t - BEAT) setFader('mic', 0.6);
     if (L && L.state === 'on' && !S.micMuted && t >= L.sp.t - BEAT) muteMic();
-    if (d && d.state === 'on' && t >= d.start + 2) { openParPanel(); fixPar(d.cause === 'cavo' ? 'plug' : 'a010'); }
+    if (d && d.state === 'on' && t >= d.start + 2) { openParPanel(); fixPar(PAR_FIX[d.cause]); }
     if (F && S.big && !S.big.who && t >= S.big.start + 1) choose('tu');
     if (F && S.away && !F.busyUntil && S.phaseDown) quadro(F.plug === 'L3' ? 'arm' : 'L3');
   }
@@ -1501,7 +1518,9 @@
     S.repParts.forEach(([what, v]) => notes.push(what + (v ? ` (${v > 0 ? '+' : ''}${v})` : '') + '.'));
     const rep = REPS.set + Math.round((R.grad - 60) / 10) + S.repParts.reduce((a, p) => a + p[1], 0);
     result = { type: 'dj', grad: R.grad, rep, beers, drunk: S.drunk, larsens: S.larsens, stars: R.stars, acc: Math.round(R.acc * 100),
-      msg: 'Il bidello ha cacciato via i musicisti: la festa è rimasta senza musica.', maxCombo: R.maxCombo, score: R.score, favours: S.favours, fase: S.big ? S.big.who || 'gerry' : null, rewinds: S.rewinds, notes };
+      msg: 'Il bidello ha cacciato via i musicisti: la festa è rimasta senza musica.', maxCombo: R.maxCombo, score: R.score, favours: S.favours, fase: S.big ? S.big.who || 'gerry' : null,
+      faseFast: S.repParts.some(p => p[1] === REPS.tuFast),
+      par: S.faults.dmx ? { ok: 'fast', late: 'ok' }[S.faults.dmx.state] || 'no' : null, parCause: S.faults.dmx ? S.faults.dmx.cause : null, rewinds: S.rewinds, notes };
     $('#outro-title').textContent = S.auto ? 'Così fa il capo.' : R.grad >= 75 ? 'La palestra è venuta giù!' : R.grad >= 45 ? 'Si è ballato.' : 'Il pubblico è andato al bar.';
     $('#r-stars').innerHTML = '★'.repeat(R.stars) + '<i>' + '★'.repeat(5 - R.stars) + '</i>';
     $('#r-grad').textContent = R.grad + '%';
