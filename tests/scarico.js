@@ -45,10 +45,10 @@ const path = require('path');
     damage(c('stativi'), 90);
     damage(c('rack'), 70);        // difettoso: il finale va controllato al montaggio
     damage(c('segnale'), 110);    // difettoso: cavi aggrovigliati nel baule
-    // Tonino fermo (al telefono) e i due tecnici in cortile, poi ogni case al suo posto
+    // Macio fermo (al telefono) e i due tecnici in cortile, poi ogni case al suo posto
     for (const w of G.workers) release(w);
-    tonino('phone'); G.tonino.ai.t = -999;
-    Matter.Body.setPosition(G.player.body, { x: 700, y: 500 }); Matter.Body.setPosition(G.tonino.body, { x: 700, y: 600 });
+    macio('phone'); G.macio.ai.t = -999;
+    Matter.Body.setPosition(G.player.body, { x: 700, y: 500 }); Matter.Body.setPosition(G.macio.body, { x: 700, y: 600 });
     const spots = { corrente: [1675, 230, 1], distro: [1745, 230, 0], ricambio: [1810, 230, 0],
       segnale: [1740, 380, 0], stativi: [1740, 470, 0], par: [1740, 560, 0],
       sub1: [1545, 380, 0], sub2: [1545, 480, 0], top1: [1545, 570, 0], top2: [1545, 640, 0],
