@@ -170,8 +170,12 @@ function tavoloSlotOffset (type) {
   return { x: q.x, y: q.y - TAVOLO_ITEM_Z[type] / 2 };
 }
 const CTRL_ISO  = isoFrame(56, 34, 10);   // consolle luci da tavolo, piano inclinato
-const QUADRO_ISO = isoFrame(112, 34, 46); // armadio di distribuzione, prese sul fronte b=B
-const QUADRO_PHASE_A = [22, 56, 90];      // posizione lungo il fronte di prese/interruttori L1-L3
+const QUADRO_ISO = isoFrame(140, 34, 46); // armadio di distribuzione su pattini, prese sul fronte b=B
+const QUADRO_PHASE_A = [62, 88, 114];     // posizione lungo il fronte di prese/interruttori L1-L3
+// moduli su guida DIN dietro la finestra del fronte: centro lungo a e
+// mezza larghezza; generale e salvavita a sinistra, poi un magnetotermico
+// sopra ogni presa
+const QUADRO_MODULES = [['main', 14, 8], ['rcd', 34, 8], ['L1', 62, 6], ['L2', 88, 6], ['L3', 114, 6]];
 const ALL_ISO   = isoFrame(26, 26, 30);   // cassetta dell'allaccio della venue
 const CIAB_ISO  = isoFrame(104, 16, 8);   // ciabatta civile: barra lunga e bassa, 3 prese sul piano
 const CIABCEE_ISO = isoFrame(134, 16, 8); // ciabatta con spina CEE: 4 prese
@@ -357,7 +361,7 @@ const COMPONENT_TYPES = {
     label: 'QUADRO', category: 'power', powerW: 0, zone: 'backstage', shape: 'quadro',
     // cabinet bianco/metallo, come un vero armadio elettrico da evento —
     // non più una scatola tinta a caso (vedi drawComponentBody per i dettagli).
-    body: { w: 76, h: 94, fill: 0xe9eaed, accent: 0x4a4f5a },
+    body: { w: 88, h: 94, fill: 0xe9eaed, accent: 0x4a4f5a },
     // prese sul fronte +b del disegno; si gira verso il palco (vedi quadroFront)
     frame: QUADRO_ISO, front: '+b',
     ledIso: [4, 34, 43],
@@ -373,7 +377,7 @@ const COMPONENT_TYPES = {
       // fronte (faccia b=B), ognuna sotto il proprio interruttore
       // (girato contro la parete di fondo l'ingresso passa sul fianco a=A,
       // l'unico che resta in vista: vedi drawComponentBody)
-      { id: 'in',    signal: 'cee_tri',  dir: 'in',  iso: [0, 17, 14], isoTurned: [QUADRO_ISO.A, 17, 14] },
+      { id: 'in',    signal: 'cee_tri',  dir: 'in',  iso: [0, 17, 15], isoTurned: [QUADRO_ISO.A, 17, 15] },
       { id: 'out_1', signal: 'cee_mono', dir: 'out', iso: [QUADRO_PHASE_A[0], 34, 12], phase: 'L1', multi: true },
       { id: 'out_2', signal: 'cee_mono', dir: 'out', iso: [QUADRO_PHASE_A[1], 34, 12], phase: 'L2', multi: true },
       { id: 'out_3', signal: 'cee_mono', dir: 'out', iso: [QUADRO_PHASE_A[2], 34, 12], phase: 'L3', multi: true }
@@ -1108,6 +1112,13 @@ function quadroProt (q) {
   if (!q.prot) q.prot = { main: false, rcd: false, L1: false, L2: false, L3: false, tripped: {} };
   if (!q.prot.tripped) q.prot.tripped = {};
   return q.prot;
+}
+// il Quadro è in tensione: arriva corrente dall'allaccio, generale e salvavita armati
+function quadroLive () {
+  const q = findQuadro();
+  if (!q || !isPowered(q.id)) return false;
+  const prot = quadroProt(q);
+  return !!(prot.main && prot.rcd);
 }
 function powerInPort (def) {
   return def.ports.find(p => p.dir === 'in' && POWER_CABLE_IDS.has(p.signal));
@@ -4355,25 +4366,35 @@ function rearProtections (ctx, comp, x, y0) {
   let mx = x + REAR_PADX;
   PROT_MODULES.forEach(([key, label, spec, w]) => {
     const on = !!prot[key], tripped = !!prot.tripped[key];
-    const lever = key === 'rcd' ? '#2f6fd6' : '#1c1d22';
+    // leve come quelle vere: generale rossa, salvavita blu, magnetotermici
+    // nere; la finestrella sopra fa vedere i contatti (rossa I chiusi, verde O aperti)
+    const lever = key === 'rcd' ? '#2f6fd6' : key === 'main' ? '#c4302b' : '#1c1d22';
     const cx = mx + w / 2;
     svg += `<g class="rp-brk" data-brk="${key}" style="cursor:pointer">
       <text x="${cx}" y="${y0 + 32}" font-size="14" font-weight="700" fill="${st.ink}" text-anchor="middle">${label}</text>
       <rect x="${mx}" y="${y0 + 44}" width="${w}" height="150" rx="4" fill="#f7f7f8" stroke="#9a9da3" stroke-width="1.5"/>
-      ${[y0 + 54, y0 + 184].map(yy => [0.3, 0.7].map(f => `<circle cx="${mx + w * f}" cy="${yy}" r="4" fill="#c9ccd1" stroke="#7d828c"/>`).join('')).join('')}
-      <rect x="${cx - 16}" y="${y0 + 78}" width="32" height="76" rx="3" fill="#2a2c32"/>
-      <rect x="${cx - 12}" y="${on ? y0 + 82 : y0 + 116}" width="24" height="34" rx="3" fill="${lever}" stroke="#55585f"/>
-      <text x="${cx}" y="${y0 + 72}" font-size="9" font-weight="700" fill="#2a2c32" text-anchor="middle">I ON</text>
-      <text x="${cx}" y="${y0 + 166}" font-size="9" font-weight="700" fill="#2a2c32" text-anchor="middle">O OFF</text>
-      <text x="${cx}" y="${y0 + 178}" font-size="9.5" fill="#5f646d" text-anchor="middle">${spec}</text>`;
+      <rect x="${mx + 8}" y="${y0 + 60}" width="${w - 16}" height="122" rx="3" fill="#ececee" stroke="#b5b8bd"/>
+      ${[y0 + 52, y0 + 188].map(yy => [0.3, 0.7].map(f => `<circle cx="${mx + w * f}" cy="${yy}" r="4" fill="#c9ccd1" stroke="#7d828c"/><line x1="${mx + w * f - 2.5}" y1="${yy}" x2="${mx + w * f + 2.5}" y2="${yy}" stroke="#7d828c"/>`).join('')).join('')}
+      <rect x="${cx - 14}" y="${y0 + 65}" width="28" height="15" rx="2" fill="${on ? '#d6392f' : '#2f9e4f'}" stroke="#55585f"/>
+      <text x="${cx}" y="${y0 + 77}" font-size="11" font-weight="700" fill="#fff" text-anchor="middle">${on ? 'I' : 'O'}</text>
+      <text x="${cx}" y="${y0 + 93}" font-size="9" font-weight="700" fill="#2a2c32" text-anchor="middle">I ON</text>
+      <rect x="${cx - 17}" y="${y0 + 97}" width="34" height="56" rx="4" fill="#b9bcc1" stroke="#8a8e98"/>
+      <rect x="${cx - 14}" y="${y0 + 100}" width="28" height="50" rx="3" fill="#d9dbde"/>
+      ${on
+        ? `<rect x="${cx - 13}" y="${y0 + 124}" width="26" height="6" fill="#00000033"/>`
+        : `<rect x="${cx - 13}" y="${y0 + 120}" width="26" height="6" fill="#00000033"/>`}
+      <rect x="${cx - 13}" y="${on ? y0 + 101 : y0 + 125}" width="26" height="24" rx="3" fill="${lever}" stroke="#0e0f12"/>
+      ${[0, 1, 2].map(i => `<line x1="${cx - 8}" x2="${cx + 8}" y1="${(on ? y0 + 104 : y0 + 138) + i * 3.5}" y2="${(on ? y0 + 104 : y0 + 138) + i * 3.5}" stroke="#ffffff" stroke-opacity=".35" stroke-width="1.5"/>`).join('')}
+      <text x="${cx}" y="${y0 + 164}" font-size="9" font-weight="700" fill="#2a2c32" text-anchor="middle">O OFF</text>
+      <text x="${cx}" y="${y0 + 177}" font-size="9.5" fill="#5f646d" text-anchor="middle">${spec}</text>`;
     const status = on ? 'ARMATO' : (tripped ? 'SCATTATO' : 'ABBASSATO');
     const sc = on ? '#1f7a40' : (tripped ? '#e0503f' : st.sub);
     svg += `<rect x="${cx - w / 2 + 2}" y="${y0 + 202}" width="${w - 4}" height="22" rx="11" fill="${tripped && !on ? '#e0503f22' : 'transparent'}" stroke="${tripped && !on ? '#e0503f' : 'none'}"/>
       <text x="${cx}" y="${y0 + 217}" font-size="11" font-weight="700" fill="${sc}" text-anchor="middle">${status}</text></g>`;
     if (key === 'rcd') {
       svg += `<g class="rp-brk" data-brk="rcd_test" style="cursor:pointer">
-        <circle cx="${mx + w - 18}" cy="${y0 + 100}" r="10" fill="#f2c53d" stroke="#8a5f1f"/>
-        <text x="${mx + w - 18}" y="${y0 + 104}" font-size="11" font-weight="700" fill="#2a2c32" text-anchor="middle">T</text></g>`;
+        <circle cx="${mx + w - 22}" cy="${y0 + 125}" r="9" fill="#f2c53d" stroke="#8a5f1f"/>
+        <text x="${mx + w - 22}" y="${y0 + 129}" font-size="11" font-weight="700" fill="#2a2c32" text-anchor="middle">T</text></g>`;
     }
     mx += w + PROT_GAP;
   });
@@ -6893,16 +6914,23 @@ class StageScene extends Phaser.Scene {
     const loads = livePhaseLoads(false);
     const g = qv.phaseBars;
     g.clear();
-    // leva di ogni magnetotermico sul fronte: verde armato, rossa scattato,
-    // grigia abbassato
+    // leva di ogni protezione dietro la finestra: su (armata, verde) o giù
+    // (abbassata grigia, scattata rossa), con la spia sopra dello stesso colore
     const prot = quadroProt(gameState.placed[quadroId]);
-    def.ports.filter(p => p.phase).forEach(p => {
-      const a = QUADRO_PHASE_A[['L1', 'L2', 'L3'].indexOf(p.phase)];
-      const c = prot[p.phase] ? 0x49b06a : (prot.tripped[p.phase] ? 0xe0503f : 0x6a6e78);
-      const P = rotFrame(QUADRO_ISO, qv.rot);
-      const pts = [[a - 3, 26.5], [a + 3, 26.5], [a + 3, 29], [a - 3, 29]].map(([aa, z]) => P(aa, QUADRO_ISO.B, z));
-      g.fillStyle(c, 1); g.fillPoints(pts, true);
+    const P = rotFrame(QUADRO_ISO, qv.rot), k = this.isoKit(g, P), B = QUADRO_ISO.B;
+    QUADRO_MODULES.forEach(([key, a, hw]) => {
+      const on = !!prot[key];
+      const c = on ? 0x49b06a : (prot.tripped[key] ? 0xe0503f : 0x2a2c32);
+      const lw = hw - 2.5;
+      const [z0, z1] = on ? [30, 34.5] : [25.5, 30];
+      k.quadB(B, a - lw, a + lw, z0, z1, c);
+      k.quadB(B, a - lw, a + lw, on ? z1 - 1.2 : z0, on ? z1 : z0 + 1.2, 0xffffff, 0.45);   // punta della leva
+      k.quadB(B, a - 2, a + 2, 35.2, 36.2, on || prot.tripped[key] ? c : 0x8a8e98);        // spia
     });
+    // vetrino fumé dello sportello, con un riflesso
+    k.quadB(B, 3, QUADRO_ISO.A - 3, 22.5, 38, 0x9fb7c9, 0.1);
+    const r0 = P(QUADRO_ISO.A * 0.55, B, 38), r1 = P(QUADRO_ISO.A * 0.55 + 14, B, 22.5);
+    g.lineStyle(1.5, 0xffffff, 0.18); g.lineBetween(r0.x, r0.y, r1.x, r1.y);
     // barra subito sotto ogni presa di fase
     const barW = 14, barH = 4;
     def.ports.filter(p => p.phase).forEach(p => {
@@ -7170,33 +7198,55 @@ class StageScene extends Phaser.Scene {
         break;
       }
       case 'quadro': {
-        // armadio di distribuzione bianco da evento: striscia di sicurezza,
-        // finestra con un interruttore per fase sopra ogni presa CEE,
-        // maniglia sul fianco
+        // quadro di distribuzione da evento in lamiera grigio chiaro, su due
+        // pattini: sul fronte la finestra col vetrino e i moduli su guida DIN
+        // (generale, salvavita, un magnetotermico per fase; le leve le
+        // disegna updateQuadroPhaseBars), sotto le prese CEE blu con lo
+        // sportellino; sul fianco l'ingresso rosso, sopra le maniglie
         const P = rotFrame(QUADRO_ISO, rot), k = this.isoKit(g, P);
         const { A, B, Z } = P;
         // fianco con sportello e ingresso: a=0, o a=A se girato (l'altro è nascosto)
         const sa = rot ? A : 0, sd = rot ? -0.1 : 0.1;
-        k.box(0, A, 0, B, 0, Z, { top: 0xf3f4f6, left: 0xd9dbdf, right: 0xc7cad0 });
-        k.quadB(B, 2, A - 2, Z - 5, Z - 2, 0xf2c53d);                   // striscia gialla/nera
-        g.lineStyle(1, 0x1c1d22, 0.8);
-        for (let a = 4; a < A - 4; a += 6) {
-          const p0 = P(a, B, Z - 5), p1 = P(a + 3, B, Z - 2);
-          g.lineBetween(p0.x, p0.y, p1.x, p1.y);
-        }
-        k.quadB(B, 3, A - 3, 24, Z - 8, 0x3a3d45);                      // finestra interruttori
-        def.ports.filter(p => p.phase).forEach(p => {
-          const a = QUADRO_PHASE_A[['L1', 'L2', 'L3'].indexOf(p.phase)];
-          k.quadB(B, a - 6, a + 6, 25, 31, 0x2a2c32);
-          k.quadB(B, a - 3, a + 3, 26.5, 29, 0x6a6e78);
+        const skid = { top: 0x3a3d45, left: 0x26282e, right: 0x17181c };
+        k.box(3, A - 3, 3, 9, 0, 4, skid); k.box(3, A - 3, B - 9, B - 3, 0, 4, skid); // pattini
+        k.box(0, A, 0, B, 4, Z, { top: 0xe4e5e2, left: 0xcfd1cd, right: 0xbcbfbb });
+        k.quadB(B, 1.5, A - 1.5, 5.5, Z - 1.5, 0xc6c9c5);              // pannello frontale imbullonato
+        [[3, 7], [A - 3, 7], [3, Z - 3], [A - 3, Z - 3]].forEach(([a, z]) => k.discB(B, a, z, 0.9, 0x7d828c));
+        // finestra: telaio scuro, fondo, guida DIN e moduli bianchi
+        k.quadB(B, 3, A - 3, 21, 38, 0x4a4d56);
+        k.quadB(B, 4.5, A - 4.5, 22.5, 36.8, 0x2a2c32);
+        k.quadB(B, 4.5, A - 4.5, 29, 31, 0x8a8e98);
+        QUADRO_MODULES.forEach(([key, a, hw]) => {
+          k.quadB(B, a - hw, a + hw, 23.5, 36.5, 0xf2f2ef);
+          k.quadB(B, a - hw + 1.5, a + hw - 1.5, 25, 35, 0xd5d7da);  // incavo della leva
         });
-        QUADRO_PHASE_A.forEach(a => {                                  // prese CEE blu
+        // pulsante T di prova del salvavita
+        k.discB(B, 34 + 6, 33.5, 1.3, 0xf2c53d);
+        // etichette delle linee sopra la finestra
+        k.quadB(B, 3, A - 3, 39, 44.5, 0xf7f7f4);
+        // prese CEE 16A blu con lo sportellino a molla sopra
+        QUADRO_PHASE_A.forEach(a => {
+          k.quadB(B, a - 9, a + 9, 4.5, 20, 0xb3b6b2);
           k.discB(B, a, 12, 7.5, 0x1d4a9a); k.discB(B, a, 12, 6, 0x2f6fd6);
+          k.quadB(B, a - 7.5, a + 7.5, 19, 21.5, 0x3a7fe0);
         });
-        k.quadA(sa, 5, 29, 4, 36, 0xcfd2d6);                            // sportello laterale
-        k.discA(sa, 17, 14, 7.5, 0x9e2820); k.discA(sa, 17, 14, 6, 0xd6392f); // ingresso CEE rosso
-        k.box(Math.min(sa, sa + sd), Math.max(sa, sa + sd), 25, 28, 28, 34, ISO_GREY); // maniglia
-        k.quadZ(Z, 6, A - 6, 4, B - 4, 0xe6e8eb);
+        // targa e triangolo di pericolo sotto generale e salvavita
+        k.quadB(B, 8, 44, 9, 19, 0xf7f7f4);
+        const t0 = P(12, B, 10.5), t1 = P(22, B, 10.5), t2 = P(17, B, 18);
+        g.fillStyle(0xf2c53d, 1); g.fillTriangle(t0.x, t0.y, t1.x, t1.y, t2.x, t2.y);
+        g.lineStyle(0.8, 0x1c1d22, 1); g.strokeTriangle(t0.x, t0.y, t1.x, t1.y, t2.x, t2.y);
+        [13.5, 16].forEach(z => { const l0 = P(26, B, z), l1 = P(41, B, z); g.lineStyle(1, 0x5f646d, 0.8); g.lineBetween(l0.x, l0.y, l1.x, l1.y); });
+        // fianco: feritoie, sportello, ingresso CEE 32A rosso e maniglia
+        for (let z = 30; z <= 40; z += 3) k.quadA(sa, 4, 30, z, z + 1.2, 0x8a8e98);
+        k.quadA(sa, 5, 29, 6, 26, 0xc4c7c3);
+        k.discA(sa, 17, 15, 7.5, 0x9e2820); k.discA(sa, 17, 15, 6, 0xd6392f); // ingresso CEE rosso
+        k.box(Math.min(sa, sa + sd), Math.max(sa, sa + sd), 25, 28, 18, 24, ISO_GREY); // maniglia
+        // due maniglie di trasporto sul tetto
+        [16, A - 16].forEach(a => {
+          k.box(a - 1.5, a + 1.5, 6, 9, Z, Z + 5, ISO_BLACK);
+          k.box(a - 1.5, a + 1.5, B - 9, B - 6, Z, Z + 5, ISO_BLACK);
+          k.box(a - 1.5, a + 1.5, 6, B - 6, Z + 5, Z + 7, ISO_BLACK);
+        });
         break;
       }
       case 'allaccio': {
@@ -7625,9 +7675,9 @@ class StageScene extends Phaser.Scene {
       c.add(phaseBars);
       // sigla della fase nella finestra degli interruttori, sopra la presa
       def.ports.filter(p => p.phase).forEach(p => {
-        const at = frame(QUADRO_PHASE_A[['L1', 'L2', 'L3'].indexOf(p.phase)], QUADRO_ISO.B, 34.5);
+        const at = frame(QUADRO_PHASE_A[['L1', 'L2', 'L3'].indexOf(p.phase)], QUADRO_ISO.B, 41.8);
         const tag = this.add.text(at.x, at.y, p.phase, {
-          fontFamily: 'Inter, sans-serif', fontSize: '8px', fontStyle: 'bold', color: '#eee9df'
+          fontFamily: 'Inter, sans-serif', fontSize: '6px', fontStyle: 'bold', color: '#1c1d22', resolution: 4
         }).setOrigin(0.5);
         c.add(tag);
       });
@@ -8925,7 +8975,7 @@ class StageScene extends Phaser.Scene {
       saveLevel();
       setCircuitStatus('error');
       const exact = miss && n >= 3 ? ' ' + bossName() + ' ti indica il foglio: «' + miss.what + '».' : '';
-      if (kind === 'power') { showToast('Scintille! ' + hint + exact, 'bad'); this.fxSparks(); }
+      if (kind === 'power') { showToast((quadroLive() ? 'Scintille! ' : 'Tutto spento: ') + hint + exact, 'bad'); this.fxSparks(); }
       else if (kind === 'audio') { showToast('L\'impianto gracchia: ' + hint + exact, 'bad'); this.fxCrackle(); }
       else { showToast('Le luci vanno in tilt: ' + hint + exact, 'bad'); this.fxLightsTilt(); }
       // dopo gli effetti, così il rosso non viene spento da chi li ferma
@@ -9010,12 +9060,24 @@ class StageScene extends Phaser.Scene {
     this.updateSignalFlow();
     this.drawLiveBeams();
   }
+  fxDead () {
+    this.fxStart();
+    SFX.button();
+    const q = findQuadro();
+    const v = q && this.compVisuals[q.id];
+    if (!v) { this.fxEvery(400, 1, () => {}, () => this.stopFx()); return; }
+    this.fxHold(v);
+    this.fxEvery(260, 6, i => this.setGlow(v, i % 2 === 0, 0x8a8e98), () => this.stopFx());
+  }
   visualsOf (...types) {
     return Object.values(gameState.placed).filter(c => types.includes(c.type)).map(c => this.compVisuals[c.id]).filter(Boolean);
   }
 
-  // corrente: raffica di scintille dal Quadro (o dall'allaccio, se manca)
+  // corrente: raffica di scintille dal Quadro (o dall'allaccio, se manca).
+  // Le scintille vogliono tensione: col Quadro senza corrente o non armato
+  // non succede niente, resta tutto spento e il Quadro lampeggia grigio
   fxSparks () {
+    if (!quadroLive()) { this.fxDead(); return; }
     this.fxStart();
     SFX.trip();
     const q = findQuadro();
