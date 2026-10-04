@@ -5262,13 +5262,29 @@ const toolbarEl = el('#toolbar');
 const NARROW_PX = 1000;
 function tabName (btn) { const b = btn && btn.querySelector('b'); return (b || btn).textContent.trim(); }
 function openDrawer () { toolbarEl.classList.add('open'); document.body.classList.add('drawer-open'); }
+// chiuso il cassetto, sotto il dito compaiono PROVA, zoom e annulla: il
+// "click" che il telefono manda dopo il tocco non deve finire su di loro
+let drawerClosedAt = -1e9;
+document.addEventListener('click', ev => {
+  if (performance.now() - drawerClosedAt < 350 && !(ev.target.closest && ev.target.closest('.tabs'))) { ev.stopPropagation(); ev.preventDefault(); }
+}, true);
 function closeDrawer () {
+  if (toolbarEl.classList.contains('open')) drawerClosedAt = performance.now();
   toolbarEl.classList.remove('open');
   document.body.classList.remove('drawer-open');
   document.querySelectorAll('.tab-panel.help').forEach(p => p.classList.remove('help'));
   document.querySelectorAll('.dr-help.on').forEach(b => b.classList.remove('on'));
 }
 function closeDrawerIfNarrow () { if (window.innerWidth < NARROW_PX) closeDrawer(); }
+// un pezzo si arma al rilascio del dito, ma il telefono manda il "click"
+// subito dopo: il cassetto si chiude solo quando quel click è arrivato
+function closeDrawerAfterTap () {
+  if (window.innerWidth >= NARROW_PX) return;
+  let done = false;
+  const fin = () => { if (done) return; done = true; document.removeEventListener('click', fin, true); setTimeout(closeDrawer, 0); };
+  document.addEventListener('click', fin, true);
+  setTimeout(fin, 450);
+}
 document.querySelectorAll('.tab-panel').forEach(panel => {
   const btn = document.querySelector('.tab-btn[data-tab="' + panel.dataset.panel + '"]');
   const head = document.createElement('div');
@@ -5375,7 +5391,7 @@ function armPiece (type, pieceEl) {
   if (window.__scene) { window.__scene.clearMoveSelection(); window.__scene.clearEdgeSelection(); window.__scene.cancelPending(); }
   gameState.selectedPieceType = type;
   document.querySelectorAll('.piece').forEach(p => p.classList.toggle('armed', p === pieceEl));
-  closeDrawerIfNarrow();
+  closeDrawerAfterTap();
   const free = window.__scene ? window.__scene.showZoneHint(type) : 1;
   const m = MOUNTS[type];
   if (m && !free) showToast(m.missing);
