@@ -3668,8 +3668,8 @@ function finishDj (r) {
   applySettings();
   const p = Profile.data.dj;
   showToast(skipped ? 'DJ set saltato: la musica c\'è stata lo stesso, ma la reputazione non cambia.'
-    : 'Il bidello ha cacciato via i musicisti. Pubblico al ' + p.grad + '%.' + (rep ? ' Reputazione ' + (rep > 0 ? '+' : '') + rep + '.' : '')
-      + (beers ? ' 🍺 +' + beers + '.' : '') + ' La palestra fischia: Macio prende il microfono, «Ci penso io!»', skipped || p.grad >= 40 ? 'ok' : undefined);
+    : 'Il bidello ha cacciato via i musicisti: la festa è rimasta senza musica. Pubblico al ' + p.grad + '%.' + (rep ? ' Reputazione ' + (rep > 0 ? '+' : '') + rep + '.' : '')
+      + (beers ? ' 🍺 +' + beers + '.' : '') + ' Macio prende il microfono: «Ci penso io!»', skipped || p.grad >= 40 ? 'ok' : undefined);
   updateFoglio();
   // fuori programma: Macio sale sul palco appena letto il messaggio
   karaokeSoon(Math.max(3200, el('#toast').textContent.length * 60) + 300);
@@ -5669,7 +5669,7 @@ function updateFoglio () {
     const missing = karaokeReady();
     icon = '🎤 ';
     head = 'Fuori programma: il karaoke di Macio';
-    body = '<p class="fg-note">' + escapeHtml('Il bidello ha cacciato via i musicisti e la palestra fischia. Macio: «Ci penso io!». '
+    body = '<p class="fg-note">' + escapeHtml('Il bidello ha cacciato via i musicisti: la festa è rimasta senza musica. Macio: «Ci penso io!». '
       + (missing ? 'Prima però: ' + missing : 'Il microfono è sul CH ' + micChannel() + '.')) + '</p>'
       + (missing ? '' : '<button type="button" class="fg-go" id="foglio-karaoke">Macio prende il microfono</button>');
   } else if (karaokeDone()) {

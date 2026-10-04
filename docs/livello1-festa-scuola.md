@@ -342,8 +342,8 @@ scegliere chi va a sistemarli.
 
 - **Il capo alle luci è peggio di te**: prende le note in automatico ma ne
   manca una su tre e la combo si azzera.
-- **Il capo si spazientisce**: se stai via troppo (proposta: 30 s) torna lui
-  alle luci e il guasto lo finisci con la pista che scorre; reputazione ridotta.
+- **Il capo non si spazientisce** (deciso): se vai tu al guasto, resta lui
+  alle luci finché non torni, senza limite di tempo.
 - **La birra ha un costo vero**: è una birra in meno contro la stanchezza.
   Senza birre in tasca la scelta non c'è: ci vai tu.
 - Il capo solo per i guasti grossi (fase che scatta, PAR senza DMX); i

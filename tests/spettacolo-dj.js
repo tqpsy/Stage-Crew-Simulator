@@ -12,7 +12,7 @@
    - il PAR senza DMX spegne la corsia CHASE finché non lo sistemi;
    - il guasto grosso: ci vai tu (Quadro, errori che costano tempo, rewind,
      +5), paghi una birra al capo (0), nessuno e arriva Gerry (−5); senza birre
-     il capo non si paga; il capo si spazientisce dopo 30 s;
+     il capo non si paga; il capo non si spazientisce: resta alle luci;
    - chi non tocca niente svuota il pubblico; tasti, fuori tempo, tenute.
 
    Uso:  node tests/spettacolo-dj.js
@@ -125,7 +125,7 @@ const path = require('path');
   // in fondo il messaggio per il prossimo cambio palco, sul palco e nella scheda finale
   await ev(() => __dj.advance(4.9));
   st = await ev(() => ({ msg: !document.querySelector('#stage-msg').hidden && document.querySelector('#stage-msg').textContent, over: __dj.state().over }));
-  check(st.msg && /cacciato via i musicisti.*Macio/.test(st.msg) && !st.over, 'manca il messaggio finale sul palco: ' + JSON.stringify(st));
+  check(st.msg && /cacciato via i musicisti.*senza musica/.test(st.msg) && !st.over, 'manca il messaggio finale sul palco: ' + JSON.stringify(st));
   await ev(() => __dj.advance(3));
   let R = await ev(() => ({ r: __dj.result(), s: (({ miss, stray, perfect, lost, dropHeld, drops, holdsBroken, over, rewinds, larsens }) => ({ miss, stray, perfect, lost, dropHeld, drops, holdsBroken, over, rewinds, larsens }))(__dj.state()) }));
   check(R.s.over && R.r, 'la demo non finisce');
@@ -136,7 +136,7 @@ const path = require('path');
   check(R.s.larsens === 0 && R.r.beers === 2, 'la demo: larsen o birre sbagliati ' + JSON.stringify(R.r));
   check(R.r.rep === 5 + 4 + 1 + 5 + 3 + 1 + 1, 'reputazione della demo: ' + R.r.rep);
   await p.waitForSelector('#outro:not([hidden])', { timeout: 3000 }).catch(() => problems.push('niente scheda finale'));
-  check(/cacciato via i musicisti/.test(await p.textContent('#outro-msg')) && /Macio/.test(R.r.msg || ''), 'la scheda finale non dice che si ripristina il palco');
+  check(/cacciato via i musicisti/.test(await p.textContent('#outro-msg')) && /senza musica/.test(R.r.msg || ''), 'la scheda finale non dice che si ripristina il palco');
 
   // ---- guasti a mano: fader DJ a tempo, poi il guasto grosso: ci vai tu ----
   await open();
@@ -217,19 +217,19 @@ const path = require('path');
   st = await S(() => ({ down: __dj.state().phaseDown, rep: __dj.state().repParts.map(p => p[1]), gx: __dj.state().gerryX }));
   check(!st.down && st.rep.includes(-5) && st.gx < 400, 'Gerry non sistema la fase, o niente −5: ' + JSON.stringify(st));
 
-  // senza birre in tasca il capo non si paga; e se stai via troppo ti rimanda alle luci
+  // senza birre in tasca il capo non si paga; e se stai via a lungo il capo resta alle luci
   await open();
   await ev(() => { __dj.start(false); __dj.state().beers = 0; });
   await goTo(T(17, 0.2));
   check(await S(() => document.querySelector('#opt-capo').disabled), 'senza birre si può pagare il capo');
   await ev(() => document.querySelector('#opt-tu').click());
   await goTo(T(17, 0.2) + 31);
-  st = await S(() => ({ away: !!__dj.state().away, mini: document.querySelector('#quadro').classList.contains('mini'), down: __dj.state().phaseDown, rew: __dj.state().rewinds }));
-  check(!st.away && st.mini && st.down && st.rew === 1, 'dopo 30 s il capo non ti rimanda alle luci: ' + JSON.stringify(st));
+  st = await S(() => ({ away: !!__dj.state().away, down: __dj.state().phaseDown, rew: __dj.state().rewinds }));
+  check(st.away && st.down && st.rew === 0, 'dopo 30 s il capo ti rimanda alle luci: ' + JSON.stringify(st));
   await ev(() => __dj.quadro('L3')); await ev(() => __dj.advance(1.6));
   await ev(() => __dj.quadro('arm')); await ev(() => __dj.advance(1.6));
   st = await S(() => ({ down: __dj.state().phaseDown, rep: __dj.state().repParts.filter(p => /Quadro/.test(p[0])).map(p => p[1]) }));
-  check(!st.down && st.rep.length === 1 && st.rep[0] === 0, 'finire il Quadro dal palco: ' + JSON.stringify(st));
+  check(!st.down && st.rep.length === 1 && st.rep[0] === 0, 'finire il Quadro con calma: ' + JSON.stringify(st));
 
   // ---- chi non tocca niente ----
   await open();
