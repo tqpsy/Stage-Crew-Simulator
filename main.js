@@ -1102,7 +1102,9 @@ const SFX = (() => {
     place: () => play(() => { tone(0, 120, 0.1, 0.3, 'sine', 70); noise(0, 0.05, 600, 1, 0.1); }),
     lift: () => play(() => { tone(0, 300, 0.12, 0.08, 'sine', 600); }),
     remove: () => play(() => { noise(0, 0.25, 800, 0.6, 0.15); tone(0, 500, 0.2, 0.06, 'sine', 150); }),
-    button: () => play(() => { click(0, 0.25, 3000); })
+    button: () => play(() => { click(0, 0.25, 3000); }),
+    // il bip del tester: acuto se la linea è a posto, grave se c'è un problema
+    beep: ok => play(() => { tone(0, ok ? 2000 : 420, ok ? 0.16 : 0.3, 0.07, ok ? 'square' : 'sawtooth'); })
   };
 })();
 
@@ -3419,7 +3421,7 @@ let caricoOpen = false;          // il carico del furgone (openCarico, più sott
 const presideDone = () => !!Profile.data.preside;
 const minigameOpen = () => scaricoOpen || gerryOpen || presideOpen || djOpen || karaokeOpen || caricoOpen;
 // una finestra del gioco sopra la scena (menù, scaletta, pannello posteriore, baule)
-const panelOpen = () => scheduleOpen || menuOpen || !!rearPanelId || !!openCaseName;
+const panelOpen = () => scheduleOpen || menuOpen || !!rearPanelId || !!openCaseName || (typeof diagOpen === 'function' && diagOpen());
 // qualcosa copre la scena: i tocchi non le arrivano finché non si chiude tutto
 const sceneCovered = () => panelOpen() || minigameOpen() || cambioCardOpen;
 // cosa manca perché il preside possa parlare (null se è tutto pronto)
@@ -4687,6 +4689,7 @@ function renderRearPanel () {
   const id = rearPanelId;
   const comp = gameState.placed[id];
   if (!comp) { closeRearPanel(); return; }
+  if (typeof renderRearVu === 'function') renderRearVu();
   const box = el('#rear-svg');
   if (comp.type === 'tavolo') {
     // vista della regia: i pannelli posteriori di tutto quello che sta sul
@@ -5357,7 +5360,8 @@ function renderCase (name) {
   const box = CABLE_CASES[name];
   // su telefono due colonne, così nastri e scritte restano grandi
   const cols = window.innerWidth < 700 ? 2 : 4, cw = 196, ch = 196;
-  const rows = Math.ceil(box.items.length / cols);
+  // l'ultimo scomparto tiene il tester cavi (vedi diagnostica.js)
+  const rows = Math.ceil((box.items.length + 1) / cols);
   const W = cols * cw + 80, H = rows * ch + 150;
   let s = `<svg class="case-svg" viewBox="0 0 ${W} ${H}" xmlns="http://www.w3.org/2000/svg" font-family="Inter,sans-serif">
     <rect x="30" y="4" width="${W - 60}" height="40" rx="6" fill="#1b1c20" stroke="#8a8e98" stroke-width="3"/>
@@ -5371,6 +5375,10 @@ function renderCase (name) {
     s += `<rect x="${cx - cw / 2 + 6}" y="${cy - ch / 2 + 6}" width="${cw - 12}" height="${ch - 12}" rx="6" fill="#1a1b1f" stroke="#26272c" stroke-width="2"/>`;
     s += cableCoil(cx, cy, it, gameState.selectedCable === it.cable, FLUO_TAPES[i % FLUO_TAPES.length]);
   });
+  if (typeof testerCell === 'function') {
+    const i = box.items.length, cx = 50 + (i % cols) * cw + cw / 2, cy = 88 + Math.floor(i / cols) * ch + ch / 2;
+    s += `<rect x="${cx - cw / 2 + 6}" y="${cy - ch / 2 + 6}" width="${cw - 12}" height="${ch - 12}" rx="6" fill="#1a1b1f" stroke="#26272c" stroke-width="2"/>` + testerCell(cx, cy);
+  }
   return s + `</svg>`;
 }
 
@@ -5382,6 +5390,10 @@ function openCase (name) {
   el('#case-svg').querySelectorAll('.cc-coil').forEach(node => {
     node.addEventListener('click', () => pickCable(node.dataset.cable));
   });
+  el('#case-svg').querySelectorAll('.cc-tester').forEach(node => node.addEventListener('click', () => {
+    if (faultsLeft('baule:' + name)) { showToast('Prima sbroglia i cavi: sono tutti aggrovigliati.'); return; }
+    openTester();
+  }));
   const fb = el('#case-fault'), key = 'baule:' + name;
   fb.hidden = true; fb.innerHTML = '';
   el('#case-svg').classList.toggle('tangled', faultsLeft(key) > 0);
@@ -9560,6 +9572,7 @@ class StageScene extends Phaser.Scene {
     if (q) this.updateQuadroPhaseBars(q.id);
     this.drawLiveBeams();
     if (rearPanelId) renderRearPanel();
+    if (typeof refreshDiag === 'function') refreshDiag();
     updateFoglio();
     this.updateSignalFlow();
   }

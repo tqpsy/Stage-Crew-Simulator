@@ -43,6 +43,7 @@
       </div>
     </div>
     <button class="rack hbtn" id="schedule-btn" title="Scaletta della serata" aria-label="Scaletta"><span class="screw tl"></span><span class="screw br"></span><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><rect x="5" y="4" width="14" height="18" rx="2"/><path d="M9 4V2h6v2M8 10h8M8 14h8M8 18h5"/></svg><span class="hbtn-txt">Scaletta</span></button>
+    <button class="rack hbtn" id="patch-btn" title="Patch sheet: tutto l'impianto in una tabella" aria-label="Patch sheet"><span class="screw tl"></span><span class="screw br"></span><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="4" width="18" height="16" rx="2"/><path d="M3 9h18M3 14h18M9 4v16"/></svg><span class="hbtn-txt">Patch</span></button>
     <span class="hud-spacer"></span>
     <button class="rack hbtn beer-btn" id="beer-btn" title="Stanchezza e birre" hidden><span class="screw tl"></span><span class="screw br"></span><span>🍺 <span id="beer-n">0</span></span><span class="fat"><i id="fat-fill"></i></span></button>
     <div class="rack hgroup history"><span class="screw tl"></span><span class="screw br"></span>
@@ -227,6 +228,35 @@
     </div>
   </div>
 
+  <div class="modal-overlay" id="patch-modal">
+    <div class="modal-box patch-box">
+      <div class="modal-header">
+        <div class="schedule-title">
+          <span class="tag">FOGLIO DI PATCH</span>
+          <h2>Patch sheet</h2>
+        </div>
+        <button class="modal-close" id="patch-close">✕</button>
+      </div>
+      <div class="patch-body" id="patch-body"></div>
+      <div class="modal-hint patch-hint">Si aggiorna da solo mentre lavori. Tocca una riga per aprire il pannello di quel pezzo.</div>
+    </div>
+  </div>
+  <div class="modal-overlay" id="tester-modal">
+    <div class="modal-box tester-box">
+      <div class="modal-header">
+        <div class="schedule-title">
+          <span class="tag">DAL BAULE</span>
+          <h2>Tester cavi</h2>
+        </div>
+        <button class="modal-close" id="tester-close">✕</button>
+      </div>
+      <div class="tester-body">
+        <div class="tester-dev"><div class="tester-lcd" id="tester-lcd"></div></div>
+        <div class="tester-lines" id="tester-lines"></div>
+      </div>
+      <div class="modal-hint tester-hint">Tocca una linea: il tester ne prova la continuità anche a impianto spento, e dice tensione o segnale quando c'è.</div>
+    </div>
+  </div>
   <div id="pick-menu"><div class="pick-box"></div></div>
   <div class="modal-overlay" id="rear-modal">
     <div class="modal-box rear-box">
@@ -237,6 +267,7 @@
       </div>
       <div class="rear-hand" id="rear-hand"></div>
       <div class="fault-box" id="rear-fault" hidden></div>
+      <div class="rear-vu" id="rear-vu" hidden></div>
       <div class="rear-svg-wrap" id="rear-svg"></div>
       <div class="rear-detail" id="rear-detail"></div>
       <div class="modal-hint rear-hint">Tocca una presa per collegare il cavo · tocca una presa occupata per vedere o scollegare i cavi.</div>
@@ -405,5 +436,6 @@
 </div>
 
 <script src="main.js"></script>
+<script src="diagnostica.js"></script>
 </body>
 </html>
