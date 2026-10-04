@@ -127,7 +127,7 @@
         <li>Sul marciapiede ci stanno solo tre case. Se è pieno, Macio aspetta.</li>
         <li>Macio a volte porta roba che non è vostra: dalla a Gerry, così si libera un posto.</li>
         <li>I pesanti vanno verso la cabina e al centro: guarda l'<b>Assetto</b>.</li>
-        <li>Poi le cinghie: ne hai tre. Tocca una fila per legarla.</li>
+        <li>Poi le cinghie: ne hai tre. Tocca una fila del furgone e la cinghia la attraversa da una sponda all'altra: ogni case che tocca quella fila resta fermo (lucchetto). I case col <b>segno rosso</b> hanno spazio intorno e in viaggio scivolano.</li>
         <li>Si parte: frenata, curve, dosso. Quello che è slegato e ha spazio scivola e sbatte. Più è fragile, più si rovina.</li>
       </ul>
       <button class="primary" id="btn-start">Si carica!</button>
@@ -274,6 +274,9 @@ function fits (p, c, r, w, h) {
   return true;
 }
 const strapped = p => { for (let y = p.r; y < p.r + p.h; y++) if (G.straps.has(y)) return true; return false; };
+// un case slegato che ha spazio libero accanto: in viaggio scivolerà
+const canSlide = p => [[1, 0], [-1, 0], [0, 1], [0, -1]].some(([dx, dy]) => fits(p, p.c + dx, p.r + dy, p.w, p.h));
+const atRisk = () => G.pieces.filter(p => inVan(p) && !strapped(p) && canSlide(p));
 const ourInVan = () => G.pieces.filter(p => inVan(p) && !p.def.school).length;
 
 // assetto: baricentro dei chili nel vano. Davanti (verso la cabina) e al
@@ -463,6 +466,18 @@ function drawPiece (p, R, opts) {
   if (p.hp < 100) {
     ctx.strokeStyle = STATE_COLOR[stateOf(p.hp)]; ctx.lineWidth = 3; rr(R.x - 1, R.y - 1, R.w + 2, R.h + 2, 5); ctx.stroke();
   }
+  // con le cinghie: lucchetto su chi è legato, bordo rosso su chi può scivolare
+  if (opts && opts.lock) {
+    const s = Math.max(9, Math.min(cs * 0.4, k * 0.35)), x = R.x + s * 0.35, y = R.y + s * 0.3;
+    ctx.fillStyle = '#f2a541'; rr(x, y + s * 0.4, s, s * 0.7, 2); ctx.fill();
+    ctx.strokeStyle = '#f2a541'; ctx.lineWidth = Math.max(1.5, s * 0.14); ctx.beginPath(); ctx.arc(x + s / 2, y + s * 0.4, s * 0.3, Math.PI, 0); ctx.stroke();
+  }
+  if (opts && opts.risk) {
+    ctx.strokeStyle = '#e0503f'; ctx.lineWidth = 3; ctx.setLineDash([6, 4]); rr(R.x - 2, R.y - 2, R.w + 4, R.h + 4, 5); ctx.stroke(); ctx.setLineDash([]);
+    const s = Math.max(10, Math.min(cs * 0.42, k * 0.4));
+    ctx.fillStyle = '#e0503f'; ctx.beginPath(); ctx.arc(R.x + R.w - s * 0.6, R.y + s * 0.6, s * 0.48, 0, Math.PI * 2); ctx.fill();
+    ctx.fillStyle = '#fff'; ctx.font = '700 ' + Math.round(s * 0.75) + 'px Inter, sans-serif'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle'; ctx.fillText('!', R.x + R.w - s * 0.6, R.y + s * 0.62);
+  }
   if (opts && opts.sel) { ctx.strokeStyle = '#f2a541'; ctx.lineWidth = 2; ctx.setLineDash([5, 4]); rr(R.x - 4, R.y - 4, R.w + 8, R.h + 8, 6); ctx.stroke(); ctx.setLineDash([]); }
   ctx.restore();
 }
@@ -526,7 +541,8 @@ function draw () {
   if (G.mode === 'strap' && G.hoverRow != null) {
     const R = cellRect(0, G.hoverRow, COLS, 1); ctx.fillStyle = 'rgba(242,165,65,.14)'; ctx.fillRect(R.x, R.y, R.w, R.h);
   }
-  for (const p of G.pieces) if (inVan(p) && (!G.drag || G.drag.p !== p)) drawPiece(p, pieceRect(p), { sel: G.sel === p && G.mode === 'load' });
+  const strapView = G.mode === 'strap';
+  for (const p of G.pieces) if (inVan(p) && (!G.drag || G.drag.p !== p)) drawPiece(p, pieceRect(p), { sel: G.sel === p && G.mode === 'load', lock: strapView && strapped(p), risk: strapView && !strapped(p) && canSlide(p) });
   drawStraps();
   // baricentro (l'assetto) come un pallino
   if (G.mode !== 'end' && G.pieces.some(inVan)) {
@@ -712,12 +728,20 @@ function toggleStrap (x, y) {
   else if (!G.pieces.some(p => inVan(p) && r >= p.r && r < p.r + p.h)) { warn('In quella fila non c\'è niente da legare.'); return; }
   else G.straps.add(r);
   SFX.strap();
+  strapHint();
   updateHud();
+}
+// cosa dice Macio con le cinghie: quanti case scivolerebbero ancora
+function strapHint (first) {
+  const n = atRisk().length, left = STRAPS - G.straps.size;
+  const head = first ? 'Tutto dentro! Ora le cinghie: tocca una fila del furgone e la lego da una sponda all\'altra. ' : '';
+  say('MACIO', head + (n ? (n === 1 ? 'Un case col segno rosso può scivolare' : n + ' case col segno rosso possono scivolare') + ': legali o parti così. Cinghie rimaste: ' + left + '.'
+    : 'Niente col segno rosso: non si muove niente. Si può partire!'), n ? '' : 'ok');
 }
 $('b-next').addEventListener('click', () => {
   if (G.mode === 'load' && readyToStrap()) {
     G.mode = 'strap'; G.sel = null;
-    say('MACIO', 'Tutto dentro! Adesso le cinghie: ne abbiamo ' + STRAPS + '. Tocca una fila per legarla. Quello che è legato non si muove.');
+    strapHint(true);
   } else if (G.mode === 'strap') startDrive();
   updateHud();
 });

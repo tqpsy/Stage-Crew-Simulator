@@ -39,6 +39,9 @@ Non è lo scarico al contrario: lì contano fisica e percorso, qui contano
 6. **Le cinghie.** Quando tutti i 12 case sono dentro si passa alle cinghie.
    Ce ne sono **tre**, e ognuna lega una fila da sponda a sponda: ogni case
    che tocca quella fila non si muove.
+   Mentre si mettono le cinghie, i case legati hanno un lucchetto e quelli
+   slegati con spazio libero accanto hanno il bordo rosso e il punto
+   esclamativo: sono quelli che in viaggio scivoleranno.
 7. **Il viaggio.** Ci sono frenata (4 quadretti), curva a destra (3),
    ripartenza (2), curva a sinistra (3) e il dosso. I case slegati scivolano
    un quadretto alla volta finché non sbattono:
