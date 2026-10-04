@@ -1526,7 +1526,9 @@ const el = sel => document.querySelector(sel);
 function updatePowerMeter () {
   const usedW = totalPowerUsedW();
   const usedKw = usedW / 1000;
-  el('#power-val').textContent = `${usedKw.toFixed(2).replace('.', ',')} / ${POWER_LIMIT_KW.toFixed(1).replace('.', ',')} kW`;
+  // sul telefono l'etichetta dice già kW: si scrive solo il numero
+  const used = usedKw.toFixed(2).replace('.', ','), lim = POWER_LIMIT_KW.toFixed(1).replace('.', ',');
+  el('#power-val').textContent = window.innerWidth < 700 ? `${used}/${lim}` : `${used} / ${lim} kW`;
   const pct = Math.min(100, (usedKw / POWER_LIMIT_KW) * 100);
   const fill = el('#power-fill');
   fill.style.width = pct + '%';
@@ -1594,6 +1596,7 @@ function updateStockUI () {
     const piece = document.querySelector(`.piece[data-type="${type}"]`);
     if (piece) piece.classList.toggle('depleted', remaining <= 0);
   });
+  if (typeof updateDrawerSubs === 'function') updateDrawerSubs();
 }
 
 /* Tabs — sono anche l'interruttore tra fase di POSA e fase di CABLAGGIO:
@@ -3751,6 +3754,7 @@ applySettings();
 
 /* Reset */
 el('#reset-btn').addEventListener('click', () => {
+  closeMenu();
   if (window.__scene) window.__scene.resetLevel();
 });
 
@@ -5193,6 +5197,7 @@ function pickCable (cableId) {
   gameState.selectedCable = cableId;
   disarmPiece();
   updateCableHand();
+  closeDrawerIfNarrow();
   SFX.pick();
   showToast('Cavo preso: ' + cableName(cableId) + '. Tocca un dispositivo per aprire il suo pannello e scegliere la presa.');
 }
@@ -5235,6 +5240,61 @@ document.querySelectorAll('.layer-toggle').forEach(btn => {
     btn.classList.toggle('active', gameState.visibleSignals[sig]);
     if (window.__scene) window.__scene.applyLayerVisibility();
   });
+});
+
+/* ---------------------------------------------------------------------
+   SCHERMATA A — la scena è a tutto schermo; le schede sono il flight case
+   in basso e ognuna apre il suo cassetto coi pezzi. Il cassetto si chiude
+   col ✕, ritoccando la scheda, quando si sceglie un pezzo o un cavo e (sul
+   telefono, dove copre la scena) toccando la scena.
+   --------------------------------------------------------------------- */
+const toolbarEl = el('#toolbar');
+const NARROW_PX = 1000;
+function tabName (btn) { const b = btn && btn.querySelector('b'); return (b || btn).textContent.trim(); }
+function openDrawer () { toolbarEl.classList.add('open'); document.body.classList.add('drawer-open'); }
+function closeDrawer () {
+  toolbarEl.classList.remove('open');
+  document.body.classList.remove('drawer-open');
+  document.querySelectorAll('.tab-panel.help').forEach(p => p.classList.remove('help'));
+  document.querySelectorAll('.dr-help.on').forEach(b => b.classList.remove('on'));
+}
+function closeDrawerIfNarrow () { if (window.innerWidth < NARROW_PX) closeDrawer(); }
+document.querySelectorAll('.tab-panel').forEach(panel => {
+  const btn = document.querySelector('.tab-btn[data-tab="' + panel.dataset.panel + '"]');
+  const head = document.createElement('div');
+  head.className = 'dr-head';
+  head.innerHTML = '<span class="tape">' + escapeHtml(tabName(btn)) + '</span><span class="sub"></span>'
+    + '<button type="button" class="rb dr-help" title="Come si usa" aria-label="Come si usa">?</button>'
+    + '<button type="button" class="rb dr-close" title="Chiudi" aria-label="Chiudi">✕</button>';
+  panel.prepend(head);
+  const help = head.querySelector('.dr-help');
+  help.addEventListener('click', () => { help.classList.toggle('on', panel.classList.toggle('help')); });
+  head.querySelector('.dr-close').addEventListener('click', closeDrawer);
+});
+// sotto il nome del cassetto: quanti pezzi restano da posare
+function updateDrawerSubs () {
+  document.querySelectorAll('.tab-panel').forEach(panel => {
+    const sub = panel.querySelector('.dr-head .sub');
+    if (!sub) return;
+    if (panel.dataset.panel === 'cavi') { sub.textContent = 'Apri un baule e prendi un cavo'; return; }
+    const left = [...panel.querySelectorAll('.piece')].filter(p => !p.classList.contains('depleted')).length;
+    sub.textContent = left ? left + (left === 1 ? ' pezzo da posare' : ' pezzi da posare') : 'Tutto posato';
+  });
+}
+// la scheda apre il suo cassetto; ritoccata col cassetto aperto lo chiude
+// (fase di cattura: si guarda com'era prima che la scheda diventi attiva)
+document.querySelectorAll('.tab-btn').forEach(btn => {
+  btn.addEventListener('click', () => {
+    if (btn.classList.contains('locked')) return;
+    if (btn.classList.contains('active') && toolbarEl.classList.contains('open')) closeDrawer();
+    else openDrawer();
+  }, true);
+});
+// sul telefono il cassetto copre la scena: un tocco sulla scena lo chiude
+el('#stage-wrap').addEventListener('pointerdown', ev => { if (ev.target && ev.target.tagName === 'CANVAS') closeDrawerIfNarrow(); });
+// strati: quali cavi si vedono, dal pulsante sopra lo zoom
+el('#layers-btn').addEventListener('click', () => {
+  el('#layers-btn').classList.toggle('on', document.body.classList.toggle('show-layers'));
 });
 
 /* ---------------------------------------------------------------------
@@ -5305,6 +5365,7 @@ function armPiece (type, pieceEl) {
   if (window.__scene) { window.__scene.clearMoveSelection(); window.__scene.clearEdgeSelection(); window.__scene.cancelPending(); }
   gameState.selectedPieceType = type;
   document.querySelectorAll('.piece').forEach(p => p.classList.toggle('armed', p === pieceEl));
+  closeDrawerIfNarrow();
   const free = window.__scene ? window.__scene.showZoneHint(type) : 1;
   const m = MOUNTS[type];
   if (m && !free) showToast(m.missing);
@@ -5340,6 +5401,7 @@ document.addEventListener('pointermove', ev => {
     ghost.classList.add('drag-ghost');
     document.body.appendChild(ghost);
     pieceDown.ghost = ghost;
+    closeDrawerIfNarrow();
     if (window.__scene) window.__scene.showZoneHint(pieceDown.type);
   }
   if (pieceDown.dragging) {
@@ -5539,7 +5601,7 @@ document.querySelectorAll('.tab-btn').forEach(btn => {
     if (!btn.classList.contains('locked')) return;
     ev.stopImmediatePropagation();
     const g = GIRI.find(x => x.tabs.includes(btn.dataset.tab));
-    showToast('La scheda ' + btn.textContent.trim() + ' si apre col giro ' + (g ? g.title : '') + ': prima finisci il giro ' + GIRI[gameState.giro].title + ' e fai la sua prova.');
+    showToast('La scheda ' + tabName(btn) + ' si apre col giro ' + (g ? g.title : '') + ': prima finisci il giro ' + GIRI[gameState.giro].title + ' e fai la sua prova.');
   }, true);
 });
 
@@ -5955,8 +6017,8 @@ class StageScene extends Phaser.Scene {
     this.input.keyboard.on('keydown-Y', event => { if (event.ctrlKey || event.metaKey) this.redo(); });
 
     this.setupCameraControls();
-    this.cameras.main.setZoom(DEFAULT_ZOOM);
-    this.cameras.main.centerOn(GAME_W / 2, GAME_H / 2);
+    this.resetView();
+    this.makePieceIcons();
 
     this.history = [];
     this.historyIndex = -1;
@@ -6073,9 +6135,58 @@ class StageScene extends Phaser.Scene {
     cam.pan(wx, wy, 250, 'Sine.easeOut');
   }
 
+  /* vista intera: tutta la palestra dentro la parte di schermo libera tra
+     l'HUD in alto e il flight case in basso (la scena è a tutto schermo) */
   resetView () {
-    this.cameras.main.setZoom(DEFAULT_ZOOM);
-    this.cameras.main.centerOn(GAME_W / 2, GAME_H / 2);
+    const cam = this.cameras.main, rc = this.game.canvas.getBoundingClientRect();
+    if (!rc.width || !rc.height) { cam.setZoom(DEFAULT_ZOOM); cam.centerOn(GAME_W / 2, GAME_H / 2); return; }
+    const k = rc.width / GAME_W;   // pixel di schermo per pixel di gioco a zoom 1
+    const hud = el('header.hud'), bar = el('#toolbar');
+    const top = Math.max(0, (hud ? hud.getBoundingClientRect().bottom : rc.top) + 8 - rc.top);
+    // sul telefono dritto anche zoom, annulla e PROVA stanno sopra il flight case
+    const lows = [bar].concat(window.innerWidth < 700 && window.innerHeight > 500 ? [el('.zoom-controls'), el('header.hud .history'), el('#run-bar')] : [])
+      .filter(e => e && e.offsetParent !== null).map(e => e.getBoundingClientRect().top);
+    const bot = Math.max(0, rc.bottom - (lows.length ? Math.min(...lows) : rc.bottom) + 8);
+    const visW = (rc.width - 16) / k, visH = Math.max(120, rc.height - top - bot) / k;
+    const x0 = gridToScreen(0, VENUE_H).x, x1 = gridToScreen(VENUE_W, CARICO_ROWS).x;
+    const y0 = gridToScreen(0, CARICO_ROWS).y - 150, y1 = gridToScreen(VENUE_W, VENUE_H).y + 20;
+    const z = Phaser.Math.Clamp(Math.min(visW / (x1 - x0), visH / (y1 - y0)), ZOOM_MIN, 1.6);
+    cam.setZoom(z);
+    cam.centerOn((x0 + x1) / 2, (y0 + y1) / 2 - (top - bot) / 2 / k / z);
+  }
+
+  /* icone dei pezzi nel cassetto: lo stesso disegno della scena, fotografato
+     una volta all'avvio (così ogni pezzo nuovo ha la sua icona da solo) */
+  makePieceIcons () {
+    const K = 2, S = 220;
+    document.querySelectorAll('.piece[data-type]').forEach(piece => {
+      const type = piece.dataset.type, def = COMPONENT_TYPES[type];
+      const sw = piece.querySelector('.swatch');
+      if (!def || !sw || sw.querySelector('.pz-img')) return;
+      const g = this.make.graphics({ x: 0, y: 0 }, false);
+      try { this.drawComponentBody(g, def, 0, type + '_icona'); } catch (e) { g.destroy(); return; }
+      const rt = this.make.renderTexture({ width: S * K, height: S * K }, false);
+      g.setScale(K);
+      rt.draw(g, S * K / 2, S * K * 0.62);
+      g.destroy();
+      rt.snapshot(img => {
+        rt.destroy();
+        // si ritaglia il disegno dal fondo trasparente
+        const c = document.createElement('canvas'); c.width = img.width; c.height = img.height;
+        const x = c.getContext('2d'); x.drawImage(img, 0, 0);
+        const a = x.getImageData(0, 0, c.width, c.height).data;
+        let x0 = c.width, y0 = c.height, x1 = -1, y1 = -1;
+        for (let yy = 0; yy < c.height; yy++) for (let xx = 0; xx < c.width; xx++) {
+          if (a[(yy * c.width + xx) * 4 + 3] > 40) { if (xx < x0) x0 = xx; if (xx > x1) x1 = xx; if (yy < y0) y0 = yy; if (yy > y1) y1 = yy; }
+        }
+        if (x1 < 0) return;
+        const o = document.createElement('canvas'); o.width = x1 - x0 + 9; o.height = y1 - y0 + 9;
+        o.getContext('2d').drawImage(c, x0 - 4, y0 - 4, o.width, o.height, 0, 0, o.width, o.height);
+        const im = document.createElement('img');
+        im.className = 'pz-img'; im.alt = ''; im.draggable = false; im.src = o.toDataURL('image/png');
+        sw.prepend(im);
+      });
+    });
   }
 
   /* ---------------- disegno venue: terreno, zone, pedana ---------------- */

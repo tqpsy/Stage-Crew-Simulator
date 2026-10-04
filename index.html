@@ -13,7 +13,8 @@
 <body>
 <div id="app">
 
-  <header>
+  <!-- HUD sopra la scena: menù, strumenti, scaletta; a destra annulla/ripeti -->
+  <header class="hud">
     <div class="level-wrap">
       <span class="service-logo" id="service-logo"></span>
       <div class="level-id">
@@ -21,18 +22,18 @@
         <h1>Livello 1: Festa della scuola</h1>
       </div>
     </div>
-
-    <div class="meters">
+    <button class="rack hbtn" id="menu-btn" title="Menù: partita e impostazioni" aria-label="Menù"><span class="screw tl"></span><span class="screw br"></span><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 6h16M4 12h16M4 18h16"/></svg></button>
+    <div class="rack meters"><span class="screw tl"></span><span class="screw br"></span>
       <div class="meter-power">
-        <div class="label">CABLAGGI <span class="val" id="conn-val">0 / 24</span></div>
+        <div class="label"><span class="lab-long">CABLAGGI</span><span class="lab-short">CAVI</span> <span class="val" id="conn-val">0 / 24</span></div>
         <div class="gauge"><div class="gauge-fill" id="conn-fill"></div></div>
       </div>
-
+      <span class="vsep"></span>
       <div class="meter-power">
-        <div class="label">POTENZA <span class="val" id="power-val">0.00 / 3.0 kW</span></div>
+        <div class="label"><span class="lab-long">POTENZA</span><span class="lab-short">kW</span> <span class="val" id="power-val">0.00 / 3.0 kW</span></div>
         <div class="gauge"><div class="gauge-fill" id="power-fill"></div></div>
       </div>
-
+      <span class="vsep"></span>
       <div class="circuit-status">
         <div class="lamp" id="circuit-lamp"></div>
         <div class="status-text">
@@ -40,13 +41,14 @@
           <span class="val" id="circuit-text">DA TESTARE</span>
         </div>
       </div>
-
-      <button class="reset-btn history-btn" id="menu-btn" title="Menù: partita e impostazioni">☰</button>
-      <button class="reset-btn history-btn" id="schedule-btn" title="Scaletta della serata">📋</button>
-      <button class="reset-btn history-btn beer-btn" id="beer-btn" title="Stanchezza e birre" hidden><span>🍺 <span id="beer-n">0</span></span><span class="fat"><i id="fat-fill"></i></span></button>
-      <button class="reset-btn history-btn" id="undo-btn" title="Annulla ultima azione" disabled>↶</button>
-      <button class="reset-btn history-btn" id="redo-btn" title="Ripeti azione" disabled>↷</button>
-      <button class="reset-btn" id="reset-btn">Reset livello</button>
+    </div>
+    <button class="rack hbtn" id="schedule-btn" title="Scaletta della serata" aria-label="Scaletta"><span class="screw tl"></span><span class="screw br"></span><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><rect x="5" y="4" width="14" height="18" rx="2"/><path d="M9 4V2h6v2M8 10h8M8 14h8M8 18h5"/></svg><span class="hbtn-txt">Scaletta</span></button>
+    <span class="hud-spacer"></span>
+    <button class="rack hbtn beer-btn" id="beer-btn" title="Stanchezza e birre" hidden><span class="screw tl"></span><span class="screw br"></span><span>🍺 <span id="beer-n">0</span></span><span class="fat"><i id="fat-fill"></i></span></button>
+    <div class="rack hgroup history"><span class="screw tl"></span><span class="screw br"></span>
+      <button class="hbtn" id="undo-btn" title="Annulla ultima azione" aria-label="Annulla" disabled>↶</button>
+      <span class="vsep"></span>
+      <button class="hbtn" id="redo-btn" title="Ripeti azione" aria-label="Ripeti" disabled>↷</button>
     </div>
   </header>
 
@@ -63,6 +65,7 @@
         <button class="menu-btn" id="menu-slots">Partite salvate</button>
         <button class="menu-btn" id="menu-levels">Livelli</button>
         <button class="menu-btn" id="menu-settings">Impostazioni</button>
+        <button class="menu-btn" id="reset-btn" type="button">Ricomincia il livello</button>
       </div>
 
       <div class="menu-page" data-page="slots" hidden>
@@ -255,7 +258,8 @@
       <button class="layer-toggle active" data-signal="jack" title="Jack"><span class="dot" style="background:var(--c-jack);"></span>JCK</button>
       <button class="layer-toggle active" data-signal="usbc" title="USB"><span class="dot" style="background:var(--c-usb);"></span>USB</button>
     </div>
-    <div class="zoom-controls">
+    <div class="zoom-controls rack"><span class="screw tl"></span><span class="screw br"></span>
+      <button id="layers-btn" title="Cavi da vedere" aria-label="Cavi da vedere"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3 2 8l10 5 10-5z"/><path d="m2 13 10 5 10-5"/></svg></button>
       <button id="zoom-in" title="Aumenta zoom">+</button>
       <button id="zoom-out" title="Riduci zoom">−</button>
       <button id="zoom-reset" title="Adatta alla vista">⤢</button>
@@ -267,13 +271,13 @@
 
   <div id="toolbar">
     <div class="tabs">
-      <button class="tab-btn active" data-tab="corrente">Corrente</button>
-      <button class="tab-btn" data-tab="strutture">Strutture</button>
-      <button class="tab-btn" data-tab="audio">Audio</button>
-      <button class="tab-btn" data-tab="regia">Regia</button>
-      <button class="tab-btn" data-tab="luci">Luci</button>
-      <button class="tab-btn" data-tab="dj" hidden>DJ</button>
-      <button class="tab-btn" data-tab="cavi">Cavi</button>
+      <button class="tab-btn active" data-tab="corrente"><span class="num">1</span><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M13 2 4 14h7l-1 8 9-12h-7z"/></svg><b>Corrente</b></button>
+      <button class="tab-btn" data-tab="strutture"><span class="num">2</span><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M3 9h18M5 9v12M19 9v12M3 9l3-5h12l3 5"/></svg><b>Strutture</b></button>
+      <button class="tab-btn" data-tab="audio"><span class="num">3</span><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><rect x="6" y="2" width="12" height="20" rx="2"/><circle cx="12" cy="14" r="4"/><circle cx="12" cy="6.5" r="1.5"/></svg><b>Audio</b></button>
+      <button class="tab-btn" data-tab="regia"><span class="num">4</span><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M6 3v18M12 3v18M18 3v18"/><rect x="4" y="13" width="4" height="3" rx="1"/><rect x="10" y="6" width="4" height="3" rx="1"/><rect x="16" y="10" width="4" height="3" rx="1"/></svg><b>Regia</b></button>
+      <button class="tab-btn" data-tab="luci"><span class="num">5</span><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M5 10a7 7 0 0 1 14 0v3H5z"/><path d="M8 13l-2 7M16 13l2 7M12 13v8"/></svg><b>Luci</b></button>
+      <button class="tab-btn" data-tab="dj" hidden><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><circle cx="8" cy="13" r="5"/><circle cx="8" cy="13" r="1.5"/><path d="M15 6h6v14h-6zM18 10v6"/></svg><b>DJ</b></button>
+      <button class="tab-btn" data-tab="cavi"><span class="num">6</span><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M5 19c5 0 4-7 7-7s2-7 7-7"/><rect x="2" y="16" width="5" height="6" rx="1"/><rect x="17" y="2" width="5" height="6" rx="1"/></svg><b>Cavi</b></button>
     </div>
 
     <div class="tab-panel active" data-panel="corrente">
@@ -389,12 +393,13 @@
         <button class="case-btn" data-case="corrente"><svg viewBox="0 0 64 44" class="case-ico"><rect x="3" y="6" width="58" height="34" rx="4" fill="#232428" stroke="#b9bcc1" stroke-width="3"/><rect x="3" y="6" width="9" height="9" rx="2" fill="#d7dadd"/><rect x="52" y="6" width="9" height="9" rx="2" fill="#d7dadd"/><rect x="3" y="31" width="9" height="9" rx="2" fill="#d7dadd"/><rect x="52" y="31" width="9" height="9" rx="2" fill="#d7dadd"/><rect x="18" y="2" width="10" height="7" rx="2" fill="#c9ccd1"/><rect x="36" y="2" width="10" height="7" rx="2" fill="#c9ccd1"/><rect x="24" y="21" width="16" height="4" rx="2" fill="#0c0d10"/></svg><span>CORRENTE</span></button>
         <div class="cable-hand" id="cable-hand"></div>
       </div>
-      <span class="panel-hint">Apri un baule (anche toccando i case vicino al furgone) e prendi un cavo, poi tocca un dispositivo e scegli la presa nel suo pannello; ripeti sul secondo dispositivo. Ogni presa accetta un solo cavo, tranne quelle del Quadro. Gli adattatori hanno due connettori diversi (es. CEE / PowerCON) e accolgono anche le spine di ciabatte e PC. Cabla a impianto spento: staccare o attaccare un cavo di corrente sotto carico fa scattare il salvavita. Poi arma il Quadro e accendi i dispositivi dal loro pannello, finali e sub per ultimi, uno alla volta.</span>
+      <span class="panel-hint">Apri un baule (anche toccando i case dietro la regia FOH) e prendi un cavo, poi tocca un dispositivo e scegli la presa nel suo pannello; ripeti sul secondo dispositivo. Ogni presa accetta un solo cavo, tranne quelle del Quadro. Gli adattatori hanno due connettori diversi (es. CEE / PowerCON) e accolgono anche le spine di ciabatte e PC. Cabla a impianto spento: staccare o attaccare un cavo di corrente sotto carico fa scattare il salvavita. Poi arma il Quadro e accendi i dispositivi dal loro pannello, finali e sub per ultimi, uno alla volta.</span>
     </div>
 
     <div id="run-bar">
       <button id="run-btn">▶ TEST IMPIANTO</button>
     </div>
+    <span class="case-corner l"></span><span class="case-corner r"></span>
   </div>
 
 </div>
