@@ -1562,10 +1562,14 @@ function setCircuitStatus (state) {
 
 let toastTimer = null;
 let toastHeld = false;
+function hideToast () {
+  clearTimeout(toastTimer);
+  el('#toast').classList.remove('show');
+}
 function showToast (msg, kind) {
   const toast = el('#toast');
   toastHeld = false; toast.classList.remove('hold');
-  toast.textContent = msg;
+  el('#toast-msg').textContent = msg;
   // di base è un avviso neutro; 'ok' per i successi, 'bad' solo per i guasti veri
   toast.classList.remove('ok', 'bad', 'boss');
   if (kind === 'ok' || kind === 'bad' || kind === 'boss') toast.classList.add(kind);
@@ -1585,6 +1589,7 @@ function releaseToast () {
   const toast = el('#toast');
   showToast(toast.textContent, ['ok', 'bad', 'boss'].find(k => toast.classList.contains(k)));
 }
+el('#toast-x').addEventListener('click', hideToast);
 
 function updateStockUI () {
   // la potenza impegnata segue i pezzi posati: si aggiorna a ogni posa
@@ -2879,7 +2884,7 @@ function renderLevels () {
    Le fasi senza "phase" non sono ancora nel gioco: si vedono come
    "in arrivo", così il giocatore sa dove va a finire la serata. */
 const SCHEDULE = [
-  { time: '16:00', title: 'Arrivo e scarico', text: 'Il furgone accosta al cortile: tu e Tonino portate i case nella palestra prima delle 16:30.', phase: 'scarico' },
+  { time: '16:00', title: 'Arrivo e scarico', text: 'Il furgone accosta al cortile: tu e Macio portate i case nella palestra prima delle 16:30.', phase: 'scarico' },
   { time: '16:30', title: 'Montaggio impianto', text: 'Corrente dal Quadro, PC → scheda → mixer → finale → casse, i PAR in DMX dalla consolle.', phase: 'montaggio' },
   { time: '19:30', title: 'Test impianto', text: 'Il collaudo: tutto acceso senza scatti né colpi nelle casse, audio e luci a posto.', phase: 'collaudo', rep: REP.phaseDone },
   { time: '20:00', title: 'Messa in sicurezza dei cavi', text: 'I cavi stesi al montaggio come si deve: via di fuga libera, passaggi attraversati dritti, niente cavi in mezzo alla scena, segnale lontano dalla corrente. Gerry, il bidello, controlla prima di aprire.', phase: 'cavi' },
@@ -3142,17 +3147,22 @@ function gerryCells (e, scene) {
   if (!f) return null;
   const P = gameState.placed, own = new Set();
   [posaBase(P[e.a]), posaBase(P[e.b])].forEach(b => (b && b.cells || []).forEach(k => own.add(k)));
-  const out = [], seen = new Set();
-  for (let s = 0; s < f.pts.length - 1; s++) {
-    const a = f.pts[s], b = f.pts[s + 1], L = Math.abs(b.gx - a.gx) + Math.abs(b.gy - a.gy);
+  const out = [], seen = new Set(), pts = f.smooth;
+  // ogni 25 cm lungo il cavo: la cella e da che parte va (h: lungo gx, v: lungo gy)
+  let carry = 0;
+  for (let s = 0; s < pts.length - 1; s++) {
+    const a = pts[s], b = pts[s + 1], L = Math.hypot(b.gx - a.gx, b.gy - a.gy);
+    if (L < 1e-9) continue;
     const dir = Math.abs(b.gx - a.gx) > Math.abs(b.gy - a.gy) ? 'h' : 'v';
-    for (let t = CELL / 4; t < L; t += CELL / 2) {
+    let t = carry;
+    for (; t < L; t += CELL / 2) {
       const x = a.gx + (b.gx - a.gx) * t / L, y = a.gy + (b.gy - a.gy) * t / L;
       const i = Math.floor(x / CELL), j = Math.floor(y / CELL), k = i + ',' + j;
       if (own.has(k) || seen.has(k + dir)) continue;
       seen.add(k + dir);
       out.push({ i, j, dir });
     }
+    carry = t - L;
   }
   return { cells: out, base: [posaBase(P[e.a]), posaBase(P[e.b])] };
 }
@@ -3207,7 +3217,7 @@ function gerryStats () {
   gameState.edges.forEach(e => {
     const f = scene && scene.edgeFloor(e);
     if (!f) return;
-    cableM += layLength(f.pts);
+    cableM += layLength(f.smooth);
     gerryCells(e, scene).cells.forEach(c => {
       const ps = passages.find(z => gInRect(z.r, c.i, c.j));
       if (ps) { ramps.add(ps.id + ':' + c.j); return; }
@@ -5005,6 +5015,7 @@ function updateCableBanner () {
 }
 // barra del cavo in mano da stendere (vedi StageScene.startLay)
 el('#lay-done').addEventListener('click', () => { SFX.button(); if (window.__scene) window.__scene.endLay(true); });
+el('#lay-add').addEventListener('click', () => { SFX.button(); if (window.__scene) window.__scene.layAddBend(); });
 el('#lay-auto').addEventListener('click', () => { SFX.button(); if (window.__scene) window.__scene.layReset(); });
 el('#lay-del').addEventListener('click', () => { if (window.__scene) window.__scene.layDelete(); });
 el('#cable-banner-cancel').addEventListener('click', () => {
@@ -5831,12 +5842,12 @@ function computeRoutePoints (from, to, stageBox, margin) {
 }
 
 /* ---------------------------------------------------------------------
-   5b) POSA AL MONTAGGIO: ogni cavo per terra è fatto di tratti dritti
-       paralleli ai muri (come si stendono davvero). Il percorso è in metri:
-       { o0: 'h'|'v' orientamento del primo tratto, rails: [...] } dove
-       rails[i] è la quota del tratto i (y se orizzontale, x se verticale).
-       Il primo e l'ultimo tratto passano per i due capi; quelli in mezzo
-       si trascinano col dito e scattano sui centri delle celle da 50 cm.
+   5b) POSA AL MONTAGGIO: un cavo per terra va dal pezzo A al pezzo B
+       passando per le sue pieghe (route.bends, [gx, gy] in metri). Tra due
+       pieghe va dritto, e a ogni piega curva morbido, come un cavo vero.
+       Le pieghe si trascinano col dito e scattano sui centri delle celle
+       da 50 cm, mettendosi in riga con quelle accanto (tratti paralleli ai
+       muri). Nessuna piega nasce da sola: si aggiunge con «+ Piega».
    --------------------------------------------------------------------- */
 // punto dello schermo -> metri sul pavimento (senza pedana)
 function screenToMeters (px, py) {
@@ -5848,27 +5859,36 @@ function worldToFloor (px, py) {
   const up = screenToMeters(px, py + PLATFORM_HEIGHT);
   return isStageCell(up.gx, up.gy) ? up : screenToMeters(px, py);
 }
-const layOrient = (route, i) => (i % 2 === 0) === (route.o0 === 'h') ? 'h' : 'v';
 const laySnap = v => Math.round((v - CELL / 2) / CELL) * CELL + CELL / 2;
-// le quote dei capi: il primo e l'ultimo tratto passano per A e B
-function layPin (route, A, B) {
-  const n = route.rails.length;
-  route.rails[0] = layOrient(route, 0) === 'h' ? A.gy : A.gx;
-  route.rails[n - 1] = layOrient(route, n - 1) === 'h' ? B.gy : B.gx;
-  return route;
+const LAY_RADIUS = 0.9;     // raggio delle curve, in metri
+const LAY_MAX_BENDS = 5;
+const LAY_REMOVE_MS = 650;  // tenendo fermo un pallino così a lungo, lasciandolo si toglie
+// i punti fermi del cavo: capo A, pieghe, capo B
+function layCorners (route, A, B) {
+  return [{ gx: A.gx, gy: A.gy }, ...route.bends.map(([gx, gy]) => ({ gx, gy })), { gx: B.gx, gy: B.gy }];
 }
-// i punti (in metri) del percorso, da A a B
-function layPoints (route, A, B) {
-  const r = route.rails, pts = [{ gx: A.gx, gy: A.gy }];
-  for (let i = 0; i < r.length - 1; i++) {
-    pts.push(layOrient(route, i) === 'h' ? { gx: r[i + 1], gy: r[i] } : { gx: r[i], gy: r[i + 1] });
+// il cavo come si posa: dritto tra i punti, curva morbida a ogni piega
+function laySmooth (pts) {
+  if (pts.length < 3) return pts.slice();
+  const out = [pts[0]];
+  for (let i = 1; i < pts.length - 1; i++) {
+    const p = pts[i - 1], c = pts[i], n = pts[i + 1];
+    const d1 = Math.hypot(c.gx - p.gx, c.gy - p.gy), d2 = Math.hypot(n.gx - c.gx, n.gy - c.gy);
+    const r = Math.min(LAY_RADIUS, d1 / 2, d2 / 2);
+    if (r < 0.05) { out.push(c); continue; }
+    const a = { gx: c.gx + (p.gx - c.gx) / d1 * r, gy: c.gy + (p.gy - c.gy) / d1 * r };
+    const b = { gx: c.gx + (n.gx - c.gx) / d2 * r, gy: c.gy + (n.gy - c.gy) / d2 * r };
+    for (let k = 0; k <= 8; k++) {
+      const t = k / 8, u = 1 - t;
+      out.push({ gx: u * u * a.gx + 2 * u * t * c.gx + t * t * b.gx, gy: u * u * a.gy + 2 * u * t * c.gy + t * t * b.gy });
+    }
   }
-  pts.push({ gx: B.gx, gy: B.gy });
-  return pts;
+  out.push(pts[pts.length - 1]);
+  return out;
 }
 function layLength (pts) {
   let s = 0;
-  for (let i = 0; i < pts.length - 1; i++) s += Math.abs(pts[i + 1].gx - pts[i].gx) + Math.abs(pts[i + 1].gy - pts[i].gy);
+  for (let i = 0; i < pts.length - 1; i++) s += Math.hypot(pts[i + 1].gx - pts[i].gx, pts[i + 1].gy - pts[i].gy);
   return s;
 }
 // quanti tratti attraversano la pedana dello spettacolo (lì i cavi non vanno)
@@ -5883,38 +5903,47 @@ function layCrossesStage (pts) {
   }
   return n;
 }
-// percorso automatico: il più corto tra a Z e a L, girando intorno alla pedana
+// toglie le pieghe che non servono: sopra un'altra o in riga con le vicine
+function layClean (bends, A, B) {
+  const out = bends.map(b => b.slice());
+  for (let guard = 0; guard < 10; guard++) {
+    const pts = layCorners({ bends: out }, A, B);
+    let k = -1;
+    for (let i = 1; i < pts.length - 1 && k < 0; i++) {
+      const p = pts[i - 1], c = pts[i], n = pts[i + 1];
+      const near = Math.hypot(c.gx - p.gx, c.gy - p.gy) < 0.1 || Math.hypot(n.gx - c.gx, n.gy - c.gy) < 0.1;
+      const cross = (c.gx - p.gx) * (n.gy - c.gy) - (c.gy - p.gy) * (n.gx - c.gx);
+      const ahead = (c.gx - p.gx) * (n.gx - c.gx) + (c.gy - p.gy) * (n.gy - c.gy) > 0;
+      if (near || (Math.abs(cross) < 1e-6 && ahead)) k = i - 1;
+    }
+    if (k < 0) break;
+    out.splice(k, 1);
+  }
+  return out;
+}
+// percorso automatico: il più corto a L o a Z, girando intorno alla pedana
 function layAutoRoute (A, B) {
   const onStage = isStageCoreCell(A.gx, A.gy) || isStageCoreCell(B.gx, B.gy);
   const sx0 = STAGE_ORIGIN_X - CELL / 2, sx1 = STAGE_ORIGIN_X + STAGE_W + CELL / 2;
   const sy0 = STAGE_ORIGIN_Y - CELL / 2, sy1 = STAGE_ORIGIN_Y + STAGE_H + CELL / 2;
-  const cands = [{ o0: 'h', rails: [0, 0] }, { o0: 'v', rails: [0, 0] }];
-  [laySnap((A.gx + B.gx) / 2), sx0, sx1].forEach(x => cands.push({ o0: 'h', rails: [0, x, 0] }));
-  [laySnap((A.gy + B.gy) / 2), sy0, sy1].forEach(y => cands.push({ o0: 'v', rails: [0, y, 0] }));
+  const cands = [[[B.gx, A.gy]], [[A.gx, B.gy]]];
+  [laySnap((A.gx + B.gx) / 2), sx0, sx1].forEach(x => cands.push([[x, A.gy], [x, B.gy]]));
+  [laySnap((A.gy + B.gy) / 2), sy0, sy1].forEach(y => cands.push([[A.gx, y], [B.gx, y]]));
   let best = null, bestScore = Infinity;
   cands.forEach(c => {
-    layPin(c, A, B);
-    const pts = layPoints(c, A, B);
-    const score = layLength(pts) + (onStage ? 0 : layCrossesStage(pts) * 100) + c.rails.length * 0.01;
-    if (score < bestScore) { bestScore = score; best = c; }
+    const bends = layClean(c, A, B), pts = layCorners({ bends }, A, B);
+    const score = layLength(pts) + (onStage ? 0 : layCrossesStage(pts) * 100) + bends.length * 0.01;
+    if (score < bestScore) { bestScore = score; best = bends; }
   });
-  return best;
+  return { bends: best };
 }
-// toglie i tratti lunghi zero (due tratti in fila diventano uno)
-function layTidy (route, A, B) {
-  layPin(route, A, B);
-  for (let k = 0; k < 8; k++) {
-    const r = route.rails, n = r.length;
-    let done = true;
-    for (let i = 1; i < n - 1; i++) {
-      if (Math.abs(r[i - 1] - r[i + 1]) < 1e-6 && n > 3) {
-        // il tratto i non ha lunghezza: i-1 e i+1 sono sulla stessa riga
-        r.splice(i, 2); done = false; break;
-      }
-    }
-    if (done) break;
-  }
-  return layPin(route, A, B);
+// i percorsi salvati prima delle pieghe (tratti a quote): diventano pieghe
+function layFromRails (r, A, B) {
+  const rails = r.rails.slice(), n = rails.length, h = i => (i % 2 === 0) === (r.o0 === 'h');
+  rails[0] = h(0) ? A.gy : A.gx; rails[n - 1] = h(n - 1) ? B.gy : B.gx;
+  const bends = [];
+  for (let i = 0; i < n - 1; i++) bends.push(h(i) ? [rails[i + 1], rails[i]] : [rails[i], rails[i + 1]]);
+  return { bends: layClean(bends, A, B) };
 }
 // metri sul pavimento -> schermo, con lo scalino della pedana
 function layToScreen (pts) {
@@ -7987,7 +8016,7 @@ class StageScene extends Phaser.Scene {
       const route = caviRoute(e);
       const floor = route ? null : this.edgeFloor(e);
       const pts = route ? [from, ...route, to]
-        : floor ? [from, ...layToScreen(floor.pts), to]
+        : floor ? [from, ...layToScreen(floor.smooth), to]
         : (zoneA === 'stage' && zoneB === 'stage') ? [from, to]
         : computeRoutePoints(from, to, this.stageBox, 30);
       // cavo in neoprene nero (come quelli veri), con un bordo appena più
@@ -8137,9 +8166,10 @@ class StageScene extends Phaser.Scene {
     if (!ends) return null;
     let route;
     if (this.lay && this.lay.id === e.id) route = this.lay.route;
-    else if (e.route && e.route.key === ends.key) route = layPin({ o0: e.route.o0, rails: e.route.rails.slice() }, ends.A, ends.B);
+    else if (e.route && e.route.key === ends.key) route = e.route.bends ? { bends: e.route.bends.map(b => b.slice()) } : layFromRails(e.route, ends.A, ends.B);
     else route = layAutoRoute(ends.A, ends.B);
-    return { ...ends, route, pts: layPoints(route, ends.A, ends.B) };
+    const pts = layCorners(route, ends.A, ends.B);
+    return { ...ends, route, pts, smooth: laySmooth(pts) };
   }
 
   // pixel di schermo per unità di mondo (per tenere i pallini grandi come un dito)
@@ -8158,10 +8188,10 @@ class StageScene extends Phaser.Scene {
     this.cancelPending();
     this.selectedEdgeId = null;
     if (this.edgeDeleteBtn) { this.edgeDeleteBtn.destroy(); this.edgeDeleteBtn = null; }
-    this.lay = { id: edgeId, route: { o0: f.route.o0, rails: f.route.rails.slice() }, start: JSON.stringify(f.route), drag: null, cam: null };
+    this.lay = { id: edgeId, route: { bends: f.route.bends.map(b => b.slice()) }, start: JSON.stringify(f.route.bends), drag: null, cam: null };
     // sul telefono la scena è piccola: ci si avvicina al cavo, poi si torna
     if (this.screenScale() < CROWD_SCALE) {
-      const sp = layToScreen(f.pts);
+      const sp = layToScreen(f.smooth);
       const xs = sp.map(p => p.x), ys = sp.map(p => p.y);
       const bw = Math.max(80, Math.max(...xs) - Math.min(...xs)), bh = Math.max(60, Math.max(...ys) - Math.min(...ys));
       const cam = this.cameras.main;
@@ -8190,14 +8220,15 @@ class StageScene extends Phaser.Scene {
   endLay (save) {
     const L = this.lay;
     if (!L) return;
+    if (L.drag && L.drag.timer) clearTimeout(L.drag.timer);
     this.lay = null;
     el('#lay-bar').classList.remove('show');
     if (this.layGraphics) this.layGraphics.clear();
     const e = gameState.edges.find(x => x.id === L.id);
     const ends = e && this.edgeEnds(e);
     // si salva solo un percorso cambiato (con il suo passo di Annulla)
-    if (save && e && ends && JSON.stringify(L.route) !== L.start) {
-      e.route = { o0: L.route.o0, rails: L.route.rails.slice(), key: ends.key };
+    if (save && e && ends && JSON.stringify(L.route.bends) !== L.start) {
+      e.route = { bends: L.route.bends.map(b => b.slice()), key: ends.key };
       SFX.place();
       this.pushHistory();
     }
@@ -8207,25 +8238,35 @@ class StageScene extends Phaser.Scene {
     this.redrawEdges();
   }
 
-  // un tocco sul cavo in mano: quale tratto si prende (null se nessuno)
+  // dove stanno i pallini (le pieghe) sullo schermo
+  layHandles (f) {
+    return f.route.bends.map(([gx, gy]) => layToScreen([{ gx, gy }, { gx, gy }])[0]);
+  }
+
+  // un tocco su un pallino lo prende; tenuto fermo un attimo diventa rosso
+  // e, lasciato lì, la piega si toglie (se il dito si muove, si trascina)
   layPointerDown (pointer) {
     const L = this.lay;
     if (!L || (pointer.downElement && pointer.downElement !== this.game.canvas)) return false;
     const e = gameState.edges.find(x => x.id === L.id);
     const f = e && this.edgeFloor(e);
     if (!f) return false;
-    const k = this.screenScale(), tol = 28 / k;
-    let best = null, bestD = tol;
-    for (let i = 0; i < f.pts.length - 1; i++) {
-      const s = layToScreen([f.pts[i], f.pts[i + 1]]);
-      for (let j = 0; j < s.length - 1; j++) {
-        const d = pointToSegmentDistance(pointer.worldX, pointer.worldY, s[j].x, s[j].y, s[j + 1].x, s[j + 1].y);
-        if (d < bestD) { bestD = d; best = i; }
-      }
-    }
-    if (best == null) return false;
-    L.drag = { seg: best };
+    const tol = 30 / this.screenScale();
+    let best = -1, bestD = tol;
+    this.layHandles(f).forEach((h, i) => {
+      const d = Math.hypot(pointer.worldX - h.x, pointer.worldY - h.y);
+      if (d < bestD) { bestD = d; best = i; }
+    });
+    if (best < 0) return false;
+    const drag = L.drag = { k: best, x: pointer.x, y: pointer.y, moved: false, armed: false, timer: null };
+    drag.timer = setTimeout(() => {
+      if (this.lay !== L || L.drag !== drag || drag.moved) return;
+      drag.armed = true;
+      if (navigator.vibrate) navigator.vibrate(30);
+      this.redrawEdges();
+    }, LAY_REMOVE_MS);
     if (navigator.vibrate) navigator.vibrate(10);
+    this.redrawEdges();
     return true;
   }
 
@@ -8233,38 +8274,65 @@ class StageScene extends Phaser.Scene {
     const L = this.lay, e = gameState.edges.find(x => x.id === L.id);
     const ends = e && this.edgeEnds(e);
     if (!ends) return;
-    const r = L.route, n = r.rails.length;
-    let i = L.drag.seg;
-    const o = layOrient(r, i);
+    const d = L.drag;
+    if (!d.moved) {
+      if (Math.hypot(pointer.x - d.x, pointer.y - d.y) < 8) return;
+      d.moved = true; d.armed = false;
+      if (d.timer) { clearTimeout(d.timer); d.timer = null; }
+    }
     const m = worldToFloor(pointer.worldX, pointer.worldY);
-    const lim = (o === 'h' ? VENUE_H : VENUE_W) - CELL / 2;
-    const v = Math.min(lim, Math.max(CELL / 2, laySnap(o === 'h' ? m.gy : m.gx)));
-    if (Math.abs(v - r.rails[i]) < 1e-6) return;
-    const next = { o0: r.o0, rails: r.rails.slice() };
-    // il primo e l'ultimo tratto partono dal pezzo: spostandoli nasce un
-    // tratto corto che scende dal pezzo, e quello preso diventa libero
-    if (i === 0) { next.o0 = next.o0 === 'h' ? 'v' : 'h'; next.rails.unshift(0); i = 1; }
-    if (L.drag.seg === n - 1) next.rails.push(0);
-    next.rails[i] = v;
-    layPin(next, ends.A, ends.B);
+    const pts = layCorners(L.route, ends.A, ends.B), prev = pts[d.k], next = pts[d.k + 2];
+    let gx = laySnap(m.gx), gy = laySnap(m.gy);
+    // in riga con la piega o il capo accanto: tratti dritti, paralleli ai muri
+    [prev, next].forEach(q => {
+      if (Math.abs(m.gx - q.gx) < CELL * 0.8) gx = q.gx;
+      if (Math.abs(m.gy - q.gy) < CELL * 0.8) gy = q.gy;
+    });
+    gx = Math.min(VENUE_W - CELL / 2, Math.max(CELL / 2, gx));
+    gy = Math.min(VENUE_H - CELL / 2, Math.max(CELL / 2, gy));
+    const cur = L.route.bends[d.k];
+    if (Math.abs(cur[0] - gx) < 1e-6 && Math.abs(cur[1] - gy) < 1e-6) return;
+    const bends = L.route.bends.map(b => b.slice());
+    bends[d.k] = [gx, gy];
     const max = layMaxLen(e);
-    const len = layLength(layPoints(next, ends.A, ends.B)), cur = layLength(layPoints(r, ends.A, ends.B));
-    if (max && len > max + 1e-6 && len > cur) {
+    const len = layLength(laySmooth(layCorners({ bends }, ends.A, ends.B))), was = layLength(laySmooth(pts));
+    if (max && len > max + 1e-6 && len > was) {
       // il cavo è teso: non si allunga oltre la sua misura
-      if (!L.taut) { L.taut = true; this.updateLayBar(e, cur, max); if (navigator.vibrate) navigator.vibrate([15, 40, 15]); }
+      if (!L.taut) { L.taut = true; this.updateLayBar(e, was, max); if (navigator.vibrate) navigator.vibrate([15, 40, 15]); }
       return;
     }
     L.taut = false;
-    L.route = next;
-    L.drag.seg = i;
+    L.route.bends = bends;
     this.redrawEdges();
   }
 
   layDragEnd () {
     const L = this.lay, e = gameState.edges.find(x => x.id === L.id);
     const ends = e && this.edgeEnds(e);
+    const d = L.drag;
+    if (d && d.timer) clearTimeout(d.timer);
     L.drag = null; L.taut = false;
-    if (ends) L.route = layTidy(L.route, ends.A, ends.B);
+    // pallino tenuto premuto e lasciato lì: la piega si toglie
+    if (d && d.armed && !d.moved) { L.route.bends.splice(d.k, 1); SFX.cableOut('xlr'); }
+    // una piega messa in riga con le vicine non serve più: sparisce
+    if (ends) L.route.bends = layClean(L.route.bends, ends.A, ends.B);
+    this.redrawEdges();
+  }
+
+  // + Piega: una piega nuova a metà del tratto più lungo
+  layAddBend () {
+    const L = this.lay, e = L && gameState.edges.find(x => x.id === L.id);
+    const ends = e && this.edgeEnds(e);
+    if (!ends) return;
+    if (L.route.bends.length >= LAY_MAX_BENDS) { showToast('Bastano ' + LAY_MAX_BENDS + ' pieghe: spostale, o tienine premuta una per toglierla.'); return; }
+    const pts = layCorners(L.route, ends.A, ends.B);
+    let k = 0, best = -1;
+    for (let i = 0; i < pts.length - 1; i++) {
+      const l = Math.hypot(pts[i + 1].gx - pts[i].gx, pts[i + 1].gy - pts[i].gy);
+      if (l > best) { best = l; k = i; }
+    }
+    const a = pts[k], b = pts[k + 1];
+    L.route.bends.splice(k, 0, [laySnap((a.gx + b.gx) / 2), laySnap((a.gy + b.gy) / 2)]);
     this.redrawEdges();
   }
 
@@ -8281,7 +8349,9 @@ class StageScene extends Phaser.Scene {
     const over = max && len > max + 1e-6;
     el('#lay-text').innerHTML = `<b>${escapeHtml(name)}</b> · <span class="${over || this.lay.taut ? 'lay-over' : ''}">${fmtM(len)}${max ? ' / ' + max + ' m' : ''}</span>`
       + (this.layIssue && !this.lay.taut ? `<small class="lay-over">${escapeHtml(this.layIssue.text)}</small>`
-        : `<small>${this.lay.taut ? 'Il cavo è teso: non arriva più in là.' : over ? 'Troppo corto: cerca una strada più breve.' : 'Trascina il cavo: scatta sulla griglia.'}</small>`);
+        : `<small>${this.lay.taut ? 'Il cavo è teso: non arriva più in là.' : over ? 'Troppo corto: cerca una strada più breve.'
+          : this.lay.drag && this.lay.drag.armed ? 'Lascia il dito: la piega si toglie (oppure trascinala).'
+          : this.lay.route.bends.length ? 'Trascina un pallino per piegare il cavo; tienilo premuto e lascia per toglierlo.' : 'Il cavo va dritto: con «+ Piega» lo pieghi dove vuoi.'}</small>`);
   }
 
   /* via di fuga e passaggi sul pavimento (le regole di Gerry), e i punti
@@ -8349,27 +8419,26 @@ class StageScene extends Phaser.Scene {
     const L = this.lay, e = L && gameState.edges.find(x => x.id === L.id);
     const f = e && this.edgeFloor(e);
     if (!f) return;
-    const k = this.screenScale(), r = 11 / k;
-    const max = layMaxLen(e), len = layLength(f.pts);
-    for (let i = 0; i < f.pts.length - 1; i++) {
-      const a = f.pts[i], b = f.pts[i + 1];
-      if (Math.abs(b.gx - a.gx) + Math.abs(b.gy - a.gy) < CELL) continue;
-      const mid = layToScreen([{ gx: (a.gx + b.gx) / 2, gy: (a.gy + b.gy) / 2 }, { gx: (a.gx + b.gx) / 2, gy: (a.gy + b.gy) / 2 }])[0];
-      const on = L.drag && L.drag.seg === i;
-      g.fillStyle(on ? 0xf2a541 : 0x1c1d22, 1);
-      g.lineStyle(2.5 / k, 0xf2a541, 1);
-      g.fillCircle(mid.x, mid.y, on ? r * 1.25 : r);
-      g.strokeCircle(mid.x, mid.y, on ? r * 1.25 : r);
-      // freccette: il tratto si sposta di lato
-      const o = layOrient(f.route, i);
-      const d = o === 'h' ? gridToScreen(0, 1) : gridToScreen(1, 0), d0 = gridToScreen(0, 0);
-      const dx = d.x - d0.x, dy = d.y - d0.y, dl = Math.hypot(dx, dy);
-      g.fillStyle(on ? 0x1c1d22 : 0xf2a541, 1);
-      [-1, 1].forEach(s => {
-        const ux = dx / dl * s, uy = dy / dl * s, cx = mid.x + ux * r * 0.45, cy = mid.y + uy * r * 0.45;
-        g.fillTriangle(cx + ux * r * 0.4, cy + uy * r * 0.4, cx - uy * r * 0.3, cy + ux * r * 0.3, cx + uy * r * 0.3, cy - ux * r * 0.3);
-      });
-    }
+    const k = this.screenScale(), r = 12 / k;
+    const max = layMaxLen(e), len = layLength(f.smooth);
+    // un pallino per piega: si trascina (o si tiene premuto per toglierla)
+    this.layHandles(f).forEach((h, i) => {
+      const on = L.drag && L.drag.k === i, armed = on && L.drag.armed;
+      const col = armed ? 0xe0503f : 0xf2a541;
+      g.fillStyle(on ? col : 0x1c1d22, 1);
+      g.lineStyle(2.5 / k, col, 1);
+      g.fillCircle(h.x, h.y, on ? r * 1.3 : r);
+      g.strokeCircle(h.x, h.y, on ? r * 1.3 : r);
+      if (armed) {
+        // ✕: lasciandolo qui la piega si toglie
+        g.lineStyle(3 / k, 0xffffff, 1);
+        g.lineBetween(h.x - r * 0.5, h.y - r * 0.5, h.x + r * 0.5, h.y + r * 0.5);
+        g.lineBetween(h.x - r * 0.5, h.y + r * 0.5, h.x + r * 0.5, h.y - r * 0.5);
+      } else {
+        g.fillStyle(on ? 0x1c1d22 : 0xf2a541, 1);
+        g.fillCircle(h.x, h.y, r * 0.32);
+      }
+    });
     // quello che avanza si arrotola a otto accanto al pezzo di arrivo
     if (max && max - len >= 1) {
       const B = layToScreen([f.B, f.B])[0], s = Math.min(1.6, 0.6 + (max - len) / 10);

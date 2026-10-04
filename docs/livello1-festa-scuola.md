@@ -12,7 +12,8 @@ Il livello è una serata divisa in fasi, sbloccate una dopo l'altra:
 | 0 | **Montaggio impianto** | subito | quello che il gioco chiede già oggi: corrente, PC → scheda → mixer → finale → sub/teste, 4 PAR in DMX, Test impianto superato |
 | 1 | **Discorso del preside** | Test impianto superato | microfono su asta sul palco, XLR fino al mixer, canale aperto e udibile |
 | 2 | **DJ set** | discorso finito | consolle DJ (mixer DJ + 2 piatti) alimentata; uscita del mixer DJ → DI → XLR → mixer di sala |
-| 3 | **Cantante con chitarra** | DJ set finito | microfono voce XLR → mixer; chitarra → DI → XLR → mixer |
+| 3 | **Karaoke di Macio** (deciso, al posto del cantante) | DJ cacciato da Gerry | da progettare: vedi *Dopo il DJ: il karaoke di Macio* |
+| 4 | **Carico del furgone** (deciso) | fine serata | minigioco puzzle, da progettare |
 
 Ogni fase si chiude con un proprio test: se passa parte un'**animazione di 10 secondi**
 che mostra cosa succede (il preside parla e il pubblico applaude, la gente balla
@@ -382,6 +383,25 @@ poco prima della fine del brano.
 **Fatto** (`dj.html`, dopo il cambio palco): com'è stato costruito, coi
 numeri, è in `docs/spettacolo-dj.md`. Dell'audio restano da fare la catena
 simulata e il brano caricato dal giocatore.
+
+## Dopo il DJ: il karaoke di Macio (deciso, da progettare)
+
+Gerry ha cacciato il DJ e la serata non può finire così. Niente gruppo di
+musicisti (Luca preferisce evitarlo): **Macio**, il collega dello scarico,
+prende il microfono e improvvisa un **karaoke**. Diventa un minigioco
+nuovo, a metà fra il discorso del preside (microfono, voce, larsen, il
+pubblico che reagisce) e il DJ Hero (pista a tempo di musica). Deve essere
+qualcosa di unico, non una copia dei due.
+
+Prende il posto della fase del cantante con chitarra: Dante e la sua
+fase escono di scena, a meno di ripensarci. Le voci *cantante* qui sotto
+(ingressi del mixer, richieste extra, fasi di spettacolo) restano come
+appunti finché il karaoke non ha il suo design. Anche la scaletta
+(`SCHEDULE`, «22:00 cantante») cambierà quando il karaoke entra nel gioco.
+
+Dopo il karaoke la serata chiude col **carico del furgone**: un minigioco
+puzzle a sé, unico nel suo genere, da provare con un prototipo (vedi
+`docs/minigioco-scarico.md`, *Da decidere*).
 
 ## Personaggi (proposta)
 
