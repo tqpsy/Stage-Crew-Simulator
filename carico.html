@@ -1,0 +1,1164 @@
+<!doctype html>
+<html lang="it">
+<meta charset="utf-8">
+<title>Il Carico</title>
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@600;700&family=Permanent+Marker&family=Inter:wght@400;500;600;700&display=swap">
+<style>
+  /* Il minigioco del carico a fine serata (docs/minigioco-carico.md). Si apre
+     da solo nel browser oppure dentro il gioco (index.html lo carica in un
+     iframe con ?embed=1 e riceve il risultato con postMessage).
+     Stessi colori e caratteri del gioco: solo tema scuro, come il gioco. */
+  :root{
+    color-scheme: dark;
+    --bg-deck:#141519; --bg-panel:#1c1d22; --bg-raised:#24252b; --hairline:#34363e;
+    --text:#eee9df; --muted:#8b8e98; --amber:#f2a541; --green:#49b06a; --red:#e0503f; --yellow:#f2c53d;
+    --paper:#f4f1ea; --ink:#141519;
+    --display:'Barlow Condensed', 'Arial Narrow', sans-serif;
+    --ui:'Inter', system-ui, sans-serif;
+    --marker:'Permanent Marker', 'Comic Sans MS', cursive;
+  }
+  *{box-sizing:border-box}
+  [hidden]{display:none!important}
+  html,body{height:100%}
+  body{margin:0;background:var(--bg-deck);color:var(--text);font-family:var(--ui);overflow:hidden;-webkit-tap-highlight-color:transparent;user-select:none;-webkit-user-select:none;touch-action:none}
+  button{font:inherit;color:inherit;cursor:pointer}
+  button:focus-visible{outline:2px solid var(--amber);outline-offset:2px}
+  button:disabled{opacity:.45;cursor:default}
+  #app{position:relative;height:100%;overflow:hidden;display:flex;flex-direction:column}
+  #cv{flex:1;min-height:0;width:100%;display:block;touch-action:none}
+
+  /* ---- testata ---- */
+  .hud{flex:none;padding:8px 16px;display:flex;gap:12px;align-items:center;justify-content:space-between;background:var(--bg-panel);border-bottom:1px solid var(--hairline)}
+  .hud-l{display:flex;align-items:center;gap:12px;min-width:0}
+  .tag{font-family:var(--display);font-size:12px;letter-spacing:.12em;color:var(--amber);white-space:nowrap}
+  .clock b{font-family:var(--display);font-size:26px;line-height:1;font-variant-numeric:tabular-nums}
+  .clock.late b{color:var(--red)}
+  .hud-r{display:flex;align-items:center;gap:12px}
+  .stat{display:grid;line-height:1.1;text-align:right}
+  .stat span{font-size:10px;color:var(--muted);text-transform:uppercase;letter-spacing:.08em}
+  .stat b{font-family:var(--display);font-size:20px;font-variant-numeric:tabular-nums}
+  .stat b.bad{color:var(--red)}.stat b.ok{color:var(--green)}
+  .icon-btn{width:34px;height:34px;border-radius:8px;border:1px solid var(--hairline);background:var(--bg-raised);font-size:13px;font-weight:700;flex:none}
+
+  /* ---- barra in basso: quello che dice Macio, gli avvisi e i comandi.
+     Gli avvisi stanno qui e non sopra la scena. ---- */
+  .bar{flex:none;background:var(--bg-panel);border-top:1px solid var(--hairline);padding:8px 16px calc(10px + env(safe-area-inset-bottom,0px));display:grid;gap:8px}
+  #say{display:flex;align-items:flex-start;gap:8px;font-size:14px;line-height:1.35;min-height:38px}
+  #say .who{font-family:var(--display);font-size:13px;letter-spacing:.06em;color:var(--amber);white-space:nowrap;padding-top:1px}
+  #say p{margin:0;flex:1}
+  #say.ok p{color:#bff0cd}#say.bad p{color:#ffc4ba}
+  #say-x{border:0;background:none;color:var(--muted);font-size:16px;line-height:1;padding:2px 4px}
+  .btns{display:flex;gap:8px}
+  .btns button{border-radius:10px;padding:10px 12px;font-weight:700;font-size:14px}
+  .b2{background:var(--bg-raised);border:1px solid var(--hairline)}
+  .b1{flex:1;background:var(--amber);color:var(--ink);border:0;font-family:var(--display);font-size:20px!important;letter-spacing:.06em}
+
+  /* ---- schermate ---- */
+  .overlay{position:absolute;inset:0;z-index:5;background:rgba(10,10,12,.82);display:grid;place-items:center;padding:16px;overflow:auto}
+  .card{background:var(--bg-panel);border:1px solid var(--hairline);border-radius:14px;padding:20px;max-width:520px;width:100%;display:grid;gap:14px;box-shadow:0 20px 60px rgba(0,0,0,.6)}
+  .card h1{font-family:var(--display);font-size:44px;line-height:.95;margin:0;letter-spacing:.02em}
+  .card h1 small{display:block;font-family:var(--ui);font-size:12px;letter-spacing:.12em;text-transform:uppercase;color:var(--amber);margin-bottom:6px;font-weight:700}
+  .card p{margin:0;line-height:1.5;font-size:15px}
+  .card ul{margin:0;padding-left:18px;display:grid;gap:6px;font-size:14px;line-height:1.45;color:#d6d2c9}
+  .primary{background:var(--amber);color:var(--ink);border:0;border-radius:10px;padding:14px;font-family:var(--display);font-size:22px;letter-spacing:.06em}
+  .secondary{background:var(--bg-raised);border:1px solid var(--hairline);border-radius:10px;padding:12px;font-weight:600}
+
+  /* bolla di carico: il foglio di carta del service */
+  .bolla{background:var(--paper);color:var(--ink);border-radius:6px;max-width:640px;width:100%;padding:20px;display:grid;gap:14px;box-shadow:0 20px 60px rgba(0,0,0,.6)}
+  .bolla header{display:flex;justify-content:space-between;align-items:flex-end;gap:12px;border-bottom:2px solid var(--ink);padding-bottom:8px;flex-wrap:wrap}
+  .bolla h2{font-family:var(--display);font-size:34px;margin:0;line-height:1}
+  .bolla header small{font-size:12px;color:#5b5750;display:block;margin-top:2px}
+  .stars{font-size:26px;letter-spacing:2px;color:#c98a12;white-space:nowrap}
+  .sum{display:grid;grid-template-columns:repeat(auto-fit,minmax(120px,1fr));gap:8px}
+  .sum div{border:1px solid #cfc9bc;border-radius:6px;padding:8px}
+  .sum span{display:block;font-size:10px;text-transform:uppercase;letter-spacing:.08em;color:#6b665d}
+  .sum b{font-family:var(--display);font-size:22px;font-variant-numeric:tabular-nums}
+  .tw{overflow-x:auto}
+  .bolla table{border-collapse:collapse;width:100%;font-size:13px;color:var(--ink)}
+  .bolla th{text-align:left;font-size:10px;text-transform:uppercase;letter-spacing:.08em;color:#6b665d;border-bottom:1px solid #cfc9bc;padding:4px 6px}
+  .bolla td{border-bottom:1px solid #e2ddd2;padding:6px;vertical-align:top;line-height:1.35}
+  .bolla td small{color:#6b665d}
+  .pill{display:inline-block;font-size:11px;font-weight:700;border-radius:999px;padding:1px 8px;white-space:nowrap}
+  .p-integro{background:#d5ecd9;color:#1f5c31}.p-ammaccato{background:#ece6cf;color:#6a5712}
+  .p-difettoso{background:#f6dcc0;color:#8a4a0f}.p-rotto{background:#f3cdc6;color:#8f2616}
+  .notes{margin:0;padding-left:18px;font-size:14px;line-height:1.5}
+  /* la foto mandata al capo: una chat del telefono */
+  .chat{background:#e6ddd0;border-radius:10px;padding:10px;display:grid;gap:6px}
+  .chat small{font-size:11px;color:#6b665d;text-align:center}
+  .msg{max-width:85%;border-radius:10px;padding:6px 8px;font-size:14px;line-height:1.4;box-shadow:0 1px 1px rgba(0,0,0,.15)}
+  .msg.me{justify-self:end;background:#d7f2c8}
+  .msg.boss{justify-self:start;background:#fff}
+  .msg b{display:block;font-size:11px;color:#1f7a3f}
+  .msg img{display:block;max-width:180px;width:100%;border-radius:6px}
+  .bolla .row{display:flex;gap:8px;flex-wrap:wrap}
+  .bolla .primary{flex:1}
+  @media (max-width:520px){
+    .tag{display:none}
+    .card h1{font-size:36px}
+    .hud{padding:6px 12px}
+    .bar{padding-left:12px;padding-right:12px}
+  }
+</style>
+
+<div id="app">
+  <header class="hud">
+    <div class="hud-l">
+      <span class="tag">CARICO · FINE SERATA</span>
+      <div class="clock" id="clock-box"><b id="clock">23:00</b></div>
+    </div>
+    <div class="hud-r">
+      <div class="stat"><span>Nel furgone</span><b id="h-in">0/12</b></div>
+      <div class="stat"><span>Assetto</span><b id="h-bal">—</b></div>
+      <div class="stat" id="h-straps-box" hidden><span>Cinghie</span><b id="h-straps">0/3</b></div>
+      <button class="icon-btn" id="btn-pause" title="Pausa" aria-label="Pausa">❚❚</button>
+    </div>
+  </header>
+
+  <canvas id="cv"></canvas>
+
+  <div class="bar">
+    <div id="say"><span class="who" id="say-who">MACIO</span><p id="say-text"></p><button id="say-x" aria-label="Chiudi l'avviso" hidden>✕</button></div>
+    <div class="btns">
+      <button class="b2" id="b-rot" title="Ruota (R)">↻ Ruota</button>
+      <button class="b2" id="b-back" hidden>← Sistema i case</button>
+      <button class="b1" id="b-next" disabled>Cinghie</button>
+    </div>
+  </div>
+
+  <div class="overlay" id="start">
+    <div class="card">
+      <h1><small>Festa della scuola · furgone · ore 23:00</small>Il carico</h1>
+      <p>La festa è finita. Macio porta fuori i case dalla palestra: tu li incastri nel furgone, li leghi e si parte. Gerry chiude il cancello alle 23:30, e se parti prima delle 23:15 ti offre un caffè.</p>
+      <ul>
+        <li>Trascina i case dal marciapiede dentro il furgone. Un tocco li gira (anche <b>R</b> o ↻ Ruota).</li>
+        <li>Sul marciapiede ci stanno solo tre case. Se è pieno, Macio aspetta.</li>
+        <li>Macio a volte porta roba che non è vostra: dalla a Gerry, così si libera un posto.</li>
+        <li>Sub, rack e bauli hanno le <b>ruote</b>: nel furgone tocca la ruota nell'angolo per tirare il freno, o in viaggio rotolano lontano.</li>
+        <li>I pesanti vanno verso la cabina e al centro: guarda l'<b>Assetto</b>.</li>
+        <li>Poi le cinghie: ne hai tre. Tocca una fila del furgone e la cinghia la attraversa da una sponda all'altra: ogni case che tocca quella fila resta fermo (lucchetto). I case col <b>segno rosso</b> hanno spazio intorno e in viaggio scivolano.</li>
+        <li>Si parte: frenata, curve, dosso. Quello che è slegato e ha spazio scivola e sbatte. Più è fragile, più si rovina.</li>
+      </ul>
+      <button class="primary" id="btn-start">Si carica!</button>
+      <button class="secondary" id="btn-skip" hidden>Salta il carico: niente stelle e niente reputazione</button>
+    </div>
+  </div>
+
+  <div class="overlay" id="pause" hidden>
+    <div class="card">
+      <h1><small>Pausa</small>Tutto fermo</h1>
+      <button class="primary" id="btn-resume">Riprendi</button>
+      <button class="secondary" id="btn-restart">Ricomincia il carico</button>
+    </div>
+  </div>
+
+  <div class="overlay" id="end" hidden></div>
+</div>
+
+<script>
+'use strict';
+// dentro il gioco (index.html) il carico gira in un iframe con ?embed=1:
+// il risultato torna al gioco con postMessage
+const QS = new URLSearchParams(location.search);
+const EMBED = QS.has('embed');
+const SERVICE = (QS.get('service') || '').slice(0, 28);
+const BOSS = (QS.get('boss') || '').slice(0, 24) || 'Il capo';
+const hexOr = (v, d) => /^#[0-9a-f]{3,6}$/i.test(v || '') ? v : d;
+const LIVERY = { bg: hexOr(QS.get('bg'), '#1c1d22'), fg: hexOr(QS.get('fg'), '#f2a541') };
+const VOL = QS.has('vol') && Number.isFinite(+QS.get('vol')) ? Math.max(0, Math.min(1, +QS.get('vol'))) : 1;
+const RFX = QS.has('rfx') || matchMedia('(prefers-reduced-motion: reduce)').matches;
+function sendResult (result) { try { parent.postMessage({ type: 'carico-fine', result }, '*'); } catch (e) { /* niente genitore */ } }
+if (EMBED) {
+  const skip = document.getElementById('btn-skip');
+  skip.hidden = false;
+  skip.addEventListener('click', () => sendResult({ skipped: true }));
+}
+
+/* ---------------------------------------------------------------------
+   COSTANTI — valori di partenza da tarare giocando (vedi il documento).
+   Il vano del furgone è a quadretti da 25 cm: 7 di larghezza (1,75 m) e
+   11 di profondità (2,75 m). La fila 0 è contro la cabina, la 10 sul
+   portellone. I passaruota rubano 3 quadretti per lato.
+   --------------------------------------------------------------------- */
+const COLS = 7, ROWS = 11;
+const ARCH = [[0, 6], [0, 7], [0, 8], [6, 6], [6, 7], [6, 8]];
+const SLOTS = 3;                 // case che stanno sul marciapiede
+const STRAPS = 3;                // cinghie nel furgone
+const GAME_SECONDS = 240;        // 23:00 → 23:30 in 4 minuti reali
+const MACIO_WALK = 1.5;          // secondi per portare un case al marciapiede
+// fragilità: quanto si rovina un case che prende o dà un colpo
+const FRAG = { bassa: 0.3, media: 0.8, alta: 1.25, altissima: 1.7, legno: 0.6 };
+// danno di un colpo: (0,6 + quadretti scivolati) × kg/40 × fragilità × questi
+// (per chi sbatte i chili contano almeno 20: anche un case leggero sente il colpo)
+const HIT = { victim: 25, self: 14, wall: 18, bump: 14 };
+// la prova su strada: scivolano i case slegati, di "s" quadretti al massimo
+// un case con le ruote senza freno rotola: scivola di questi quadretti in più
+const ROLL_EXTRA = 3;
+const DRIVE = [
+  { name: 'Frenata', cause: 'gatto', say: 'Un gatto! FRENO!', dx: 0, dy: -1, s: 4 },
+  { name: 'Curva a destra', cause: 'destra', say: 'Rotonda, prima a destra. Un po\' larga…', dx: -1, dy: 0, s: 3 },
+  { name: 'Ripartenza', cause: 'via', say: 'Il gatto è passato. Si riparte!', dx: 0, dy: 1, s: 2 },
+  { name: 'Curva a sinistra', cause: 'sinistra', say: 'E adesso tutto a sinistra, che ho sbagliato strada.', dx: 1, dy: 0, s: 3 },
+  { name: 'Dosso', cause: 'dosso', say: 'Il dosso davanti alla scuola… l\'avevo visto, giuro.', bump: true }
+];
+// i 12 case del livello 1 (gli stessi dello scarico), più la roba della
+// scuola che Macio carica per sbaglio. w × h in quadretti (larghezza × profondità)
+const CASES = [
+  { id: 'corrente', wheels: true, from: 'dal baule CORRENTE', name: 'Baule CORRENTE', short: 'CORRENTE', kg: 70, w: 4, h: 2, frag: 'bassa', tape: '#ff4fb4' },
+  { id: 'segnale', wheels: true, from: 'dal baule SEGNALE', name: 'Baule SEGNALE', short: 'SEGNALE', kg: 45, w: 4, h: 2, frag: 'bassa', tape: '#eaff2b' },
+  { id: 'sub1', wheels: true, from: 'dal sub', name: 'Sub 1', short: 'SUB 1', kg: 40, w: 3, h: 3, frag: 'media', tape: '#4fb7ff' },
+  { id: 'sub2', wheels: true, from: 'dal sub', name: 'Sub 2', short: 'SUB 2', kg: 40, w: 3, h: 3, frag: 'media', tape: '#4fb7ff' },
+  { id: 'rack', wheels: true, from: 'dal rack', name: 'Rack regia', short: 'RACK', kg: 55, w: 2, h: 2, frag: 'alta', tape: '#49e07a' },
+  { id: 'distro', from: 'dal distro', name: 'Case distro', short: 'DISTRO', kg: 35, w: 2, h: 2, frag: 'bassa', tape: '#ff4fb4' },
+  { id: 'stativi', from: 'dagli stativi', name: 'Borsa stativi', short: 'STATIVI', kg: 22, w: 4, h: 1, frag: 'bassa', tape: '#eaff2b', soft: true },
+  { id: 'top1', from: 'dalla cassa top', name: 'Top 1', short: 'TOP 1', kg: 20, w: 2, h: 2, frag: 'media', tape: '#4fb7ff' },
+  { id: 'top2', from: 'dalla cassa top', name: 'Top 2', short: 'TOP 2', kg: 20, w: 2, h: 2, frag: 'media', tape: '#4fb7ff' },
+  { id: 'valigetta', from: 'dalla valigetta', name: 'Valigetta regia', short: 'PC', kg: 8, w: 2, h: 1, frag: 'altissima', tape: '#49e07a' },
+  { id: 'par', from: 'dal case PAR', name: 'Case PAR', short: 'PAR ×4', kg: 25, w: 2, h: 2, frag: 'alta', tape: '#eaff2b' },
+  { id: 'ricambio', from: 'dal case ricambi', name: 'Case ricambi', short: 'RICAMBI', kg: 18, w: 2, h: 2, frag: 'media', tape: '#ff4fb4' },
+  { id: 'cavo', from: 'dal rotolo di cavo', name: 'Cavo dimenticato', short: 'CAVO', kg: 4, w: 1, h: 1, frag: 'bassa', tape: '#eaff2b', soft: true, late: true },
+  { id: 'leggio', from: 'dal leggio', name: 'Leggio della scuola', short: 'LEGGIO', kg: 6, w: 2, h: 1, frag: 'legno', school: true },
+  { id: 'scopa', from: 'dalla scopa', name: 'Scopa di Gerry', short: 'SCOPA', kg: 2, w: 4, h: 1, frag: 'legno', school: true }
+];
+// i case del service: i 12 del livello più il cavo dimenticato, che Gerry
+// porta fuori a metà carico (si conta da quando arriva)
+const OURS_ALL = CASES.filter(d => !d.school).length;
+const oursCount = () => OURS_ALL - (G.cavoSaid ? 0 : 1);
+// l'ordine del capo: domani questi si scaricano per primi, vanno vicino al portellone
+const FIRST_OUT = ['par', 'valigetta'];
+const DOOR_ROWS = 3;
+const nearDoor = p => inVan(p) && p.r + p.h - 1 >= ROWS - DOOR_ROWS;
+const orderOk = () => FIRST_OUT.every(id => nearDoor(G.pieces.find(p => p.def.id === id)));
+const CAVO_AFTER = 8;
+// in secondi di gioco (240 = 23:30): Gerry agita le chiavi, la luce salta e torna, il caffè
+const T_KEYS = 80, T_DARK = 96, T_LIGHT = 160, T_COFFEE = 120;
+const TORCH = 3.2;               // raggio della torcia di Macio, in quadretti            // Gerry arriva col cavo quando nel furgone ci sono tanti case
+const MACIO_SAYS = {
+  corrente: 'Il baule CORRENTE. Settanta chili, mettilo bene che non lo rialzo.',
+  segnale: 'Baule SEGNALE, tutti i cavi arrotolati. Più o meno.',
+  sub1: 'Sub numero uno. Pesa come un frigorifero.',
+  sub2: 'E il suo gemello, il sub due.',
+  rack: 'Il rack regia: dentro c\'è il mixer, trattalo bene.',
+  distro: 'Il distro col quadro. Questo non si rompe neanche se lo lanci.',
+  stativi: 'La borsa degli stativi, lunga e morbida.',
+  top1: 'Una cassa top.',
+  top2: 'L\'altra cassa top.',
+  valigetta: 'La valigetta col PC. Occhio che è delicatissima.',
+  par: 'I PAR. Le lenti si graffiano a guardarle.',
+  ricambio: 'Il case dei ricambi.',
+  leggio: 'Ho preso anche il leggio. È nostro… no?',
+  scopa: 'C\'era una scopa vicino al palco, l\'ho presa per sicurezza.'
+};
+const STATE_LABEL = { integro: 'integro', ammaccato: 'ammaccato', difettoso: 'difettoso', rotto: 'rotto' };
+const STATE_COLOR = { integro: '#49b06a', ammaccato: '#f2c53d', difettoso: '#f2843d', rotto: '#e0503f' };
+const stateOf = hp => hp >= 70 ? 'integro' : hp >= 40 ? 'ammaccato' : hp >= 15 ? 'difettoso' : 'rotto';
+
+/* ---------------- audio: due suoni fatti a mano ---------------- */
+let AC = null;
+function tone (f, dur, type, gain) {
+  if (!VOL) return;
+  try {
+    AC = AC || new (window.AudioContext || window.webkitAudioContext)();
+    const o = AC.createOscillator(), g = AC.createGain(), t = AC.currentTime;
+    o.type = type || 'sine'; o.frequency.setValueAtTime(f, t); o.frequency.exponentialRampToValueAtTime(Math.max(30, f * 0.5), t + dur);
+    g.gain.setValueAtTime((gain || 0.2) * VOL, t); g.gain.exponentialRampToValueAtTime(0.001, t + dur);
+    o.connect(g); g.connect(AC.destination); o.start(t); o.stop(t + dur);
+  } catch (e) { /* niente audio */ }
+}
+// il mazzo di chiavi di Gerry
+function jingle () { for (let i = 0; i < 4; i++) setTimeout(() => tone(1800 + Math.random() * 900, 0.08, 'triangle', 0.05), i * 70); }
+const SFX = { place: () => tone(180, 0.12, 'triangle', 0.25), bad: () => tone(110, 0.15, 'square', 0.08), bang: k => tone(70 + 40 * Math.random(), 0.25, 'sawtooth', 0.12 + 0.2 * k), strap: () => tone(520, 0.08, 'square', 0.06) };
+
+/* ---------------- stato ---------------- */
+const $ = id => document.getElementById(id);
+const cv = $('cv'), ctx = cv.getContext('2d');
+let G = null;
+
+function shuffle (a) { for (let i = a.length - 1; i > 0; i--) { const j = Math.floor(Math.random() * (i + 1)); [a[i], a[j]] = [a[j], a[i]]; } return a; }
+function newGame () {
+  const pieces = CASES.map((d, i) => ({ i, def: d, w: d.w, h: d.h, loc: 'queue', slot: -1, c: 0, r: 0, hp: 100, notes: [], brake: false }));
+  // l'ordine di Macio: a caso, ma la roba della scuola non arriva per prima
+  const q = shuffle(pieces.filter(p => !p.def.school && !p.def.late).map(p => p.i));
+  const school = pieces.filter(p => p.def.school).map(p => p.i);
+  q.splice(3 + Math.floor(Math.random() * 3), 0, school[0]);
+  q.splice(8 + Math.floor(Math.random() * 3), 0, school[1]);
+  G = { mode: 'load', pieces, queue: q, cavoSaid: false, keysSaid: false, dark: false, darkDone: false, torch: null, slots: Array(SLOTS).fill(null), arriving: null, wait: 0.6,
+    straps: new Set(), time: 0, departAt: null, paused: true, drag: null, sel: null, drive: null, shake: 0, bangs: [], lateSaid: false, departClock: null };
+  $('end').hidden = true;
+  updateHud();
+  say('MACIO', 'Io porto fuori i case, tu li incastri. Il capo dice che domani PAR e valigetta del PC si scaricano per primi: mettili vicino al portellone.');
+}
+
+/* ---------------- griglia ---------------- */
+const isArch = (c, r) => ARCH.some(a => a[0] === c && a[1] === r);
+const inVan = p => p.loc === 'van';
+function occupant (c, r, skip) {
+  for (const p of G.pieces) if (p !== skip && inVan(p) && c >= p.c && c < p.c + p.w && r >= p.r && r < p.r + p.h) return p;
+  return null;
+}
+function fits (p, c, r, w, h) {
+  if (c < 0 || r < 0 || c + w > COLS || r + h > ROWS) return false;
+  for (let y = r; y < r + h; y++) for (let x = c; x < c + w; x++) if (isArch(x, y) || occupant(x, y, p)) return false;
+  return true;
+}
+const strapped = p => { for (let y = p.r; y < p.r + p.h; y++) if (G.straps.has(y)) return true; return false; };
+// un case slegato che ha spazio libero accanto: in viaggio scivolerà
+const canSlide = p => [[1, 0], [-1, 0], [0, 1], [0, -1]].some(([dx, dy]) => fits(p, p.c + dx, p.r + dy, p.w, p.h));
+// ruote senza freno: Macio i case con le ruote li porta fuori sfrenati
+const rolling = p => !!p.def.wheels && !p.brake;
+const atRisk = () => G.pieces.filter(p => inVan(p) && !strapped(p) && canSlide(p));
+const ourInVan = () => G.pieces.filter(p => inVan(p) && !p.def.school).length;
+
+// assetto: baricentro dei chili nel vano. Davanti (verso la cabina) e al
+// centro va bene; troppo dietro o di lato il furgone sbanda
+function balance () {
+  let m = 0, x = 0, y = 0;
+  for (const p of G.pieces) if (inVan(p)) { m += p.def.kg; x += p.def.kg * (p.c + p.w / 2); y += p.def.kg * (p.r + p.h / 2); }
+  if (!m) return { ok: true, label: '—', x: COLS / 2, y: ROWS / 2 };
+  x /= m; y /= m;
+  const side = x - COLS / 2;
+  if (y > ROWS * 0.55) return { ok: false, label: 'Dietro', x, y };
+  if (side > 0.6) return { ok: false, label: 'A destra', x, y };
+  if (side < -0.6) return { ok: false, label: 'A sinistra', x, y };
+  return { ok: true, label: 'OK', x, y };
+}
+
+/* ---------------- impaginazione ----------------
+   Il furgone si gira in orizzontale (cabina a sinistra) quando lo schermo è
+   largo e basso: si prova ogni sistemazione e si tiene quella coi quadretti
+   più grandi. Il marciapiede (tre posti) e Gerry stanno di fianco o sotto. */
+let L = null, DPR = 1;
+function layout () {
+  DPR = Math.min(2, window.devicePixelRatio || 1);
+  const W = cv.clientWidth, H = cv.clientHeight;
+  cv.width = Math.round(W * DPR); cv.height = Math.round(H * DPR);
+  const PAD = 0.6, SL = 3.4, GAP = 0.8, CAB = 1.8;     // in quadretti
+  const n = SLOTS + 1;                                  // tre posti più Gerry
+  const opts = [];
+  // [orientamento, larghezza e altezza del furgone, posti: colonne × righe, posti a destra o sotto]
+  for (const o of ['v', 'h']) {
+    const vw = o === 'v' ? COLS : ROWS + CAB, vh = o === 'v' ? ROWS + CAB : COLS;
+    for (const [cols, rows] of [[1, n], [2, 2], [n, 1]]) {
+      for (const where of ['right', 'below']) {
+        const sw = cols * SL + (cols - 1) * 0.3, sh = rows * SL + (rows - 1) * 0.3 + 0.5;
+        const tw = where === 'right' ? vw + GAP + sw : Math.max(vw, sw), th = where === 'right' ? Math.max(vh, sh) : vh + GAP + sh;
+        const cs = Math.min((W - 16) / (tw + 2 * PAD), (H - 12) / (th + 2 * PAD));
+        opts.push({ o, vw, vh, cols, rows, where, sw, sh, tw, th, cs });
+      }
+    }
+  }
+  opts.sort((a, b) => b.cs - a.cs);
+  const k = opts[0], cs = Math.max(8, Math.min(64, k.cs));
+  const ox = (W - k.tw * cs) / 2, oy = (H - k.th * cs) / 2;
+  const vanX = ox + (k.where === 'below' ? (k.tw - k.vw) / 2 * cs : 0), vanY = oy + (k.where === 'right' ? (k.th - k.vh) / 2 * cs : 0);
+  // il vano, senza la cabina
+  const vx = k.o === 'v' ? vanX : vanX + CAB * cs, vy = k.o === 'v' ? vanY + CAB * cs : vanY;
+  const sx0 = k.where === 'right' ? ox + (k.vw + GAP) * cs : ox + (k.tw - k.sw) / 2 * cs;
+  const sy0 = k.where === 'right' ? oy + (k.th - k.sh) / 2 * cs + 0.5 * cs : oy + (k.vh + GAP + 0.5) * cs;
+  const slots = [];
+  for (let i = 0; i < n; i++) {
+    const cx = i % k.cols, cy = Math.floor(i / k.cols);
+    slots.push({ x: sx0 + cx * (SL + 0.3) * cs, y: sy0 + cy * (SL + 0.3) * cs, w: SL * cs, h: SL * cs });
+  }
+  L = { o: k.o, cs, vx, vy, vanX, vanY, vw: k.vw * cs, vh: k.vh * cs, CAB, slots: slots.slice(0, SLOTS), gerry: slots[SLOTS], W, H, sideLabelY: sy0 - 0.5 * cs, sideX: sx0 };
+}
+// quadretto logico (colonna, fila; anche frazionari) → punto sullo schermo
+function toScreen (c, r) {
+  return L.o === 'v' ? { x: L.vx + c * L.cs, y: L.vy + r * L.cs } : { x: L.vx + r * L.cs, y: L.vy + (COLS - c) * L.cs };
+}
+function toCell (x, y) {
+  return L.o === 'v' ? { c: (x - L.vx) / L.cs, r: (y - L.vy) / L.cs } : { c: COLS - (y - L.vy) / L.cs, r: (x - L.vx) / L.cs };
+}
+// rettangolo sullo schermo di un pezzo w × h con l'angolo logico in (c, r)
+function cellRect (c, r, w, h) {
+  const a = toScreen(c, r), b = toScreen(c + w, r + h);
+  return { x: Math.min(a.x, b.x), y: Math.min(a.y, b.y), w: Math.abs(b.x - a.x), h: Math.abs(b.y - a.y) };
+}
+const inRect = (x, y, R) => R && x >= R.x && x <= R.x + R.w && y >= R.y && y <= R.y + R.h;
+// un pezzo sul marciapiede: centrato nel suo posto, rimpicciolito se serve
+function slotRect (p, s) {
+  const S = L.slots[s] || L.gerry;
+  const sw = L.o === 'v' ? p.w : p.h, sh = L.o === 'v' ? p.h : p.w;
+  const k = Math.min(1, (S.w - L.cs * 0.4) / (sw * L.cs), (S.h - L.cs * 0.4) / (sh * L.cs));
+  const w = sw * L.cs * k, h = sh * L.cs * k;
+  return { x: S.x + (S.w - w) / 2, y: S.y + (S.h - h) / 2, w, h };
+}
+function pieceRect (p) {
+  if (p.loc === 'van') {
+    const d = G.drive && G.drive.anim && G.drive.anim.get(p);
+    return d ? cellRect(d.c, d.r, p.w, p.h) : cellRect(p.c, p.r, p.w, p.h);
+  }
+  if (p.loc === 'slot') return slotRect(p, p.slot);
+  return null;
+}
+
+/* ---------------- disegno ---------------- */
+function rr (x, y, w, h, r) { ctx.beginPath(); ctx.roundRect ? ctx.roundRect(x, y, w, h, r) : ctx.rect(x, y, w, h); }
+function drawVan () {
+  const cs = L.cs, v = L.o === 'v';
+  // carrozzeria con la livrea del service
+  ctx.fillStyle = LIVERY.bg; ctx.strokeStyle = '#5a5d66'; ctx.lineWidth = 2;
+  rr(L.vanX - 6, L.vanY - 6, L.vw + 12, L.vh + 12, cs * 0.6); ctx.fill(); ctx.stroke();
+  // cabina: parabrezza e sedili
+  const cab = v ? { x: L.vanX, y: L.vanY, w: L.vw, h: L.CAB * cs } : { x: L.vanX, y: L.vanY, w: L.CAB * cs, h: L.vh };
+  ctx.fillStyle = '#2b3a48'; rr(cab.x + cs * 0.2, cab.y + cs * 0.2, cab.w - cs * 0.4, cab.h - cs * 0.4, cs * 0.4); ctx.fill();
+  ctx.fillStyle = 'rgba(160,200,230,.25)';
+  if (v) rr(cab.x + cs * 0.4, cab.y + cs * 0.25, cab.w - cs * 0.8, cs * 0.45, cs * 0.2); else rr(cab.x + cs * 0.25, cab.y + cs * 0.4, cs * 0.45, cab.h - cs * 0.8, cs * 0.2);
+  ctx.fill();
+  if (SERVICE) {
+    ctx.save(); ctx.fillStyle = LIVERY.fg; ctx.font = '700 ' + Math.round(cs * 0.42) + 'px "Barlow Condensed", sans-serif'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+    if (v) ctx.fillText(SERVICE.toUpperCase(), cab.x + cab.w / 2, cab.y + cab.h * 0.68);
+    else { ctx.translate(cab.x + cab.w * 0.68, cab.y + cab.h / 2); ctx.rotate(-Math.PI / 2); ctx.fillText(SERVICE.toUpperCase(), 0, 0); }
+    ctx.restore();
+  }
+  // pianale
+  const fl = cellRect(0, 0, COLS, ROWS);
+  ctx.fillStyle = '#2a2b31'; ctx.fillRect(fl.x, fl.y, fl.w, fl.h);
+  ctx.strokeStyle = 'rgba(255,255,255,.05)'; ctx.lineWidth = 1;
+  for (let c = 1; c < COLS; c++) { const a = toScreen(c, 0), b = toScreen(c, ROWS); ctx.beginPath(); ctx.moveTo(a.x, a.y); ctx.lineTo(b.x, b.y); ctx.stroke(); }
+  for (let r = 1; r < ROWS; r++) { const a = toScreen(0, r), b = toScreen(COLS, r); ctx.beginPath(); ctx.moveTo(a.x, a.y); ctx.lineTo(b.x, b.y); ctx.stroke(); }
+  // le ultime file: l'ordine del capo per domani
+  if (G.mode === 'load' || G.mode === 'strap') {
+    const z = cellRect(0, ROWS - DOOR_ROWS, COLS, DOOR_ROWS);
+    ctx.fillStyle = 'rgba(234,255,43,.05)'; ctx.fillRect(z.x, z.y, z.w, z.h);
+    ctx.save(); ctx.fillStyle = 'rgba(234,255,43,.35)'; ctx.font = '700 ' + Math.round(Math.max(9, cs * 0.3)) + 'px "Barlow Condensed", sans-serif'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+    const m = toScreen(COLS / 2, ROWS - DOOR_ROWS + 0.35), txt = 'PAR E PC: DOMANI ESCONO PRIMA';
+    // la scritta si stringe fino a stare nella larghezza del vano
+    const fw = ctx.measureText(txt).width, room = COLS * cs * 0.9;
+    if (fw > room) ctx.font = '700 ' + Math.max(7, Math.floor(Math.max(9, cs * 0.3) * room / fw)) + 'px "Barlow Condensed", sans-serif';
+    if (v) ctx.fillText(txt, m.x, m.y);
+    else { ctx.translate(m.x, m.y); ctx.rotate(-Math.PI / 2); ctx.fillText(txt, 0, 0); }
+    ctx.restore();
+  }
+  // passaruota
+  ctx.fillStyle = '#3c3e46';
+  for (const [c, r] of ARCH) { const R = cellRect(c, r, 1, 1); ctx.fillRect(R.x, R.y, R.w, R.h); }
+  for (const side of [0, 6]) {
+    const R = cellRect(side, 6, 1, 3);
+    ctx.strokeStyle = '#55585f'; ctx.lineWidth = 2; ctx.strokeRect(R.x + 1, R.y + 1, R.w - 2, R.h - 2);
+  }
+  // binari delle cinghie lungo le sponde (in modalità cinghie si vedono di più)
+  ctx.fillStyle = G.mode === 'strap' ? 'rgba(242,165,65,.7)' : 'rgba(255,255,255,.12)';
+  for (let r = 0; r < ROWS; r++) for (const c of [0, COLS]) {
+    const a = toScreen(c, r + 0.5);
+    ctx.beginPath(); ctx.arc(a.x, a.y, Math.max(2, cs * 0.08), 0, Math.PI * 2); ctx.fill();
+  }
+  // portellone
+  const d1 = toScreen(0, ROWS), d2 = toScreen(COLS, ROWS);
+  ctx.strokeStyle = '#9a9ca3'; ctx.lineWidth = 4; ctx.beginPath(); ctx.moveTo(d1.x, d1.y); ctx.lineTo(d2.x, d2.y); ctx.stroke();
+  const mid = toScreen(COLS / 2, ROWS);
+  ctx.save(); ctx.fillStyle = '#8b8e98'; ctx.font = '600 ' + Math.round(Math.max(10, cs * 0.3)) + 'px Inter, sans-serif'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+  if (v) ctx.fillText('portellone', mid.x, mid.y + cs * 0.35); else { ctx.translate(mid.x + cs * 0.35, mid.y); ctx.rotate(Math.PI / 2); ctx.fillText('portellone', 0, 0); }
+  ctx.restore();
+}
+function drawStraps () {
+  for (const r of G.straps) {
+    const a = toScreen(0, r + 0.5), b = toScreen(COLS, r + 0.5);
+    ctx.strokeStyle = '#f2a541'; ctx.lineWidth = Math.max(4, L.cs * 0.22); ctx.lineCap = 'butt';
+    ctx.beginPath(); ctx.moveTo(a.x, a.y); ctx.lineTo(b.x, b.y); ctx.stroke();
+    ctx.strokeStyle = 'rgba(20,21,25,.5)'; ctx.lineWidth = 1; ctx.setLineDash([4, 4]);
+    ctx.beginPath(); ctx.moveTo(a.x, a.y); ctx.lineTo(b.x, b.y); ctx.stroke(); ctx.setLineDash([]);
+    // cricchetto a metà
+    const m = toScreen(COLS * 0.72, r + 0.5);
+    ctx.fillStyle = '#c0c3ca'; ctx.fillRect(m.x - L.cs * 0.22, m.y - L.cs * 0.18, L.cs * 0.44, L.cs * 0.36);
+  }
+}
+// il bollino della ruota, nell'angolo in basso a sinistra del case
+function wheelBadge (p, R) {
+  const r = Math.max(9, Math.min(L.cs * 0.36, Math.min(R.w, R.h) * 0.3));
+  return { x: R.x + r + 3, y: R.y + R.h - r - 3, r };
+}
+function wheelAt (x, y) {
+  for (const p of G.pieces) {
+    if (!p.def.wheels || !inVan(p)) continue;
+    const b = wheelBadge(p, pieceRect(p));
+    if (Math.hypot(x - b.x, y - b.y) <= Math.max(b.r + 4, 16)) return p;
+  }
+  return null;
+}
+function toggleBrake (p) {
+  p.brake = !p.brake;
+  SFX.strap();
+  say('MACIO', p.brake ? 'Freno tirato sul ' + p.def.short + ': le ruote non girano più.' : 'Freno tolto: il ' + p.def.short + ' adesso rotola.', p.brake ? 'ok' : '');
+  updateHud();
+}
+function drawPiece (p, R, opts) {
+  const d = p.def, cs = L.cs, k = Math.min(R.w, R.h);
+  ctx.save();
+  if (opts && opts.alpha) ctx.globalAlpha = opts.alpha;
+  ctx.fillStyle = 'rgba(0,0,0,.35)'; rr(R.x + 3, R.y + 4, R.w, R.h, 4); ctx.fill();
+  if (d.id === 'scopa') {
+    // manico di legno e setole
+    ctx.fillStyle = '#b07a43'; const long = R.w >= R.h;
+    if (long) { ctx.fillRect(R.x, R.y + R.h * 0.38, R.w * 0.72, R.h * 0.24); ctx.fillStyle = '#d9c27a'; rr(R.x + R.w * 0.7, R.y + R.h * 0.05, R.w * 0.3, R.h * 0.9, 3); ctx.fill(); }
+    else { ctx.fillRect(R.x + R.w * 0.38, R.y, R.w * 0.24, R.h * 0.72); ctx.fillStyle = '#d9c27a'; rr(R.x + R.w * 0.05, R.y + R.h * 0.7, R.w * 0.9, R.h * 0.3, 3); ctx.fill(); }
+  } else if (d.school) {
+    ctx.fillStyle = '#9b6a3a'; rr(R.x, R.y, R.w, R.h, 3); ctx.fill();
+    ctx.strokeStyle = '#6e4826'; ctx.lineWidth = 2; ctx.stroke();
+  } else {
+    ctx.fillStyle = d.soft ? '#2c2d33' : '#3a3c44'; rr(R.x, R.y, R.w, R.h, d.soft ? k * 0.3 : 4); ctx.fill();
+    ctx.strokeStyle = '#a5a8b0'; ctx.lineWidth = Math.max(1.5, cs * 0.06); ctx.stroke();
+    // angolari di metallo
+    if (!d.soft) {
+      ctx.fillStyle = '#c0c3ca'; const a = Math.max(3, k * 0.14);
+      for (const [x, y] of [[R.x, R.y], [R.x + R.w - a, R.y], [R.x, R.y + R.h - a], [R.x + R.w - a, R.y + R.h - a]]) ctx.fillRect(x, y, a, a);
+    }
+    // nastro della zona
+    ctx.fillStyle = d.tape; const tw = Math.max(3, k * 0.12);
+    if (R.w >= R.h) ctx.fillRect(R.x + R.w * 0.1, R.y + R.h - tw - Math.max(3, k * 0.1), R.w * 0.8, tw);
+    else ctx.fillRect(R.x + R.w - tw - Math.max(3, k * 0.1), R.y + R.h * 0.1, tw, R.h * 0.8);
+  }
+  // scritta
+  // la scritta più grande che ci sta nel case
+  let fs = Math.max(8, Math.min(cs * 0.42, k * 0.45));
+  ctx.font = '700 ' + Math.round(fs) + 'px "Barlow Condensed", sans-serif';
+  const tw0 = ctx.measureText(d.short).width;
+  if (tw0 > R.w * 0.86) { fs = Math.max(7, fs * R.w * 0.86 / tw0); ctx.font = '700 ' + Math.round(fs) + 'px "Barlow Condensed", sans-serif'; }
+  ctx.fillStyle = d.school ? '#fff2dc' : '#eee9df'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+  const big = R.h > fs * 2.4;
+  ctx.fillText(d.short, R.x + R.w / 2, R.y + R.h / 2 - (big ? fs * 0.45 : 0));
+  if (big) {
+    ctx.font = '600 ' + Math.round(fs * 0.7) + 'px Inter, sans-serif';
+    ctx.fillStyle = FRAG[d.frag] >= 1.2 ? '#ff9b8c' : '#a9acb4';
+    ctx.fillText(FRAG[d.frag] >= 1.2 ? 'FRAGILE' : d.kg + ' kg', R.x + R.w / 2, R.y + R.h / 2 + fs * 0.55);
+  } else if (FRAG[d.frag] >= 1.2) {
+    ctx.fillStyle = '#ff6a55'; ctx.beginPath(); ctx.arc(R.x + R.w - fs * 0.5, R.y + fs * 0.5, fs * 0.22, 0, Math.PI * 2); ctx.fill();
+  }
+  // danni: bordo del colore dello stato
+  if (p.hp < 100) {
+    ctx.strokeStyle = STATE_COLOR[stateOf(p.hp)]; ctx.lineWidth = 3; rr(R.x - 1, R.y - 1, R.w + 2, R.h + 2, 5); ctx.stroke();
+  }
+  // ruote: grigia se libera (rotola), rossa con la P se frenata. Si tocca per frenare
+  if (p.def.wheels && p.loc === 'van') {
+    const b = wheelBadge(p, R);
+    ctx.fillStyle = p.brake ? '#e0503f' : '#1a1b20'; ctx.beginPath(); ctx.arc(b.x, b.y, b.r, 0, Math.PI * 2); ctx.fill();
+    ctx.strokeStyle = p.brake ? '#ffd2cb' : '#c0c3ca'; ctx.lineWidth = Math.max(1.5, b.r * 0.18); ctx.stroke();
+    ctx.fillStyle = p.brake ? '#fff' : '#c0c3ca'; ctx.font = '700 ' + Math.round(b.r * 1.1) + 'px Inter, sans-serif'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+    if (p.brake) ctx.fillText('P', b.x, b.y + 1);
+    else { ctx.beginPath(); ctx.arc(b.x, b.y, b.r * 0.32, 0, Math.PI * 2); ctx.fill(); for (let a = 0; a < 6; a++) { ctx.beginPath(); ctx.moveTo(b.x, b.y); ctx.lineTo(b.x + Math.cos(a) * b.r * 0.75, b.y + Math.sin(a) * b.r * 0.75); ctx.stroke(); } }
+  }
+  // con le cinghie: lucchetto su chi è legato, bordo rosso su chi può scivolare
+  if (opts && opts.lock) {
+    const s = Math.max(9, Math.min(cs * 0.4, k * 0.35)), x = R.x + s * 0.35, y = R.y + s * 0.3;
+    ctx.fillStyle = '#f2a541'; rr(x, y + s * 0.4, s, s * 0.7, 2); ctx.fill();
+    ctx.strokeStyle = '#f2a541'; ctx.lineWidth = Math.max(1.5, s * 0.14); ctx.beginPath(); ctx.arc(x + s / 2, y + s * 0.4, s * 0.3, Math.PI, 0); ctx.stroke();
+  }
+  if (opts && opts.risk) {
+    ctx.strokeStyle = '#e0503f'; ctx.lineWidth = 3; ctx.setLineDash([6, 4]); rr(R.x - 2, R.y - 2, R.w + 4, R.h + 4, 5); ctx.stroke(); ctx.setLineDash([]);
+    const s = Math.max(10, Math.min(cs * 0.42, k * 0.4));
+    ctx.fillStyle = '#e0503f'; ctx.beginPath(); ctx.arc(R.x + R.w - s * 0.6, R.y + s * 0.6, s * 0.48, 0, Math.PI * 2); ctx.fill();
+    ctx.fillStyle = '#fff'; ctx.font = '700 ' + Math.round(s * 0.75) + 'px Inter, sans-serif'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle'; ctx.fillText('!', R.x + R.w - s * 0.6, R.y + s * 0.62);
+  }
+  if (opts && opts.sel) { ctx.strokeStyle = '#f2a541'; ctx.lineWidth = 2; ctx.setLineDash([5, 4]); rr(R.x - 4, R.y - 4, R.w + 8, R.h + 8, 6); ctx.stroke(); ctx.setLineDash([]); }
+  ctx.restore();
+}
+// Macio: pelato coi baffi, maglietta del service
+function drawMacio (x, y, s) {
+  ctx.save(); ctx.translate(x, y);
+  ctx.fillStyle = 'rgba(0,0,0,.35)'; ctx.beginPath(); ctx.ellipse(2, s * 1.1, s * 0.9, s * 0.3, 0, 0, Math.PI * 2); ctx.fill();
+  ctx.fillStyle = LIVERY.bg === '#1c1d22' ? '#2d2f36' : LIVERY.bg; rr(-s * 0.85, s * 0.45, s * 1.7, s * 0.8, s * 0.35); ctx.fill();
+  ctx.fillStyle = '#e2b48f'; ctx.beginPath(); ctx.arc(0, 0, s * 0.62, 0, Math.PI * 2); ctx.fill();
+  ctx.fillStyle = 'rgba(255,255,255,.25)'; ctx.beginPath(); ctx.arc(-s * 0.18, -s * 0.28, s * 0.18, 0, Math.PI * 2); ctx.fill();
+  ctx.fillStyle = '#2a1d14'; // sopracciglia serie e baffi scuri
+  ctx.fillRect(-s * 0.36, -s * 0.12, s * 0.24, s * 0.07); ctx.fillRect(s * 0.12, -s * 0.12, s * 0.24, s * 0.07);
+  ctx.beginPath(); ctx.ellipse(0, s * 0.22, s * 0.3, s * 0.1, 0, 0, Math.PI * 2); ctx.fill();
+  ctx.fillStyle = '#141519'; ctx.fillRect(-s * 0.26, -s * 0.02, s * 0.08, s * 0.08); ctx.fillRect(s * 0.18, -s * 0.02, s * 0.08, s * 0.08);
+  ctx.restore();
+}
+function drawSide () {
+  const cs = L.cs;
+  ctx.save();
+  ctx.fillStyle = '#8b8e98'; ctx.font = '600 ' + Math.round(Math.max(10, cs * 0.3)) + 'px Inter, sans-serif'; ctx.textBaseline = 'bottom'; ctx.textAlign = 'left';
+  ctx.fillText('MARCIAPIEDE', L.sideX, L.sideLabelY + cs * 0.4);
+  ctx.restore();
+  L.slots.forEach((S, i) => {
+    ctx.strokeStyle = G.drag && !G.slots[i] ? 'rgba(242,165,65,.6)' : '#34363e'; ctx.lineWidth = 2; ctx.setLineDash([6, 5]);
+    rr(S.x, S.y, S.w, S.h, 8); ctx.stroke(); ctx.setLineDash([]);
+  });
+  // Gerry, il bidello, aspetta la roba della scuola
+  const S = L.gerry;
+  ctx.fillStyle = 'rgba(47,93,138,.18)'; rr(S.x, S.y, S.w, S.h, 8); ctx.fill();
+  ctx.strokeStyle = G.drag && G.drag.p.def.school ? '#7fb2e5' : '#2f5d8a'; ctx.lineWidth = 2; ctx.stroke();
+  const gx = S.x + S.w / 2, gy = S.y + S.h * 0.42, gs = Math.min(S.w, S.h) * 0.2;
+  ctx.fillStyle = '#2f5d8a'; ctx.beginPath(); ctx.ellipse(gx, gy + gs * 1.2, gs * 1.4, gs * 0.75, 0, 0, Math.PI * 2); ctx.fill();
+  ctx.fillStyle = '#e8a883'; ctx.beginPath(); ctx.arc(gx, gy, gs * 0.8, 0, Math.PI * 2); ctx.fill();
+  ctx.strokeStyle = '#7d7570'; ctx.lineWidth = Math.max(2, gs * 0.3); ctx.beginPath(); ctx.arc(gx, gy, gs * 0.7, Math.PI * 0.9, Math.PI * 2.1, true); ctx.stroke();
+  ctx.fillStyle = '#d6926c'; ctx.beginPath(); ctx.arc(gx, gy + gs * 0.15, gs * 0.2, 0, Math.PI * 2); ctx.fill();
+  ctx.fillStyle = '#cfe0f1'; ctx.font = '600 ' + Math.round(Math.max(9, cs * 0.28)) + 'px Inter, sans-serif'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+  if (G.keysSaid && G.mode === 'load') {
+    // il mazzo di chiavi: più è tardi, più lo agita
+    const amp = Math.min(1, G.time / GAME_SECONDS), a = Math.sin(performance.now() / (120 - 60 * amp)) * 0.6 * amp;
+    const kx = gx + gs * 1.5, ky = gy + gs * 0.6;
+    ctx.save(); ctx.translate(kx, ky); ctx.rotate(a);
+    ctx.strokeStyle = '#d9b44a'; ctx.lineWidth = Math.max(1.5, gs * 0.12);
+    ctx.beginPath(); ctx.arc(0, 0, gs * 0.3, 0, Math.PI * 2); ctx.stroke();
+    for (const k of [-0.5, 0, 0.5]) { ctx.beginPath(); ctx.moveTo(0, gs * 0.3); ctx.lineTo(k * gs * 0.6, gs * 1.1); ctx.stroke(); }
+    ctx.restore();
+  }
+  ctx.fillText('Gerry: roba', gx, S.y + S.h * 0.8); ctx.fillText('della scuola', gx, S.y + S.h * 0.8 + cs * 0.34);
+  // Macio che arriva dalla palestra col prossimo case
+  if (G.arriving) {
+    const T = L.slots[G.arriving.slot], t = Math.min(1, G.arriving.t / MACIO_WALK);
+    const fx = L.W + cs, fy = T.y + T.h / 2, tx = T.x + T.w / 2, ty = T.y + T.h / 2;
+    const x = fx + (tx - fx) * t, y = fy + (ty - fy) * t + Math.sin(t * 20) * 2;
+    const p = G.pieces[G.arriving.i], R = slotRect(p, G.arriving.slot);
+    drawPiece(p, { x: x - R.w / 2, y: y - R.h / 2, w: R.w, h: R.h });
+    drawMacio(Math.min(L.W - cs * 0.5, x + R.w / 2 + cs * 0.3), y, cs * 0.5);
+  } else if (G.mode === 'load' && G.queue.length) {
+    // Macio aspetta accanto al marciapiede, col prossimo case
+    const T = L.slots[SLOTS - 1], x = T.x + T.w + cs * 0.7;
+    if (x < L.W - cs * 0.5) drawMacio(x, T.y + T.h / 2, cs * 0.5);
+    else drawMacio(L.slots[0].x + L.slots[0].w - cs * 0.5, L.sideLabelY + cs * 0.05, cs * 0.4);
+  }
+}
+/* ---------------- il viaggio: la strada sotto il furgone ----------------
+   Le strisce scorrono all'indietro, il furgone si piega in curva, il gatto
+   attraversa davanti alla cabina e il dosso passa sotto le ruote. */
+function along (k, side) {
+  // un punto della strada: k quadretti davanti alla cabina (negativo = dietro), side di lato
+  return toScreen(COLS / 2 + side, -L.CAB - k);
+}
+function drawRoad () {
+  const D = G.drive, cs = L.cs;
+  ctx.fillStyle = '#26272c'; ctx.fillRect(0, 0, L.W, L.H);
+  const span = Math.max(L.W, L.H) / cs + 8, period = 4, o = (D.off % period);
+  // strisce di mezzeria a sinistra del furgone, bordi tratteggiati e lampioni
+  for (let k = -span; k < span; k += period) {
+    const kk = k - o;
+    for (const [side, len, wd, col] of [[-COLS / 2 - 1.2, 1.8, 0.16, '#d9d4c7'], [COLS / 2 + 1.2, 1.8, 0.1, '#6b6d74']]) {
+      const a = along(kk, side), b = along(kk - len, side);
+      ctx.strokeStyle = col; ctx.lineWidth = Math.max(2, cs * wd); ctx.beginPath(); ctx.moveTo(a.x, a.y); ctx.lineTo(b.x, b.y); ctx.stroke();
+    }
+  }
+  for (let k = -span; k < span; k += period * 2.5) {
+    const a = along(k - (D.off % (period * 2.5)), COLS / 2 + 2.6);
+    ctx.fillStyle = 'rgba(242,197,61,.18)'; ctx.beginPath(); ctx.arc(a.x, a.y, cs * 1.2, 0, Math.PI * 2); ctx.fill();
+    ctx.fillStyle = '#c9c4b5'; ctx.beginPath(); ctx.arc(a.x, a.y, cs * 0.18, 0, Math.PI * 2); ctx.fill();
+  }
+  const e = D.e;
+  if (!e || D.intro <= 0 && !D.frames) return;
+  const t = D.intro > 0 ? 1 - D.intro / INTRO : 1;
+  if (e.cause === 'gatto') {
+    // il gatto attraversa davanti alla cabina, da destra a sinistra
+    const c = along(0.5, COLS * 0.9 - t * COLS * 1.8);
+    drawCat(c.x, c.y, cs * 0.55);
+    if (D.intro > 0) { ctx.fillStyle = '#ffd65a'; ctx.font = '700 ' + Math.round(cs * 0.55) + 'px "Barlow Condensed", sans-serif'; ctx.textAlign = 'center'; ctx.fillText('MIAO!', c.x, c.y - cs * 0.7); }
+  }
+  if (e.cause === 'dosso' && D.intro > 0) {
+    // il dosso arriva da davanti e passa sotto il furgone
+    const k = 4 - t * (ROWS + L.CAB + 4);
+    const a = along(k, -COLS / 2 - 0.6), b = along(k, COLS / 2 + 0.6);
+    ctx.strokeStyle = '#f2c53d'; ctx.lineWidth = cs * 0.5; ctx.setLineDash([cs * 0.4, cs * 0.4]); ctx.beginPath(); ctx.moveTo(a.x, a.y); ctx.lineTo(b.x, b.y); ctx.stroke(); ctx.setLineDash([]);
+  }
+  if ((e.cause === 'destra' || e.cause === 'sinistra') && D.intro > 0) {
+    const a = along(3.5, 0);
+    ctx.save(); ctx.fillStyle = '#2f6fb0'; ctx.beginPath(); ctx.arc(a.x, a.y, cs * 0.6, 0, Math.PI * 2); ctx.fill();
+    ctx.fillStyle = '#fff'; ctx.font = '700 ' + Math.round(cs * 0.75) + 'px Inter, sans-serif'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+    // la freccia del cartello, girata come il furgone
+    const dir = e.cause === 'destra' ? 1 : -1, arrow = L.o === 'v' ? (dir > 0 ? '↱' : '↰') : (dir > 0 ? '⬏' : '⬎');
+    ctx.fillText(L.o === 'v' ? arrow : (dir > 0 ? '↑' : '↓'), a.x, a.y + 1); ctx.restore();
+  }
+}
+function drawCat (x, y, s) {
+  ctx.save(); ctx.translate(x, y);
+  ctx.fillStyle = '#e08a2e';
+  ctx.beginPath(); ctx.ellipse(0, 0, s * 0.7, s * 0.38, 0, 0, Math.PI * 2); ctx.fill();
+  ctx.beginPath(); ctx.arc(-s * 0.7, -s * 0.1, s * 0.3, 0, Math.PI * 2); ctx.fill();
+  ctx.beginPath(); ctx.moveTo(-s * 0.9, -s * 0.3); ctx.lineTo(-s * 0.82, -s * 0.55); ctx.lineTo(-s * 0.7, -s * 0.35); ctx.fill();
+  ctx.beginPath(); ctx.moveTo(-s * 0.62, -s * 0.35); ctx.lineTo(-s * 0.5, -s * 0.55); ctx.lineTo(-s * 0.45, -s * 0.28); ctx.fill();
+  ctx.strokeStyle = '#e08a2e'; ctx.lineWidth = s * 0.14; ctx.beginPath(); ctx.moveTo(s * 0.65, 0); ctx.quadraticCurveTo(s * 1.1, -s * 0.1, s * 1.05, -s * 0.5); ctx.stroke();
+  ctx.fillStyle = '#141519'; ctx.beginPath(); ctx.arc(-s * 0.8, -s * 0.13, s * 0.05, 0, Math.PI * 2); ctx.fill();
+  ctx.restore();
+}
+// la luce del cortile è saltata: si vede solo dove punta la torcia di Macio
+function drawDark () {
+  const t = G.torch || { x: L.vanX + L.vw / 2, y: L.vanY + L.vh / 2 }, r = TORCH * L.cs, D = 'rgba(6,6,9,.8)';
+  const g = ctx.createRadialGradient(t.x, t.y, r * 0.55, t.x, t.y, r);
+  g.addColorStop(0, 'rgba(6,6,9,0)'); g.addColorStop(1, D);
+  ctx.fillStyle = g; ctx.fillRect(t.x - r, t.y - r, 2 * r, 2 * r);
+  ctx.fillStyle = D;
+  ctx.fillRect(0, 0, L.W, Math.max(0, t.y - r)); ctx.fillRect(0, t.y + r, L.W, L.H);
+  ctx.fillRect(0, t.y - r, Math.max(0, t.x - r), 2 * r); ctx.fillRect(t.x + r, t.y - r, L.W, 2 * r);
+}
+function draw () {
+  if (!L) return;
+  ctx.setTransform(DPR, 0, 0, DPR, 0, 0);
+  ctx.clearRect(0, 0, L.W, L.H);
+  ctx.save();
+  if (G.mode === 'drive') drawRoad();
+  if (G.shake > 0 && !RFX) ctx.translate((Math.random() - 0.5) * G.shake, (Math.random() - 0.5) * G.shake);
+  if (G.mode === 'drive' && G.drive.tilt && !RFX) {
+    // in curva il furgone si piega un po'
+    const cx = L.vanX + L.vw / 2, cy = L.vanY + L.vh / 2;
+    ctx.translate(cx, cy); ctx.rotate(G.drive.tilt * 0.07); ctx.translate(-cx, -cy);
+  }
+  drawVan();
+  if (G.mode === 'drive') {
+    // Macio al volante
+    const m = toScreen(COLS * 0.72, -L.CAB * 0.45);
+    drawMacio(m.x, m.y, L.cs * 0.45);
+  }
+  // in modalità cinghie, la fila sotto il dito
+  if (G.mode === 'strap' && G.hoverRow != null) {
+    const R = cellRect(0, G.hoverRow, COLS, 1); ctx.fillStyle = 'rgba(242,165,65,.14)'; ctx.fillRect(R.x, R.y, R.w, R.h);
+  }
+  const strapView = G.mode === 'strap';
+  for (const p of G.pieces) if (inVan(p) && (!G.drag || G.drag.p !== p)) drawPiece(p, pieceRect(p), { sel: G.sel === p && G.mode === 'load', lock: strapView && strapped(p), risk: strapView && !strapped(p) && canSlide(p) });
+  drawStraps();
+  // baricentro (l'assetto) come un pallino
+  if (G.mode !== 'end' && G.pieces.some(inVan)) {
+    const b = balance(), a = toScreen(b.x, b.y);
+    ctx.strokeStyle = b.ok ? '#49b06a' : '#e0503f'; ctx.lineWidth = 2;
+    ctx.beginPath(); ctx.arc(a.x, a.y, L.cs * 0.28, 0, Math.PI * 2); ctx.stroke();
+    ctx.beginPath(); ctx.moveTo(a.x - L.cs * 0.4, a.y); ctx.lineTo(a.x + L.cs * 0.4, a.y); ctx.moveTo(a.x, a.y - L.cs * 0.4); ctx.lineTo(a.x, a.y + L.cs * 0.4); ctx.stroke();
+  }
+  if (G.mode !== 'drive') drawSide();
+  for (const p of G.pieces) if (p.loc === 'slot' && (!G.drag || G.drag.p !== p)) drawPiece(p, pieceRect(p), { sel: G.sel === p });
+  // botte della prova su strada
+  for (const b of G.bangs) {
+    ctx.fillStyle = 'rgba(255,214,90,' + Math.max(0, b.t) + ')'; ctx.font = '700 ' + Math.round(L.cs * 0.6) + 'px "Barlow Condensed", sans-serif';
+    ctx.textAlign = 'center'; ctx.fillText(b.txt, b.x, b.y - (1 - b.t) * L.cs);
+  }
+  ctx.restore();
+  if (G.dark && (G.mode === 'load' || G.mode === 'strap')) drawDark();
+  // il case trascinato, con l'ombra dove andrebbe
+  if (G.drag && G.drag.moved) {
+    const d = G.drag, p = d.p, spot = dropSpot(d);
+    if (spot.van) {
+      const R = cellRect(spot.c, spot.r, p.w, p.h);
+      ctx.fillStyle = spot.ok ? 'rgba(73,176,106,.25)' : 'rgba(224,80,63,.25)'; ctx.fillRect(R.x, R.y, R.w, R.h);
+      ctx.strokeStyle = spot.ok ? '#49b06a' : '#e0503f'; ctx.lineWidth = 2; ctx.strokeRect(R.x, R.y, R.w, R.h);
+    }
+    const c = toCell(d.x, d.y), R = cellRect(c.c - d.oc, c.r - d.or, p.w, p.h);
+    drawPiece(p, R, { alpha: 0.9 });
+  }
+}
+
+/* ---------------- testata e barra ---------------- */
+function clockText (sec) { const m = Math.floor(sec * 30 / GAME_SECONDS); return (23 + Math.floor(m / 60)) + ':' + String(m % 60).padStart(2, '0'); }
+function updateHud () {
+  $('clock').textContent = clockText(G.departAt != null ? G.departAt : G.time);
+  $('clock-box').classList.toggle('late', G.time > GAME_SECONDS);
+  const n = ourInVan();
+  $('h-in').textContent = n + '/' + oursCount();
+  const b = balance(); $('h-bal').textContent = b.label; $('h-bal').className = b.label === '—' ? '' : b.ok ? 'ok' : 'bad';
+  $('h-straps-box').hidden = G.mode !== 'strap' && G.mode !== 'drive';
+  $('h-straps').textContent = G.straps.size + '/' + STRAPS;
+  const next = $('b-next'), back = $('b-back'), rot = $('b-rot');
+  rot.hidden = G.mode !== 'load';
+  back.hidden = G.mode !== 'strap';
+  if (G.mode === 'load') { next.textContent = 'Cinghie'; next.disabled = !readyToStrap(); }
+  else if (G.mode === 'strap') { next.textContent = 'Si parte!'; next.disabled = false; }
+  else { next.textContent = 'In viaggio…'; next.disabled = true; }
+}
+const readyToStrap = () => G.cavoSaid && ourInVan() === OURS_ALL && !G.queue.length && !G.arriving;
+let sayTimer = null;
+function say (who, text, kind, sticky) {
+  $('say-who').textContent = who;
+  $('say-text').textContent = text;
+  $('say').className = kind || '';
+  $('say-x').hidden = !sticky;
+  clearTimeout(sayTimer);
+}
+function warn (text) { say('ATTENZIONE', text, 'bad', true); SFX.bad(); }
+$('say-x').addEventListener('click', () => { $('say-text').textContent = ''; $('say-who').textContent = ''; $('say-x').hidden = true; });
+
+/* ---------------- trascinare, girare, posare ---------------- */
+function pickAt (x, y) {
+  for (let i = G.pieces.length - 1; i >= 0; i--) {
+    const p = G.pieces[i];
+    if ((p.loc === 'van' || p.loc === 'slot') && inRect(x, y, pieceRect(p))) return p;
+  }
+  return null;
+}
+// dove cadrebbe il case trascinato: nel furgone (agganciato ai quadretti),
+// in un posto libero del marciapiede, o da Gerry
+function dropSpot (d) {
+  const p = d.p, cc = toCell(d.x, d.y);
+  const c = Math.round(cc.c - d.oc), r = Math.round(cc.r - d.or);
+  const fl = cellRect(0, 0, COLS, ROWS);
+  if (inRect(d.x, d.y, { x: fl.x - L.cs, y: fl.y - L.cs, w: fl.w + 2 * L.cs, h: fl.h + 2 * L.cs })) return { van: true, c, r, ok: fits(p, c, r, p.w, p.h) };
+  if (inRect(d.x, d.y, L.gerry)) return { gerry: true };
+  const s = L.slots.findIndex(S => inRect(d.x, d.y, S));
+  if (s >= 0 && (G.slots[s] == null || G.slots[s] === p.i)) return { slot: s };
+  return {};
+}
+function rotate (p) {
+  if (!p || G.mode !== 'load') return;
+  const w = p.h, h = p.w;
+  if (p.loc === 'van') {
+    // si gira attorno al centro; se non ci sta, si prova a spostarlo di poco
+    const cx = p.c + p.w / 2, cy = p.r + p.h / 2, c0 = Math.round(cx - w / 2), r0 = Math.round(cy - h / 2);
+    const tries = [[0, 0], [-1, 0], [1, 0], [0, -1], [0, 1], [-1, -1], [1, -1], [-1, 1], [1, 1], [p.c - c0, p.r - r0]];
+    const t = tries.find(([dx, dy]) => fits(p, c0 + dx, r0 + dy, w, h));
+    if (!t) { warn('Lì non c\'è spazio per girarlo.'); return; }
+    p.c = c0 + t[0]; p.r = r0 + t[1];
+  }
+  p.w = w; p.h = h;
+  SFX.place();
+  updateHud();
+}
+function placeInVan (p, c, r) {
+  if (p.loc === 'slot') G.slots[p.slot] = null;
+  p.loc = 'van'; p.slot = -1; p.c = c; p.r = r;
+  SFX.place();
+  if (p.def.school && !p.saidSchool) { p.saidSchool = true; say('MACIO', p.def.id === 'scopa' ? 'Sicuro che la scopa viene con noi?' : 'Il leggio però non mi sembra nostro…'); }
+}
+function toSlot (p, s) {
+  if (p.loc === 'slot') G.slots[p.slot] = null;
+  p.loc = 'slot'; p.slot = s; G.slots[s] = p.i;
+  SFX.place();
+}
+function toGerry (p) {
+  if (!p.def.school) { warn('Questo è roba del service: va nel furgone, non a Gerry.'); return false; }
+  if (p.loc === 'slot') G.slots[p.slot] = null;
+  p.loc = 'gerry'; p.slot = -1;
+  say('GERRY', p.def.id === 'scopa' ? 'La mia scopa! Vi stavate portando via la mia scopa?!' : 'Il leggio del preside! Grazie, eh. Domani ci serve.', 'ok');
+  SFX.place();
+  return true;
+}
+
+function pointerPos (ev) { const b = cv.getBoundingClientRect(); return { x: ev.clientX - b.left, y: ev.clientY - b.top }; }
+cv.addEventListener('pointerdown', ev => {
+  if (!G || G.paused) return;
+  const { x, y } = pointerPos(ev);
+  G.torch = { x, y };
+  if ((G.mode === 'strap' || G.mode === 'load') && ev.button !== 2) { const w = wheelAt(x, y); if (w) { toggleBrake(w); return; } }
+  if (G.mode === 'strap') { toggleStrap(x, y); return; }
+  if (G.mode !== 'load' || G.drag) return;
+  if (ev.button === 2) return;
+  const p = pickAt(x, y);
+  if (!p) { G.sel = null; return; }
+  G.sel = p;
+  let oc = p.w / 2, or = p.h / 2;
+  if (p.loc === 'van') { const c = toCell(x, y); oc = c.c - p.c; or = c.r - p.r; }
+  G.drag = { p, x, y, sx: x, sy: y, t: performance.now(), moved: false, oc, or, id: ev.pointerId };
+  try { cv.setPointerCapture(ev.pointerId); } catch (e) { /* niente cattura */ }
+});
+cv.addEventListener('pointermove', ev => {
+  if (!G) return;
+  const { x, y } = pointerPos(ev);
+  G.torch = { x, y };
+  if (G.mode === 'strap') { const c = toCell(x, y); G.hoverRow = c.c >= -0.5 && c.c <= COLS + 0.5 && c.r >= 0 && c.r < ROWS ? Math.floor(c.r) : null; return; }
+  const d = G.drag;
+  if (!d || d.id !== ev.pointerId) return;
+  d.x = x; d.y = y;
+  if (!d.moved && Math.hypot(x - d.sx, y - d.sy) > 8) {
+    d.moved = true;
+    // dal marciapiede il case si prende per il centro, a grandezza vera
+    if (d.p.loc === 'slot') { d.oc = d.p.w / 2; d.or = d.p.h / 2; }
+  }
+});
+function endDrag (ev, cancel) {
+  const d = G && G.drag;
+  if (!d || (ev && d.id !== ev.pointerId)) return;
+  G.drag = null;
+  if (cancel) return;
+  if (!d.moved) { if (performance.now() - d.t < 400) rotate(d.p); return; }
+  const s = dropSpot(d), p = d.p;
+  if (s.van) {
+    if (s.ok) placeInVan(p, s.c, s.r);
+    else warn(s.c < 0 || s.r < 0 || s.c + p.w > COLS || s.r + p.h > ROWS ? 'Sporge dal furgone: il portellone non chiuderebbe.' : 'Lì non ci sta: sbatte contro un altro case o il passaruota.');
+  } else if (s.gerry) toGerry(p);
+  else if (s.slot != null) {
+    if (p.loc !== 'slot' || p.slot !== s.slot) toSlot(p, s.slot);
+  } else if (p.loc === 'van') warn('Per toglierlo dal furgone serve un posto libero sul marciapiede.');
+  updateHud();
+}
+cv.addEventListener('pointerup', ev => endDrag(ev));
+cv.addEventListener('pointercancel', ev => endDrag(ev, true));
+// tasto destro: gira il case che si sta trascinando
+function turnDragged () { const d = G.drag, p = d.p, w = p.w; p.w = p.h; p.h = w; d.oc = p.w / 2; d.or = p.h / 2; SFX.place(); }
+cv.addEventListener('contextmenu', ev => { ev.preventDefault(); if (G && G.drag && G.drag.moved) turnDragged(); });
+window.addEventListener('keydown', ev => {
+  if (!G || G.paused) return;
+  if (ev.key === 'r' || ev.key === 'R') {
+    if (G.drag && G.drag.moved) turnDragged();
+    else rotate(G.sel);
+  }
+  if (ev.key === 'Escape') openPause();
+});
+$('b-rot').addEventListener('click', () => {
+  if (!G.sel || (G.sel.loc !== 'van' && G.sel.loc !== 'slot')) { say('MACIO', 'Tocca prima un case, poi lo giro io.'); return; }
+  rotate(G.sel);
+});
+
+/* ---------------- le cinghie ---------------- */
+function toggleStrap (x, y) {
+  const c = toCell(x, y);
+  if (c.c < -0.5 || c.c > COLS + 0.5 || c.r < 0 || c.r >= ROWS) return;
+  const r = Math.floor(c.r);
+  if (G.straps.has(r)) G.straps.delete(r);
+  else if (G.straps.size >= STRAPS) { warn('Le cinghie sono finite: ne hai ' + STRAPS + '. Toccane una per toglierla.'); return; }
+  else if (!G.pieces.some(p => inVan(p) && r >= p.r && r < p.r + p.h)) { warn('In quella fila non c\'è niente da legare.'); return; }
+  else G.straps.add(r);
+  SFX.strap();
+  strapHint();
+  updateHud();
+}
+// cosa dice Macio con le cinghie: quanti case scivolerebbero ancora
+function strapHint (first) {
+  const n = atRisk().length, left = STRAPS - G.straps.size, free = G.pieces.filter(p => inVan(p) && rolling(p) && !strapped(p)).length;
+  const head = first ? 'Tutto dentro! Ora le cinghie: tocca una fila del furgone e la lego da una sponda all\'altra. ' : '';
+  say('MACIO', head + (n ? (n === 1 ? 'Un case col segno rosso può scivolare' : n + ' case col segno rosso possono scivolare') + ': legali o parti così. Cinghie rimaste: ' + left + '.'
+    : 'Niente col segno rosso: non si muove niente. Si può partire!')
+    + (free ? ' ' + (free === 1 ? 'Un case ha' : free + ' case hanno') + ' le ruote senza freno: tocca la ruota.' : ''), n ? '' : 'ok');
+}
+$('b-next').addEventListener('click', () => {
+  if (G.mode === 'load' && readyToStrap()) {
+    G.mode = 'strap'; G.sel = null;
+    strapHint(true);
+  } else if (G.mode === 'strap') startDrive();
+  updateHud();
+});
+$('b-back').addEventListener('click', () => { G.mode = 'load'; G.straps.clear(); say('MACIO', 'Va bene, risistemiamo. Le cinghie le ho tolte.'); updateHud(); });
+
+/* ---------------- la prova su strada ----------------
+   Per ogni evento i case slegati scivolano nella direzione della spinta,
+   un quadretto alla volta, finché non sbattono contro la sponda, un
+   passaruota o un altro case. Il colpo rovina chi sbatte e chi viene preso,
+   in base ai chili, alla corsa fatta e alla fragilità. */
+function startDrive () {
+  G.dark = false;
+  draw(); snapVan();
+  G.mode = 'drive';
+  G.departAt = G.time;
+  G.late = G.time > GAME_SECONDS;
+  G.bal = balance();
+  G.events = DRIVE.map(e => ({ ...e, s: e.s && !G.bal.ok ? e.s + 1 : e.s }));
+  G.drive = { k: -1, frames: null, f: 0, t: 0, anim: null, wait: 0.8, intro: 0, e: null, speed: 0, off: 0, tilt: 0 };
+  say('MACIO', 'Si parte! Guido io.' + (G.bal.ok ? '' : ' Però il furgone tira ' + (G.bal.label === 'Dietro' ? 'dietro' : G.bal.label.toLowerCase()) + '…'));
+  updateHud();
+}
+function hit (p, amount, why) {
+  if (amount <= 0.5) return;
+  p.hp = Math.max(0, p.hp - amount);
+  // nella bolla si scrivono solo i colpi che si notano
+  if (why && amount >= 5 && !p.notes.includes(why)) p.notes.push(why);
+}
+function simulateEvent (e) {
+  const loose = G.pieces.filter(p => inVan(p) && !strapped(p));
+  if (e.bump) {
+    // sul dosso salta il dietro del furgone: i fragili slegati lì prendono un colpo
+    const out = [];
+    for (const p of loose) if (p.r + p.h / 2 > ROWS * 0.5) { const dmg = HIT.bump * FRAG[p.def.frag]; hit(p, dmg, 'saltato sul dosso'); if (dmg > 4) out.push(p); }
+    return { frames: [], bangs: out };
+  }
+  const frames = [], bangs = [];
+  const st = new Map(loose.map(p => [p, { slid: 0, done: false }]));
+  const ahead = p => e.dx ? (e.dx > 0 ? p.c : -p.c) : (e.dy > 0 ? p.r : -p.r);
+  for (let step = 0; step < e.s + ROLL_EXTRA; step++) {
+    // oltre la spinta normale continuano solo le ruote senza freno
+    for (const p of loose) if (step >= e.s && !rolling(p)) st.get(p).done = true;
+    const order = loose.filter(p => !st.get(p).done).sort((a, b) => ahead(b) - ahead(a));
+    if (!order.length) break;
+    for (const p of order) {
+      const s = st.get(p), nc = p.c + e.dx, nr = p.r + e.dy;
+      if (fits(p, nc, nr, p.w, p.h)) { p.c = nc; p.r = nr; s.slid++; continue; }
+      s.done = true;
+      if (!s.slid) continue;
+      // contro cosa ha sbattuto?
+      const victims = new Set();
+      for (let y = nr; y < nr + p.h; y++) for (let x = nc; x < nc + p.w; x++) { const o = occupant(x, y, p); if (o) victims.add(o); }
+      // chi viene preso sente i chili di chi arriva; chi sbatte, anche se è
+      // leggero, sente il colpo (il PC si rompe anche da solo)
+      const run = 0.6 + s.slid, ev = e.name.toLowerCase(), self = run * Math.max(0.5, p.def.kg / 40) * FRAG[p.def.frag];
+      if (victims.size) {
+        for (const v of victims) hit(v, run * p.def.kg / 40 * FRAG[v.def.frag] * HIT.victim / victims.size, 'preso ' + p.def.from + ' in ' + ev);
+        hit(p, self * HIT.self, 'sbattuto in ' + ev);
+      } else hit(p, self * HIT.wall, 'contro la sponda in ' + ev);
+      if (rolling(p) && s.slid > e.s && !p.notes.includes('senza freno')) p.notes.push('senza freno');
+      bangs.push(p);
+    }
+    frames.push(new Map(loose.map(p => [p, { c: p.c, r: p.r }])));
+  }
+  // chi scivola fino in fondo senza sbattere si ferma da solo (poco male)
+  return { frames, bangs };
+}
+// prima di ogni spinta si vede perché (il gatto, la curva, il dosso): poi i case scivolano
+const INTRO = 1.0;
+function tickDrive (dt) {
+  const D = G.drive;
+  // la strada scorre: veloce in viaggio, ferma dopo la frenata
+  const target = D.e && D.e.cause === 'gatto' && (D.intro > 0 || D.frames) ? 0 : D.e && D.e.cause === 'via' && D.intro > 0 ? 3 : 8;
+  D.speed += (target - D.speed) * Math.min(1, dt * (target < D.speed ? 4 : 1.5));
+  D.off += D.speed * dt;
+  const tiltTo = D.e && (D.intro > 0 || D.frames) ? (D.e.cause === 'destra' ? 1 : D.e.cause === 'sinistra' ? -1 : 0) : 0;
+  D.tilt += (tiltTo - D.tilt) * Math.min(1, dt * 3);
+  if (D.intro > 0) {
+    D.intro -= dt;
+    if (D.intro <= 0) runEvent(D);
+    return;
+  }
+  if (D.wait > 0) { D.wait -= dt; return; }
+  if (!D.frames) {
+    D.k++;
+    if (D.k >= G.events.length) { finish(); return; }
+    D.e = G.events[D.k];
+    D.intro = INTRO;
+    say('MACIO', D.e.say, '', false);
+    $('h-in').textContent = D.e.name.toUpperCase();
+    if (D.e.cause === 'gatto') tone(900, 0.3, 'sine', 0.06);
+    return;
+  }
+  const STEPT = 0.11;
+  D.t += dt;
+  const f = Math.min(D.frames.length - 1, Math.floor(D.t / STEPT)), u = Math.min(1, (D.t - f * STEPT) / STEPT);
+  const from = f === 0 ? D.start : D.frames[f - 1], to = D.frames[f];
+  D.anim = new Map();
+  for (const [p, b] of to) { const a = from.get(p) || b; D.anim.set(p, { c: a.c + (b.c - a.c) * u, r: a.r + (b.r - a.r) * u }); }
+  if (D.t >= D.frames.length * STEPT) {
+    D.anim = null; D.frames = null; D.wait = 0.7;
+    if (D.bangs.length) { G.shake = 8; for (const p of D.bangs) bangAt(p, 'BANG'); }
+  }
+}
+// la spinta vera: si parte dalle posizioni attuali e si anima verso i fotogrammi calcolati
+function runEvent (D) {
+  const e = D.e;
+  const start = new Map(G.pieces.filter(inVan).map(p => [p, { c: p.c, r: p.r }]));
+  const res = simulateEvent(e);
+  D.start = start; D.frames = res.frames; D.bangs = res.bangs; D.f = 0; D.t = 0;
+  if (e.bump) { G.shake = 10; for (const p of res.bangs) bangAt(p, 'TUNF'); D.frames = null; D.wait = 1.0; D.anim = null; return; }
+  if (!D.frames.length) { D.frames = null; D.wait = 0.8; D.anim = null; }
+}
+function bangAt (p, txt) {
+  const R = cellRect(p.c, p.r, p.w, p.h);
+  G.bangs.push({ x: R.x + R.w / 2, y: R.y + R.h / 2, t: 1, txt });
+  SFX.bang(Math.min(1, p.def.kg / 70));
+}
+
+/* ---------------- fine: la bolla di carico ---------------- */
+const REP_BY_STARS = [-3, -1, 0, 1, 3, 5];
+function finish () {
+  G.mode = 'end';
+  const ours = G.pieces.filter(p => !p.def.school);
+  const left = ours.filter(p => !inVan(p));
+  const st = ours.map(p => stateOf(p.hp));
+  const rotti = st.filter(s => s === 'rotto').length, dif = st.filter(s => s === 'difettoso').length, amm = st.filter(s => s === 'ammaccato').length;
+  const taken = G.pieces.filter(p => p.def.school && inVan(p));
+  const order = orderOk(), coffee = G.departAt <= T_COFFEE;
+  // l'ordine del capo rimedia a un errore (ma non va oltre le 5 stelle)
+  let stars = 5 - 2 * rotti - dif - (amm >= 2 ? 1 : 0) - (G.bal.ok ? 0 : 1) - (taken.length ? 1 : 0) - (G.late ? 1 : 0) - 2 * left.length + (order ? 1 : 0);
+  stars = Math.max(0, Math.min(5, stars));
+  const rep = REP_BY_STARS[stars];
+  const beers = stars === 5 ? 1 : 0;
+  const result = {
+    skipped: false, stars, rep, beers, late: G.late, order, coffee, depart: clockText(G.departAt), balance: G.bal.label, straps: G.straps.size,
+    states: Object.fromEntries(ours.map(p => [p.def.id, stateOf(p.hp)])),
+    damaged: ours.filter(p => p.hp < 70).map(p => p.def.name), taken: taken.map(p => p.def.name)
+  };
+  G.result = result;
+  const notes = [];
+  if (taken.length) notes.push('Ti sei portato via ' + taken.map(p => p.def.id === 'scopa' ? 'la scopa di Gerry' : 'il leggio della scuola').join(' e ') + ': domani chiamano il service.');
+  if (!G.bal.ok) notes.push('Furgone sbilanciato (' + G.bal.label.toLowerCase() + '): in curva ha sbandato di più. I pesanti vanno verso la cabina e al centro.');
+  if (G.late) notes.push('Partiti dopo le 23:30: Gerry ha dovuto riaprire il cancello.');
+  notes.push(order ? 'PAR e PC vicino al portellone, come voleva il capo: una stella in più.' : 'Il capo voleva PAR e PC vicino al portellone: domani li cercherà sotto a tutto.');
+  if (!rotti && !dif && !amm) notes.push('Niente si è mosso più del dovuto. Carico da manuale.');
+  if (beers) notes.push('Il capo è contento: una birra per te. 🍺');
+  if (coffee) notes.push('Partiti prima delle 23:15: Gerry ti offre un caffè dalla macchinetta della sala professori. ☕');
+  const rows = ours.slice().sort((a, b) => a.hp - b.hp).map(p => {
+    const s = stateOf(p.hp);
+    return '<tr><td>' + p.def.name + '</td><td><span class="pill p-' + s + '">' + STATE_LABEL[s] + '</span></td><td><small>' + (p.notes.length ? p.notes.join(', ') : strapped(p) ? 'legato, non si è mosso' : '—') + '</small></td></tr>';
+  }).join('');
+  $('end').innerHTML = '<div class="bolla">'
+    + '<header><div><h2>Bolla di carico</h2><small>Festa della scuola · partenza alle ' + result.depart + (SERVICE ? ' · ' + escapeHtml(SERVICE) : '') + '</small></div>'
+    + '<span class="stars" aria-label="' + stars + ' stelle su 5">' + '★'.repeat(stars) + '☆'.repeat(5 - stars) + '</span></header>'
+    + '<div class="sum"><div><span>Integri</span><b>' + st.filter(s => s === 'integro').length + '/' + OURS_ALL + '</b></div><div><span>Assetto</span><b>' + G.bal.label + '</b></div><div><span>Cinghie</span><b>' + G.straps.size + '/' + STRAPS + '</b></div><div><span>Reputazione</span><b>' + (rep > 0 ? '+' : '') + rep + '</b></div></div>'
+    + '<div class="tw"><table><thead><tr><th>Case</th><th>Stato</th><th>Cosa è successo</th></tr></thead><tbody>' + rows + '</tbody></table></div>'
+    + (notes.length ? '<ul class="notes">' + notes.map(n => '<li>' + n + '</li>').join('') + '</ul>' : '')
+    + photoChat(stars, taken)
+    + '<div class="row">' + (EMBED ? '<button class="primary" id="btn-home">Si torna a casa</button>' : '<button class="primary" id="btn-again">Rigioca</button>') + '</div></div>';
+  $('end').hidden = false;
+  if (EMBED) $('btn-home').addEventListener('click', () => sendResult(G.result));
+  else $('btn-again').addEventListener('click', () => { $('end').hidden = true; newGame(); G.paused = false; });
+  updateHud();
+}
+/* la foto al capo: Macio fotografa il furgone prima di chiudere il
+   portellone e la manda; il capo risponde in base a com'è andata */
+const BOSS_SAYS = [
+  'Chiamami. Anzi no, non chiamarmi.',
+  'Domani si fa l\'inventario. Insieme. Alle 7.',
+  'Ho visto la foto. Ho pianto. Non di gioia.',
+  'Sembra caricato da Macio. Ah, l\'hai caricato tu?',
+  'Bene dai. Domani però niente sorprese.',
+  'Questo è un furgone o un cubo di Rubik? Bravo, la birra domani la offro io.'
+];
+let vanShot = '';
+function snapVan () {
+  // la foto: solo il furgone, rimpicciolita
+  try {
+    const k = 200 / Math.max(L.vw, L.vh), c = document.createElement('canvas');
+    c.width = Math.round(L.vw * k); c.height = Math.round(L.vh * k);
+    c.getContext('2d').drawImage(cv, (L.vanX - 6) * DPR, (L.vanY - 6) * DPR, (L.vw + 12) * DPR, (L.vh + 12) * DPR, 0, 0, c.width, c.height);
+    vanShot = c.toDataURL('image/jpeg', 0.7);
+  } catch (e) { vanShot = ''; }
+}
+function photoChat (stars, taken) {
+  let reply = BOSS_SAYS[stars];
+  if (taken.length) reply = 'Perché nel furgone c\'è ' + (taken.some(p => p.def.id === 'scopa') ? 'una scopa' : 'un leggio') + '? ' + reply;
+  return '<div class="chat"><small>Chat «' + escapeHtml(BOSS) + '» · ' + clockText(G.departAt) + '</small>'
+    + '<div class="msg me">' + (vanShot ? '<img src="' + vanShot + '" alt="Foto del furgone carico">' : '') + 'Furgone carico, partiamo! (foto di Macio)</div>'
+    + '<div class="msg boss"><b>' + escapeHtml(BOSS) + '</b>' + escapeHtml(reply) + '</div></div>';
+}
+function escapeHtml (s) { return String(s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]); }
+
+/* ---------------- ciclo ---------------- */
+function tick (dt) {
+  if (G.mode === 'load' || G.mode === 'strap') {
+    G.time += dt;
+    if (G.time > GAME_SECONDS && !G.lateSaid) { G.lateSaid = true; say('GERRY', 'Sono le 23:30, io devo chiudere il cancello! Sbrigatevi!', 'bad', true); }
+    if (G.time > T_KEYS && !G.keysSaid) { G.keysSaid = true; say('GERRY', '*dlin dlin* Io le chiavi le ho già in mano, eh.', '', true); jingle(); }
+    if (G.time > T_DARK && !G.dark && !G.darkDone) { G.dark = true; say('MACIO', 'È saltata la luce del cortile! Ti faccio luce io con la torcia: segue il tuo dito.', 'bad', true); tone(60, 0.4, 'square', 0.1); }
+    if (G.time > T_LIGHT && G.dark) { G.dark = false; G.darkDone = true; say('GERRY', 'Ho riacceso. Sono le 23:20, e io a mezzanotte dormo.', '', true); jingle(); }
+  }
+  if (G.mode === 'load' && !G.cavoSaid && ourInVan() >= CAVO_AFTER) {
+    G.cavoSaid = true;
+    G.queue.unshift(G.pieces.find(p => p.def.late).i);
+    say('GERRY', 'Ehi, voi! Vi siete dimenticati un cavo in palestra. Ve lo porta Macio.', '', true);
+    updateHud();
+  }
+  if (G.mode === 'load') {
+    if (G.arriving) {
+      G.arriving.t += dt;
+      if (G.arriving.t >= MACIO_WALK) {
+        const p = G.pieces[G.arriving.i];
+        p.loc = 'slot'; p.slot = G.arriving.slot; G.slots[p.slot] = p.i;
+        G.arriving = null; G.wait = 0.5;
+        say('MACIO', MACIO_SAYS[p.def.id] + (p.def.wheels ? ' Ha le ruote: nel furgone tocca la ruota per tirare il freno.' : ''));
+        if (!G.queue.length) say('MACIO', MACIO_SAYS[p.def.id] + ' Era l\'ultimo!');
+      }
+    } else if (G.queue.length) {
+      G.wait -= dt;
+      const s = G.slots.findIndex(x => x == null);
+      if (s >= 0 && G.wait <= 0) G.arriving = { i: G.queue.shift(), slot: s, t: 0 };
+      else if (s < 0 && !G.fullSaid) { G.fullSaid = true; say('MACIO', 'Il marciapiede è pieno: carica qualcosa e ti porto il prossimo.'); }
+      if (s >= 0) G.fullSaid = false;
+    }
+  }
+  if (G.mode === 'drive') tickDrive(dt);
+  G.shake = Math.max(0, G.shake - dt * 30);
+  for (const b of G.bangs) b.t -= dt * 1.2;
+  G.bangs = G.bangs.filter(b => b.t > 0);
+  if (G.mode === 'load' || G.mode === 'strap') { $('clock').textContent = clockText(G.time); $('clock-box').classList.toggle('late', G.time > GAME_SECONDS); }
+}
+let last = performance.now();
+function frame (now) {
+  const dt = Math.min(0.1, (now - last) / 1000); last = now;
+  if (G && !G.paused) tick(dt);
+  draw();
+  requestAnimationFrame(frame);
+}
+function openPause () { if (!G || G.mode === 'end' || !$('start').hidden) return; G.paused = true; G.drag = null; $('pause').hidden = false; }
+$('btn-pause').addEventListener('click', openPause);
+$('btn-resume').addEventListener('click', () => { $('pause').hidden = true; G.paused = false; });
+$('btn-restart').addEventListener('click', () => { $('pause').hidden = true; newGame(); G.paused = false; });
+$('btn-start').addEventListener('click', () => { $('start').hidden = true; G.paused = false; last = performance.now(); });
+document.addEventListener('visibilitychange', () => { if (document.hidden) openPause(); });
+window.addEventListener('resize', layout);
+newGame();
+layout();
+requestAnimationFrame(frame);
+// per i test: lo stato del gioco
+window.__carico = () => G;
+</script>
+</html>

@@ -126,9 +126,12 @@ cambiano da una fase all'altra.
 - Dopo il DJ set (deciso, da progettare): Gerry ha cacciato il DJ e
   **Macio** improvvisa un **karaoke**, un minigioco nuovo a metà fra il
   discorso del preside e il DJ Hero. Prende il posto del cantante con
-  chitarra. Poi a fine serata il **carico del furgone**, un minigioco
-  puzzle unico nel suo genere, da provare. Design in
-  `docs/livello1-festa-scuola.md`.
+  chitarra. Design in `docs/livello1-festa-scuola.md`.
+- **Carico del furgone** (23:00): prima versione nel gioco, `carico.html`
+  dopo il DJ set (dopo il karaoke, quando ci sarà). Il tetris del furgone
+  col marciapiede da tre posti, la roba della scuola da ridare a Gerry,
+  l'assetto, tre cinghie e la prova su strada. Da provare giocando. Design
+  in `docs/minigioco-carico.md`.
 
 ## Show del DJ set
 
@@ -171,6 +174,8 @@ cambiano da una fase all'altra.
   discorso del preside dentro il gioco, dopo collaudo e posa;
   `tests/preside-cavi.js`: i cavi lasciati dalla posa nel discorso (pagina da
   sola).
+- `tests/carico.js`: il carico del furgone, da solo (trascinare, girare,
+  Gerry, cinghie e viaggio) e dentro il gioco (scaletta, reputazione, birra).
 - `tests/stanchezza.js`: la stanchezza del tecnico (tasto 🍺, tempo, azioni,
   birra con conferma, connettore che scivola, ricarica, nuova partita).
 - `tests/robustezza.js`: frecce e WASD, ripresa con un altro schermo,

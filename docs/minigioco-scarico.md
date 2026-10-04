@@ -474,11 +474,10 @@ non toccano la scena di Phaser.
 
 - Il carattere di Macio. Deciso il nome: **Macio** (prima era Tonino).
   L'aspetto resta quello di oggi: pelato, baffi scuri, aria seria.
-- Il carico all'uscita (a fine serata, dopo il karaoke): deciso che è un
-  **minigioco a sé, tipo puzzle**, e deve essere unico nel suo genere,
-  non lo scarico al contrario. Le regole sono da provare con un
-  prototipo; il "tetris" del mezzo e le **cinghie** restano idee di
-  partenza.
+- Il carico all'uscita (a fine serata, dopo il karaoke): un **minigioco a
+  sé, tipo puzzle**, non lo scarico al contrario. Prima versione nel gioco:
+  il tetris del furgone, le cinghie e la prova su strada, in
+  `docs/minigioco-carico.md`.
 
 ## Il minigioco
 
