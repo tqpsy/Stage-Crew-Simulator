@@ -1709,7 +1709,7 @@ const SAVE_FILE_KIND = 'stage-crew-simulator';   // firma del file esportato
 const SHARED_KEYS = ['settings', 'records', 'usedServices'];
 
 function defaultProfile () {
-  return { v: SAVE_VERSION, player: '', service: '', serviceInfo: null, usedServices: [], settings: { volume: 0.8, reducedFx: false, skipShow: false, skipScarico: false, testMusic: true, bossTips: true, tapeMarks: true, traceSignal: true }, tutorSeen: {}, logo: null, level: null, scarico: null, cavi: null, preside: null, cambioDj: null, dj: null, karaoke: null, carico: null, beers: 0, assistant: defaultAssistant(), fatigue: 0, records: {}, reputation: { total: 0, earned: {}, log: [] }, levelsSeen: 1, savedAt: 0 };
+  return { v: SAVE_VERSION, player: '', service: '', serviceInfo: null, usedServices: [], settings: { volume: 0.8, reducedFx: false, skipShow: false, skipScarico: false, testMusic: true, bossTips: true, tapeMarks: true, traceSignal: true }, tutorSeen: {}, logo: null, level: null, scarico: null, cavi: null, preside: null, cambioDj: null, dj: null, karaoke: null, carico: null, collaudo: null, serata: null, beers: 0, assistant: defaultAssistant(), fatigue: 0, records: {}, reputation: { total: 0, earned: {}, log: [] }, levelsSeen: 1, savedAt: 0 };
 }
 // l'assistente della serata (dal livello 2, vedi ASSISTANTS): chi è e
 // quanti favori ha già fatto nel set in corso. Le partite salvate prima
@@ -2664,11 +2664,13 @@ function showMenuPage (page, keep) {
   if (page === 'slots') renderSlots();
   if (page === 'levels') renderLevels();
   if (page === 'new' && !keep) {
-    if (newSlot == null || Profile.slots()[newSlot]) newSlot = Profile.firstFree();
+    const replay = replaySlot != null && newSlot === replaySlot;
+    if (!replay && (newSlot == null || Profile.slots()[newSlot])) newSlot = Profile.firstFree();
     // le altre partite restano: la nuova va in uno slot vuoto
-    const others = Profile.slots().filter(Boolean).length;
-    el('#new-warning').hidden = !others;
-    el('#new-warning').textContent = 'La nuova partita va nello slot ' + (newSlot + 1) + ' e il nuovo tecnico parte da reputazione 0. '
+    const others = Profile.slots().filter((x, i) => x && !(replay && i === newSlot)).length;
+    el('#new-warning').hidden = !others && !replay;
+    el('#new-warning').textContent = replay ? 'Si rigioca la serata nello slot ' + (newSlot + 1) + ': la partita finita lascia il posto alla nuova, la sua valutazione resta nei record. Il tecnico riparte da reputazione 0.'
+      : 'La nuova partita va nello slot ' + (newSlot + 1) + ' e il nuovo tecnico parte da reputazione 0. '
       + (others === 1 ? 'L\'altra partita resta salvata' : 'Le altre partite restano salvate') + '; impostazioni e record sono comuni a tutte.';
     draft = { player: Profile.data.player, offers: serviceOffers(Profile.data.usedServices), pick: null };
     const i = el('#player-input');
@@ -2729,9 +2731,10 @@ const cleanName = s => String(s || '').replace(/\s+/g, ' ').trim().slice(0, NAME
 // i nomi delle tre offerte non verranno più proposti
 function startNewGame (player, offer, offers) {
   // nello slot scelto (vuoto): la partita in corso resta salvata nel suo
-  const slot = newSlot != null && !Profile.slots()[newSlot] ? newSlot : Profile.firstFree();
+  // (o nello slot della serata finita che si rigioca)
+  const slot = newSlot != null && (!Profile.slots()[newSlot] || newSlot === replaySlot) ? newSlot : Profile.firstFree();
   if (slot >= 0 && slot !== Profile.active) { saveLevel(); Profile.select(slot); }
-  newSlot = null;
+  newSlot = null; replaySlot = null;
   Profile.data.player = cleanName(player);
   Profile.data.service = offer.name;
   Profile.data.logo = { ...offer.logo };
@@ -2746,6 +2749,8 @@ function startNewGame (player, offer, offers) {
   Profile.data.carico = null;
   Profile.data.cambioDj = null;
   Profile.data.karaoke = null;
+  Profile.data.collaudo = null;
+  Profile.data.serata = null;
   // uno show del DJ o un karaoke ancora aperto o in arrivo della partita vecchia
   clearTimeout(djTimer);
   if (el('#dj-frame')) el('#dj-frame').remove();
@@ -3003,8 +3008,8 @@ function openSchedule (first) {
   // del preside, poi al cambio palco per il DJ
   scheduleNext = first ? null : schedulePhaseState('cavi') === 'now' ? 'cavi' : schedulePhaseState('preside') === 'now' ? 'preside'
     : schedulePhaseState('cambio-dj') === 'now' && !cambioDj() ? 'cambio-dj' : schedulePhaseState('dj') === 'now' ? 'dj'
-    : schedulePhaseState('karaoke') === 'now' ? 'karaoke' : schedulePhaseState('carico') === 'now' ? 'carico' : null;
-  el('#schedule-go').textContent = first ? 'Al lavoro!' : { cavi: 'Chiama Gerry', preside: 'Il preside sale sul palco', 'cambio-dj': 'Inizia il cambio palco', dj: 'Via al DJ set', karaoke: 'Macio prende il microfono', carico: 'Carica il furgone' }[scheduleNext] || 'Torna al palco';
+    : schedulePhaseState('karaoke') === 'now' ? 'karaoke' : schedulePhaseState('carico') === 'now' ? 'carico' : caricoDone() ? 'serata' : null;
+  el('#schedule-go').textContent = first ? 'Al lavoro!' : { cavi: 'Chiama Gerry', preside: 'Il preside sale sul palco', 'cambio-dj': 'Inizia il cambio palco', dj: 'Via al DJ set', karaoke: 'Macio prende il microfono', carico: 'Carica il furgone', serata: 'Com\'è andata la serata' }[scheduleNext] || 'Torna al palco';
   el('#schedule-modal').classList.add('show');
   setSceneInput(false);
 }
@@ -3419,10 +3424,12 @@ let presideOpen = false, presideTimer = null;
 let djOpen = false;              // lo spettacolo del DJ (openDj, più sotto)
 let karaokeOpen = false;         // il karaoke di Macio (openKaraoke, più sotto)
 let caricoOpen = false;          // il carico del furgone (openCarico, più sotto)
+let serataOpen = false;          // la valutazione della serata (openSerata, più sotto)
+let replaySlot = null;           // slot della serata finita che si rigioca
 const presideDone = () => !!Profile.data.preside;
 const minigameOpen = () => scaricoOpen || gerryOpen || presideOpen || djOpen || karaokeOpen || caricoOpen;
 // una finestra del gioco sopra la scena (menù, scaletta, pannello posteriore, baule)
-const panelOpen = () => scheduleOpen || menuOpen || !!rearPanelId || !!openCaseName;
+const panelOpen = () => scheduleOpen || menuOpen || serataOpen || !!rearPanelId || !!openCaseName;
 // qualcosa copre la scena: i tocchi non le arrivano finché non si chiude tutto
 const sceneCovered = () => panelOpen() || minigameOpen() || cambioCardOpen;
 // cosa manca perché il preside possa parlare (null se è tutto pronto)
@@ -3487,7 +3494,7 @@ function finishPreside (r) {
   const num = (v, d) => Number.isFinite(+v) ? Math.round(+v) : d;
   const beers = skipped ? 0 : Math.max(0, num(r.beers, 0)), drunk = skipped ? 0 : Math.max(0, num(r.drunk, 0));
   Profile.data.preside = { skipped, grad: skipped ? 0 : num(r.grad, 0), rep: skipped ? 0 : num(r.rep, 0), beers, drunk,
-    larsens: skipped ? 0 : num(r.larsens, 0), fault: !skipped && !!r.fault };
+    larsens: skipped ? 0 : num(r.larsens, 0), fault: !skipped && !!r.fault, faultFix: skipped || !['fast', 'ok', 'gerry'].includes(r.faultFix) ? null : r.faultFix };
   Profile.data.beers = Math.max(0, (Profile.data.beers || 0) - drunk + beers);
   // la stanchezza a fine discorso (salito col tempo, sceso con le birre bevute)
   if (!skipped && Number.isFinite(+r.fatigue)) setFatigue(+r.fatigue);
@@ -3709,7 +3716,8 @@ function finishDj (r) {
   const beers = skipped ? 0 : Math.max(0, num(r.beers, 0)), drunk = skipped ? 0 : Math.max(0, num(r.drunk, 0));
   const paid = skipped || r.fase !== 'capo' ? 0 : 1;          // la birra pagata al capo
   Profile.data.dj = { skipped, grad: skipped ? 0 : num(r.grad, 0), rep: skipped ? 0 : num(r.rep, 0), beers, drunk: drunk + paid,
-    stars: skipped ? 0 : num(r.stars, 0), larsens: skipped ? 0 : num(r.larsens, 0), fase: skipped ? null : (['tu', 'capo', 'gerry'].includes(r.fase) ? r.fase : null) };
+    stars: skipped ? 0 : num(r.stars, 0), larsens: skipped ? 0 : num(r.larsens, 0), fase: skipped ? null : (['tu', 'capo', 'gerry'].includes(r.fase) ? r.fase : null),
+    faseFast: skipped || r.fase !== 'tu' ? null : r.faseFast !== false, par: skipped || !['fast', 'ok', 'no'].includes(r.par) ? null : r.par };
   Profile.data.beers = Math.max(0, (Profile.data.beers || 0) - drunk - paid + beers);
   const rep = skipped ? 0 : addReputation(Profile.data.dj.rep, 'Notte fuori controllo: le luci del DJ set', 'L' + LEVEL_ID + ':dj');
   Profile.save();
@@ -3859,6 +3867,8 @@ function finishCarico (r) {
   showToast(skipped ? 'Carico saltato: il furgone è partito, ma la reputazione non cambia.'
     : 'Furgone carico, si torna a casa. ' + '★'.repeat(stars) + '☆'.repeat(5 - stars) + (rep ? ' Reputazione ' + (rep > 0 ? '+' : '') + rep + '.' : '') + (c.beers ? ' 🍺 +' + c.beers + '.' : ''), skipped || stars >= 3 ? 'ok' : undefined);
   updateFoglio();
+  // fine serata: la valutazione
+  setTimeout(() => { if (!sceneCovered()) openSerata(); }, 1200);
 }
 function caricoSummary () {
   const c = Profile.data.carico;
@@ -3870,6 +3880,178 @@ function caricoSummary () {
     + (c.beers ? ' · 🍺 +' + c.beers : '') + ' · reputazione ' + (c.rep >= 0 ? '+' : '') + c.rep + '.';
 }
 
+/* ---------------- la valutazione della serata (fine del livello) ----------------
+   Dopo il carico del furgone la serata si chiude con un voto: tempo, errori,
+   guasti risolti, danni, qualità del montaggio e del troubleshooting, gli
+   show e la reputazione. Le quattro qualità (0-100) pesano nel punteggio
+   (SERATA_PESI), il punteggio dà le stelle e il titolo, e il perché dice
+   cosa è andato bene e cosa migliorare. Tutto viene da quello che la
+   partita ha già salvato (fasi, collaudo, montaggio): le fasi saltate
+   contano zero. La prima valutazione entra nei record della serata
+   (comuni a tutte le partite): rigiocando si vede se si è fatto meglio. */
+const SERATA_PESI = { montaggio: 30, guasti: 25, show: 30, danni: 15 };
+const SERATA_KEEP = 10;              // valutazioni tenute nei record
+const serataKey = () => 'serata-' + LEVEL_ID;
+const SERATA_TITOLI = [[90, 5, 'CREW EXCELLENT'], [75, 4, 'OTTIMO LAVORO'], [55, 3, 'BUON LAVORO'], [35, 2, 'SI PUÒ FARE MEGLIO'], [0, 1, 'DEVI FARE ANCORA PRATICA']];
+function serataReport () {
+  const d = Profile.data;
+  const n = v => Number.isFinite(+v) ? +v : 0;
+  const clamp = v => Math.max(0, Math.min(100, Math.round(v)));
+  const lv = d.level || {};
+  // il montaggio fino al primo collaudo riuscito (le partite di prima
+  // non l'hanno salvato: allora i conti di tutta la serata)
+  const col = d.collaudo && typeof d.collaudo === 'object' ? d.collaudo : null;
+  const failed = n(col ? col.failedTests : lv.stats && lv.stats.failedTests);
+  const trips = n(col ? col.trips : lv.trips) + n(col ? col.rcdTrips : lv.rcdTrips);
+  const pops = col ? n(col.pops) : (Array.isArray(lv.procErrors) ? lv.procErrors.filter(x => x === 'pop').length : 0);
+  const shows = [['preside', 'discorso del preside'], ['dj', 'DJ set'], ['karaoke', 'karaoke di Macio']];
+  const larsens = shows.reduce((a, [k]) => a + n(d[k] && !d[k].skipped && d[k].larsens), 0);
+
+  // qualità del montaggio: prove fallite, scatti, colpi nelle casse, posa dei cavi
+  const cavi = d.cavi || {};
+  const caviCut = cavi.skipped || cavi.late ? 30 : ({ 3: 0, 2: 10, 1: 20 }[n(cavi.stars)] || 0);
+  const montaggio = clamp(100 - 10 * failed - 15 * trips - 15 * pops - caviCut);
+  const mBits = [failed ? failed + (failed === 1 ? ' prova fallita' : ' prove fallite') : 'collaudo senza prove fallite'];
+  if (trips) mBits.push(trips + (trips === 1 ? ' protezione scattata' : ' protezioni scattate'));
+  if (pops) mBits.push(pops + (pops === 1 ? ' colpo nelle casse' : ' colpi nelle casse'));
+  mBits.push(cavi.skipped ? 'posa dei cavi saltata' : cavi.late ? 'cavi ancora in giro alle 20:30' : 'posa dei cavi ' + '★'.repeat(n(cavi.stars)) + '☆'.repeat(3 - n(cavi.stars)));
+
+  // troubleshooting: ogni guasto vale 1 se sistemato bene e in fretta, meno se tardi o lasciato ad altri
+  const fixes = [];
+  const sc = d.scarico || {};
+  const nf = (Array.isArray(sc.faultyIds) ? sc.faultyIds : []).filter(id => FAULT_BY_CASE[id]).length;
+  for (let i = 0; i < nf; i++) fixes.push(1);
+  const pr = d.preside || {};
+  if (!pr.skipped && (pr.fault || pr.faultFix)) fixes.push({ fast: 1, ok: 0.6, gerry: 0 }[pr.faultFix] ?? 0.6);
+  const dj = d.dj || {};
+  if (!dj.skipped && dj.fase) fixes.push(dj.fase === 'tu' ? (dj.faseFast === false ? 0.6 : 1) : dj.fase === 'capo' ? 0.6 : 0);
+  if (!dj.skipped && dj.par) fixes.push({ fast: 1, ok: 0.6, no: 0 }[dj.par] ?? 0.6);
+  const cb = d.cambioDj || {};
+  if (cb.done) fixes.push(cb.slow ? 0.2 : 1);
+  const guasti = fixes.length ? clamp(100 * fixes.reduce((a, x) => a + x, 0) / fixes.length) : 70;
+  const solved = fixes.filter(x => x > 0).length, fast = fixes.filter(x => x >= 1).length, slow = solved - fast, left = fixes.length - solved;
+  const gBits = [];
+  if (nf) gBits.push(nf + (nf === 1 ? ' pezzo difettoso sistemato' : ' pezzi difettosi sistemati'));
+  if (pr.faultFix) gBits.push({ fast: 'microfono del preside riparato in fretta', ok: 'microfono del preside riparato, ma con calma', gerry: 'il microfono del preside l\'ha sistemato Gerry' }[pr.faultFix]);
+  if (!dj.skipped && dj.fase) gBits.push({ tu: 'fase del DJ riarmata da te', capo: 'fase del DJ riarmata dal capo', gerry: 'fase del DJ lasciata a Gerry' }[dj.fase]);
+  if (!dj.skipped && dj.par) gBits.push({ fast: 'PAR senza DMX trovato in fretta', ok: 'PAR senza DMX trovato tardi', no: 'PAR senza DMX mai sistemato' }[dj.par]);
+  if (cb.done) gBits.push(cb.slow ? 'cambio palco a pazienza finita' : 'cambio palco in ' + mmss(n(cb.ms)));
+
+  // gli show: il gradimento del pubblico, le fasi saltate contano zero, ogni larsen pesa
+  const grads = shows.map(([k, name]) => ({ name, skipped: !d[k] || d[k].skipped, grad: d[k] && !d[k].skipped ? n(d[k].grad) : 0 }));
+  const show = clamp(grads.reduce((a, g) => a + g.grad, 0) / grads.length - 8 * larsens);
+  const sBits = grads.map(g => g.name + (g.skipped ? ' saltato' : ' ' + g.grad + '%'));
+  if (larsens) sBits.push(larsens + ' larsen');
+
+  // danni: allo scarico e al carico
+  const ca = d.carico || {};
+  const damaged = Array.isArray(ca.damaged) ? ca.damaged.length : 0, taken = Array.isArray(ca.taken) ? ca.taken.length : 0;
+  const broken = n(sc.parsBroken) + (sc.staBroken ? 1 : 0) + (sc.skipped || sc.ricOk !== false ? 0 : 1);
+  const kids = n(sc.kidHits);
+  const danni = clamp(100 - 20 * (broken + damaged) - 10 * (kids + taken));
+  const dBits = [];
+  if (broken) dBits.push(broken + (broken === 1 ? ' pezzo rotto allo scarico' : ' pezzi rotti allo scarico'));
+  if (kids) dBits.push(kids + (kids === 1 ? ' bambino urtato' : ' bambini urtati'));
+  if (damaged) dBits.push('rovinati al carico: ' + ca.damaged.join(', '));
+  if (taken) dBits.push('portati via per sbaglio: ' + ca.taken.join(', '));
+  if (!dBits.length) dBits.push('tutto integro');
+
+  const quality = { montaggio, guasti, show, danni };
+  const score = Math.round(Object.keys(SERATA_PESI).reduce((a, k) => a + SERATA_PESI[k] * quality[k], 0) / 100);
+  const [, stars, title] = SERATA_TITOLI.find(([min]) => score >= min);
+
+  // il perché: il punto forte e quello da migliorare, con un consiglio pratico
+  const praise = {
+    montaggio: 'Montaggio pulito' + (failed ? ' (' + mBits[0] + ')' : ': collaudo al primo colpo') + (trips || pops ? '.' : ', niente scatti né colpi nelle casse.'),
+    guasti: guasti >= 90 ? 'Ottimo troubleshooting: i guasti li hai trovati tu, e in fretta.' : 'Buon troubleshooting: ' + solved + ' guasti su ' + fixes.length + ' risolti.',
+    show: 'Gli show sono andati forte: il pubblico era con te.',
+    danni: 'Materiale trattato bene: niente rotto, niente dimenticato.'
+  };
+  const tip = {
+    montaggio: failed ? 'prima di premere la prova guarda il foglio: tutte le voci spuntate, poi prova.'
+      : trips ? 'cabla con l\'impianto spento e accendi i pesanti uno alla volta.'
+      : pops ? 'accendi finale e sub per ultimi, e spegnili per primi.'
+      : 'alla posa dei cavi tieni libera la via di fuga e attraversa i passaggi dritto.',
+    guasti: 'quando qualcosa tace segui il segnale dalla sorgente all\'uscita: il primo anello che non va è il guasto. Non lasciarlo a Gerry.',
+    show: grads.some(g => g.skipped) ? 'non saltare gli show: valgono quanto il montaggio.' : larsens ? 'occhio al larsen: microfono lontano dalle casse e MUTE pronto.' : 'negli show tieni la voce nel verde e le luci a tempo.',
+    danni: 'allo scarico e al carico vai piano coi case e lega tutto con le cinghie.'
+  };
+  const NAMES = { montaggio: 'il montaggio', guasti: 'il troubleshooting', show: 'gli show', danni: 'il materiale' };
+  const order = Object.keys(quality).sort((a, b) => quality[b] - quality[a]);
+  const why = [];
+  if (quality[order[0]] >= 70) why.push(praise[order[0]]);
+  const worst = order[order.length - 1];
+  if (quality[worst] < 85) why.push('Da migliorare, ' + NAMES[worst] + ': ' + tip[worst]);
+  if (!why.length) why.push('Serata perfetta da cima a fondo.');
+
+  const ms = col ? n(col.ms) : 0;
+  return {
+    score, stars, title, why, quality, ms,
+    rows: [
+      ['Tempo', ms ? mmss(ms) : '—', 'montaggio fino al collaudo · serata intera ' + mmss(n(d.serata ? d.serata.ms : lv.stats && lv.stats.playMs))],
+      ['Errori', String(failed + trips + pops + larsens), [failed && 'prove fallite ' + failed, trips && 'protezioni ' + trips, pops && 'colpi ' + pops, larsens && 'larsen ' + larsens].filter(Boolean).join(' · ') || 'nessuno'],
+      ['Guasti risolti', solved + ' su ' + fixes.length, fixes.length ? [fast && fast + ' bene e in fretta', slow && slow + ' tardi o con un aiuto', left && left + ' lasciati ad altri'].filter(Boolean).join(' · ') : 'nessun guasto'],
+      ['Danni', String(broken + damaged + taken), dBits.join(' · ')],
+      ['Qualità del montaggio', montaggio, mBits.join(' · ')],
+      ['Qualità del troubleshooting', guasti, gBits.join(' · ') || 'nessun guasto da risolvere'],
+      ['Performance negli show', show, sBits.join(' · ')],
+      ['Reputazione guadagnata', '★ ' + reputation(), 'la soglia del livello 2 è ' + levelInfo(2).rep]
+    ]
+  };
+}
+// la prima volta la valutazione entra nei record (una per partita)
+function serataRecord (r) {
+  const d = Profile.data, key = serataKey();
+  const list = Array.isArray(d.records[key]) ? d.records[key] : [];
+  const best = list[0] || null;
+  if (!d.serata) {
+    d.serata = { score: r.score, stars: r.stars, ms: gameState.stats.playMs, montaggioMs: r.ms, at: Date.now() };
+    d.records[key] = list.concat({ at: d.serata.at, player: d.player, service: d.service, score: r.score, stars: r.stars, montaggioMs: r.ms })
+      .sort((a, b) => b.score - a.score || (a.montaggioMs || 9e9) - (b.montaggioMs || 9e9)).slice(0, SERATA_KEEP);
+    Profile.save();
+    return { best, fresh: true, newBest: !best || r.score > best.score };
+  }
+  return { best: list.find(x => x.at !== d.serata.at) || null, fresh: false, newBest: false, mine: list[0] && list[0].at === d.serata.at };
+}
+function openSerata () {
+  if (!caricoDone() || minigameOpen()) return;
+  const r = serataReport();
+  const rec = serataRecord(r);
+  serataOpen = true;
+  el('#serata-verdict').innerHTML = '<span class="serata-stars" aria-label="' + r.stars + ' stelle su 5">' + '★'.repeat(r.stars) + '<i>' + '★'.repeat(5 - r.stars) + '</i></span>'
+    + '<b class="serata-title">' + escapeHtml(r.title) + '</b><span class="serata-score">' + r.score + ' punti su 100</span>';
+  el('#serata-rows').innerHTML = r.rows.map(([k, v, small]) => {
+    const q = typeof v === 'number';
+    return '<li><span class="sr-k">' + escapeHtml(k) + '</span>'
+      + (q ? '<span class="sr-bar"><i style="width:' + v + '%" class="' + (v >= 75 ? 'hi' : v >= 45 ? 'mid' : 'lo') + '"></i></span><b class="sr-v">' + v + '</b>'
+        : '<b class="sr-v wide">' + escapeHtml(v) + '</b>')
+      + '<small>' + escapeHtml(small) + '</small></li>';
+  }).join('');
+  el('#serata-why').innerHTML = r.why.map(w => '<span>' + escapeHtml(w) + '</span>').join('');
+  const b = rec.best;
+  el('#serata-record').textContent = rec.newBest ? (b ? 'Nuovo record! Prima il meglio era ' + b.score + ' punti.' : 'Prima serata registrata: rigiocala per battere questo punteggio.')
+    : b ? 'Il tuo record: ' + '★'.repeat(b.stars) + ' ' + b.score + ' punti' + (b.montaggioMs ? ', montaggio in ' + mmss(b.montaggioMs) : '') + '.' : '';
+  el('#serata-modal').classList.add('show');
+  setSceneInput(false);
+  if (rec.fresh) (r.stars >= 4 ? SFX.success : SFX.button)();
+}
+function closeSerata () {
+  if (!serataOpen) return;
+  serataOpen = false;
+  el('#serata-modal').classList.remove('show');
+  setTimeout(() => { if (!sceneCovered()) setSceneInput(true); }, 0);
+}
+// rigiocare la serata finita: una nuova partita nello stesso slot (la
+// valutazione resta nei record)
+el('#serata-close').addEventListener('click', () => { SFX.button(); closeSerata(); });
+el('#serata-ok').addEventListener('click', () => { SFX.button(); closeSerata(); });
+el('#serata-modal').addEventListener('click', ev => { if (ev.target.id === 'serata-modal') closeSerata(); });
+el('#serata-replay').addEventListener('click', () => {
+  SFX.button(); closeSerata();
+  replaySlot = newSlot = Profile.active;
+  openMenu('new');
+});
+
 el('#cambio-go').addEventListener('click', () => { SFX.button(); closeCambioCard(); });
 el('#cambio-close').addEventListener('click', () => { SFX.button(); closeCambioCard(); });
 
@@ -3879,7 +4061,7 @@ el('#schedule-go').addEventListener('click', () => {
   SFX.button();
   const next = scheduleNext;
   closeSchedule();
-  if (next === 'cavi') openCavi(); else if (next === 'preside') openPreside(); else if (next === 'cambio-dj') startCambioDj(); else if (next === 'dj') openDj(); else if (next === 'karaoke') openKaraoke(); else if (next === 'carico') openCarico();
+  if (next === 'cavi') openCavi(); else if (next === 'preside') openPreside(); else if (next === 'cambio-dj') startCambioDj(); else if (next === 'dj') openDj(); else if (next === 'karaoke') openKaraoke(); else if (next === 'carico') openCarico(); else if (next === 'serata') openSerata();
 });
 el('#schedule-close').addEventListener('click', () => { SFX.button(); closeSchedule(); });
 el('#schedule-modal').addEventListener('click', ev => { if (ev.target.id === 'schedule-modal') closeSchedule(); });
@@ -3926,7 +4108,7 @@ el('#level-list').addEventListener('click', ev => {
   if (slotUsed(Profile.data)) continueGame(); else goNewGame();
 });
 el('#menu-settings').addEventListener('click', () => { SFX.button(); showMenuPage('settings'); });
-el('#new-cancel').addEventListener('click', () => { SFX.button(); showMenuPage('main'); });
+el('#new-cancel').addEventListener('click', () => { SFX.button(); replaySlot = null; showMenuPage('main'); });
 el('#new-form').addEventListener('submit', ev => {
   ev.preventDefault();
   if (el('#new-start').disabled) return;
@@ -5809,9 +5991,9 @@ function updateFoglio () {
       + (missing ? '' : '<button type="button" class="fg-go" id="foglio-karaoke">Macio prende il microfono</button>');
   } else if (karaokeDone()) {
     icon = '🎤 ';
-    head = 'Karaoke finito';
+    head = caricoDone() ? 'Serata finita' : 'Karaoke finito';
     body = '<p class="fg-note">' + escapeHtml('Karaoke di Macio: ' + karaokeSummary()) + '</p>'
-      + (caricoDone() ? '<p class="fg-note">Carico: ' + escapeHtml(caricoSummary()) + '</p>'
+      + (caricoDone() ? '<p class="fg-note">Carico: ' + escapeHtml(caricoSummary()) + '</p><button type="button" class="fg-go" id="foglio-serata">Com\'è andata la serata</button>'
         : '<button type="button" class="fg-go" id="foglio-carico">Smonta e carica il furgone</button>');
   } else if (caviDone() && !presideDone()) {
     // il discorso del preside: pronto se il microfono è cablato
@@ -5843,6 +6025,8 @@ function updateFoglio () {
   if (kg) kg.addEventListener('click', () => { SFX.button(); openKaraoke(); });
   const cg = el('#foglio-carico');
   if (cg) cg.addEventListener('click', () => { SFX.button(); openCarico(); });
+  const sg = el('#foglio-serata');
+  if (sg) sg.addEventListener('click', () => { SFX.button(); openSerata(); });
 }
 
 // cambio di scheda verso una chiusa: si spiega perché
@@ -9214,6 +9398,11 @@ class StageScene extends Phaser.Scene {
     const next = ch ? ' Microfono pronto sul CH ' + ch + ': il preside può salire sul palco.'
       : ' Prossimo: arriva il preside. Monta l\'asta sul palco, il microfono sulla giraffa e collegalo con un XLR a un ingresso MIC del mixer.';
     this.repGain = gameActive ? addRecord() : 0;
+    // il montaggio fino al primo collaudo riuscito, per la valutazione della serata
+    if (gameActive && !Profile.data.collaudo) {
+      const st = gameState.stats;
+      Profile.data.collaudo = { ms: st.playMs, tests: st.tests, failedTests: st.failedTests, trips: gameState.trips || 0, rcdTrips: gameState.rcdTrips || 0, pops };
+    }
     this.caviAfterShow = gameActive && !caviDone();
     showToast('Impianto collaudato, si va in scena! ' + (tip ? 'Piccolo consiglio: ' + tip : 'Procedura perfetta.')
       + (this.repGain ? ' Reputazione +' + this.repGain + '.' : gameActive ? ' Fase già completata: la reputazione non cambia.' : '') + next, 'ok');
