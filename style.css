@@ -431,7 +431,7 @@
     border-radius:6px; padding:0 12px; min-height:38px; cursor:pointer; font-size:13px; white-space:nowrap;
   }
   #lay-bar button.lay-ok{ background:var(--amber); border-color:var(--amber); color:#141519; font-weight:700; }
-  @media (max-width:520px){ #lay-bar{ width:calc(100% - 24px); } #lay-text{ flex:1 1 100%; } .lay-btns{ flex:1 1 100%; } .lay-btns button{ flex:1; } }
+  @media (max-width:520px){ #lay-bar{ width:calc(100% - 24px); } #lay-text{ flex:1 1 100%; } .lay-btns{ flex:1 1 100%; } .lay-btns button{ flex:1; padding:0 6px; } }
 
   /* ---------- QUADRO: finestra pop-up diagnostica ---------- */
   .modal-overlay{

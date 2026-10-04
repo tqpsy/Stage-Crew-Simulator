@@ -86,13 +86,27 @@ const path = require('path');
   check(floor.floor > 10 && floor.table > 3 && !floor.bent.length, 'cavi per terra sbagliati: ' + JSON.stringify(floor));
   // il percorso automatico di questo montaggio va già bene a Gerry
   check(await ev(() => gerryIssues().length) === 0, 'il percorso automatico ha errori: ' + JSON.stringify(await ev(() => gerryIssues().map(i => i.text))));
+  // + Piega aggiunge una piega e basta; messa in riga con le vicine sparisce
+  const bend = await ev(() => {
+    const S = window.__scene, e = gameState.edges.find(x => x.signal === 'speakon');
+    S.startLay(e.id);
+    const n0 = S.lay.route.bends.length;
+    S.layAddBend();
+    const n1 = S.lay.route.bends.length;
+    S.lay.drag = { k: n1 - 1 }; S.layDragEnd();
+    const n2 = S.lay.route.bends.length;
+    S.endLay(true);
+    return { n0, n1, n2, saved: !!e.route };
+  });
+  check(bend.n1 === bend.n0 + 1 && bend.n2 === bend.n0 && !bend.saved, 'pieghe aggiunte o tolte male: ' + JSON.stringify(bend));
   // uno Speakon steso sulla via di fuga (sul pavimento a strisce rosse)
   const bad = await ev(() => {
     const S = window.__scene, sub = subsLeftToRight()[0].id;
     const e = gameState.edges.find(x => x.b === sub && x.signal === 'speakon');
     S.startLay(e.id);
     // giù fino alla platea, a sinistra lungo il muro e su fino al sub
-    S.lay.route = layPin({ o0: 'v', rails: [0, 11.75, 0.75, 0] }, ...Object.values(S.edgeEnds(e)).slice(0, 2));
+    const { A, B } = S.edgeEnds(e);
+    S.lay.route = { bends: [[A.gx, 11.75], [0.75, 11.75], [0.75, B.gy]] };
     S.redrawEdges();
     const live = el('#lay-text').textContent;
     S.endLay(true);
@@ -124,7 +138,7 @@ const path = require('path');
   await ev(() => closeSchedule());
   check(await ev(() => !gerryOpen), 'Gerry ripassa dopo aver aperto le porte');
   // i percorsi stesi restano dopo la ricarica; spostando una base quel cavo torna automatico
-  await ev(() => { const S = window.__scene, e = gameState.edges.find(x => x.signal === 'xlr' && x.a === placedOfType('mic')[0].id); S.startLay(e.id); S.lay.route = layPin({ o0: 'h', rails: [0, 5.75, 0] }, ...Object.values(S.edgeEnds(e)).slice(0, 2)); S.endLay(true); });
+  await ev(() => { const S = window.__scene, e = gameState.edges.find(x => x.signal === 'xlr' && x.a === placedOfType('mic')[0].id); S.startLay(e.id); const { A, B } = S.edgeEnds(e); S.lay.route = { bends: [[5.75, A.gy], [5.75, B.gy]] }; S.endLay(true); });
   await ev(() => Profile.flush());
   await p.reload();
   await p.waitForFunction(() => window.__scene, null, { timeout: 20000 });
@@ -136,11 +150,11 @@ const path = require('path');
     const f1 = S.edgeFloor(e), r = e.route;
     const asta = placedOfType('asta')[0], cells = asta.cells;
     asta.cells = cells.map(k => k.replace(/^(\d+)/, m => String(+m + 1)));
-    const moved = JSON.stringify(S.edgeFloor(e).route.rails) !== JSON.stringify(f1.route.rails);
+    const moved = JSON.stringify(S.edgeFloor(e).route.bends) !== JSON.stringify(f1.route.bends);
     asta.cells = cells;
-    return { r: !!r, rails: f1.route.rails, moved };
+    return { r: !!r, bends: f1.route.bends, moved };
   });
-  check(kept.r && kept.rails.includes(5.75) && kept.moved, 'percorso perso dopo la ricarica o rimasto dopo aver spostato il pezzo: ' + JSON.stringify(kept));
+  check(kept.r && kept.bends.some(b => b[0] === 5.75) && kept.moved, 'percorso perso dopo la ricarica o rimasto dopo aver spostato il pezzo: ' + JSON.stringify(kept));
 
   // partita nuova: Gerry dalla scaletta, e si aprono le porte con i cavi in giro
   await ev(() => startNewGame('Frettoloso', serviceOffers([])[0]));
@@ -152,7 +166,8 @@ const path = require('path');
     P('quadro', 4, 2); P('stativo', 0, 8); const st = placedOfType('stativo')[0]; const v = S.compVisuals[st.id].container; S.placeComponentAt('par', v.x, v.y);
     const Q = placedOfType('quadro')[0].id, par = placedOfType('par')[0].id;
     selectCable('cee_powercon'); openRearPanel(Q); onRearPortClick(Q, 'out_1'); openRearPanel(par); onRearPortClick(par, 'power_in');
-    S.lay.route = layPin({ o0: 'v', rails: [0, 11.75, 0] }, ...Object.values(S.edgeEnds(gameState.edges[gameState.edges.length - 1])).slice(0, 2));
+    const { A, B } = S.edgeEnds(gameState.edges[gameState.edges.length - 1]);
+    S.lay.route = { bends: [[A.gx, 11.75], [B.gx, 11.75]] };
     S.endLay(true);
     openSchedule(false);
   });
