@@ -2892,7 +2892,6 @@ const SCHEDULE = [
   { time: '21:00', title: 'Discorso del Preside Tramp', text: 'Microfono su asta sul palco, cablato a un ingresso MIC del mixer: ricordati quale. Vuole essere sentito fino al parcheggio.', phase: 'preside' },
   { time: '21:10', title: 'Cambio palco: arriva il DJ', text: 'DJ Inestimabile porta la sua consolle: corrente, uscite nella DI e dalla DI al mixer. Il microfono resta dov\'è, per Musa Esistenziale. Il pubblico aspetta: non metterci troppo.', phase: 'cambio-dj', rep: REP.changeDone },
   { time: '21:15', title: 'Notte fuori controllo', text: 'DJ Inestimabile in consolle e Musa Esistenziale al microfono: mixer DJ → DI → mixer di sala, il microfono del vocalist, luci colorate al drop. E tanti guasti da inseguire.', poster: 'img/locandina-dj.svg', phase: 'dj' },
-  { time: '22:00', title: 'Dante unplugged', text: 'Voce e chitarra (via DI). Gli ingressi non bastano: cambio palco e via il DJ.' },
   { time: '23:00', title: 'Smontaggio', text: 'Tutto nei case e i case nel furgone. Si torna a casa.' }
 ];
 const collaudoDone = () => ('L' + LEVEL_ID + ':collaudo') in Profile.data.reputation.earned;
@@ -3658,7 +3657,7 @@ function finishDj (r) {
   applySettings();
   const p = Profile.data.dj;
   showToast(skipped ? 'DJ set saltato: la musica c\'è stata lo stesso, ma la reputazione non cambia.'
-    : 'Il bidello ha cacciato via i musicisti. Ora si può ripristinare il palco per l\'ultima band. Pubblico al ' + p.grad + '%.' + (rep ? ' Reputazione ' + (rep > 0 ? '+' : '') + rep + '.' : '')
+    : 'Il bidello ha cacciato via i musicisti: la festa è rimasta senza musica. Pubblico al ' + p.grad + '%.' + (rep ? ' Reputazione ' + (rep > 0 ? '+' : '') + rep + '.' : '')
       + (beers ? ' 🍺 +' + beers + '.' : ''), skipped || p.grad >= 40 ? 'ok' : undefined);
   updateFoglio();
 }
@@ -5592,7 +5591,7 @@ function updateFoglio () {
   } else if (djDone()) {
     icon = '🎧 ';
     head = 'DJ set finito';
-    body = '<p class="fg-note">Il bidello ha cacciato via i musicisti. Ora si può ripristinare il palco per l\'ultima band (Dante unplugged, alle 22:00: arriva presto).</p>'
+    body = '<p class="fg-note">Il bidello ha cacciato via i musicisti: la festa è rimasta senza musica.</p>'
       + '<p class="fg-note">' + escapeHtml(djSummary()) + '</p>';
   } else if (caviDone() && !presideDone()) {
     // il discorso del preside: pronto se il microfono è cablato
