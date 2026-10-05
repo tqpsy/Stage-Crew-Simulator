@@ -101,6 +101,15 @@ const path = require('path');
     const o = { pointerId: 9, clientX: r.left + 5, clientY: r.top + 5, bubbles: true };
     pc.dispatchEvent(new PointerEvent('pointerdown', o)); await sleep(LONG_PRESS_MS + 150); document.dispatchEvent(new PointerEvent('pointerup', o));
     check(el('#piece-info').classList.contains('show') && !gameState.selectedPieceType, 'pressione lunga: scheda non mostrata o pezzo armato');
+    // spiegazioni a due livelli: CREW di partenza, PRO con un tasto o dalle impostazioni
+    document.querySelectorAll('.piece').forEach(pc => check(PIECE_CREW[pc.dataset.type], 'manca la spiegazione CREW di ' + pc.dataset.type));
+    check(el('#piece-info p').textContent === PIECE_CREW.ciabatta && /CREW/.test(el('#piece-info .pi-lvl').textContent), 'la scheda non parte in CREW');
+    el('#piece-info .pi-other').click();
+    check(el('#piece-info').classList.contains('show') && el('#piece-info p').textContent === PIECE_INFO.ciabatta[0], 'il tasto non passa a PRO');
+    check(proWhy('dmx') === '', 'perché PRO senza le spiegazioni PRO');
+    settings().proInfo = true;
+    check(/^ PRO: /.test(proWhy('wire', 'luci')) && /THRU/.test(proWhy('wire', 'luci')), 'perché PRO mancante');
+    settings().proInfo = false;
     document.body.dispatchEvent(new PointerEvent('pointerdown', { bubbles: true }));
     check(!el('#piece-info').classList.contains('show'), 'la scheda cos\'è non si chiude');
     pc.dispatchEvent(new PointerEvent('pointerdown', o)); document.dispatchEvent(new PointerEvent('pointerup', o));

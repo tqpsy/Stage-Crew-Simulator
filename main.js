@@ -2564,9 +2564,9 @@ function assistantFavor (fault) {
      poco ma subito (FATIGUE.coffee, FATIGUE.coffees a serata); 🪑 pausa
      seduto sul case, molto ma costa tempo (FATIGUE.pause, FATIGUE.pauseMs
      sul tempo di gioco) e non si fa col pubblico che aspetta il cambio
-     palco. Le birre non si bevono durante il lavoro: sono il premio della
-     crew, si offrono al capo o all'assistente per un favore negli show e
-     quelle rimaste si bevono con Macio a fine serata (valutazione);
+     palco. Al montaggio le birre non si bevono: sono il premio della crew.
+     Negli show restano come prima (una contro la stanchezza, o un favore
+     del capo) e quelle rimaste si bevono con Macio a fine serata (valutazione);
    - effetti leggeri, il livello 1 perdona: da FATIGUE.slipFrom in su ogni
      tanto il connettore scivola di mano (il cavo resta in mano, si
      riprova). Nel discorso del preside fader più tremolanti e tempo limite
@@ -2620,7 +2620,7 @@ function paintPausa () {
   el('#pausa-coffee-n').textContent = c ? '−' + FATIGUE.coffee + ' subito · ne restano ' + c : 'thermos vuoto';
   sb.disabled = !!block || f < 1;
   el('#pausa-sit-n').textContent = block || '−' + FATIGUE.pause + ' · passano ' + Math.round(FATIGUE.pauseMs / 60000) + ' minuti';
-  el('#pausa-beer').textContent = '🍺 ' + beers + (beers === 1 ? ' birra' : ' birre') + ' della crew: non si bevono mentre si lavora. Negli show valgono un favore del capo o dell\'assistente; quelle che restano si bevono con Macio a fine serata.';
+  el('#pausa-beer').textContent = '🍺 ' + beers + (beers === 1 ? ' birra' : ' birre') + ' della crew: al montaggio non si bevono. Negli show una ti rimette in sesto o vale un favore del capo; quelle che restano si bevono con Macio a fine serata.';
 }
 function openPausa () {
   if (!gameActive || minigameOpen() || panelOpen()) return;
@@ -2726,6 +2726,7 @@ function showMenuPage (page, keep) {
     el('#set-skipscarico').checked = !!settings().skipScarico;
     el('#set-testmusic').checked = settings().testMusic !== false;
     el('#set-bosstips').checked = settings().bossTips !== false;
+    el('#set-proinfo').checked = proInfo();
     el('#set-tapemarks').checked = settings().tapeMarks !== false;
     el('#set-trace').checked = settings().traceSignal !== false;
     el('#set-player').value = Profile.data.player;
@@ -4170,6 +4171,7 @@ el('#set-reduced').addEventListener('change', ev => { settings().reducedFx = ev.
 el('#set-skipshow').addEventListener('change', ev => { settings().skipShow = ev.target.checked; Profile.save(); });
 el('#set-skipscarico').addEventListener('change', ev => { settings().skipScarico = ev.target.checked; Profile.save(); });
 el('#set-bosstips').addEventListener('change', ev => { settings().bossTips = ev.target.checked; Profile.save(); });
+el('#set-proinfo').addEventListener('change', ev => { settings().proInfo = ev.target.checked; Profile.save(); });
 el('#set-tapemarks').addEventListener('change', ev => { settings().tapeMarks = ev.target.checked; Profile.save(); if (window.__scene) window.__scene.drawTapeMarks(); });
 el('#set-trace').addEventListener('change', ev => { settings().traceSignal = ev.target.checked; Profile.save(); });
 el('#set-testmusic').addEventListener('change', ev => { settings().testMusic = ev.target.checked; Profile.save(); if (window.__scene) window.__scene.updateSignalFlow(); });
@@ -5895,11 +5897,40 @@ const PIECE_INFO = {
   dj: ['La consolle di DJ Inestimabile: due lettori e il mixer DJ. Ha la sua spina Schuko; le uscite MASTER L e R (jack) vanno in una DI, e dalla DI due XLR al mixer di sala.', 'Va sul palco.'],
   djluci: ['Lo stativo luci del DJ: quattro PAR LED cinesi e una strobo LED in mezzo, già montati sulla barra e collegati tra loro. Servono una spina Schuko e un solo DMX dalla consolle luci; i fari sono già indirizzati (canali ' + DJ_LUCI_DMX.from + '-' + DJ_LUCI_DMX.to + ').', 'Va sul palco, dietro la consolle.']
 };
-function showPieceInfo (type, pieceEl) {
+/* Spiegazioni a due livelli. CREW (di partenza): a parole semplici, cosa fa
+   il pezzo e a cosa serve. PRO (impostazioni): i dati tecnici di PIECE_INFO,
+   e negli avvisi delle prove fallite anche il perché da tecnico (PRO_WHY).
+   Nel riquadro del pezzo un tasto passa all'altro livello. */
+const proInfo = () => !!settings().proInfo;
+const PIECE_CREW = {
+  quadro: 'Il cuore della corrente: la prende dall\'allaccio della scuola e la divide in tre prese, ognuna con il suo interruttore.',
+  ciabatta: 'Una ciabatta di casa: porta la corrente dove serve, per esempio al PC.',
+  ciabatta_cee: 'Una ciabatta da palco: la spina blu va nel Quadro, le prese normali danno corrente agli apparecchi.',
+  tavolo: 'Il tavolo del tecnico: sopra mixer, consolle luci e PC, sotto il finale.',
+  stativo: 'Il treppiede su cui si monta un faro.',
+  sub: 'La cassa dei bassi. Il suono arriva dal finale e passa anche alla testa che ci sta sopra.',
+  top: 'La cassa delle voci e degli alti: si monta sopra il sub e prende il suono da lì.',
+  mixer: 'Raccoglie microfoni e musica, regola i volumi e manda tutto al finale.',
+  asta: 'L\'asta che tiene il microfono all\'altezza della bocca.',
+  mic: 'Il microfono per chi parla: col suo cavo va nel mixer.',
+  ampli: 'Dà la forza al suono per far suonare le casse. Si accende per ultimo e si spegne per primo.',
+  pc: 'Il portatile con la musica della serata.',
+  scheda: 'Porta la musica dal PC al mixer.',
+  par: 'Un faro colorato: vuole corrente e il cavo dei comandi dalla consolle luci, poi li passa al faro dopo.',
+  controller: 'La consolle che accende e colora i fari.',
+  di: 'Una scatoletta che rende il suono del DJ adatto al mixer di sala. Al montaggio non serve.',
+  dj: 'La consolle di DJ Inestimabile: vuole una presa e due cavi verso il mixer di sala, passando dalla DI.',
+  djluci: 'Le luci del DJ già montate e collegate fra loro: servono una presa e un cavo DMX dalla consolle luci.'
+};
+function showPieceInfo (type, pieceEl, pro) {
   const info = PIECE_INFO[type];
   if (!info) return false;
+  if (pro === undefined) pro = proInfo();
   const box = el('#piece-info');
-  box.innerHTML = '<b>' + escapeHtml(COMPONENT_TYPES[type].label) + '</b><p>' + escapeHtml(info[0]) + '</p><small>' + escapeHtml(info[1]) + '</small>';
+  box.innerHTML = '<b>' + escapeHtml(COMPONENT_TYPES[type].label) + '</b><span class="pi-lvl">' + (pro ? 'PRO' : 'CREW') + '</span><p>' + escapeHtml(pro || !PIECE_CREW[type] ? info[0] : PIECE_CREW[type]) + '</p><small>' + escapeHtml(info[1]) + '</small>'
+    + (PIECE_CREW[type] ? '<button type="button" class="pi-other">' + (pro ? '‹ Più semplice' : 'Più tecnico ›') + '</button>' : '');
+  const other = box.querySelector('.pi-other');
+  if (other) other.addEventListener('click', () => showPieceInfo(type, pieceEl, !pro));
   box.classList.add('show');
   const r = pieceEl.getBoundingClientRect(), bw = box.offsetWidth, bh = box.offsetHeight;
   box.style.left = Math.max(8, Math.min(window.innerWidth - bw - 8, r.left + r.width / 2 - bw / 2)) + 'px';
@@ -6031,6 +6062,29 @@ function unlockedTabs (giro) {
    Test impianto) più quello che non è un cavo (quadro armato, apparecchi
    accesi, stereo, frontali e tagli). Ogni voce: { ok, what, ids, kind }
    dove kind dice che indizio dare se manca. */
+// il perché da tecnico, solo con le spiegazioni PRO (vedi PIECE_CREW)
+const PRO_WHY = {
+  overPhase: 'Ogni fase del Quadro ha il suo magnetotermico: somma gli assorbimenti di quello che c\'è su ogni presa e sposta un carico su un\'altra fase.',
+  overBudget: 'L\'allaccio ha una potenza massima: somma i watt degli apparecchi accesi.',
+  place: 'Il foglio del giro elenca ogni pezzo: confrontalo con le celle del palco.',
+  wire: {
+    corrente: 'Linea di alimentazione: allaccio CEE 400 V trifase → ingresso del Quadro.',
+    audio: 'Signal flow: PC → USB-C → scheda → jack nei CH 5-6 → MAIN L/R in XLR → finale → Speakon al sub → LINK alla testa. Ogni apparecchio vuole anche la sua corrente.',
+    luci: 'DMX in catena: consolle OUT → IN del primo PAR → THRU → IN del successivo. Ogni PAR vuole anche la sua corrente (PowerCON).'
+  },
+  arm: 'Senza generale e salvavita alzati nessuna presa del Quadro è sotto tensione.',
+  on: 'Ordine di accensione: sorgenti e mixer prima, finale e sub per ultimi (al contrario si sente il colpo nelle casse).',
+  stereo: 'Il CH 5 va a sinistra e il CH 6 a destra; il finale manda IN L su OUT L: segui il cavo dalla cassa all\'indietro.',
+  lights: 'Frontali nel Pit davanti al palco, tagli ai lati: ogni posizione illumina il palco da un lato diverso.',
+  dmx: 'Ogni PAR occupa un blocco di canali a partire dal suo indirizzo: due blocchi non devono sovrapporsi.',
+  fault: 'Un pezzo che arriva ammaccato dallo scarico si controlla prima di usarlo.'
+};
+const proWhy = (kind, giroId) => {
+  if (!proInfo() || !kind) return '';
+  const w = PRO_WHY[kind];
+  return w ? ' PRO: ' + (typeof w === 'string' ? w : w[giroId] || '') : '';
+};
+
 function giroChecks (giro) {
   const g = GIRI[giro];
   if (!g) return [];
@@ -9432,7 +9486,7 @@ class StageScene extends Phaser.Scene {
     }[miss.kind];
     // secondo tentativo: il pezzo colpevole in rosso; dal terzo parla il capo
     if (miss && n >= 2) miss.ids.forEach(id => { const v = this.compVisuals[id]; if (v) this.setGlow(v, true); });
-    const exact = miss && n >= 3 ? ' ' + boss + ' ti indica il foglio: «' + miss.what + '».' : '';
+    const exact = (miss && n >= 3 ? ' ' + boss + ' ti indica il foglio: «' + miss.what + '».' : '') + proWhy(result.overPhase ? 'overPhase' : result.overBudget ? 'overBudget' : miss && miss.kind, g.id);
     setCircuitStatus('error');
     saveLevel();
     if (g.id === 'corrente') { showToast('Niente corrente: ' + hint + exact, 'bad'); this.fxSparks(); }
@@ -9549,7 +9603,8 @@ class StageScene extends Phaser.Scene {
         : buildExpectedConnections().find(x => !x.ok && x.cat === kind) || giroChecks(giro).find(x => !x.ok);
       saveLevel();
       setCircuitStatus('error');
-      const exact = miss && n >= 3 ? ' ' + bossName() + ' ti indica il foglio: «' + miss.what + '».' : '';
+      const exact = (miss && n >= 3 ? ' ' + bossName() + ' ti indica il foglio: «' + miss.what + '».' : '')
+        + proWhy(result.overPhase ? 'overPhase' : result.overBudget ? 'overBudget' : miss && (miss.kind || 'wire'), GIRI[giro].id);
       if (kind === 'power') { showToast((quadroLive() ? 'Scintille! ' : 'Tutto spento: ') + hint + exact, 'bad'); this.fxSparks(); }
       else if (kind === 'audio') { showToast('L\'impianto gracchia: ' + hint + exact, 'bad'); this.fxCrackle(); }
       else { showToast('Le luci vanno in tilt: ' + hint + exact, 'bad'); this.fxLightsTilt(); }

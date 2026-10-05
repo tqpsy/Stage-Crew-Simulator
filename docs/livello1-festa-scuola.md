@@ -163,6 +163,20 @@ Test: `tests/aiuti.js`.
   «Rigioca la serata» riparte nello stesso slot. Si riapre dalla scaletta e
   dal foglio (`serataReport`, `openSerata`; test `tests/serata.js`).
 
+## Spiegazioni CREW / PRO (fatto)
+
+- Due livelli di spiegazione, scelti nelle impostazioni («Spiegazioni PRO»,
+  comune a tutte le partite). Di partenza **CREW**: a parole semplici, cosa
+  fa un pezzo e a cosa serve. **PRO**: i dati tecnici (400 V trifase, fasi
+  L1-L3, XLR bilanciato, DMX THRU…).
+- La scheda «cos'è» di un pezzo (pressione lunga nella barra) mostra il
+  livello scelto e ha un tasto «Più tecnico ›» / «‹ Più semplice» per
+  vedere l'altro (`PIECE_CREW`, `PIECE_INFO`, `showPieceInfo`).
+- Con PRO gli avvisi delle prove fallite (giri e collaudo) aggiungono il
+  perché da tecnico: signal flow, ordine di accensione, DMX in catena,
+  carico delle fasi (`PRO_WHY`, `proWhy`). Gli indizi a scalare restano
+  uguali: il perché non dice quale cavo manca.
+
 ## Scheda obiettivi
 
 **Fatto: scaletta della serata.** A ogni nuova partita, prima del montaggio, si
@@ -187,8 +201,10 @@ Sostituiscono le stelle. Proposta: per ogni fase
 - 🍺 fase completata senza magnetotermici né salvavita scattati;
 - 🍺 nessun colpo nelle casse (accensione nell'ordine giusto).
 
-Le birre sono anche la risorsa per recuperare la **stanchezza** (vedi sotto):
-berne una la toglie dal punteggio finale, quindi c'è una scelta da fare.
+Le birre sono il premio della crew: al montaggio non si bevono (contro la
+**stanchezza** ci sono caffè e pausa, vedi sotto). Negli show una si può bere
+o offrire al capo per un favore; quelle rimaste compaiono nella valutazione
+della serata, da bere con Macio.
 
 ## Guasti e reputazione (malus)
 
@@ -202,7 +218,7 @@ berne una la toglie dal punteggio finale, quindi c'è una scelta da fare.
 ## Stanchezza (fatta, prima versione)
 
 Il tempo passa come stanchezza del tecnico. Più è stanco, più rischia di fare
-errori. Si recupera bevendo una birra.
+errori. Si recupera con una pausa: caffè o seduti sul case.
 
 - **Un valore solo**, da 0 (riposato) a 100, salvato nella partita
   (`Profile.data.fatigue`, dentro lo slot della partita: ogni slot ha la
@@ -217,9 +233,12 @@ errori. Si recupera bevendo una birra.
   Gli errori mettono tensione: +4 per ogni protezione che scatta (magnetotermico
   o salvavita) e ogni colpo nelle casse, +2 per ogni prova fallita. Così gli
   errori del montaggio rendono più difficili gli show, che ricevono la stanchezza.
-- **Scende** di 30 bevendo una birra dal tasto 🍺. Serve un secondo tocco
-  di conferma: la birra bevuta esce dal punteggio finale. Senza birre, o da
-  riposati, non si beve.
+- **Scende** con la pausa: il tasto 🍺 apre «Una pausa?» con due scelte.
+  ☕ **Caffè dal thermos**: −12 subito, 3 a serata (`Profile.data.coffees`).
+  🪑 **Seduto sul case**: −35, ma il tempo di gioco va avanti di 5 minuti
+  (e si vede nella valutazione); non si può col pubblico che aspetta il
+  cambio palco o con Gerry che controlla i cavi. Le birre non si bevono al
+  montaggio: la finestra ricorda a cosa servono.
 - **Effetti nel montaggio (livello 1, leggeri)**: sopra 70 ogni tanto il
   connettore scivola di mano (fino a 1 volta su 7 a stanchezza 100). Il
   cavo resta in mano e basta riprovare: nessun collegamento sbagliato.
@@ -229,7 +248,7 @@ errori. Si recupera bevendo una birra.
   birra la fa scendere, e rende i fader più tremolanti, le finestre di
   reazione e il tempo limite del guasto più corti (vedi *Tempi del guasto*).
   Saltato il discorso, la stanchezza non cambia.
-- Codice: `FATIGUE`, `setFatigue`, `tireOut`, `drinkBeer`, `slipChance` in
+- Codice: `FATIGUE`, `setFatigue`, `tireOut`, `openPausa`, `drinkCoffee`, `takePause`, `slipChance` in
   `main.js`. Test: `tests/stanchezza.js`, e `tests/preside-gioco.js` per il
   passaggio al discorso.
 - **Da fare**: scarico e posa dei cavi non la ricevono ancora (lì conta solo
@@ -559,8 +578,8 @@ camicia azzurra aperta. Per il ritratto si usa il ritaglio `viewBox="6 0 88 88"`
 - Cambi palco (fasi 1-3): barra di **pazienza del pubblico**. Se si svuota non
   si perde, ma si perde reputazione e il pubblico fischia. Fatto per il
   cambio Preside → DJ (vedi sopra).
-- La **stanchezza** sale con il tempo e con le azioni; la birra la abbassa
-  (fatto, vedi *Stanchezza*).
+- La **stanchezza** sale con il tempo e con le azioni; caffè e pausa la
+  abbassano (fatto, vedi *Stanchezza*).
 
 ## Guasti (proposta)
 
@@ -643,7 +662,7 @@ Giro del livello: **Montaggio → Test impianto → [cambio palco → spettacolo
 
 - **Header**: barra del tempo con faccia del personaggio e orologio; il
   gradimento del pubblico è la barra più grande, con la percentuale; la
-  stanchezza sta nel tasto della 🍺 (la birra la fa scendere); reputazione.
+  stanchezza sta nel tasto della 🍺 (caffè e pausa la fanno scendere); reputazione.
 - **Palco isometrico**: resta la vista di gioco del montaggio. Il discorso
   del preside invece ha il suo palco disegnato di fronte (vedi *Il discorso
   nel gioco*). **Deciso: anche le altre fasi di spettacolo (DJ, cantante)
