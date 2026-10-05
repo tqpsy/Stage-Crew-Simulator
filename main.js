@@ -110,9 +110,35 @@ function rotFrame (base, k) {
 function orientK (def, x, y) {
   if (!def.front) return 0;
   const { cx, cy } = screenToCell(x, y);
-  const want = isFohCell(cx, cy) ? '-a' : '+b';
+  const want = def.shape === 'quadro' ? quadroFront(cx, cy) : isFohCell(cx, cy) ? '-a' : '+b';
   if (def.front === want) return 0;
   return def.front === '+b' ? 1 : 3;
+}
+
+/* il Quadro si appoggia di schiena alla parete che ha dietro, con le prese
+   verso il palco: nella fila contro la parete dietro al palco (anche
+   nell'angolo) le prese guardano il palco (-a, girato di un quarto); contro
+   la parete laterale (gx = 0) guardano +gx (+b, il disegno); lontano dai
+   muri guardano comunque il palco */
+function quadroFront (cx, cy) { return cy >= CARICO_ROWS + CELL && cx < CELL ? '+b' : '-a'; }
+/* solido del Quadro già girato e appoggiato al muro che ha dietro.
+   isoFrame centra il disegno intero (altezza compresa), così la base
+   finirebbe mezza altezza più avanti della cella: qui la base si rimette
+   sulla cella e, contro un muro, si spinge fino a toccarlo (la cella è di
+   50 cm, il quadro è profondo 27) */
+function quadroFrame (x, y) {
+  const { cx, cy } = screenToCell(x, y);
+  const rot = orientK(COMPONENT_TYPES.quadro, x, y);
+  const P0 = rotFrame(QUADRO_ISO, rot);
+  const d = (TILE_W * CELL - QUADRO_ISO.B) / 2 - 0.5;
+  // verso il muro di fondo: +a sul pavimento; verso quello laterale: -b
+  const back = cy < CARICO_ROWS + CELL, side = !back && cx < CELL;
+  let dx = back ? d * 0.5 : side ? -d * 0.5 : 0, dy = -QUADRO_ISO.Z / 2 - (back || side ? d * ISO_K : 0);
+  // nell'angolo si accosta anche alla parete laterale
+  if (back && cx < CELL) { const e = (TILE_W * CELL - QUADRO_ISO.A) / 2 - 0.5; dx -= e * 0.5; dy -= e * ISO_K; }
+  const P = (a, b, z = 0) => { const p = P0(a, b, z); return { x: p.x + dx, y: p.y + dy }; };
+  P.A = P0.A; P.B = P0.B; P.Z = P0.Z; P.k = P0.k;
+  return P;
 }
 
 // posizione di una porta ancorata a un punto del solido
@@ -141,7 +167,6 @@ const TOP_POLE  = 18;                     // px: palo tra sub e testa
 const PAR_ISO   = isoFrame(38, 34, 42);   // PAR LED su staffa (lente sulla faccia a=0)
 const STAND_ISO = isoFrame(46, 46, 3);    // stativo luci: treppiede a terra
 const STAND_POLE = 64;                    // px: asta dello stativo fino alla barra a T
-const AMP_ISO   = isoFrame(80, 46, 16);   // finale 2U, pannello frontale sulla faccia b=B
 const RACK_ISO  = isoFrame(96, 60, 30);   // flight case rack 2U del finale, fronte sulla faccia b=B
 /* tavolo regia (la plancia): lungo il fianco del palco (a), il tecnico sta sul
    lato +b e guarda il palco. Sopra mixer, consolle luci, PC e scheda audio;
@@ -165,8 +190,15 @@ function tavoloSlotOffset (type) {
   return { x: q.x, y: q.y - TAVOLO_ITEM_Z[type] / 2 };
 }
 const CTRL_ISO  = isoFrame(56, 34, 10);   // consolle luci da tavolo, piano inclinato
-const QUADRO_ISO = isoFrame(112, 34, 46); // armadio di distribuzione, prese sul fronte b=B
-const QUADRO_PHASE_A = [22, 56, 90];      // posizione lungo il fronte di prese/interruttori L1-L3
+// combinazione prese da evento in gomma piena, come le EverGUM di Mennekes,
+// in scala con gli altri pezzi (102 unità = 1 m): 32 cm di fronte, 30 di
+// fondo, 33 di altezza, impilabile, maniglia sul tetto
+const QUADRO_ISO = isoFrame(33, 31, 34); // prese sul fronte b=B
+const QUADRO_PHASE_A = [6, 16.5, 27];     // prese CEE 16A L1-L3 lungo il fronte
+// moduli su guida DIN dietro la finestra del fronte: centro lungo a e
+// mezza larghezza; generale e salvavita a sinistra, poi un magnetotermico
+// sopra ogni presa
+const QUADRO_MODULES = [['main', 5.2, 2.7], ['rcd', 11, 2.7], ['L1', 17.4, 1.9], ['L2', 21.7, 1.9], ['L3', 26, 1.9]];
 const ALL_ISO   = isoFrame(26, 26, 30);   // cassetta dell'allaccio della venue
 const CIAB_ISO  = isoFrame(104, 16, 8);   // ciabatta civile: barra lunga e bassa, 3 prese sul piano
 const CIABCEE_ISO = isoFrame(134, 16, 8); // ciabatta con spina CEE: 4 prese
@@ -352,8 +384,10 @@ const COMPONENT_TYPES = {
     label: 'QUADRO', category: 'power', powerW: 0, zone: 'backstage', shape: 'quadro',
     // cabinet bianco/metallo, come un vero armadio elettrico da evento —
     // non più una scatola tinta a caso (vedi drawComponentBody per i dettagli).
-    body: { w: 76, h: 94, fill: 0xe9eaed, accent: 0x4a4f5a },
-    ledPos: QUADRO_ISO(4, 34, 43),
+    body: { w: 36, h: 60, oy: -20, fill: 0xe9eaed, accent: 0x4a4f5a },
+    // prese sul fronte +b del disegno; si gira verso il palco (vedi quadroFront)
+    frame: QUADRO_ISO, front: '+b',
+    ledIso: [28, 27, 34],
     // 3 prese, una per fase (L1/L2/L3): a differenza degli altri componenti,
     // ogni presa può ricevere PIÙ cavi (multi:true) — non è il singolo cavo a
     // contare, ma il carico totale che finisce su quella fase (vedi
@@ -364,10 +398,12 @@ const COMPONENT_TYPES = {
       // valle (PowerCON o Schuko) richiede l'adattatore giusto in scheda Cavi.
       // ingresso trifase sul fianco (faccia a=0), le 3 prese in fila sul
       // fronte (faccia b=B), ognuna sotto il proprio interruttore
-      { id: 'in',    signal: 'cee_tri',  dir: 'in',  ...isoPort(QUADRO_ISO, 0, 17, 14) },
-      { id: 'out_1', signal: 'cee_mono', dir: 'out', ...isoPort(QUADRO_ISO, QUADRO_PHASE_A[0], 34, 12), phase: 'L1', multi: true },
-      { id: 'out_2', signal: 'cee_mono', dir: 'out', ...isoPort(QUADRO_ISO, QUADRO_PHASE_A[1], 34, 12), phase: 'L2', multi: true },
-      { id: 'out_3', signal: 'cee_mono', dir: 'out', ...isoPort(QUADRO_ISO, QUADRO_PHASE_A[2], 34, 12), phase: 'L3', multi: true }
+      // (girato contro la parete di fondo l'ingresso passa sul fianco a=A,
+      // l'unico che resta in vista: vedi drawComponentBody)
+      { id: 'in',    signal: 'cee_tri',  dir: 'in',  iso: [0, 15.5, 13], isoTurned: [QUADRO_ISO.A, 15.5, 13] },
+      { id: 'out_1', signal: 'cee_mono', dir: 'out', iso: [QUADRO_PHASE_A[0], 31, 9.5], phase: 'L1', multi: true },
+      { id: 'out_2', signal: 'cee_mono', dir: 'out', iso: [QUADRO_PHASE_A[1], 31, 9.5], phase: 'L2', multi: true },
+      { id: 'out_3', signal: 'cee_mono', dir: 'out', iso: [QUADRO_PHASE_A[2], 31, 9.5], phase: 'L3', multi: true }
     ]
   },
   allaccio: {
@@ -824,8 +860,7 @@ const gameState = {
   selectedCable: null,
   pendingPort: null,      // { componentId, portId }
   selectedPieceType: null, // tipo di pezzo "armato" in attesa di un tocco sulla pedana
-  visibleSignals: { powercon: true, xlr: true, speakon: true, dmx: true, schuko: true, cee_tri: true, cee_mono: true, jack: true, usbc: true },
-  tested: false
+  visibleSignals: { powercon: true, xlr: true, speakon: true, dmx: true, schuko: true, cee_tri: true, cee_mono: true, jack: true, usbc: true }
 };
 
 function totalPowerUsedW () {
@@ -1090,7 +1125,6 @@ const SWITCHABLE = new Set(['sub', 'mixer', 'ampli', 'controller', 'pc', 'ciabat
 // multiplo del loro consumo (si caricano i condensatori dell'alimentatore)
 const INRUSH_FACTOR = { ampli: 5, sub: 4 };
 const INRUSH_MS = 700;
-const PROTECTIONS = ['main', 'rcd', 'L1', 'L2', 'L3'];
 
 // kW con la virgola decimale, all'italiana
 function fmtKW (w, digits) { return (w / 1000).toFixed(digits).replace('.', ','); }
@@ -1101,6 +1135,13 @@ function quadroProt (q) {
   if (!q.prot) q.prot = { main: false, rcd: false, L1: false, L2: false, L3: false, tripped: {} };
   if (!q.prot.tripped) q.prot.tripped = {};
   return q.prot;
+}
+// il Quadro è in tensione: arriva corrente dall'allaccio, generale e salvavita armati
+function quadroLive () {
+  const q = findQuadro();
+  if (!q || !isPowered(q.id)) return false;
+  const prot = quadroProt(q);
+  return !!(prot.main && prot.rcd);
 }
 function powerInPort (def) {
   return def.ports.find(p => p.dir === 'in' && POWER_CABLE_IDS.has(p.signal));
@@ -1473,12 +1514,6 @@ function portHasConnection (componentId, portId) {
   );
 }
 
-// "a; b; c e altri 2"
-function listShort (items, max) {
-  if (items.length <= max) return items.join('; ');
-  return items.slice(0, max).join('; ') + ' e altri ' + (items.length - max);
-}
-
 function runValidation () {
   const expected = buildExpectedConnections();
   const failedComponents = new Set();
@@ -1535,19 +1570,23 @@ const el = sel => document.querySelector(sel);
 function updatePowerMeter () {
   const usedW = totalPowerUsedW();
   const usedKw = usedW / 1000;
-  el('#power-val').textContent = `${usedKw.toFixed(2).replace('.', ',')} / ${POWER_LIMIT_KW.toFixed(1).replace('.', ',')} kW`;
+  // sul telefono l'etichetta dice già kW: si scrive solo il numero
+  const used = usedKw.toFixed(2).replace('.', ','), lim = POWER_LIMIT_KW.toFixed(1).replace('.', ',');
+  el('#power-val').textContent = window.innerWidth < 700 ? `${used}/${lim}` : `${used} / ${lim} kW`;
   const pct = Math.min(100, (usedKw / POWER_LIMIT_KW) * 100);
   const fill = el('#power-fill');
   fill.style.width = pct + '%';
   fill.classList.toggle('over', usedKw > POWER_LIMIT_KW);
 }
 
-function updateConnectionCounter () {
+// views: false quando foglio e flusso del segnale li ha appena ridisegnati refreshLive
+function updateConnectionCounter (views = true) {
   const result = runValidation();
   const val = el('#conn-val');
   if (val) val.textContent = `${result.madeCount} / ${result.totalCount}`;
   const fill = el('#conn-fill');
   if (fill) fill.style.width = Math.min(100, (result.madeCount / result.totalCount) * 100) + '%';
+  if (!views) return;
   if (typeof updateFoglio === 'function') updateFoglio();
   if (window.__scene) window.__scene.updateSignalFlow();
 }
@@ -1567,10 +1606,14 @@ function setCircuitStatus (state) {
 
 let toastTimer = null;
 let toastHeld = false;
+function hideToast () {
+  clearTimeout(toastTimer);
+  el('#toast').classList.remove('show');
+}
 function showToast (msg, kind) {
   const toast = el('#toast');
   toastHeld = false; toast.classList.remove('hold');
-  toast.textContent = msg;
+  el('#toast-msg').textContent = msg;
   // di base è un avviso neutro; 'ok' per i successi, 'bad' solo per i guasti veri
   toast.classList.remove('ok', 'bad', 'boss');
   if (kind === 'ok' || kind === 'bad' || kind === 'boss') toast.classList.add(kind);
@@ -1590,6 +1633,7 @@ function releaseToast () {
   const toast = el('#toast');
   showToast(toast.textContent, ['ok', 'bad', 'boss'].find(k => toast.classList.contains(k)));
 }
+el('#toast-x').addEventListener('click', hideToast);
 
 function updateStockUI () {
   // la potenza impegnata segue i pezzi posati: si aggiorna a ogni posa
@@ -1601,6 +1645,7 @@ function updateStockUI () {
     const piece = document.querySelector(`.piece[data-type="${type}"]`);
     if (piece) piece.classList.toggle('depleted', remaining <= 0);
   });
+  if (typeof updateDrawerSubs === 'function') updateDrawerSubs();
 }
 
 /* Tabs — sono anche l'interruttore tra fase di POSA e fase di CABLAGGIO:
@@ -1664,8 +1709,12 @@ const SAVE_FILE_KIND = 'stage-crew-simulator';   // firma del file esportato
 const SHARED_KEYS = ['settings', 'records', 'usedServices'];
 
 function defaultProfile () {
-  return { v: SAVE_VERSION, player: '', service: '', serviceInfo: null, usedServices: [], settings: { volume: 0.8, reducedFx: false, skipShow: false, skipScarico: false, testMusic: true, bossTips: true, tapeMarks: true, traceSignal: true }, tutorSeen: {}, logo: null, level: null, scarico: null, cavi: null, preside: null, cambioDj: null, dj: null, beers: 0, fatigue: 0, records: {}, reputation: { total: 0, earned: {}, log: [] }, levelsSeen: 1, savedAt: 0 };
+  return { v: SAVE_VERSION, player: '', service: '', serviceInfo: null, usedServices: [], settings: { volume: 0.8, reducedFx: false, skipShow: false, skipScarico: false, testMusic: true, bossTips: true, tapeMarks: true, traceSignal: true }, tutorSeen: {}, logo: null, level: null, scarico: null, cavi: null, preside: null, cambioDj: null, dj: null, karaoke: null, carico: null, beers: 0, assistant: defaultAssistant(), fatigue: 0, records: {}, reputation: { total: 0, earned: {}, log: [] }, levelsSeen: 1, savedAt: 0 };
 }
+// l'assistente della serata (dal livello 2, vedi ASSISTANTS): chi è e
+// quanti favori ha già fatto nel set in corso. Le partite salvate prima
+// dell'assistente non lo hanno: fillSlot le parte con nessuno assunto.
+function defaultAssistant () { return { id: null, favors: 0 }; }
 // solo la partita (senza le parti comuni): è quello che va in uno slot
 function slotPart (d) {
   const s = { ...d };
@@ -1729,7 +1778,8 @@ function fillSlot (s, root) {
   return { ...def, ...(s || {}), v: SAVE_VERSION,
     settings: { ...def.settings, ...root.settings },
     records: root.records || {}, usedServices: root.usedServices || [],
-    reputation: { ...def.reputation, ...((s && s.reputation) || {}) } };
+    reputation: { ...def.reputation, ...((s && s.reputation) || {}) },
+    assistant: { ...def.assistant, ...((s && s.assistant) || {}) } };
 }
 
 /* file esportato: una partita (uno slot) con firma e versione. Si legge
@@ -1739,6 +1789,19 @@ function fillSlot (s, root) {
 function exportSlotFile (slot) {
   return JSON.stringify({ kind: SAVE_FILE_KIND, v: SAVE_VERSION, exportedAt: Date.now(), slot: slotPart(slot) }, null, 1);
 }
+// il montaggio di un file importato: solo pezzi e cavi che il gioco conosce,
+// con i campi che servono a disegnarli (un tipo sconosciuto romperebbe la scena)
+function validLevel (lv) {
+  const num = v => typeof v === 'number' && Number.isFinite(v);
+  const placed = Object.entries(lv.placed);
+  const pieceOk = ([id, c]) => c && typeof c === 'object' && c.id === id && COMPONENT_TYPES[c.type]
+    && (c.gx == null || (num(c.gx) && num(c.gy))) && (!c.cells || (Array.isArray(c.cells) && c.cells.every(k => typeof k === 'string')))
+    && c.screen && num(c.screen.x) && num(c.screen.y);
+  const edgeOk = e => e && typeof e === 'object' && lv.placed[e.a] && lv.placed[e.b]
+    && typeof e.aPort === 'string' && typeof e.bPort === 'string' && CABLE_TYPES[e.signal];
+  return placed.every(pieceOk) && lv.edges.every(edgeOk);
+}
+
 function readSlotFile (text) {
   let d;
   try { d = JSON.parse(text); } catch (e) { return { error: 'Il file non è un salvataggio di Stage Crew Simulator.' }; }
@@ -1749,7 +1812,7 @@ function readSlotFile (text) {
   else if (d.v >= 1 && d.v <= 4 && !d.kind) { const one = upgradeSingle(d); slot = one && slotPart(one); }
   const ok = slot && typeof slot === 'object' && typeof (slot.service || '') === 'string' && typeof (slot.player || '') === 'string'
     && (!slot.reputation || typeof slot.reputation.total === 'number')
-    && (!slot.level || (typeof slot.level === 'object' && typeof slot.level.placed === 'object' && Array.isArray(slot.level.edges)));
+    && (!slot.level || (typeof slot.level === 'object' && slot.level.placed && typeof slot.level.placed === 'object' && Array.isArray(slot.level.edges) && validLevel(slot.level)));
   if (!ok || !slotUsed(slot)) return { error: 'Il file è rovinato o non contiene una partita.' };
   // il file può venire da chiunque: logo e service solo con valori ammessi
   // (i colori del logo finiscono dentro l'SVG)
@@ -1757,9 +1820,11 @@ function readSlotFile (text) {
   const color = c => typeof c === 'string' && /^#[0-9a-f]{3,8}$/i.test(c) ? c : undefined;
   const key = (k, set) => typeof k === 'string' && (k === 'iniziali' || k in set) ? k : undefined;
   const info = slot.serviceInfo && typeof slot.serviceInfo === 'object' ? slot.serviceInfo : null;
+  const as = slot.assistant && typeof slot.assistant === 'object' ? slot.assistant : null;
   slot = { ...slot, player: String(slot.player || '').slice(0, NAME_MAX), service: String(slot.service || '').slice(0, SERVICE_NAME_MAX),
     logo: lg ? JSON.parse(JSON.stringify({ shape: key(lg.shape, LOGO_SHAPES), icon: key(lg.icon, LOGO_ICONS), bg: color(lg.bg), fg: color(lg.fg), style: key(lg.style, BRAND_STYLES) })) : null,
     serviceInfo: info ? { kind: key(info.kind, SERVICE_KINDS) || null, boss: String(info.boss || '').slice(0, NAME_MAX * 2) } : null,
+    assistant: as ? { id: typeof as.id === 'string' ? as.id.slice(0, NAME_MAX) : null, favors: Number.isInteger(as.favors) && as.favors >= 0 ? as.favors : 0 } : undefined,
     fatigue: Math.min(100, Math.max(0, +slot.fatigue || 0)) };
   return { slot };
 }
@@ -2332,11 +2397,14 @@ let gameActive = false;
 function freshStats () { return { playMs: 0, tests: 0, failedTests: 0 }; }
 gameState.stats = freshStats();
 
+// un cavo senza la linea disegnata (_pts), che si ricalcola: non va salvata
+function edgeData (e) { const { _pts, ...rest } = e; return rest; }
+
 function saveLevel () {
   if (!gameActive) return;
   Profile.data.level = {
     id: LEVEL_ID,
-    placed: gameState.placed, edges: gameState.edges, stock: gameState.stock,
+    placed: gameState.placed, edges: gameState.edges.map(edgeData), stock: gameState.stock,
     nextIndex: gameState.nextIndex, edgeSeq: gameState.edgeSeq,
     trips: gameState.trips || 0, rcdTrips: gameState.rcdTrips || 0,
     procErrors: gameState.procErrors || [], stats: gameState.stats,
@@ -2389,7 +2457,9 @@ const LEVELS = [
       { title: 'Messa in sicurezza dei cavi', done: s => !!s.cavi },
       { title: 'Discorso del preside', done: s => !!s.preside },
       { title: 'Cambio palco per il DJ', done: s => !!(s.cambioDj && s.cambioDj.done) },
-      { title: 'DJ set', done: s => !!s.dj }
+      { title: 'DJ set', done: s => !!s.dj },
+      { title: 'Karaoke di Macio', done: s => !!s.karaoke },
+      { title: 'Carico del furgone', done: s => !!s.carico }
     ] },
   { id: 2, name: 'Sagra in piazza', venue: 'Piazza con i sampietrini', vehicle: 'camion', rep: 20 },
   { id: 3, name: 'Matrimonio in villa', venue: 'Giardino di una villa, sotto la pioggia', vehicle: 'camion', rep: 60 },
@@ -2434,6 +2504,50 @@ function addRecord () {
     .slice(0, RECORDS_KEEP);
   Profile.save();
   return addReputation(REP.phaseDone, 'Collaudo del livello ' + LEVEL_ID, 'L' + LEVEL_ID + ':collaudo');
+}
+
+/* ASSISTENTE (dal livello 2) — dove c'è il capo tutor (TUTOR_LEVELS) il
+   favore nei guasti grossi lo fa lui; negli altri livelli si assume un
+   assistente per la serata. La reputazione è una soglia (non si spende),
+   i favori si pagano in birre. Ognuno ha il suo carattere: quante note
+   manca alle luci, quanto ci mette, quali guasti sa sistemare, quanti
+   favori per set. Design in docs/assistente.md; lo spettacolo che li usa
+   non c'è ancora. */
+const ASSISTANTS = {
+  nico:   { name: 'Nico «Cavetto»',       rep: 10, beers: 1, missEvery: 2, fixS: 25, fixes: ['fase'],        favors: 2,
+            line: 'Stagista, tanta voglia e poca pratica: alle luci ne manca una su due, il DMX non lo tocca.' },
+  sabri:  { name: 'Sabri «Nastro Nero»',  rep: 20, beers: 1, missEvery: 3, fixS: 15, fixes: ['fase', 'dmx'], favors: 2,
+            line: 'Brava quanto il capo: una nota su tre alle luci, sistema fasi e DMX.' },
+  tonino: { name: 'Tonino «Ventennale»',  rep: 35, beers: 2, missEvery: 5, fixS: 10, fixes: ['fase', 'dmx'], favors: 3,
+            line: 'Vent\'anni di palchi: ne manca una su cinque, velocissimo, ma costa due birre a favore.' }
+};
+const assistantLevel = (level = LEVEL_ID) => !TUTOR_LEVELS.has(level);
+const assistantUnlocked = id => Object.hasOwn(ASSISTANTS, id) && reputation() >= ASSISTANTS[id].rep;
+const assistant = () => Object.hasOwn(ASSISTANTS, Profile.data.assistant.id) ? ASSISTANTS[Profile.data.assistant.id] : null;
+// assume per la serata (o con null resta da solo); vale solo nei livelli
+// senza capo e con la reputazione che basta
+function hireAssistant (id, level = LEVEL_ID) {
+  if (!assistantLevel(level) || (id !== null && !assistantUnlocked(id))) return false;
+  Profile.data.assistant = { id, favors: 0 };
+  Profile.save();
+  return true;
+}
+// nuovo set: i favori ripartono da zero, l'assistente resta
+function assistantNewSet () { Profile.data.assistant.favors = 0; Profile.save(); }
+// l'assistente può andare a sistemare questo guasto grosso ('fase', 'dmx')?
+function assistantCanFix (fault) {
+  const a = assistant();
+  return !!a && a.fixes.includes(fault) && Profile.data.assistant.favors < a.favors && (Profile.data.beers || 0) >= a.beers;
+}
+// ci va l'assistente: paga le birre e conta il favore; false se non può
+function assistantFavor (fault) {
+  if (!assistantCanFix(fault)) return false;
+  const a = assistant();
+  Profile.data.beers -= a.beers;
+  Profile.data.assistant.favors++;
+  Profile.save();
+  applySettings();
+  return true;
 }
 
 /* STANCHEZZA del tecnico — il tempo della serata si sente addosso.
@@ -2626,14 +2740,21 @@ function startNewGame (player, offer, offers) {
   Profile.data.reputation = defaultProfile().reputation;
   Profile.data.scarico = null;
   Profile.data.cavi = null;
+  Profile.data.caviGiri = 0;
   Profile.data.preside = null;
   Profile.data.dj = null;
+  Profile.data.carico = null;
   Profile.data.cambioDj = null;
-  // uno show del DJ ancora aperto o in arrivo della partita vecchia
+  Profile.data.karaoke = null;
+  // uno show del DJ o un karaoke ancora aperto o in arrivo della partita vecchia
   clearTimeout(djTimer);
   if (el('#dj-frame')) el('#dj-frame').remove();
   djOpen = false;
+  clearTimeout(karaokeTimer);
+  if (el('#karaoke-frame')) el('#karaoke-frame').remove();
+  karaokeOpen = false;
   Profile.data.beers = 0;
+  Profile.data.assistant = defaultAssistant();   // il nuovo tecnico non ha ancora nessuno
   Profile.data.fatigue = 0;      // la serata comincia: tecnico riposato
   Profile.data.tutorSeen = {};   // il nuovo tecnico non ha ancora sentito i consigli del capo
   whenScene(scene => {
@@ -2812,18 +2933,19 @@ function renderLevels () {
    serata dal carico allo smontaggio. Si apre all'inizio di una nuova
    partita (prima di mettere mano ai cavi) e si riapre dal tasto 📋.
    Le fasi senza "phase" non sono ancora nel gioco: si vedono come
-   "in arrivo", così il giocatore sa dove va a finire la serata. */
+   "in arrivo", così il giocatore sa dove va a finire la serata. Quelle
+   "fuori programma" non sono sul foglio: compaiono solo quando arrivano. */
 const SCHEDULE = [
-  { time: '16:00', title: 'Arrivo e scarico', text: 'Il furgone accosta al cortile: tu e Tonino portate i case nella palestra prima delle 16:30.', phase: 'scarico' },
+  { time: '16:00', title: 'Arrivo e scarico', text: 'Il furgone accosta al cortile: tu e Macio portate i case nella palestra prima delle 16:30.', phase: 'scarico' },
   { time: '16:30', title: 'Montaggio impianto', text: 'Corrente dal Quadro, PC → scheda → mixer → finale → casse, i PAR in DMX dalla consolle.', phase: 'montaggio' },
   { time: '19:30', title: 'Test impianto', text: 'Il collaudo: tutto acceso senza scatti né colpi nelle casse, audio e luci a posto.', phase: 'collaudo', rep: REP.phaseDone },
-  { time: '20:00', title: 'Messa in sicurezza dei cavi', text: 'I cavi stesi per terra come si deve: via di fuga libera, passacavi nei passaggi, nastro dove si cammina. Gerry, il bidello, controlla prima di aprire.', phase: 'cavi' },
+  { time: '20:00', title: 'Messa in sicurezza dei cavi', text: 'I cavi stesi al montaggio come si deve: via di fuga libera, passaggi attraversati dritti, niente cavi in mezzo alla scena, segnale lontano dalla corrente. Gerry, il bidello, controlla prima di aprire.', phase: 'cavi' },
   { time: '20:30', title: 'Apertura porte', text: 'Entrano famiglie e studenti; musica di sottofondo dal PC.', phase: 'porte' },
   { time: '21:00', title: 'Discorso del Preside Tramp', text: 'Microfono su asta sul palco, cablato a un ingresso MIC del mixer: ricordati quale. Vuole essere sentito fino al parcheggio.', phase: 'preside' },
   { time: '21:10', title: 'Cambio palco: arriva il DJ', text: 'DJ Inestimabile porta la sua consolle: corrente, uscite nella DI e dalla DI al mixer. Il microfono resta dov\'è, per Musa Esistenziale. Il pubblico aspetta: non metterci troppo.', phase: 'cambio-dj', rep: REP.changeDone },
   { time: '21:15', title: 'Notte fuori controllo', text: 'DJ Inestimabile in consolle e Musa Esistenziale al microfono: mixer DJ → DI → mixer di sala, il microfono del vocalist, luci colorate al drop. E tanti guasti da inseguire.', poster: 'img/locandina-dj.svg', phase: 'dj' },
-  { time: '22:00', title: 'Dante unplugged', text: 'Voce e chitarra (via DI). Gli ingressi non bastano: cambio palco e via il DJ.' },
-  { time: '23:00', title: 'Smontaggio', text: 'Tutto nei case e i case nel furgone. Si torna a casa.' }
+  { time: '22:00', title: 'Fuori programma: il karaoke di Macio', text: 'Gerry ha cacciato il DJ. Macio prende il microfono e salva la serata con una canzone scritta lì per lì: tu mandi avanti il testo e tieni la sua voce nel verde.', phase: 'karaoke', surprise: true },
+  { time: '23:00', title: 'Smontaggio e carico', text: 'Tutto nei case e i case nel furgone: Macio li porta fuori, tu li incastri e li leghi con tre cinghie. Gerry chiude il cancello alle 23:30.', phase: 'carico' }
 ];
 const collaudoDone = () => ('L' + LEVEL_ID + ':collaudo') in Profile.data.reputation.earned;
 function schedulePhaseState (phase) {
@@ -2835,6 +2957,9 @@ function schedulePhaseState (phase) {
   if (phase === 'preside') return presideDone() ? 'done' : caviDone() ? 'now' : 'next';
   if (phase === 'cambio-dj') return cambioDjDone() ? 'done' : presideDone() ? 'now' : 'next';
   if (phase === 'dj') return djDone() ? 'done' : cambioDjDone() ? 'now' : 'next';
+  if (phase === 'karaoke') return karaokeDone() ? 'done' : djDone() ? 'now' : 'next';
+  // il carico chiude la serata: dopo il karaoke di Macio
+  if (phase === 'carico') return caricoDone() ? 'done' : karaokeDone() ? 'now' : 'next';
   return collaudoDone() ? 'done' : 'next';
 }
 const SCHEDULE_STATE_LABEL = { done: 'Fatto', now: 'Adesso', next: 'Da fare', soon: 'In arrivo' };
@@ -2848,7 +2973,7 @@ function renderSchedule () {
     ['Tecnico', playerName()]
   ];
   el('#schedule-info').innerHTML = rows.map(([k, v]) => '<dt>' + k + '</dt><dd>' + escapeHtml(v) + '</dd>').join('');
-  el('#schedule-list').innerHTML = SCHEDULE.map(s => {
+  el('#schedule-list').innerHTML = SCHEDULE.filter(s => !s.surprise || djDone()).map(s => {
     const st = schedulePhaseState(s.phase);
     return '<li class="sched-row ' + st + '">'
       + '<span class="sched-time">' + (s.phase === 'montaggio' && scaricoDone() ? montaggioTime() : s.time) + '</span>'
@@ -2859,6 +2984,8 @@ function renderSchedule () {
         : s.phase === 'preside' && presideDone() ? presideSummary()
         : s.phase === 'cambio-dj' && cambioDjDone() ? cambioSummary()
         : s.phase === 'dj' && djDone() ? djSummary()
+        : s.phase === 'karaoke' && karaokeDone() ? karaokeSummary()
+        : s.phase === 'carico' && caricoDone() ? caricoSummary()
         : s.phase === 'montaggio' ? s.text.replace('i PAR', parsRequired() + ' PAR') : s.text) + '</small>'
       + (s.poster ? '<button class="sched-poster" type="button" data-poster="' + s.poster + '">🎟️ Guarda la locandina</button>' : '')
       + '</span>'
@@ -2875,8 +3002,9 @@ function openSchedule (first) {
   // dopo il collaudo la scaletta porta alla posa dei cavi, poi al discorso
   // del preside, poi al cambio palco per il DJ
   scheduleNext = first ? null : schedulePhaseState('cavi') === 'now' ? 'cavi' : schedulePhaseState('preside') === 'now' ? 'preside'
-    : schedulePhaseState('cambio-dj') === 'now' && !cambioDj() ? 'cambio-dj' : schedulePhaseState('dj') === 'now' ? 'dj' : null;
-  el('#schedule-go').textContent = first ? 'Al lavoro!' : { cavi: 'Stendi i cavi', preside: 'Il preside sale sul palco', 'cambio-dj': 'Inizia il cambio palco', dj: 'Via al DJ set' }[scheduleNext] || 'Torna al palco';
+    : schedulePhaseState('cambio-dj') === 'now' && !cambioDj() ? 'cambio-dj' : schedulePhaseState('dj') === 'now' ? 'dj'
+    : schedulePhaseState('karaoke') === 'now' ? 'karaoke' : schedulePhaseState('carico') === 'now' ? 'carico' : null;
+  el('#schedule-go').textContent = first ? 'Al lavoro!' : { cavi: 'Chiama Gerry', preside: 'Il preside sale sul palco', 'cambio-dj': 'Inizia il cambio palco', dj: 'Via al DJ set', karaoke: 'Macio prende il microfono', carico: 'Carica il furgone' }[scheduleNext] || 'Torna al palco';
   el('#schedule-modal').classList.add('show');
   setSceneInput(false);
 }
@@ -2885,7 +3013,7 @@ function closeSchedule () {
   scheduleOpen = false;
   el('#schedule-modal').classList.remove('show');
   if (scheduleFirst) { if (scaricoDone()) showToast(montaggioMessage(), 'ok'); else openScarico(); }
-  setTimeout(() => { if (!scheduleOpen && !minigameOpen() && !cambioCardOpen && !rearPanelId && !openCaseName && !menuOpen) setSceneInput(true); }, 0);
+  setTimeout(() => { if (!sceneCovered()) setSceneInput(true); }, 0);
   scheduleFirst = false;
 }
 
@@ -2898,6 +3026,10 @@ function closeSchedule () {
    saltare (dalle impostazioni o dalla sua schermata iniziale): tutto arriva
    sano, ma niente birre. */
 let scaricoOpen = false;
+// volume ed «Effetti ridotti» delle impostazioni, passati ai minigiochi nell'indirizzo dell'iframe
+function minigameQuery () { return '&vol=' + settings().volume + (reducedFx() ? '&rfx=1' : ''); }
+// un messaggio vale solo se arriva davvero dall'iframe di quel minigioco
+const fromFrame = (ev, id) => { const f = el('#' + id); return !!f && ev.source === f.contentWindow; };
 const scaricoDone = () => !!Profile.data.scarico;
 function openScarico () {
   if (scaricoOpen) return;
@@ -2909,13 +3041,13 @@ function openScarico () {
   f.id = 'scarico-frame';
   f.title = 'Lo scarico';
   const logo = serviceLogo();
-  f.src = 'scarico.html?embed=1&service=' + encodeURIComponent(serviceName()) + '&bg=' + encodeURIComponent(logo.bg) + '&fg=' + encodeURIComponent(logo.fg);
+  f.src = 'scarico.html?embed=1&service=' + encodeURIComponent(serviceName()) + '&bg=' + encodeURIComponent(logo.bg) + '&fg=' + encodeURIComponent(logo.fg) + minigameQuery();
   f.addEventListener('load', () => { try { f.contentWindow.focus(); } catch (e) { /* niente fuoco: si clicca */ } });
   document.body.appendChild(f);
 }
 window.addEventListener('message', ev => {
   const d = ev.data;
-  if (scaricoOpen && d && d.type === 'scarico-fine') finishScarico(d.result || { skipped: true });
+  if (scaricoOpen && d && d.type === 'scarico-fine' && fromFrame(ev, 'scarico-frame')) finishScarico(d.result || { skipped: true });
 });
 function finishScarico (r) {
   const f = el('#scarico-frame');
@@ -2940,7 +3072,7 @@ function finishScarico (r) {
   whenScene(scene => {
     scene.resetLevel(true);          // la dotazione senza i pezzi rotti
     sceneKeyboard(true);
-    if (!scheduleOpen && !menuOpen && !rearPanelId && !openCaseName) setSceneInput(true);
+    if (!sceneCovered()) setSceneInput(true);
     applySettings();
     showToast(montaggioMessage(), 'ok');
   });
@@ -2981,7 +3113,6 @@ function scaricoSummary () {
    la regia sul tavolo) e i cavi collegati al montaggio tra basi diverse,
    uniti quando fanno la stessa strada (DMX e PowerCON dei PAR). Gli errori
    li trova solo Gerry; le stelle diventano reputazione, una volta sola. */
-let caviOpen = false;
 const caviDone = () => !!Profile.data.cavi;
 const CAVI_LOOK = { sub: 'sub', stativo: 'par', asta: 'asta', tavolo: 'tavolo', quadro: 'quadro', allaccio: 'allaccio' };
 // la base di un pezzo montato (PAR → stativo, regia → tavolo, mic → asta)
@@ -3043,29 +3174,168 @@ function posaLayout () {
   caviLines = lines;
   return { title: 'Festa della scuola', sub: 'La tua regia · Gerry controlla alle 20:30', devices, lines };
 }
-function openCavi () {
-  if (caviOpen || caviDone()) return;
-  caviOpen = true;
-  setSceneInput(false);
-  sceneKeyboard(false);
-  const f = document.createElement('iframe');
-  f.id = 'cavi-frame';
-  f.className = 'minigame-frame';
-  f.title = 'La posa dei cavi';
-  f.src = 'posa-cavi.html?embed=1';
-  f.addEventListener('load', () => { try { f.contentWindow.focus(); } catch (e) { /* niente fuoco: si tocca */ } });
-  document.body.appendChild(f);
+/* GERRY AL MONTAGGIO — i cavi si stendono già al montaggio (StageScene.
+   startLay); alle 20:00 Gerry, il bidello, passa e li controlla con le
+   regole della posa (docs/minigioco-posa-cavi.md). Celle da 50 cm come la
+   posa: i = gx / CELL, j = gy / CELL. Passacavi e nastro li mette la crew
+   da sola: si guarda solo da dove passano i cavi. */
+const GERRY_PASSAGES = [
+  { id: 'artisti', label: 'passaggio degli artisti', r: [13, 4, 2, 4] },
+  { id: 'corridoio', label: 'corridoio del pubblico', r: [9, 20, 2, 12] }
+];
+const GERRY_EXITS = [{ id: 'fuga', label: 'via di fuga', r: [0, 22, 3, 3] }];
+const gInRect = (r, i, j) => i >= r[0] && i < r[0] + r[2] && j >= r[1] && j < r[1] + r[3];
+// in mezzo alla pedana (il bordo largo 50 cm resta per i cavi)
+const gInterior = (i, j) => i >= 5 && i <= 10 && j >= 9 && j <= 14;
+// passaggi e via di fuga, senza quelli dove è già stato posato un pezzo
+function gerryZones () {
+  const busy = new Set();
+  Object.values(gameState.placed).forEach(c => (c.cells || []).forEach(k => busy.add(k)));
+  const clear = z => { for (let i = z.r[0]; i < z.r[0] + z.r[2]; i++) for (let j = z.r[1]; j < z.r[1] + z.r[3]; j++) if (busy.has(i + ',' + j)) return false; return true; };
+  return { passages: GERRY_PASSAGES.filter(clear), exits: GERRY_EXITS.filter(clear) };
 }
-window.addEventListener('message', ev => {
-  const d = ev.data, f = el('#cavi-frame');
-  if (!caviOpen || !d || !f) return;
-  if (d.type === 'posa-cavi-pronta') f.contentWindow.postMessage({ type: 'posa-cavi-pianta', layout: posaLayout() }, '*');
-  if (d.type === 'posa-cavi-fine') finishCavi(d.result || { skipped: true });
+const GERRY_SENSITIVE = new Set(['xlr', 'jack']);
+function gerryCableName (e) {
+  const it = cableItem(e.signal);
+  return (it ? it.name : cableName(e.signal)) + ' ' + compLabel(e.a) + ' → ' + compLabel(e.b);
+}
+// le celle che un cavo tocca per terra, con la direzione (h: lungo gx, v: lungo gy)
+function gerryCells (e, scene) {
+  const f = scene.edgeFloor(e);
+  if (!f) return null;
+  const P = gameState.placed, own = new Set();
+  [posaBase(P[e.a]), posaBase(P[e.b])].forEach(b => (b && b.cells || []).forEach(k => own.add(k)));
+  const out = [], seen = new Set(), pts = f.smooth;
+  // ogni 25 cm lungo il cavo: la cella e da che parte va (h: lungo gx, v: lungo gy)
+  let carry = 0;
+  for (let s = 0; s < pts.length - 1; s++) {
+    const a = pts[s], b = pts[s + 1], L = Math.hypot(b.gx - a.gx, b.gy - a.gy);
+    if (L < 1e-9) continue;
+    const dir = Math.abs(b.gx - a.gx) > Math.abs(b.gy - a.gy) ? 'h' : 'v';
+    let t = carry;
+    for (; t < L; t += CELL / 2) {
+      const x = a.gx + (b.gx - a.gx) * t / L, y = a.gy + (b.gy - a.gy) * t / L;
+      const i = Math.floor(x / CELL), j = Math.floor(y / CELL), k = i + ',' + j;
+      if (own.has(k) || seen.has(k + dir)) continue;
+      seen.add(k + dir);
+      out.push({ i, j, dir });
+    }
+    carry = t - L;
+  }
+  return { cells: out, base: [posaBase(P[e.a]), posaBase(P[e.b])] };
+}
+function gerryIssues () {
+  const scene = window.__scene;
+  if (!scene) return [];
+  const { passages, exits } = gerryZones();
+  const issues = [];
+  const add = (type, ids, cells, text) => issues.push({ type, ids, cells, text });
+  const use = new Map();
+  const nearInterior = b => (b && b.cells || []).some(k => { const [i, j] = k.split(',').map(Number); return [-1, 0, 1].some(di => [-1, 0, 1].some(dj => gInterior(i + di, j + dj))); });
+  gameState.edges.forEach(e => {
+    const g = gerryCells(e, scene);
+    if (!g) return;
+    const name = gerryCableName(e);
+    const mic = g.base.some(b => b && b.type === 'asta') || g.base.some(nearInterior);
+    const fuga = [], open = [], along = [], scena = [];
+    g.cells.forEach(c => {
+      const k = c.i + ',' + c.j;
+      if (!use.has(k)) use.set(k, []);
+      use.get(k).push({ e, dir: c.dir });
+      if (exits.some(z => gInRect(z.r, c.i, c.j))) fuga.push(c);
+      const ps = passages.find(z => gInRect(z.r, c.i, c.j));
+      if (ps && c.dir === 'v') along.push(Object.assign({ ps }, c));
+      if (!mic && gInterior(c.i, c.j)) scena.push(c);
+    });
+    if (fuga.length) add('fuga', [e.id], fuga, name + ' passa sulla via di fuga: lì per terra non ci deve essere niente.');
+    if (along.length) add('lungo', [e.id], along, name + ' corre lungo il ' + along[0].ps.label + ': i passaggi si attraversano dritti, di traverso.');
+    if (scena.length) add('scena', [e.id], scena, name + ' passa in mezzo alla scena: il preside ci inciampa. Sul palco solo il microfono, gli altri lungo i bordi.');
+  });
+  // ronzio: segnale debole affiancato alla corrente per almeno 1 m
+  const pairs = new Map();
+  use.forEach((list, k) => {
+    list.filter(u => GERRY_SENSITIVE.has(u.e.signal)).forEach(s => list.filter(u => POWER_CABLE_IDS.has(u.e.signal)).forEach(pw => {
+      if (s.dir !== pw.dir) return;
+      const pk = s.e.id + '|' + pw.e.id;
+      if (!pairs.has(pk)) pairs.set(pk, { s: s.e, pw: pw.e, cells: [] });
+      pairs.get(pk).cells.push({ i: +k.split(',')[0], j: +k.split(',')[1] });
+    }));
+  });
+  pairs.forEach(({ s, pw, cells }) => {
+    if (cells.length < 2) return;
+    add('ronzio', [s.id], cells, gerryCableName(s) + ' corre accanto a ' + gerryCableName(pw) + ' per ' + fmtM(cells.length * CELL) + ': ronzio nelle casse. Il segnale incrocia la corrente, non ci va affiancato.');
+  });
+  return issues;
+}
+// metri di cavo per terra, nastro (palco, Pit e platea, non lungo i muri) e passacavi
+function gerryStats () {
+  const scene = window.__scene, { passages } = gerryZones();
+  let cableM = 0;
+  const tape = new Set(), ramps = new Set();
+  gameState.edges.forEach(e => {
+    const f = scene && scene.edgeFloor(e);
+    if (!f) return;
+    cableM += layLength(f.smooth);
+    gerryCells(e, scene).cells.forEach(c => {
+      const ps = passages.find(z => gInRect(z.r, c.i, c.j));
+      if (ps) { ramps.add(ps.id + ':' + c.j); return; }
+      const gx = c.i * CELL, gy = c.j * CELL;
+      if ((isStageCoreCell(gx, gy) || isPitCell(gx, gy) || isPlateaCell(gx, gy)) && c.i > 0 && c.i < VENUE_W / CELL - 1) tape.add(c.i + ',' + c.j);
+    });
+  });
+  return { cableM, tapeM: tape.size * CELL, ramps: ramps.size };
+}
+let gerryOpen = false;
+// alle 20:00 (o dalla scaletta) Gerry fa il suo giro
+function openCavi () {
+  if (gerryOpen || caviDone()) return;
+  if (window.__scene) window.__scene.endLay(true);
+  Profile.data.caviGiri = (Profile.data.caviGiri || 0) + 1;
+  Profile.save();
+  const issues = gerryIssues();
+  gerryOpen = true;
+  setSceneInput(false);
+  const giro = Profile.data.caviGiri;
+  const box = el('#gerry-text'), list = el('#gerry-list');
+  if (!issues.length) {
+    const stars = Math.max(1, 4 - giro);
+    el('#gerry-title').textContent = 'Cavi a posto';
+    box.innerHTML = '<p>' + { 3: 'Perfetto al primo giro. Neanche io l\'avrei fatto meglio, e io i cavi li scavalco da trent\'anni!', 2: 'Adesso sì. Si può aprire!', 1: 'Finalmente. Apro le porte, ma la prossima volta pensaci prima.' }[stars] + '</p>'
+      + '<p class="gerry-stars">' + '★'.repeat(stars) + '<span>' + '★'.repeat(3 - stars) + '</span></p>';
+    list.innerHTML = '';
+    el('#gerry-fix').hidden = true;
+    el('#gerry-go').textContent = 'Apri le porte';
+    el('#gerry-go').onclick = () => { SFX.button(); finishCavi(Object.assign({ stars, inspections: giro }, gerryStats())); };
+  } else {
+    el('#gerry-title').textContent = ['Fermi tutti!', 'Ancora no, ragazzi.', 'Ci siamo quasi…'][Math.min(2, giro - 1)];
+    box.innerHTML = '<p>Prima di aprire le porte qui va sistemato (i punti sono segnati in rosso sul pavimento):</p>';
+    list.innerHTML = issues.slice(0, 5).map(i => '<li>' + escapeHtml(i.text) + '</li>').join('')
+      + (issues.length > 5 ? '<li class="more">…e altre ' + (issues.length - 5) + ' cose.</li>' : '');
+    el('#gerry-fix').hidden = false;
+    el('#gerry-go').textContent = 'Apri così';
+    el('#gerry-go').onclick = () => {
+      SFX.button();
+      finishCavi(Object.assign({ late: true, inspections: giro, left: issues.map(i => ({ type: i.type })) }, gerryStats()));
+    };
+  }
+  if (window.__scene) window.__scene.gerryMarks = issues;
+  if (window.__scene) window.__scene.redrawEdges();
+  el('#gerry-modal').classList.add('show');
+}
+function closeGerry () {
+  if (!gerryOpen) return;
+  gerryOpen = false;
+  el('#gerry-modal').classList.remove('show');
+  setTimeout(() => { if (!sceneCovered()) setSceneInput(true); }, 0);
+}
+el('#gerry-fix').addEventListener('click', () => {
+  SFX.button();
+  closeGerry();
+  showToast('Sistema i cavi segnati in rosso (tocca un cavo per prenderlo), poi richiama Gerry dalla scaletta.');
 });
 function finishCavi (r) {
-  const f = el('#cavi-frame');
-  if (f) f.remove();
-  caviOpen = false;
+  closeGerry();
+  if (window.__scene) window.__scene.gerryMarks = null;
   // late: alle 20:30 Gerry ha aperto con i cavi ancora in giro (nessuna stella)
   const late = !r.skipped && !!r.late;
   const stars = r.skipped || late ? 0 : Math.max(1, Math.min(3, r.stars || 1));
@@ -3074,12 +3344,12 @@ function finishCavi (r) {
   const rep = stars ? addReputation(REP.cavi[stars], 'Posa dei cavi alla festa della scuola', 'L' + LEVEL_ID + ':cavi') : 0;
   Profile.save();
   sceneKeyboard(true);
-  if (!scheduleOpen && !menuOpen && !rearPanelId && !openCaseName) setSceneInput(true);
+  if (!sceneCovered()) setSceneInput(true);
   applySettings();
   whenScene(scene => scene.redrawEdges());   // i cavi seguono le pieghe della posa
   const missing = presideReady();
   showToast((r.skipped ? 'Posa dei cavi saltata: Gerry apre le porte, ma la reputazione non cambia.'
-    : late ? 'Sono le 20:30: Gerry apre le porte con i cavi ancora in giro. La reputazione non cambia.'
+    : late ? 'Gerry apre le porte con i cavi ancora in giro. La reputazione non cambia.'
     : 'Cavi a posto, Gerry apre le porte! ' + '★'.repeat(stars) + (rep ? ' Reputazione +' + rep + '.' : ''))
     + (missing ? ' Alle 21:00 parla il preside: ' + missing : ' Alle 21:00 il preside sale sul palco.'), 'ok');
   updateFoglio();
@@ -3131,7 +3401,7 @@ function caviSummary () {
   if (c.skipped) return 'Saltata: niente reputazione.';
   if (c.late) {
     const left = caviLeftovers().map(k => CAVI_LEFT_TEXT[k]);
-    return 'Finita col tempo: alle 20:30 porte aperte con i cavi in giro, niente reputazione.' + (left.length ? ' Durante lo show ' + left.join(', ') + '.' : '');
+    return 'Porte aperte con i cavi in giro: niente reputazione.' + (left.length ? ' Durante lo show ' + left.join(', ') + '.' : '');
   }
   return '★'.repeat(c.stars) + '☆'.repeat(3 - c.stars) + ' · ' + (c.inspections === 1 ? 'promossa al primo giro di Gerry' : c.inspections + ' giri di Gerry')
     + ' · ' + String(Math.round(c.tapeM * 10) / 10).replace('.', ',') + ' m di nastro.';
@@ -3147,8 +3417,14 @@ function caviSummary () {
    una volta sola, birre, stanchezza a fine discorso. */
 let presideOpen = false, presideTimer = null;
 let djOpen = false;              // lo spettacolo del DJ (openDj, più sotto)
+let karaokeOpen = false;         // il karaoke di Macio (openKaraoke, più sotto)
+let caricoOpen = false;          // il carico del furgone (openCarico, più sotto)
 const presideDone = () => !!Profile.data.preside;
-const minigameOpen = () => scaricoOpen || caviOpen || presideOpen || djOpen;
+const minigameOpen = () => scaricoOpen || gerryOpen || presideOpen || djOpen || karaokeOpen || caricoOpen;
+// una finestra del gioco sopra la scena (menù, scaletta, pannello posteriore, baule)
+const panelOpen = () => scheduleOpen || menuOpen || !!rearPanelId || !!openCaseName;
+// qualcosa copre la scena: i tocchi non le arrivano finché non si chiude tutto
+const sceneCovered = () => panelOpen() || minigameOpen() || cambioCardOpen;
 // cosa manca perché il preside possa parlare (null se è tutto pronto)
 function presideReady () {
   const asta = placedOfType('asta')[0], mic = placedOfType('mic').find(m => mountBase(m));
@@ -3167,7 +3443,7 @@ function presidePars () {
 }
 function openPreside () {
   clearTimeout(presideTimer);
-  if (presideOpen || presideDone() || !caviDone() || scaricoOpen || caviOpen) return;
+  if (presideOpen || presideDone() || !caviDone() || scaricoOpen || gerryOpen) return;
   const missing = presideReady();
   if (missing) { showToast('Il preside aspetta dietro le quinte: ' + missing); return; }
   presideOpen = true;
@@ -3178,7 +3454,7 @@ function openPreside () {
   f.id = 'preside-frame';
   f.className = 'minigame-frame';
   f.title = 'Il discorso del preside';
-  f.src = 'preside.html?embed=1';
+  f.src = 'preside.html?embed=1' + minigameQuery();
   f.addEventListener('load', () => { try { f.contentWindow.focus(); } catch (e) { /* niente fuoco: si tocca */ } });
   document.body.appendChild(f);
 }
@@ -3187,7 +3463,7 @@ function openPreside () {
 function presideSoon () {
   clearTimeout(presideTimer);
   presideTimer = setTimeout(() => {
-    if (!scheduleOpen && !menuOpen && !rearPanelId && !openCaseName && !presideReady()) openPreside();
+    if (!panelOpen() && !presideReady()) openPreside();
   }, 3000);
 }
 // un XLR appena collegato può rendere pronto il microfono (l'avviso arriva
@@ -3199,7 +3475,7 @@ function presideMicHint () {
 }
 window.addEventListener('message', ev => {
   const d = ev.data, f = el('#preside-frame');
-  if (!presideOpen || !d || !f) return;
+  if (!presideOpen || !d || !f || ev.source !== f.contentWindow) return;
   if (d.type === 'preside-pronto') f.contentWindow.postMessage({ type: 'preside-dati', wired: micChannel(), left: caviLeftovers(), beers: Profile.data.beers || 0, fatigue: fatigue(), pars: presidePars() }, '*');
   if (d.type === 'preside-fine') finishPreside(d.result || { skipped: true });
 });
@@ -3218,7 +3494,7 @@ function finishPreside (r) {
   const rep = skipped ? 0 : addReputation(Profile.data.preside.rep, 'Discorso del preside alla festa della scuola', 'L' + LEVEL_ID + ':preside');
   Profile.save();
   sceneKeyboard(true);
-  if (!scheduleOpen && !menuOpen && !rearPanelId && !openCaseName) setSceneInput(true);
+  if (!sceneCovered()) setSceneInput(true);
   applySettings();
   const p = Profile.data.preside;
   showToast(skipped ? 'Discorso saltato: il preside ha parlato lo stesso, ma la reputazione non cambia.'
@@ -3350,7 +3626,7 @@ function closeCambioCard () {
   if (!cambioCardOpen) return;
   cambioCardOpen = false;
   el('#cambio-modal').classList.remove('show');
-  if (!scheduleOpen && !menuOpen && !rearPanelId && !openCaseName) setSceneInput(true);
+  if (!sceneCovered()) setSceneInput(true);
   updateGiroUI();
   const tab = document.querySelector('.tab-btn[data-tab="dj"]');
   if (tab && gameState.stock.dj > 0) tab.click();
@@ -3404,7 +3680,7 @@ function openDj () {
   f.className = 'minigame-frame';
   f.title = 'Notte fuori controllo';
   f.allow = 'autoplay';
-  f.src = 'dj.html?embed=1';
+  f.src = 'dj.html?embed=1' + minigameQuery();
   f.addEventListener('load', () => { try { f.contentWindow.focus(); } catch (e) { /* niente fuoco: si tocca */ } });
   document.body.appendChild(f);
 }
@@ -3412,15 +3688,15 @@ function openDj () {
 function djSoon (ms) {
   clearTimeout(djTimer);
   djTimer = setTimeout(() => {
-    if (!scheduleOpen && !menuOpen && !rearPanelId && !openCaseName && !cambioCardOpen) openDj();
+    if (!panelOpen() && !cambioCardOpen) openDj();
   }, ms || 3000);
 }
 window.addEventListener('message', ev => {
   const d = ev.data, f = el('#dj-frame');
-  if (!djOpen || !d || !f) return;
+  if (!djOpen || !d || !f || ev.source !== f.contentWindow) return;
   if (d.type === 'dj-pronto') {
     const info = Profile.data.serviceInfo;
-    f.contentWindow.postMessage({ type: 'dj-dati', beers: Profile.data.beers || 0, boss: info && info.boss ? info.boss : '', pars: presidePars().map(p => p.label) }, '*');
+    f.contentWindow.postMessage({ type: 'dj-dati', beers: Profile.data.beers || 0, boss: info && info.boss ? info.boss : '', pars: presidePars().map(p => p.label), fatigue: fatigue() }, '*');
   }
   if (d.type === 'dj-fine') finishDj(d.result || { skipped: true });
 });
@@ -3438,13 +3714,15 @@ function finishDj (r) {
   const rep = skipped ? 0 : addReputation(Profile.data.dj.rep, 'Notte fuori controllo: le luci del DJ set', 'L' + LEVEL_ID + ':dj');
   Profile.save();
   sceneKeyboard(true);
-  if (!scheduleOpen && !menuOpen && !rearPanelId && !openCaseName) setSceneInput(true);
+  if (!sceneCovered()) setSceneInput(true);
   applySettings();
   const p = Profile.data.dj;
   showToast(skipped ? 'DJ set saltato: la musica c\'è stata lo stesso, ma la reputazione non cambia.'
-    : 'Il bidello ha cacciato via i musicisti. Ora si può ripristinare il palco per l\'ultima band. Pubblico al ' + p.grad + '%.' + (rep ? ' Reputazione ' + (rep > 0 ? '+' : '') + rep + '.' : '')
-      + (beers ? ' 🍺 +' + beers + '.' : ''), skipped || p.grad >= 40 ? 'ok' : undefined);
+    : 'Il bidello ha cacciato via i musicisti: la festa è rimasta senza musica. Pubblico al ' + p.grad + '%.' + (rep ? ' Reputazione ' + (rep > 0 ? '+' : '') + rep + '.' : '')
+      + (beers ? ' 🍺 +' + beers + '.' : '') + ' Macio prende il microfono: «Ci penso io!»', skipped || p.grad >= 40 ? 'ok' : undefined);
   updateFoglio();
+  // fuori programma: Macio sale sul palco appena letto il messaggio
+  karaokeSoon(Math.max(3200, el('#toast').textContent.length * 60) + 300);
 }
 function djSummary () {
   const p = Profile.data.dj;
@@ -3452,6 +3730,144 @@ function djSummary () {
   const who = { tu: 'la fase l\'hai riarmata tu', capo: 'la fase l\'ha riarmata il capo (una birra)', gerry: 'la fase l\'ha riarmata Gerry' }[p.fase];
   return '★'.repeat(p.stars) + '☆'.repeat(5 - p.stars) + ' · pubblico al ' + p.grad + '%' + (p.larsens ? ' · larsen: ' + p.larsens : ' · niente larsen')
     + (who ? ' · ' + who : '') + (p.beers ? ' · 🍺 +' + p.beers : '') + ' · reputazione ' + (p.rep >= 0 ? '+' : '') + p.rep + '.';
+}
+
+/* ---------------- il karaoke di Macio (fuori programma, dopo il DJ) ----------------
+   Gerry ha cacciato il DJ: Macio, il collega dello scarico, salva la serata
+   con un karaoke improvvisato (karaoke.html, in un iframe sopra il gioco).
+   Non è sul foglio né sulla locandina: arriva da solo dopo il DJ set, o dalla
+   scaletta e dal foglio. Serve il microfono ancora collegato al mixer
+   acceso. La pagina riceve birre, stanchezza, nome del capo e canale del
+   microfono; l'esito torna al gioco: reputazione una volta sola, birre,
+   stanchezza. Dopo viene il carico del furgone (openCarico). */
+let karaokeTimer = null;
+const karaokeDone = () => !!Profile.data.karaoke;
+// cosa manca perché Macio possa cantare (null se è tutto pronto)
+function karaokeReady () {
+  if (!micChannel()) return 'il microfono non è più collegato: un XLR dal microfono a un ingresso MIC (1-4) del mixer.';
+  const mx = placedOfType('mixer')[0];
+  if (!mx || !isRunning(mx.id)) return 'il mixer è spento: accendi l\'impianto.';
+  return null;
+}
+function openKaraoke () {
+  clearTimeout(karaokeTimer);
+  if (karaokeOpen || karaokeDone() || !djDone() || minigameOpen()) return;
+  const missing = karaokeReady();
+  if (missing) { showToast('Macio aspetta col microfono in mano: ' + missing); updateFoglio(); return; }
+  karaokeOpen = true;
+  setSceneInput(false);
+  sceneKeyboard(false);
+  if (window.__scene) window.__scene.stopFx();
+  const f = document.createElement('iframe');
+  f.id = 'karaoke-frame';
+  f.className = 'minigame-frame';
+  f.title = 'Il karaoke di Macio';
+  f.allow = 'autoplay';
+  f.src = 'karaoke.html?embed=1' + minigameQuery();
+  f.addEventListener('load', () => { try { f.contentWindow.focus(); } catch (e) { /* niente fuoco: si tocca */ } });
+  document.body.appendChild(f);
+}
+function karaokeSoon (ms) {
+  clearTimeout(karaokeTimer);
+  karaokeTimer = setTimeout(() => {
+    if (!panelOpen() && !cambioCardOpen) openKaraoke();
+  }, ms || 3000);
+}
+window.addEventListener('message', ev => {
+  const d = ev.data, f = el('#karaoke-frame');
+  if (!karaokeOpen || !d || !f || ev.source !== f.contentWindow) return;
+  if (d.type === 'karaoke-pronto') {
+    const info = Profile.data.serviceInfo;
+    f.contentWindow.postMessage({ type: 'karaoke-dati', beers: Profile.data.beers || 0, boss: info && info.boss ? info.boss : '', mic: micChannel() || 0, fatigue: fatigue() }, '*');
+  }
+  if (d.type === 'karaoke-fine') finishKaraoke(d.result || { skipped: true });
+});
+function finishKaraoke (r) {
+  const f = el('#karaoke-frame');
+  if (f) f.remove();
+  karaokeOpen = false;
+  const skipped = !!r.skipped;
+  const num = (v, d) => Number.isFinite(+v) ? Math.round(+v) : d;
+  const beers = skipped ? 0 : Math.max(0, num(r.beers, 0)), drunk = skipped ? 0 : Math.max(0, num(r.drunk, 0));
+  Profile.data.karaoke = { skipped, grad: skipped ? 0 : num(r.grad, 0), rep: skipped ? 0 : num(r.rep, 0), beers, drunk,
+    stars: skipped ? 0 : Math.max(0, Math.min(5, num(r.stars, 0))), larsens: skipped ? 0 : Math.max(0, num(r.larsens, 0)) };
+  Profile.data.beers = Math.max(0, (Profile.data.beers || 0) - drunk + beers);
+  if (!skipped && Number.isFinite(+r.fatigue)) setFatigue(+r.fatigue);
+  const rep = skipped ? 0 : addReputation(Profile.data.karaoke.rep, 'Il karaoke di Macio alla festa della scuola', 'L' + LEVEL_ID + ':karaoke');
+  Profile.save();
+  sceneKeyboard(true);
+  if (!sceneCovered()) setSceneInput(true);
+  applySettings();
+  const p = Profile.data.karaoke;
+  showToast(skipped ? 'Karaoke saltato: Macio ha cantato lo stesso, ma la reputazione non cambia.'
+    : (p.grad >= 45 ? 'Macio ha salvato la serata!' : 'Macio ci ha provato.') + ' Pubblico al ' + p.grad + '%.' + (rep ? ' Reputazione ' + (rep > 0 ? '+' : '') + rep + '.' : '')
+      + (beers ? ' 🍺 +' + beers + '.' : '') + ' Ora si smonta e si carica il furgone.', skipped || p.grad >= 40 ? 'ok' : undefined);
+  updateFoglio();
+}
+function karaokeSummary () {
+  const p = Profile.data.karaoke;
+  if (p.skipped) return 'Saltato: niente reputazione.';
+  return '★'.repeat(p.stars) + '☆'.repeat(5 - p.stars) + ' · pubblico al ' + p.grad + '%' + (p.larsens ? ' · larsen: ' + p.larsens : ' · niente larsen')
+    + (p.beers ? ' · 🍺 +' + p.beers : '') + ' · reputazione ' + (p.rep >= 0 ? '+' : '') + p.rep + '.';
+}
+
+/* ---------------- il carico del furgone (23:00) ----------------
+   Minigioco a sé (carico.html, vedi docs/minigioco-carico.md), in un iframe
+   sopra il gioco dopo il karaoke di Macio, dalla scaletta o dal foglio. Macio porta
+   fuori i case, il tecnico li incastra nel furgone, li lega con tre cinghie
+   e si parte: quello che è slegato scivola e sbatte. L'esito torna al gioco:
+   reputazione una volta sola (la calcola la pagina dalle stelle) e birre. */
+const caricoDone = () => !!Profile.data.carico;
+function openCarico () {
+  if (caricoOpen || caricoDone() || !karaokeDone() || minigameOpen()) return;
+  caricoOpen = true;
+  setSceneInput(false);
+  sceneKeyboard(false);
+  if (window.__scene) window.__scene.stopFx();
+  const f = document.createElement('iframe');
+  f.id = 'carico-frame';
+  f.className = 'minigame-frame';
+  f.title = 'Il carico';
+  const logo = serviceLogo();
+  const info = Profile.data.serviceInfo;
+  f.src = 'carico.html?embed=1&service=' + encodeURIComponent(serviceName()) + '&bg=' + encodeURIComponent(logo.bg) + '&fg=' + encodeURIComponent(logo.fg)
+    + (info && info.boss ? '&boss=' + encodeURIComponent(info.boss) : '') + minigameQuery();
+  f.addEventListener('load', () => { try { f.contentWindow.focus(); } catch (e) { /* niente fuoco: si tocca */ } });
+  document.body.appendChild(f);
+}
+window.addEventListener('message', ev => {
+  const d = ev.data;
+  if (caricoOpen && d && d.type === 'carico-fine' && fromFrame(ev, 'carico-frame')) finishCarico(d.result || { skipped: true });
+});
+function finishCarico (r) {
+  const f = el('#carico-frame');
+  if (f) f.remove();
+  caricoOpen = false;
+  const skipped = !!r.skipped;
+  const num = (v, d) => Number.isFinite(+v) ? Math.round(+v) : d;
+  const stars = skipped ? 0 : Math.max(0, Math.min(5, num(r.stars, 0)));
+  const list = v => Array.isArray(v) ? v.filter(x => typeof x === 'string').slice(0, 14) : [];
+  Profile.data.carico = { skipped, stars, rep: skipped ? 0 : Math.max(-5, Math.min(5, num(r.rep, 0))), beers: skipped ? 0 : Math.max(0, Math.min(1, num(r.beers, 0))),
+    depart: skipped ? null : String(r.depart || '23:00').slice(0, 5), late: !skipped && !!r.late, order: !skipped && !!r.order, coffee: !skipped && !!r.coffee, damaged: skipped ? [] : list(r.damaged), taken: skipped ? [] : list(r.taken) };
+  const c = Profile.data.carico;
+  Profile.data.beers = (Profile.data.beers || 0) + c.beers;
+  const rep = skipped ? 0 : addReputation(c.rep, 'Carico del furgone a fine serata', 'L' + LEVEL_ID + ':carico');
+  Profile.save();
+  sceneKeyboard(true);
+  if (!sceneCovered()) setSceneInput(true);
+  applySettings();
+  showToast(skipped ? 'Carico saltato: il furgone è partito, ma la reputazione non cambia.'
+    : 'Furgone carico, si torna a casa. ' + '★'.repeat(stars) + '☆'.repeat(5 - stars) + (rep ? ' Reputazione ' + (rep > 0 ? '+' : '') + rep + '.' : '') + (c.beers ? ' 🍺 +' + c.beers + '.' : ''), skipped || stars >= 3 ? 'ok' : undefined);
+  updateFoglio();
+}
+function caricoSummary () {
+  const c = Profile.data.carico;
+  if (c.skipped) return 'Saltato: niente reputazione.';
+  return '★'.repeat(c.stars) + '☆'.repeat(5 - c.stars) + ' · partiti alle ' + c.depart + (c.late ? ' (dopo la chiusura)' : '')
+    + (c.damaged.length ? ' · rovinati: ' + c.damaged.join(', ') : ' · tutto integro')
+    + (c.taken.length ? ' · portati via per sbaglio: ' + c.taken.join(', ') : '')
+    + (c.order ? ' · PAR e PC al portellone' : '') + (c.coffee ? ' · caffè di Gerry' : '')
+    + (c.beers ? ' · 🍺 +' + c.beers : '') + ' · reputazione ' + (c.rep >= 0 ? '+' : '') + c.rep + '.';
 }
 
 el('#cambio-go').addEventListener('click', () => { SFX.button(); closeCambioCard(); });
@@ -3463,7 +3879,7 @@ el('#schedule-go').addEventListener('click', () => {
   SFX.button();
   const next = scheduleNext;
   closeSchedule();
-  if (next === 'cavi') openCavi(); else if (next === 'preside') openPreside(); else if (next === 'cambio-dj') startCambioDj(); else if (next === 'dj') openDj();
+  if (next === 'cavi') openCavi(); else if (next === 'preside') openPreside(); else if (next === 'cambio-dj') startCambioDj(); else if (next === 'dj') openDj(); else if (next === 'karaoke') openKaraoke(); else if (next === 'carico') openCarico();
 });
 el('#schedule-close').addEventListener('click', () => { SFX.button(); closeSchedule(); });
 el('#schedule-modal').addEventListener('click', ev => { if (ev.target.id === 'schedule-modal') closeSchedule(); });
@@ -3548,6 +3964,7 @@ applySettings();
 
 /* Reset */
 el('#reset-btn').addEventListener('click', () => {
+  closeMenu();
   if (window.__scene) window.__scene.resetLevel();
 });
 
@@ -3811,7 +4228,7 @@ const REAR_PANELS = {
   controller: { style: 'desk', accent: true, power: true, serial: 'DMX CONTROLLER  ·  2 UNIVERSI  ·  1024 CH',
     sections: [['DMX OUT', [['dmx_1', 'UNIVERSO 1'], ['dmx_2', 'UNIVERSO 2']]], ['POWER', [['power', 'POWER IN']]]] },
   // sopra le protezioni su guida DIN, sotto ingresso e prese
-  quadro: { style: 'white', serial: 'QUADRO DI DISTRIBUZIONE  ·  3F+N 16A  ·  IP44',
+  quadro: { style: 'cabinet', serial: 'COMBINAZIONE PRESE IN GOMMA  ·  3F+N 16A  ·  IP44',
     rows: [
       [['__PROT__', []]],
       [['INGRESSO', [['in', '400V TRIFASE']]], ['USCITE 230V', [['out_1', 'L1'], ['out_2', 'L2'], ['out_3', 'L3']]]]
@@ -4129,25 +4546,35 @@ function rearProtections (ctx, comp, x, y0) {
   let mx = x + REAR_PADX;
   PROT_MODULES.forEach(([key, label, spec, w]) => {
     const on = !!prot[key], tripped = !!prot.tripped[key];
-    const lever = key === 'rcd' ? '#2f6fd6' : '#1c1d22';
+    // leve come quelle vere: generale rossa, salvavita blu, magnetotermici
+    // nere; la finestrella sopra fa vedere i contatti (rossa I chiusi, verde O aperti)
+    const lever = key === 'rcd' ? '#2f6fd6' : key === 'main' ? '#c4302b' : '#1c1d22';
     const cx = mx + w / 2;
     svg += `<g class="rp-brk" data-brk="${key}" style="cursor:pointer">
       <text x="${cx}" y="${y0 + 32}" font-size="14" font-weight="700" fill="${st.ink}" text-anchor="middle">${label}</text>
       <rect x="${mx}" y="${y0 + 44}" width="${w}" height="150" rx="4" fill="#f7f7f8" stroke="#9a9da3" stroke-width="1.5"/>
-      ${[y0 + 54, y0 + 184].map(yy => [0.3, 0.7].map(f => `<circle cx="${mx + w * f}" cy="${yy}" r="4" fill="#c9ccd1" stroke="#7d828c"/>`).join('')).join('')}
-      <rect x="${cx - 16}" y="${y0 + 78}" width="32" height="76" rx="3" fill="#2a2c32"/>
-      <rect x="${cx - 12}" y="${on ? y0 + 82 : y0 + 116}" width="24" height="34" rx="3" fill="${lever}" stroke="#55585f"/>
-      <text x="${cx}" y="${y0 + 72}" font-size="9" font-weight="700" fill="#2a2c32" text-anchor="middle">I ON</text>
-      <text x="${cx}" y="${y0 + 166}" font-size="9" font-weight="700" fill="#2a2c32" text-anchor="middle">O OFF</text>
-      <text x="${cx}" y="${y0 + 178}" font-size="9.5" fill="#5f646d" text-anchor="middle">${spec}</text>`;
+      <rect x="${mx + 8}" y="${y0 + 60}" width="${w - 16}" height="122" rx="3" fill="#ececee" stroke="#b5b8bd"/>
+      ${[y0 + 52, y0 + 188].map(yy => [0.3, 0.7].map(f => `<circle cx="${mx + w * f}" cy="${yy}" r="4" fill="#c9ccd1" stroke="#7d828c"/><line x1="${mx + w * f - 2.5}" y1="${yy}" x2="${mx + w * f + 2.5}" y2="${yy}" stroke="#7d828c"/>`).join('')).join('')}
+      <rect x="${cx - 14}" y="${y0 + 65}" width="28" height="15" rx="2" fill="${on ? '#d6392f' : '#2f9e4f'}" stroke="#55585f"/>
+      <text x="${cx}" y="${y0 + 77}" font-size="11" font-weight="700" fill="#fff" text-anchor="middle">${on ? 'I' : 'O'}</text>
+      <text x="${cx}" y="${y0 + 93}" font-size="9" font-weight="700" fill="#2a2c32" text-anchor="middle">I ON</text>
+      <rect x="${cx - 17}" y="${y0 + 97}" width="34" height="56" rx="4" fill="#b9bcc1" stroke="#8a8e98"/>
+      <rect x="${cx - 14}" y="${y0 + 100}" width="28" height="50" rx="3" fill="#d9dbde"/>
+      ${on
+        ? `<rect x="${cx - 13}" y="${y0 + 124}" width="26" height="6" fill="#00000033"/>`
+        : `<rect x="${cx - 13}" y="${y0 + 120}" width="26" height="6" fill="#00000033"/>`}
+      <rect x="${cx - 13}" y="${on ? y0 + 101 : y0 + 125}" width="26" height="24" rx="3" fill="${lever}" stroke="#0e0f12"/>
+      ${[0, 1, 2].map(i => `<line x1="${cx - 8}" x2="${cx + 8}" y1="${(on ? y0 + 104 : y0 + 138) + i * 3.5}" y2="${(on ? y0 + 104 : y0 + 138) + i * 3.5}" stroke="#ffffff" stroke-opacity=".35" stroke-width="1.5"/>`).join('')}
+      <text x="${cx}" y="${y0 + 164}" font-size="9" font-weight="700" fill="#2a2c32" text-anchor="middle">O OFF</text>
+      <text x="${cx}" y="${y0 + 177}" font-size="9.5" fill="#5f646d" text-anchor="middle">${spec}</text>`;
     const status = on ? 'ARMATO' : (tripped ? 'SCATTATO' : 'ABBASSATO');
     const sc = on ? '#1f7a40' : (tripped ? '#e0503f' : st.sub);
     svg += `<rect x="${cx - w / 2 + 2}" y="${y0 + 202}" width="${w - 4}" height="22" rx="11" fill="${tripped && !on ? '#e0503f22' : 'transparent'}" stroke="${tripped && !on ? '#e0503f' : 'none'}"/>
       <text x="${cx}" y="${y0 + 217}" font-size="11" font-weight="700" fill="${sc}" text-anchor="middle">${status}</text></g>`;
     if (key === 'rcd') {
       svg += `<g class="rp-brk" data-brk="rcd_test" style="cursor:pointer">
-        <circle cx="${mx + w - 18}" cy="${y0 + 100}" r="10" fill="#f2c53d" stroke="#8a5f1f"/>
-        <text x="${mx + w - 18}" y="${y0 + 104}" font-size="11" font-weight="700" fill="#2a2c32" text-anchor="middle">T</text></g>`;
+        <circle cx="${mx + w - 22}" cy="${y0 + 125}" r="9" fill="#f2c53d" stroke="#8a5f1f"/>
+        <text x="${mx + w - 22}" y="${y0 + 129}" font-size="11" font-weight="700" fill="#2a2c32" text-anchor="middle">T</text></g>`;
     }
     mx += w + PROT_GAP;
   });
@@ -4646,6 +5073,17 @@ function selectCable (cableId) {
   updateCableHand();
 }
 
+/* Spina o cavo di corrente in mano e nessuna presa adatta libera in giro:
+   non manca niente, le prese del Quadro accettano più cavi. Si dice come
+   arrivarci (chi resta senza ciabatte pensava di dover rubare corrente). */
+function noFreeSocketHint (signal) {
+  if ((signal !== 'schuko' && signal !== 'powercon') || !window.__scene || window.__scene.compatibleTargets().length) return '';
+  const adapter = signal === 'schuko' ? 'cee_schuko' : 'cee_powercon';
+  return 'Nessuna presa ' + SIGNAL_LABEL[signal] + ' libera? Non manca niente: le prese del Quadro accettano più cavi. ' +
+    'Prendi l\'adattatore ' + cableName(adapter) + ' dal baule (scheda Cavi) e collegalo al Quadro' +
+    (signal === 'powercon' ? ', oppure usa il passante PowerCON di un PAR.' : '.');
+}
+const CIABATTE_FINITE = 'Ciabatte finite: non ne servono altre. Le prese del Quadro accettano più cavi, e con gli adattatori del baule (CEE / Schuko, CEE / PowerCON) ci colleghi qualunque spina.';
 function onRearPortClick (compId, portId) {
   const scene = window.__scene;
   if (!scene) return;
@@ -4716,9 +5154,13 @@ function onRearPortClick (compId, portId) {
   if (connected || picked) {
     // cavo collegato, o primo capo scelto: si torna alla scena
     closeRearPanel();
-    if (picked && p.lead) showToast('Spina in mano: tocca il dispositivo con la presa ' + SIGNAL_LABEL[p.signal] + ' dove infilarla (quelli in verde hanno una presa adatta libera).', 'ok');
+    const noSocket = picked && noFreeSocketHint(p.signal);
+    if (noSocket) showToast(noSocket);
+    else if (picked && p.lead) showToast('Spina in mano: tocca il dispositivo con la presa ' + SIGNAL_LABEL[p.signal] + ' dove infilarla (quelli in verde hanno una presa adatta libera).', 'ok');
     else if (picked) showToast('Cavo in mano: ora tocca il dispositivo da collegare (quelli in verde hanno una presa adatta libera).', 'ok');
     else if (!arced) showToast('Collegato: ' + compLabel(compId) + ' · ' + portLabel(compId, portId) + '.', 'ok');
+    // il cavo appena collegato resta in mano: si stende per terra
+    if (connected) scene.startLay(gameState.edges[gameState.edges.length - 1].id);
     return;
   }
   renderRearPanel();
@@ -4729,6 +5171,8 @@ function onRearPortClick (compId, portId) {
 // letto come un tocco sul pavimento (che annulla il cavo in mano)
 function setSceneInput (on) {
   const scene = window.__scene;
+  // si apre un pannello o un menù: il cavo in mano resta come è stato steso
+  if (!on && scene && scene.lay) scene.endLay(true);
   if (scene && scene.input) scene.input.enabled = on;
 }
 function openRearPanel (compId) {
@@ -4766,7 +5210,7 @@ function closeRearPanel () {
   el('#rear-modal').classList.remove('show');
   // riattivato al giro successivo: il rilascio del tocco che ha chiuso il
   // popup non deve arrivare alla scena
-  setTimeout(() => { if (!rearPanelId && !openCaseName) setSceneInput(true); }, 0);
+  setTimeout(() => { if (!sceneCovered()) setSceneInput(true); }, 0);
 }
 el('#rear-close').addEventListener('click', closeRearPanel);
 el('#rear-trace').addEventListener('click', () => {
@@ -4788,6 +5232,11 @@ function updateCableBanner () {
     : `Cavo <b>${escapeHtml(cableName(gameState.selectedCable))}</b> in mano da <b>${escapeHtml(compLabel(pending.componentId))} · ${escapeHtml(portLabel(pending.componentId, pending.portId))}</b> → tocca il dispositivo da collegare`;
   bar.classList.add('show');
 }
+// barra del cavo in mano da stendere (vedi StageScene.startLay)
+el('#lay-done').addEventListener('click', () => { SFX.button(); if (window.__scene) window.__scene.endLay(true); });
+el('#lay-add').addEventListener('click', () => { SFX.button(); if (window.__scene) window.__scene.layAddBend(); });
+el('#lay-auto').addEventListener('click', () => { SFX.button(); if (window.__scene) window.__scene.layReset(); });
+el('#lay-del').addEventListener('click', () => { if (window.__scene) window.__scene.layDelete(); });
 el('#cable-banner-cancel').addEventListener('click', () => {
   if (window.__scene) window.__scene.cancelPending();
 });
@@ -4956,7 +5405,7 @@ function openCase (name) {
 function closeCase () {
   openCaseName = null;
   el('#case-modal').classList.remove('show');
-  setTimeout(() => { if (!openCaseName && !rearPanelId) setSceneInput(true); }, 0);
+  setTimeout(() => { if (!sceneCovered()) setSceneInput(true); }, 0);
 }
 el('#case-close').addEventListener('click', closeCase);
 el('#case-modal').addEventListener('click', ev => { if (ev.target.id === 'case-modal') closeCase(); });
@@ -4978,6 +5427,7 @@ function pickCable (cableId) {
   gameState.selectedCable = cableId;
   disarmPiece();
   updateCableHand();
+  closeDrawerIfNarrow();
   SFX.pick();
   showToast('Cavo preso: ' + cableName(cableId) + '. Tocca un dispositivo per aprire il suo pannello e scegliere la presa.');
 }
@@ -5020,6 +5470,77 @@ document.querySelectorAll('.layer-toggle').forEach(btn => {
     btn.classList.toggle('active', gameState.visibleSignals[sig]);
     if (window.__scene) window.__scene.applyLayerVisibility();
   });
+});
+
+/* ---------------------------------------------------------------------
+   SCHERMATA A — la scena è a tutto schermo; le schede sono il flight case
+   in basso e ognuna apre il suo cassetto coi pezzi. Il cassetto si chiude
+   col ✕, ritoccando la scheda, quando si sceglie un pezzo o un cavo e (sul
+   telefono, dove copre la scena) toccando la scena.
+   --------------------------------------------------------------------- */
+const toolbarEl = el('#toolbar');
+const NARROW_PX = 1000;
+function tabName (btn) { const b = btn && btn.querySelector('b'); return (b || btn).textContent.trim(); }
+function openDrawer () { toolbarEl.classList.add('open'); document.body.classList.add('drawer-open'); }
+// chiuso il cassetto, sotto il dito compaiono PROVA, zoom e annulla: il
+// "click" che il telefono manda dopo il tocco non deve finire su di loro
+let drawerClosedAt = -1e9;
+document.addEventListener('click', ev => {
+  if (performance.now() - drawerClosedAt < 350 && !(ev.target.closest && ev.target.closest('.tabs'))) { ev.stopPropagation(); ev.preventDefault(); }
+}, true);
+function closeDrawer () {
+  if (toolbarEl.classList.contains('open')) drawerClosedAt = performance.now();
+  toolbarEl.classList.remove('open');
+  document.body.classList.remove('drawer-open');
+  document.querySelectorAll('.tab-panel.help').forEach(p => p.classList.remove('help'));
+  document.querySelectorAll('.dr-help.on').forEach(b => b.classList.remove('on'));
+}
+function closeDrawerIfNarrow () { if (window.innerWidth < NARROW_PX) closeDrawer(); }
+// un pezzo si arma al rilascio del dito, ma il telefono manda il "click"
+// subito dopo: il cassetto si chiude solo quando quel click è arrivato
+function closeDrawerAfterTap () {
+  if (window.innerWidth >= NARROW_PX) return;
+  let done = false;
+  const fin = () => { if (done) return; done = true; document.removeEventListener('click', fin, true); setTimeout(closeDrawer, 0); };
+  document.addEventListener('click', fin, true);
+  setTimeout(fin, 450);
+}
+document.querySelectorAll('.tab-panel').forEach(panel => {
+  const btn = document.querySelector('.tab-btn[data-tab="' + panel.dataset.panel + '"]');
+  const head = document.createElement('div');
+  head.className = 'dr-head';
+  head.innerHTML = '<span class="tape">' + escapeHtml(tabName(btn)) + '</span><span class="sub"></span>'
+    + '<button type="button" class="rb dr-help" title="Come si usa" aria-label="Come si usa">?</button>'
+    + '<button type="button" class="rb dr-close" title="Chiudi" aria-label="Chiudi">✕</button>';
+  panel.prepend(head);
+  const help = head.querySelector('.dr-help');
+  help.addEventListener('click', () => { help.classList.toggle('on', panel.classList.toggle('help')); });
+  head.querySelector('.dr-close').addEventListener('click', closeDrawer);
+});
+// sotto il nome del cassetto: quanti pezzi restano da posare
+function updateDrawerSubs () {
+  document.querySelectorAll('.tab-panel').forEach(panel => {
+    const sub = panel.querySelector('.dr-head .sub');
+    if (!sub) return;
+    if (panel.dataset.panel === 'cavi') { sub.textContent = 'Apri un baule e prendi un cavo'; return; }
+    const left = [...panel.querySelectorAll('.piece')].filter(p => !p.classList.contains('depleted')).length;
+    sub.textContent = left ? left + (left === 1 ? ' pezzo da posare' : ' pezzi da posare') : 'Tutto posato';
+  });
+}
+// la scheda apre il suo cassetto; ritoccata col cassetto aperto lo chiude
+// (fase di cattura: si guarda com'era prima che la scheda diventi attiva)
+document.querySelectorAll('.tab-btn').forEach(btn => {
+  btn.addEventListener('click', () => {
+    if (btn.classList.contains('locked')) return;
+    if (btn.classList.contains('active') && toolbarEl.classList.contains('open')) closeDrawer();
+    else openDrawer();
+  }, true);
+});
+// sul telefono il cassetto copre la scena: un tocco sulla scena lo chiude
+el('#stage-wrap').addEventListener('pointerdown', ev => { if (ev.target && ev.target.tagName === 'CANVAS') closeDrawerIfNarrow(); });
+// strati: quali cavi si vedono, dal pulsante sopra lo zoom
+el('#layers-btn').addEventListener('click', () => {
+  el('#layers-btn').classList.toggle('on', document.body.classList.toggle('show-layers'));
 });
 
 /* ---------------------------------------------------------------------
@@ -5090,6 +5611,7 @@ function armPiece (type, pieceEl) {
   if (window.__scene) { window.__scene.clearMoveSelection(); window.__scene.clearEdgeSelection(); window.__scene.cancelPending(); }
   gameState.selectedPieceType = type;
   document.querySelectorAll('.piece').forEach(p => p.classList.toggle('armed', p === pieceEl));
+  closeDrawerAfterTap();
   const free = window.__scene ? window.__scene.showZoneHint(type) : 1;
   const m = MOUNTS[type];
   if (m && !free) showToast(m.missing);
@@ -5125,6 +5647,7 @@ document.addEventListener('pointermove', ev => {
     ghost.classList.add('drag-ghost');
     document.body.appendChild(ghost);
     pieceDown.ghost = ghost;
+    closeDrawerIfNarrow();
     if (window.__scene) window.__scene.showZoneHint(pieceDown.type);
   }
   if (pieceDown.dragging) {
@@ -5152,7 +5675,7 @@ document.addEventListener('pointerup', ev => {
     if (window.__scene) { window.__scene.clearDropPreview(); window.__scene.showZoneHint(gameState.selectedPieceType); }
     const { over } = stagePointFromClient(ev.clientX, ev.clientY);
     if (over && window.__scene) {
-      if (gameState.stock[type] <= 0) showToast('Esaurito in questo livello: ' + COMPONENT_TYPES[type].label + '.');
+      if (gameState.stock[type] <= 0) showToast(/^ciabatta/.test(type) ? CIABATTE_FINITE : 'Esaurito in questo livello: ' + COMPONENT_TYPES[type].label + '.');
       else window.__scene.handleExternalDrop(type, ev.clientX, ev.clientY);
     }
     window.__draggedType = null;
@@ -5285,11 +5808,20 @@ function updateFoglio () {
     head = 'Prossimo: Notte fuori controllo';
     body = '<p class="fg-note">DJ Inestimabile e Musa Esistenziale sono pronti. Tu vai alla consolle luci: le memorie si suonano a tempo col brano.</p>'
       + '<button type="button" class="fg-go" id="foglio-dj">Via al DJ set</button>';
-  } else if (djDone()) {
-    icon = '🎧 ';
-    head = 'DJ set finito';
-    body = '<p class="fg-note">Il bidello ha cacciato via i musicisti. Ora si può ripristinare il palco per l\'ultima band (Dante unplugged, alle 22:00: arriva presto).</p>'
-      + '<p class="fg-note">' + escapeHtml(djSummary()) + '</p>';
+  } else if (djDone() && !karaokeDone()) {
+    // fuori programma: il karaoke di Macio, col microfono che c'è già
+    const missing = karaokeReady();
+    icon = '🎤 ';
+    head = 'Fuori programma: il karaoke di Macio';
+    body = '<p class="fg-note">' + escapeHtml('Il bidello ha cacciato via i musicisti: la festa è rimasta senza musica. Macio: «Ci penso io!». '
+      + (missing ? 'Prima però: ' + missing : 'Il microfono è sul CH ' + micChannel() + '.')) + '</p>'
+      + (missing ? '' : '<button type="button" class="fg-go" id="foglio-karaoke">Macio prende il microfono</button>');
+  } else if (karaokeDone()) {
+    icon = '🎤 ';
+    head = 'Karaoke finito';
+    body = '<p class="fg-note">' + escapeHtml('Karaoke di Macio: ' + karaokeSummary()) + '</p>'
+      + (caricoDone() ? '<p class="fg-note">Carico: ' + escapeHtml(caricoSummary()) + '</p>'
+        : '<button type="button" class="fg-go" id="foglio-carico">Smonta e carica il furgone</button>');
   } else if (caviDone() && !presideDone()) {
     // il discorso del preside: pronto se il microfono è cablato
     const missing = presideReady();
@@ -5316,6 +5848,10 @@ function updateFoglio () {
   if (pr) pr.addEventListener('click', () => { SFX.button(); openPreside(); });
   const dg = el('#foglio-dj');
   if (dg) dg.addEventListener('click', () => { SFX.button(); openDj(); });
+  const kg = el('#foglio-karaoke');
+  if (kg) kg.addEventListener('click', () => { SFX.button(); openKaraoke(); });
+  const cg = el('#foglio-carico');
+  if (cg) cg.addEventListener('click', () => { SFX.button(); openCarico(); });
 }
 
 // cambio di scheda verso una chiusa: si spiega perché
@@ -5324,13 +5860,14 @@ document.querySelectorAll('.tab-btn').forEach(btn => {
     if (!btn.classList.contains('locked')) return;
     ev.stopImmediatePropagation();
     const g = GIRI.find(x => x.tabs.includes(btn.dataset.tab));
-    showToast('La scheda ' + btn.textContent.trim() + ' si apre col giro ' + (g ? g.title : '') + ': prima finisci il giro ' + GIRI[gameState.giro].title + ' e fai la sua prova.');
+    showToast('La scheda ' + tabName(btn) + ' si apre col giro ' + (g ? g.title : '') + ': prima finisci il giro ' + GIRI[gameState.giro].title + ' e fai la sua prova.');
   }, true);
 });
 
 /* Run button: la prova del giro in corso, o il Test impianto a montaggio finito */
 el('#run-btn').addEventListener('click', () => {
   if (!window.__scene) return;
+  window.__scene.endLay(true);
   if (gameState.giro < GIRO_COLLAUDO) window.__scene.runGiroTest();
   else if (cambioDjOn()) window.__scene.runCambioTest();
   else window.__scene.runSystemTest();
@@ -5351,7 +5888,7 @@ const __stageWrapEl = document.getElementById('stage-wrap');
 const __rawRatio = (__stageWrapEl && __stageWrapEl.clientWidth && __stageWrapEl.clientHeight)
   ? __stageWrapEl.clientHeight / __stageWrapEl.clientWidth
   : 1.3; // valore di riserva se la misura non fosse disponibile
-const __containerRatio = Math.min(2.2, Math.max(0.75, __rawRatio)); // limite di sicurezza
+const __containerRatio = Math.min(2.2, Math.max(0.45, __rawRatio)); // limite di sicurezza
 const GAME_H = Math.round(GAME_W * __containerRatio);
 
 const ORIGIN_X = 853;
@@ -5362,6 +5899,11 @@ const ORIGIN_Y = Math.round((GAME_H - (VENUE_W + VENUE_H) * TILE_H / 2) / 2);
 
 const ZOOM_MIN = 0.5, ZOOM_MAX = 4;
 const DEFAULT_ZOOM = 1.05;
+// passi di Annulla tenuti in memoria (ogni passo è una fotografia di tutto il montaggio)
+const HISTORY_MAX = 200;
+// pixel di schermo per unità di mondo a cui si avvicina la scena quando un
+// tocco cade in mezzo a più dispositivi (su telefono a zoom base è ≈ 0,3)
+const CROWD_SCALE = 0.6;
 // "Quale?": cose entro PICK_TIE_PX (pixel di schermo) dalla più vicina sono
 // ambigue; al massimo PICK_MAX voci; "Ingrandisci qui" moltiplica lo zoom
 const PICK_TIE_PX = 8, PICK_ON_CABLE_PX = 5, PICK_MAX = 8, PICK_ZOOM_STEP = 2, PICK_ZOOM_MIN = 2.2;
@@ -5418,7 +5960,7 @@ function screenToCell (px, py) {
    misura reale nel disegno; se il pezzo è girato di un quarto (in FOH) si
    scambia. I pezzi montati (testa, PAR) non occupano celle. */
 const FOOTPRINT = {
-  sub: [1, 1], mixer: [1, 2], ampli: [1, 2], tavolo: [2, 6], controller: [1, 1], quadro: [1, 2],
+  sub: [1, 1], mixer: [1, 2], ampli: [1, 2], tavolo: [2, 6], controller: [1, 1], quadro: [1, 1],
   ciabatta: [1, 2], ciabatta_cee: [1, 3], pc: [1, 1], scheda: [1, 1], di: [1, 1], stativo: [1, 1], asta: [1, 1], dj: [2, 1], djluci: [1, 1]
 };
 function footprint (type, rot) {
@@ -5436,6 +5978,25 @@ function footCells (gx, gy, f) {
 function compCenter (c) {
   const f = c.foot || [1, 1];
   return { gx: c.gx + f[0] * CELL / 2, gy: c.gy + f[1] * CELL / 2 };
+}
+// il quadro della palestra è appeso alla parete dietro al palco
+function allaccioPos () { return gridToScreen(3.3, CARICO_ROWS + 0.25); }
+/* le coordinate di schermo dei pezzi dipendono dall'altezza del canvas, misurata
+   all'apertura della pagina (telefono dritto o girato, finestra del computer):
+   una partita salvata con un'altra misura le ha spostate, quindi alla ripresa
+   si rifanno dalla griglia (pezzi a terra), dalla parete (quadro della palestra)
+   e dalla base (pezzi montati, anche uno sopra l'altro) */
+function alignScreens (placed) {
+  Object.values(placed).forEach(c => {
+    if (c.type === 'allaccio') c.screen = allaccioPos();
+    else if (c.gx != null) { const m = compCenter(c); c.screen = gridToScreen(m.gx, m.gy); }
+  });
+  for (let pass = 0; pass < 3; pass++) {
+    Object.values(placed).forEach(c => {
+      const m = MOUNTS[c.type], base = m && placed[c[m.back]];
+      if (base && base.screen) c.screen = { x: base.screen.x + (m.offsetX ? m.offsetX() : 0), y: base.screen.y + m.offsetY() };
+    });
+  }
 }
 
 function isStageCoreCell (cx, cy) {
@@ -5515,6 +6076,137 @@ function computeRoutePoints (from, to, stageBox, margin) {
   return [from, { x: railX, y: from.y }, { x: railX, y: to.y }, to];
 }
 
+/* ---------------------------------------------------------------------
+   5b) POSA AL MONTAGGIO: un cavo per terra va dal pezzo A al pezzo B
+       passando per le sue pieghe (route.bends, [gx, gy] in metri). Tra due
+       pieghe va dritto, e a ogni piega curva morbido, come un cavo vero.
+       Le pieghe si trascinano col dito e scattano sui centri delle celle
+       da 50 cm, mettendosi in riga con quelle accanto (tratti paralleli ai
+       muri). Nessuna piega nasce da sola: si aggiunge con «+ Piega».
+   --------------------------------------------------------------------- */
+// punto dello schermo -> metri sul pavimento (senza pedana)
+function screenToMeters (px, py) {
+  const rx = (px - ORIGIN_X) / (TILE_W / 2), ry = (py - ORIGIN_Y) / (TILE_H / 2);
+  return { gx: (rx + ry) / 2, gy: (ry - rx) / 2 };
+}
+// come sopra, ma se il punto cade sulla pedana tiene conto del rialzo
+function worldToFloor (px, py) {
+  const up = screenToMeters(px, py + PLATFORM_HEIGHT);
+  return isStageCell(up.gx, up.gy) ? up : screenToMeters(px, py);
+}
+const laySnap = v => Math.round((v - CELL / 2) / CELL) * CELL + CELL / 2;
+const LAY_RADIUS = 0.9;     // raggio delle curve, in metri
+const LAY_MAX_BENDS = 5;
+const LAY_REMOVE_MS = 650;  // tenendo fermo un pallino così a lungo, lasciandolo si toglie
+// i punti fermi del cavo: capo A, pieghe, capo B
+function layCorners (route, A, B) {
+  return [{ gx: A.gx, gy: A.gy }, ...route.bends.map(([gx, gy]) => ({ gx, gy })), { gx: B.gx, gy: B.gy }];
+}
+// il cavo come si posa: dritto tra i punti, curva morbida a ogni piega
+function laySmooth (pts) {
+  if (pts.length < 3) return pts.slice();
+  const out = [pts[0]];
+  for (let i = 1; i < pts.length - 1; i++) {
+    const p = pts[i - 1], c = pts[i], n = pts[i + 1];
+    const d1 = Math.hypot(c.gx - p.gx, c.gy - p.gy), d2 = Math.hypot(n.gx - c.gx, n.gy - c.gy);
+    const r = Math.min(LAY_RADIUS, d1 / 2, d2 / 2);
+    if (r < 0.05) { out.push(c); continue; }
+    const a = { gx: c.gx + (p.gx - c.gx) / d1 * r, gy: c.gy + (p.gy - c.gy) / d1 * r };
+    const b = { gx: c.gx + (n.gx - c.gx) / d2 * r, gy: c.gy + (n.gy - c.gy) / d2 * r };
+    for (let k = 0; k <= 8; k++) {
+      const t = k / 8, u = 1 - t;
+      out.push({ gx: u * u * a.gx + 2 * u * t * c.gx + t * t * b.gx, gy: u * u * a.gy + 2 * u * t * c.gy + t * t * b.gy });
+    }
+  }
+  out.push(pts[pts.length - 1]);
+  return out;
+}
+function layLength (pts) {
+  let s = 0;
+  for (let i = 0; i < pts.length - 1; i++) s += Math.hypot(pts[i + 1].gx - pts[i].gx, pts[i + 1].gy - pts[i].gy);
+  return s;
+}
+// quanti tratti attraversano la pedana dello spettacolo (lì i cavi non vanno)
+function layCrossesStage (pts) {
+  let n = 0;
+  for (let i = 0; i < pts.length - 1; i++) {
+    const a = pts[i], b = pts[i + 1], L = Math.abs(b.gx - a.gx) + Math.abs(b.gy - a.gy);
+    for (let t = CELL / 2; t < L; t += CELL / 2) {
+      const x = a.gx + (b.gx - a.gx) * t / L, y = a.gy + (b.gy - a.gy) * t / L;
+      if (isStageCoreCell(x, y)) { n++; break; }
+    }
+  }
+  return n;
+}
+// toglie le pieghe che non servono: sopra un'altra o in riga con le vicine
+function layClean (bends, A, B) {
+  const out = bends.map(b => b.slice());
+  for (let guard = 0; guard < 10; guard++) {
+    const pts = layCorners({ bends: out }, A, B);
+    let k = -1;
+    for (let i = 1; i < pts.length - 1 && k < 0; i++) {
+      const p = pts[i - 1], c = pts[i], n = pts[i + 1];
+      const near = Math.hypot(c.gx - p.gx, c.gy - p.gy) < 0.1 || Math.hypot(n.gx - c.gx, n.gy - c.gy) < 0.1;
+      const cross = (c.gx - p.gx) * (n.gy - c.gy) - (c.gy - p.gy) * (n.gx - c.gx);
+      const ahead = (c.gx - p.gx) * (n.gx - c.gx) + (c.gy - p.gy) * (n.gy - c.gy) > 0;
+      if (near || (Math.abs(cross) < 1e-6 && ahead)) k = i - 1;
+    }
+    if (k < 0) break;
+    out.splice(k, 1);
+  }
+  return out;
+}
+// percorso automatico: il più corto a L o a Z, girando intorno alla pedana
+function layAutoRoute (A, B) {
+  const onStage = isStageCoreCell(A.gx, A.gy) || isStageCoreCell(B.gx, B.gy);
+  const sx0 = STAGE_ORIGIN_X - CELL / 2, sx1 = STAGE_ORIGIN_X + STAGE_W + CELL / 2;
+  const sy0 = STAGE_ORIGIN_Y - CELL / 2, sy1 = STAGE_ORIGIN_Y + STAGE_H + CELL / 2;
+  const cands = [[[B.gx, A.gy]], [[A.gx, B.gy]]];
+  [laySnap((A.gx + B.gx) / 2), sx0, sx1].forEach(x => cands.push([[x, A.gy], [x, B.gy]]));
+  [laySnap((A.gy + B.gy) / 2), sy0, sy1].forEach(y => cands.push([[A.gx, y], [B.gx, y]]));
+  let best = null, bestScore = Infinity;
+  cands.forEach(c => {
+    const bends = layClean(c, A, B), pts = layCorners({ bends }, A, B);
+    const score = layLength(pts) + (onStage ? 0 : layCrossesStage(pts) * 100) + bends.length * 0.01;
+    if (score < bestScore) { bestScore = score; best = bends; }
+  });
+  return { bends: best };
+}
+// i percorsi salvati prima delle pieghe (tratti a quote): diventano pieghe
+function layFromRails (r, A, B) {
+  const rails = r.rails.slice(), n = rails.length, h = i => (i % 2 === 0) === (r.o0 === 'h');
+  rails[0] = h(0) ? A.gy : A.gx; rails[n - 1] = h(n - 1) ? B.gy : B.gx;
+  const bends = [];
+  for (let i = 0; i < n - 1; i++) bends.push(h(i) ? [rails[i + 1], rails[i]] : [rails[i], rails[i + 1]]);
+  return { bends: layClean(bends, A, B) };
+}
+// metri sul pavimento -> schermo, con lo scalino della pedana
+function layToScreen (pts) {
+  const out = [];
+  const up = (x, y) => { const p = gridToScreen(x, y); return isStageCell(x, y) ? { x: p.x, y: p.y - PLATFORM_HEIGHT } : p; };
+  for (let i = 0; i < pts.length - 1; i++) {
+    const a = pts[i], b = pts[i + 1], L = Math.abs(b.gx - a.gx) + Math.abs(b.gy - a.gy);
+    out.push(up(a.gx, a.gy));
+    let prev = isStageCell(a.gx, a.gy);
+    for (let t = CELL / 4; t < L; t += CELL / 4) {
+      const x = a.gx + (b.gx - a.gx) * t / L, y = a.gy + (b.gy - a.gy) * t / L;
+      const s = isStageCell(x, y);
+      if (s !== prev) { out.push(up(x, y)); prev = s; }
+    }
+  }
+  const z = pts[pts.length - 1];
+  out.push(up(z.gx, z.gy));
+  return out;
+}
+// lunghezza del cavo del baule (null: spina della ciabatta, cavo suo)
+function layMaxLen (e) {
+  const pd = getPortDef(e.b, e.bPort);
+  if (pd && pd.lead) return null;
+  const it = cableItem(e.signal), m = it && /(\d+) m/.exec(it.info);
+  return m ? +m[1] : null;
+}
+const fmtM = v => (Math.round(v * 2) / 2).toLocaleString('it-IT') + ' m';
+
 function strokeRoutedPath (g, pts, color, width, chamfer, alpha) {
   g.lineStyle(width, color, alpha == null ? 1 : alpha);
   if (pts.length <= 2) { g.lineBetween(pts[0].x, pts[0].y, pts[1].x, pts[1].y); return; }
@@ -5572,7 +6264,7 @@ class StageScene extends Phaser.Scene {
   create () {
     window.__scene = this;
 
-    this.occupied = {};
+    this.occupied = {}; this.blockSceneryCells();
     this.compVisuals = {};
     this.moveSelected = null;
     this.selectedEdgeId = null;
@@ -5595,8 +6287,9 @@ class StageScene extends Phaser.Scene {
 
     this.cursors = this.input.keyboard.createCursorKeys();
     this.wasd = this.input.keyboard.addKeys({ up: 'W', down: 'S', left: 'A', right: 'D' });
-    this.input.keyboard.on('keydown-DELETE', () => { if (this.selectedEdgeId != null) this.deleteSelectedEdge(); });
-    this.input.keyboard.on('keydown-BACKSPACE', () => { if (this.selectedEdgeId != null) this.deleteSelectedEdge(); });
+    this.input.keyboard.on('keydown-DELETE', () => { if (this.lay) this.layDelete(); else if (this.selectedEdgeId != null) this.deleteSelectedEdge(); });
+    this.input.keyboard.on('keydown-BACKSPACE', () => { if (this.lay) this.layDelete(); else if (this.selectedEdgeId != null) this.deleteSelectedEdge(); });
+    this.input.keyboard.on('keydown-ENTER', () => { if (this.lay) this.endLay(true); });
     this.input.keyboard.on('keydown-Z', event => {
       if (!(event.ctrlKey || event.metaKey)) return;
       if (event.shiftKey) this.redo(); else this.undo();
@@ -5604,8 +6297,8 @@ class StageScene extends Phaser.Scene {
     this.input.keyboard.on('keydown-Y', event => { if (event.ctrlKey || event.metaKey) this.redo(); });
 
     this.setupCameraControls();
-    this.cameras.main.setZoom(DEFAULT_ZOOM);
-    this.cameras.main.centerOn(GAME_W / 2, GAME_H / 2);
+    this.resetView();
+    this.makePieceIcons();
 
     this.history = [];
     this.historyIndex = -1;
@@ -5621,6 +6314,7 @@ class StageScene extends Phaser.Scene {
   /* ---------------- movimento: zoom (rotellina/pizzico/pulsanti),
      pan (tasto destro o trascinamento sul vuoto), frecce/WASD ---------------- */
   setupCameraControls () {
+    // la rotella ingrandisce dove sta il puntatore
     this.input.on('wheel', (pointer, gameObjects, deltaX, deltaY) => {
       this.adjustZoom(deltaY > 0 ? -0.12 : 0.12, pointer.x, pointer.y);
     });
@@ -5660,6 +6354,7 @@ class StageScene extends Phaser.Scene {
 
       const p1 = this.input.pointer1, p2 = this.input.pointer2;
       if (p1 && p2 && p1.isDown && p2.isDown) {
+        // il pizzico ingrandisce fra le due dita, non al centro dello schermo
         const dist = Phaser.Math.Distance.Between(p1.x, p1.y, p2.x, p2.y);
         if (this.lastPinchDist) this.adjustZoom((dist - this.lastPinchDist) * 0.004, (p1.x + p2.x) / 2, (p1.y + p2.y) / 2);
         this.lastPinchDist = dist;
@@ -5688,6 +6383,9 @@ class StageScene extends Phaser.Scene {
     if (pendKey !== this.pendingKey) { this.pendingKey = pendKey; updateCableBanner(); this.highlightTargets(); }
     // le note della musica di prova seguono il loro dispositivo
     if (this.signalFx) Object.values(this.signalFx).forEach(f => { if (f.note) this.placeSignalNote(f); });
+    // i pallini del cavo in mano restano grandi come un dito a ogni zoom
+    if (this.lay && this.layZoom !== cam.zoom) { this.layZoom = cam.zoom; this.drawLay(); }
+    const speed = (420 * (delta / 1000)) / cam.zoom;
     let dx = 0, dy = 0;
     if (this.cursors.left.isDown || this.wasd.left.isDown) dx -= speed;
     if (this.cursors.right.isDown || this.wasd.right.isDown) dx += speed;
@@ -5696,53 +6394,158 @@ class StageScene extends Phaser.Scene {
     if (dx || dy) { cam.scrollX += dx; cam.scrollY += dy; }
   }
 
-  /* zoom; con un punto dello schermo (rotellina, pizzico) quel punto resta
-     fermo sotto il cursore o tra le dita, così ci si avvicina a ciò che si
-     guarda (la regia, il backstage) invece che al centro */
-  adjustZoom (delta, sx, sy) {
-    const cam = this.cameras.main;
-    const before = sx != null ? cam.getWorldPoint(sx, sy) : null;
-    cam.setZoom(Phaser.Math.Clamp(cam.zoom + delta, ZOOM_MIN, ZOOM_MAX));
-    if (before) {
-      cam.preRender();
-      const after = cam.getWorldPoint(sx, sy);
-      cam.scrollX += before.x - after.x;
-      cam.scrollY += before.y - after.y;
-    }
+  /* zoom; con un punto (in pixel del gioco) quel punto resta fermo sotto
+     il dito o il puntatore, come nelle mappe */
+  adjustZoom (delta, ax, ay) {
+    const cam = this.cameras.main, z0 = cam.zoom;
+    const z1 = Phaser.Math.Clamp(z0 + delta, ZOOM_MIN, ZOOM_MAX);
+    cam.setZoom(z1);
     if (this.selectedEdgeId != null) this.refreshEdgeDeleteButton();
+    if (ax == null || z1 === z0) return;
+    cam.scrollX += (ax - cam.width / 2) * (1 / z0 - 1 / z1);
+    cam.scrollY += (ay - cam.height / 2) * (1 / z0 - 1 / z1);
+  }
+  /* tocco su più dispositivi vicini con la scena piccola (telefono):
+     oltre al menu "Quale?" la scena si avvicina lì, così il tocco dopo
+     prende quello giusto senza dover zoomare a mano */
+  zoomToCrowd (wx, wy) {
+    const cam = this.cameras.main, rc = this.game.canvas.getBoundingClientRect();
+    const k = cam.zoom * (rc.width / GAME_W);
+    if (k >= CROWD_SCALE) return;
+    cam.zoomTo(Math.min(ZOOM_MAX, CROWD_SCALE * GAME_W / rc.width), 250, 'Sine.easeOut');
+    cam.pan(wx, wy, 250, 'Sine.easeOut');
   }
 
+  /* vista intera: tutta la palestra dentro la parte di schermo libera tra
+     l'HUD in alto e il flight case in basso (la scena è a tutto schermo) */
   resetView () {
-    this.cameras.main.setZoom(DEFAULT_ZOOM);
-    this.cameras.main.centerOn(GAME_W / 2, GAME_H / 2);
+    const cam = this.cameras.main, rc = this.game.canvas.getBoundingClientRect();
+    if (!rc.width || !rc.height) { cam.setZoom(DEFAULT_ZOOM); cam.centerOn(GAME_W / 2, GAME_H / 2); return; }
+    const k = rc.width / GAME_W;   // pixel di schermo per pixel di gioco a zoom 1
+    const hud = el('header.hud'), bar = el('#toolbar');
+    const top = Math.max(0, (hud ? hud.getBoundingClientRect().bottom : rc.top) + 8 - rc.top);
+    // sul telefono dritto anche zoom, annulla e PROVA stanno sopra il flight case
+    const lows = [bar].concat(window.innerWidth < 700 && window.innerHeight > 500 ? [el('.zoom-controls'), el('header.hud .history'), el('#run-bar')] : [])
+      .filter(e => e && e.offsetParent !== null).map(e => e.getBoundingClientRect().top);
+    const bot = Math.max(0, rc.bottom - (lows.length ? Math.min(...lows) : rc.bottom) + 8);
+    const visW = (rc.width - 16) / k, visH = Math.max(120, rc.height - top - bot) / k;
+    const x0 = gridToScreen(0, VENUE_H).x, x1 = gridToScreen(VENUE_W, CARICO_ROWS).x;
+    const y0 = gridToScreen(0, CARICO_ROWS).y - 150, y1 = gridToScreen(VENUE_W, VENUE_H).y + 20;
+    const z = Phaser.Math.Clamp(Math.min(visW / (x1 - x0), visH / (y1 - y0)), ZOOM_MIN, 1.6);
+    cam.setZoom(z);
+    cam.centerOn((x0 + x1) / 2, (y0 + y1) / 2 - (top - bot) / 2 / k / z);
+  }
+
+  /* icone dei pezzi nel cassetto: lo stesso disegno della scena, fotografato
+     una volta all'avvio (così ogni pezzo nuovo ha la sua icona da solo) */
+  makePieceIcons () {
+    const K = 2, S = 220;
+    document.querySelectorAll('.piece[data-type]').forEach(piece => {
+      const type = piece.dataset.type, def = COMPONENT_TYPES[type];
+      const sw = piece.querySelector('.swatch');
+      if (!def || !sw || sw.querySelector('.pz-img')) return;
+      const g = this.make.graphics({ x: 0, y: 0 }, false);
+      try { this.drawComponentBody(g, def, 0, type + '_icona'); } catch (e) { g.destroy(); return; }
+      const rt = this.make.renderTexture({ width: S * K, height: S * K }, false);
+      g.setScale(K);
+      rt.draw(g, S * K / 2, S * K * 0.62);
+      g.destroy();
+      rt.snapshot(img => {
+        rt.destroy();
+        // si ritaglia il disegno dal fondo trasparente
+        const c = document.createElement('canvas'); c.width = img.width; c.height = img.height;
+        const x = c.getContext('2d'); x.drawImage(img, 0, 0);
+        const a = x.getImageData(0, 0, c.width, c.height).data;
+        let x0 = c.width, y0 = c.height, x1 = -1, y1 = -1;
+        for (let yy = 0; yy < c.height; yy++) for (let xx = 0; xx < c.width; xx++) {
+          if (a[(yy * c.width + xx) * 4 + 3] > 40) { if (xx < x0) x0 = xx; if (xx > x1) x1 = xx; if (yy < y0) y0 = yy; if (yy > y1) y1 = yy; }
+        }
+        if (x1 < 0) return;
+        const o = document.createElement('canvas'); o.width = x1 - x0 + 9; o.height = y1 - y0 + 9;
+        o.getContext('2d').drawImage(c, x0 - 4, y0 - 4, o.width, o.height, 0, 0, o.width, o.height);
+        const im = document.createElement('img');
+        im.className = 'pz-img'; im.alt = ''; im.draggable = false; im.src = o.toDataURL('image/png');
+        sw.prepend(im);
+      });
+    });
   }
 
   /* ---------------- disegno venue: terreno, zone, pedana ---------------- */
   drawGround () {
     const g = this.add.graphics().setDepth(0);
-    g.fillStyle(0x383b45, 1);
     const p0 = gridToScreen(0, 0), p1 = gridToScreen(VENUE_W, 0),
           p2 = gridToScreen(VENUE_W, VENUE_H), p3 = gridToScreen(0, VENUE_H);
-    g.beginPath();
-    g.moveTo(p0.x, p0.y); g.lineTo(p1.x, p1.y); g.lineTo(p2.x, p2.y); g.lineTo(p3.x, p3.y);
-    g.closePath(); g.fillPath();
-    // griglia di posa leggera, celle da 50 cm (una linea più marcata ogni metro)
-    for (let x = CELL; x < VENUE_W; x += CELL) {
-      const a = gridToScreen(x, 0), b = gridToScreen(x, VENUE_H);
-      g.lineStyle(1, 0x484c58, x % 1 ? 0.35 : 0.6); g.lineBetween(a.x, a.y, b.x, b.y);
+    // rettangolo di pavimento da (x0, y0) a (x1, y1), in metri
+    const quad = (x0, y0, x1, y1, color, alpha = 1) => {
+      g.fillStyle(color, alpha);
+      g.fillPoints([gridToScreen(x0, y0), gridToScreen(x1, y0), gridToScreen(x1, y1), gridToScreen(x0, y1)], true);
+    };
+    // generatore fisso: lo stesso pavimento a ogni partita
+    let seed = 7;
+    const rnd = () => { seed = (seed * 16807) % 2147483647; return seed / 2147483647; };
+
+    // cortile di carico, fuori dalla palestra: di notte si vede solo dai
+    // finestroni della parete di fondo, quindi resta quasi nero
+    // (tagliato in diagonale a destra, così non sporge oltre la parete)
+    g.fillStyle(0x202226, 1);
+    g.fillPoints([gridToScreen(0, 0), gridToScreen(VENUE_W - CARICO_ROWS, 0), gridToScreen(VENUE_W, CARICO_ROWS), gridToScreen(0, CARICO_ROWS)], true);
+    for (let i = 0; i < 160; i++) {
+      const x = rnd() * (VENUE_W - CARICO_ROWS), y = rnd() * CARICO_ROWS, q = gridToScreen(x, y);
+      g.fillStyle(rnd() < 0.5 ? 0x2a2c31 : 0x18191c, 0.9); g.fillCircle(q.x, q.y, 1 + rnd() * 1.2);
     }
-    for (let y = CELL; y < VENUE_H; y += CELL) {
+
+    // backstage: cemento a lastre
+    quad(0, CARICO_ROWS, VENUE_W, STAGE_ORIGIN_Y, 0x3a3c42);
+    for (let x = 2; x < VENUE_W; x += 2) {
+      const a = gridToScreen(x, CARICO_ROWS), b = gridToScreen(x, STAGE_ORIGIN_Y);
+      g.lineStyle(1, 0x2c2e33, 0.9); g.lineBetween(a.x, a.y, b.x, b.y);
+    }
+
+    // palestra: parquet a doghe, dal palco fino in fondo
+    const woods = [0x4b3a29, 0x523f2c, 0x473726, 0x4e3c2a];
+    for (let x = 0, k = 0; x < VENUE_W - 0.01; x += 0.25, k++) {
+      let y = STAGE_ORIGIN_Y - (k % 4) * 0.6;
+      while (y < VENUE_H) {
+        const y0 = Math.max(STAGE_ORIGIN_Y, y), y1 = Math.min(VENUE_H, y + 2.4);
+        quad(x, y0, x + 0.25, y1, woods[Math.floor(rnd() * woods.length)]);
+        y += 2.4;
+      }
+      const a = gridToScreen(x, STAGE_ORIGIN_Y), b = gridToScreen(x, VENUE_H);
+      g.lineStyle(1, 0x2e2318, 0.55); g.lineBetween(a.x, a.y, b.x, b.y);
+    }
+    // righe del campo da basket, sbiadite
+    const pitStart = STAGE_ORIGIN_Y + STAGE_H, fohStart = pitStart + PIT_ROWS + PLATEA_ROWS;
+    const line = (pts, color, alpha) => { g.lineStyle(3, color, alpha); g.strokePoints(pts.map(([x, y]) => gridToScreen(x, y)), false); };
+    line([[0.5, pitStart + 0.5], [0.5, VENUE_H - 0.4], [VENUE_W - 0.5, VENUE_H - 0.4], [VENUE_W - 0.5, pitStart + 0.5]], 0xe9e4d6, 0.22);
+    const circ = []; for (let a = 0; a <= Math.PI; a += Math.PI / 24) circ.push([VENUE_W / 2 + Math.cos(a) * 1.8, VENUE_H - 0.4 - Math.sin(a) * 1.8]);
+    line(circ, 0xe9e4d6, 0.22);
+    line([[VENUE_W / 2 - 1.2, VENUE_H - 0.4], [VENUE_W / 2 - 1.2, VENUE_H - 2.6], [VENUE_W / 2 + 1.2, VENUE_H - 2.6], [VENUE_W / 2 + 1.2, VENUE_H - 0.4]], 0xd6392f, 0.28);
+    // Pit: fascia più scura davanti al palco, dove stanno le casse
+    quad(0, pitStart, VENUE_W, pitStart + PIT_ROWS, 0x000000, 0.18);
+
+    // griglia di posa appena accennata (un metro), per orientarsi
+    for (let x = 1; x < VENUE_W; x += 1) {
+      const a = gridToScreen(x, CARICO_ROWS), b = gridToScreen(x, VENUE_H);
+      g.lineStyle(1, 0xffffff, 0.045); g.lineBetween(a.x, a.y, b.x, b.y);
+    }
+    for (let y = CARICO_ROWS + 1; y < VENUE_H; y += 1) {
       const a = gridToScreen(0, y), b = gridToScreen(VENUE_W, y);
-      g.lineStyle(1, 0x484c58, y % 1 ? 0.35 : 0.6); g.lineBetween(a.x, a.y, b.x, b.y);
+      g.lineStyle(1, 0xffffff, 0.045); g.lineBetween(a.x, a.y, b.x, b.y);
     }
-    g.lineStyle(2, 0x484c58, 0.9);
-    g.beginPath();
-    g.moveTo(p0.x, p0.y); g.lineTo(p1.x, p1.y); g.lineTo(p2.x, p2.y); g.lineTo(p3.x, p3.y);
-    g.closePath(); g.strokePath();
+    g.lineStyle(2, 0x0c0d10, 0.9);
+    g.strokePoints([gridToScreen(0, CARICO_ROWS), gridToScreen(VENUE_W, CARICO_ROWS), p2, p3], true);
+    this.drawGymWalls();
+    this.drawGymDetails();
+    this.drawWorkLights();
 
     g.setInteractive(new Phaser.Geom.Rectangle(0, 0, GAME_W, GAME_H), Phaser.Geom.Rectangle.Contains);
     g.on('pointerdown', pointer => {
       if (pointer.rightButtonDown()) return;
+      // Phaser sente anche i tocchi sui pulsanti sopra la scena (zoom, ⤢):
+      // non sono tocchi sul pavimento e non devono far cadere il cavo in mano
+      if (pointer.downElement && pointer.downElement !== this.game.canvas) return;
+      // cavo in mano: un tocco sul cavo ne prende il tratto (niente pan)
+      if (this.lay && this.layPointerDown(pointer)) return;
       this.floorDown = { x: pointer.x, y: pointer.y, moved: false };
     });
     g.on('pointerup', pointer => {
@@ -5751,6 +6554,8 @@ class StageScene extends Phaser.Scene {
       this.floorDown = null;
       if (moved) return;
 
+      // cavo in mano: un tocco sul pavimento lo lascia così com'è
+      if (this.lay) { this.endLay(true); return; }
       // un pezzo armato si posa; altrimenti un tocco su un cavo lo seleziona,
       // e un tocco sul pavimento vuoto chiude montaggio e cavo in attesa
       if (gameState.selectedPieceType) { this.placeArmedPieceAt(pointer.worldX, pointer.worldY); return; }
@@ -5764,29 +6569,217 @@ class StageScene extends Phaser.Scene {
     this.floorGraphics = g;
   }
 
-  drawZoneOutline (corners, label) {
+  // celle dove sta la scenografia (i case nel backstage): lì non si posa niente
+  blockSceneryCells () {
+    for (let cx = 0; cx < 2; cx += CELL) for (let cy = VENUE_H - 1; cy < VENUE_H; cy += CELL) this.occupied[cellKey(cx, cy)] = 'scenografia';
+    for (let cx = 0; cx < 1; cx += CELL) for (let cy = VENUE_H - 2; cy < VENUE_H - 1; cy += CELL) this.occupied[cellKey(cx, cy)] = 'scenografia';
+  }
+
+  /* parete di fondo della palestra, lungo il lato sinistro (gx = 0): finestre
+     alte, spalliere, l'uscita di sicurezza e lo striscione della festa.
+     Sta dietro a tutto, quindi non copre mai i dispositivi. */
+  drawGymWalls () {
+    const g = this.add.graphics().setDepth(0.5);
+    const H = 190, gy0 = CARICO_ROWS, gy1 = VENUE_H;
+    // punto della parete: gy lungo il muro, h altezza in px
+    const wp = (gy, h) => { const q = gridToScreen(0, gy); return { x: q.x, y: q.y - h }; };
+    const face = (ya, yb, ha, hb, color, alpha = 1) => { g.fillStyle(color, alpha); g.fillPoints([wp(ya, ha), wp(yb, ha), wp(yb, hb), wp(ya, hb)], true); };
+    face(gy0, gy1, 0, H, 0x4a4f5a);
+    face(gy0, gy1, 0, 74, 0x2f4356);
+    face(gy0, gy1, 74, 79, 0xf2a541, 0.55);
+    face(gy0, gy1, H - 6, H, 0x5d636f);
+    // ombra del muro sul pavimento
+    g.fillStyle(0x000000, 0.28);
+    g.fillPoints([gridToScreen(0, gy0), gridToScreen(0, gy1), gridToScreen(0.45, gy1), gridToScreen(0.45, gy0)], true);
+    // finestre alte
+    for (let y = gy0 + 4.3; y < gy1 - 1; y += 2.1) {
+      if (y < 12.5 && y + 1.5 > 11) continue;   // lì c'è la seconda uscita
+      face(y, y + 1.5, 112, 170, 0x1a2738);
+      face(y, y + 1.5, 112, 116, 0x6b7180);
+      g.lineStyle(1.5, 0x6d8fb3, 0.35);
+      const a = wp(y + 0.3, 120), b = wp(y + 0.75, 162); g.lineBetween(a.x, a.y, b.x, b.y);
+      const m0 = wp(y + 0.75, 112), m1 = wp(y + 0.75, 170); g.lineStyle(2, 0x6b7180, 1); g.lineBetween(m0.x, m0.y, m1.x, m1.y);
+    }
+    // spalliere
+    for (let y = 12.9; y <= 14.3; y += 0.35) { const a = wp(y, 0), b = wp(y, 150); g.lineStyle(3, 0x8a6a45, 1); g.lineBetween(a.x, a.y, b.x, b.y); }
+    for (let h = 10; h <= 150; h += 14) { const a = wp(12.9, h), b = wp(14.3, h); g.lineStyle(2, 0x9c7a50, 0.9); g.lineBetween(a.x, a.y, b.x, b.y); }
+    // spigolo del muro verso il cortile
+    { const a = wp(gy0, 0), b = wp(gy0, H); g.lineStyle(3, 0x6b7180, 1); g.lineBetween(a.x, a.y, b.x, b.y); }
+    // uscita di sicurezza verso il backstage
+    face(2.5, 3.6, 0, 105, 0x1b1d21);
+    face(2.5, 3.6, 105, 109, 0x6b7180);
+    face(2.75, 3.35, 116, 134, 0x2fa35a);
+    // seconda uscita di sicurezza, in fondo alla via di fuga della sala
+    face(11.2, 12.3, 0, 105, 0x1b1d21);
+    face(11.7, 11.72, 0, 105, 0x0f1013);
+    face(11.2, 12.3, 105, 109, 0x6b7180);
+    face(11.45, 12.05, 116, 134, 0x2fa35a);
+    // striscione della festa
+    face(5.2, 9.6, 118, 150, 0xe9e4d6);
+    face(5.2, 9.6, 118, 123, 0xd6392f);
+    face(5.2, 9.6, 145, 150, 0xd6392f);
+    const c = wp(7.4, 134);
+    const ang = Phaser.Math.RadToDeg(Math.atan2(TILE_H / 2, -TILE_W / 2)) + 180;
+    this.add.text(c.x, c.y, 'FESTA DI FINE ANNO', { fontFamily: FONT_MARKER, fontSize: '15px', color: '#2b5fb0' })
+      .setOrigin(0.5).setAngle(ang).setDepth(0.55);
+    this.drawBackWall(H);
+    const ex = wp(3.05, 125);
+    [ex, wp(11.75, 125)].forEach(q => this.add.text(q.x, q.y, 'USCITA', { fontFamily: 'Inter, sans-serif', fontStyle: 'bold', fontSize: '8px', color: '#ffffff' })
+      .setOrigin(0.5).setAngle(ang).setDepth(0.55));
+  }
+
+  /* rifiniture della palestra: ombre morbide ai piedi dei muri, spessore
+     in cima alle pareti, luce della luna dalle finestre, canestro e
+     tabellone. Solo scenografia: nessuna cella occupata. */
+  drawGymDetails () {
+    const H = 190, y0 = CARICO_ROWS;
+    const g = this.add.graphics().setDepth(0.45);
+    const floorQuad = (x0, ya, x1, yb, color, alpha) => {
+      g.fillStyle(color, alpha);
+      g.fillPoints([gridToScreen(x0, ya), gridToScreen(x1, ya), gridToScreen(x1, yb), gridToScreen(x0, yb)], true);
+    };
+    // ombra morbida lungo i due muri (si allarga e sfuma verso la sala)
+    [[0.45, 0.9, 0.1], [0.9, 1.5, 0.05]].forEach(([a, b, al]) => {
+      floorQuad(a, y0, b, VENUE_H, 0x000000, al);
+      floorQuad(0, y0 + a, VENUE_W, y0 + b, 0x000000, al);
+    });
+    // luna dalle finestre della parete laterale: chiazze fredde sul parquet
+    const moon = this.add.graphics().setDepth(0.46).setBlendMode(Phaser.BlendModes.ADD);
+    for (let y = y0 + 4.3; y < VENUE_H - 1; y += 2.1) {
+      if (y + 1.5 < STAGE_ORIGIN_Y + STAGE_H + 0.5 || y + 3 > VENUE_H) continue;   // palco già illuminato; non fuori sala
+      moon.fillStyle(0x7f9ccc, 0.07);
+      moon.fillPoints([gridToScreen(0.7, y + 0.9), gridToScreen(2.1, y + 1.5), gridToScreen(2.1, y + 3.0), gridToScreen(0.7, y + 2.4)], true);
+    }
+
+    const w = this.add.graphics().setDepth(1.16);
+    // spessore in cima alle pareti: si capisce che sono muri veri
+    const top = (pts, color) => { w.fillStyle(color, 1); w.fillPoints(pts.map(([x, y]) => { const q = gridToScreen(x, y); return { x: q.x, y: q.y - H }; }), true); };
+    top([[-0.22, y0 - 0.22], [0, y0], [0, VENUE_H], [-0.22, VENUE_H]], 0x767c89);
+    top([[-0.22, y0 - 0.22], [VENUE_W, y0 - 0.22], [VENUE_W, y0], [0, y0]], 0x767c89);
+    { const a = gridToScreen(VENUE_W, y0 - 0.22), b = gridToScreen(VENUE_W, y0); w.fillStyle(0x3a3e47, 1);
+      w.fillPoints([{ x: a.x, y: a.y - H }, { x: b.x, y: b.y - H }, { x: b.x, y: b.y }, { x: a.x, y: a.y }], true); }
+    { const a = gridToScreen(0, VENUE_H), b = gridToScreen(-0.22, VENUE_H); w.fillStyle(0x3a3e47, 1);
+      w.fillPoints([{ x: a.x, y: a.y - H }, { x: b.x, y: b.y - H }, { x: b.x, y: b.y }, { x: a.x, y: a.y }], true); }
+
+    // tabellone segnapunti sulla parete di fondo, sopra la porta del carico
+    const bp = (gx, h) => { const q = gridToScreen(gx, y0); return { x: q.x, y: q.y - h }; };
+    const bface = (xa, xb, ha, hb, color) => { w.fillStyle(color, 1); w.fillPoints([bp(xa, ha), bp(xb, ha), bp(xb, hb), bp(xa, hb)], true); };
+    bface(3.05, 4.15, 112, 158, 0x0d0e11);
+    bface(3.05, 4.15, 112, 114, 0x5d636f);
+    const ang = Phaser.Math.RadToDeg(Math.atan2(TILE_H / 2, TILE_W / 2));
+    const sc = bp(3.6, 144), sl = bp(3.28, 124), sr = bp(3.92, 124);
+    const digit = { fontFamily: 'Barlow Condensed, sans-serif', fontStyle: 'bold', color: '#ff5a3c' };
+    this.add.text(sc.x, sc.y, '20:30', { ...digit, fontSize: '13px', color: '#ffb23c' }).setOrigin(0.5).setAngle(ang).setDepth(1.17);
+    this.add.text(sl.x, sl.y, 'CASA 12', { ...digit, fontSize: '7px' }).setOrigin(0.5).setAngle(ang).setDepth(1.17);
+    this.add.text(sr.x, sr.y, 'OSPITI 9', { ...digit, fontSize: '7px' }).setOrigin(0.5).setAngle(ang).setDepth(1.17);
+
+    // canestro laterale sulla parete sinistra, sopra l'angolo dei case
+    const lp = (gy, h, gx = 0) => { const q = gridToScreen(gx, gy); return { x: q.x, y: q.y - h }; };
+    const c = this.add.graphics().setDepth(0.55);
+    c.fillStyle(0x9aa0ab, 1); c.fillPoints([lp(14.95, 120), lp(15.25, 120), lp(15.25, 128, 0.35), lp(14.95, 128, 0.35)], true);
+    c.fillStyle(0xf4f2ec, 1); c.fillPoints([lp(14.45, 128, 0.35), lp(15.75, 128, 0.35), lp(15.75, 178, 0.35), lp(14.45, 178, 0.35)], true);
+    c.lineStyle(2, 0xd6392f, 1); c.strokePoints([lp(14.8, 132, 0.35), lp(15.4, 132, 0.35), lp(15.4, 152, 0.35), lp(14.8, 152, 0.35)], true);
+    const rim = lp(15.1, 132, 0.75);
+    c.lineStyle(2.5, 0xf06a1f, 1); c.strokeEllipse(rim.x, rim.y, 30, 14);
+    for (let i = -2; i <= 2; i++) { c.lineStyle(1, 0xe9e4d6, 0.6); c.lineBetween(rim.x + i * 6, rim.y + 3, rim.x + i * 3.5, rim.y + 20); }
+    c.lineStyle(1, 0xe9e4d6, 0.5); c.strokeEllipse(rim.x, rim.y + 12, 18, 7);
+  }
+
+  /* parete dietro al palco (gy = CARICO_ROWS): chiude la palestra. Dai
+     finestroni alti si intravede il cortile di notte col furgone del service.
+     Sta sopra il cortile e sotto tutto ciò che è dentro. */
+  drawBackWall (H) {
+    const g = this.add.graphics().setDepth(1.15);
+    const y = CARICO_ROWS;
+    const wp = (gx, h) => { const q = gridToScreen(gx, y); return { x: q.x, y: q.y - h }; };
+    const face = (xa, xb, ha, hb, color, alpha = 1) => { g.fillStyle(color, alpha); g.fillPoints([wp(xa, ha), wp(xb, ha), wp(xb, hb), wp(xa, hb)], true); };
+    const W0 = 66, W1 = 172;                     // davanzale e architrave dei finestroni
+    const wins = [[0.35, 2.85], [5.7, 7.6], [7.9, 9.7]];
+    // muro pieno sotto, sopra e fra i finestroni (i vetri restano aperti sul cortile)
+    face(0, VENUE_W, 0, W0, 0x464b56);
+    face(0, VENUE_W, W1, H, 0x464b56);
+    let x = 0;
+    wins.forEach(([a, b]) => { face(x, a, W0, W1, 0x464b56); x = b; });
+    face(x, VENUE_W, W0, W1, 0x464b56);
+    face(0, VENUE_W, 0, 56, 0x2f4356);
+    face(0, VENUE_W, 56, 60, 0xf2a541, 0.55);
+    face(0, VENUE_W, H - 6, H, 0x5d636f);
+    // vetri: notte fuori, riflessi e montanti
+    wins.forEach(([a, b]) => {
+      face(a, b, W0, W1, 0x0e1622, 0.35);
+      face(a, b, W0 - 4, W0, 0x6b7180);
+      face(a, b, W1, W1 + 4, 0x6b7180);
+      for (let m = a; m <= b + 0.001; m += (b - a) / Math.max(2, Math.round((b - a) / 0.8))) {
+        const p0 = wp(m, W0), p1 = wp(m, W1); g.lineStyle(3, 0x6b7180, 1); g.lineBetween(p0.x, p0.y, p1.x, p1.y);
+      }
+      const h0 = wp(a, (W0 + W1) / 2), h1 = wp(b, (W0 + W1) / 2); g.lineStyle(2, 0x6b7180, 1); g.lineBetween(h0.x, h0.y, h1.x, h1.y);
+      g.lineStyle(2, 0x9fb6d3, 0.22);
+      const r0 = wp(a + 0.2, W0 + 8), r1 = wp(a + 0.6, W1 - 6); g.lineBetween(r0.x, r0.y, r1.x, r1.y);
+    });
+    // porta del carico, da dove sono entrati i case
+    face(4.3, 5.4, 0, 100, 0x2a2d33);
+    face(4.85, 4.87, 0, 100, 0x14161a);
+    face(4.3, 5.4, 100, 104, 0x6b7180);
+    // ombra del muro sul pavimento del backstage
+    g.fillStyle(0x000000, 0.25);
+    g.fillPoints([gridToScreen(0, y), gridToScreen(VENUE_W, y), gridToScreen(VENUE_W, y + 0.4), gridToScreen(0, y + 0.4)], true);
+    // spigolo con la parete laterale
+    { const a = wp(0, 0), b = wp(0, H); g.lineStyle(3, 0x5d636f, 1); g.lineBetween(a.x, a.y, b.x, b.y); }
+  }
+
+  /* luci di servizio: pozze calde sul palco e in regia, buio ai bordi */
+  drawWorkLights () {
+    if (!this.textures.exists('pool')) {
+      const tex = this.textures.createCanvas('pool', 256, 256), ctx = tex.getContext();
+      const gr = ctx.createRadialGradient(128, 128, 0, 128, 128, 128);
+      gr.addColorStop(0, 'rgba(255,255,255,1)'); gr.addColorStop(0.5, 'rgba(255,255,255,.35)'); gr.addColorStop(1, 'rgba(255,255,255,0)');
+      ctx.fillStyle = gr; ctx.fillRect(0, 0, 256, 256); tex.refresh();
+    }
+    const pool = (gx, gy, sx, color, alpha) => {
+      const q = gridToScreen(gx, gy);
+      this.add.image(q.x, q.y, 'pool').setScale(sx, sx * 0.62).setTint(color).setAlpha(alpha)
+        .setBlendMode(Phaser.BlendModes.ADD).setDepth(0.9);
+    };
+    pool(1.8, 0.6, 2.2, 0xffd28a, 0.35);
+    pool(0.6, 3.05, 0.5, 0x2fa35a, 0.35);  // luce verde delle uscite
+    pool(0.6, 11.75, 0.5, 0x2fa35a, 0.35);   // lampione del cortile, si vede dai finestroni
+    pool(STAGE_ORIGIN_X + 2, STAGE_ORIGIN_Y + 2, 2.6, 0xffc98a, 0.22);
+    pool(7.5, 6, 1.6, 0xffe2b8, 0.16);
+    pool(5, 2.6, 2.4, 0xbfd4ff, 0.12);
+    pool(5, 13.5, 2.6, 0xffd9a0, 0.10);
+  }
+
+  // confine di zona: una striscia di nastro bianco sul pavimento
+  drawZoneOutline (corners, label, at) {
     const g = this.add.graphics().setDepth(1);
-    g.lineStyle(1.5, 0x565a68, 0.85);
-    const pts = corners.map(c => gridToScreen(c[0], c[1]));
-    g.beginPath();
-    g.moveTo(pts[0].x, pts[0].y);
-    for (let i = 1; i < pts.length; i++) g.lineTo(pts[i].x, pts[i].y);
-    g.closePath(); g.strokePath();
-    const cx = pts.reduce((s, p) => s + p.x, 0) / pts.length;
-    const cy = pts.reduce((s, p) => s + p.y, 0) / pts.length;
-    this.add.text(cx, cy, label, { fontFamily: 'Inter, sans-serif', fontSize: '11px', color: '#585b64' })
-      .setOrigin(0.5).setDepth(1);
+    const [[x0, y0], , [x1, y1]] = corners;
+    g.fillStyle(0xe9e4d6, 0.28);
+    if (y0 > 0) g.fillPoints([gridToScreen(x0, y0 - 0.03), gridToScreen(x1, y0 - 0.03), gridToScreen(x1, y0 + 0.03), gridToScreen(x0, y0 + 0.03)], true);
+    if (label) this.floorSticker(at ? at[0] : x0 + 0.9, at ? at[1] : (y0 + y1) / 2, label);
+  }
+
+  // etichetta di zona: un pezzo di nastro scritto a pennarello, sempre leggibile
+  floorSticker (gx, gy, text, color = '#d9d4c7') {
+    const p = gridToScreen(gx, gy);
+    const t = this.add.text(0, 0, text, { fontFamily: FONT_MARKER, fontSize: '15px', color: '#1b1b1b' }).setOrigin(0.5);
+    const w = t.width + 18, h = t.height + 2;
+    const bg = this.add.graphics();
+    bg.fillStyle(0x000000, 0.35); bg.fillRect(-w / 2 + 2, -h / 2 + 3, w, h);
+    bg.fillStyle(Phaser.Display.Color.HexStringToColor(color).color, 0.92);
+    bg.fillPoints([{ x: -w / 2, y: -h / 2 + 1 }, { x: w / 2, y: -h / 2 }, { x: w / 2 - 3, y: 0 }, { x: w / 2, y: h / 2 },
+      { x: -w / 2 + 1, y: h / 2 - 1 }, { x: -w / 2 + 4, y: 0 }], true);
+    return this.add.container(p.x, p.y, [bg, t]).setDepth(1.2).setAngle(-4).setAlpha(0.92);
   }
 
   drawZoneOutlines () {
     const pitStart = STAGE_ORIGIN_Y + STAGE_H;
     const plateaStart = pitStart + PIT_ROWS;
     const fohStart = plateaStart + PLATEA_ROWS;
-    this.drawZoneOutline([[0, 0], [VENUE_W, 0], [VENUE_W, CARICO_ROWS], [0, CARICO_ROWS]], 'Carico e scarico');
-    this.drawZoneOutline([[0, CARICO_ROWS], [VENUE_W, CARICO_ROWS], [VENUE_W, STAGE_ORIGIN_Y], [0, STAGE_ORIGIN_Y]], 'Backstage');
-    this.drawZoneOutline([[0, pitStart], [VENUE_W, pitStart], [VENUE_W, plateaStart], [0, plateaStart]], 'Pit');
-    this.drawZoneOutline([[0, plateaStart], [VENUE_W, plateaStart], [VENUE_W, fohStart], [0, fohStart]], 'Platea');
-    this.drawZoneOutline([[0, fohStart], [VENUE_W, fohStart], [VENUE_W, VENUE_H], [0, VENUE_H]], 'Regia di sala (FOH)');
+    this.drawZoneOutline([[0, 0], [VENUE_W, 0], [VENUE_W, CARICO_ROWS], [0, CARICO_ROWS]], null);
+    this.drawZoneOutline([[0, CARICO_ROWS], [VENUE_W, CARICO_ROWS], [VENUE_W, STAGE_ORIGIN_Y], [0, STAGE_ORIGIN_Y]], 'BACKSTAGE', [1.2, 3.1]);
+    this.drawZoneOutline([[0, pitStart], [VENUE_W, pitStart], [VENUE_W, plateaStart], [0, plateaStart]], 'PIT', [4.6, pitStart + 1.1]);
+    this.drawZoneOutline([[0, plateaStart], [VENUE_W, plateaStart], [VENUE_W, fohStart], [0, fohStart]], 'PLATEA', [4.6, plateaStart + 2]);
+    this.drawZoneOutline([[0, fohStart], [VENUE_W, fohStart], [VENUE_W, VENUE_H], [0, VENUE_H]], 'REGIA FOH', [4.6, fohStart + 1.2]);
   }
 
   /* Carico e scarico: il mezzo del service e i flight case, nella stessa
@@ -5799,11 +6792,12 @@ class StageScene extends Phaser.Scene {
     const vg = this.add.graphics().setDepth(1).setPosition(vp.x, vp.y);
     this.van = { vp, v, ...this.drawVehicle(vg, v) };
 
-    // i due bauli dei cavi e un case di ricambio, in fila lungo la banchina
-    const caseSpots = [[5.9, 0.9, 'segnale'], [7.2, 0.9, 'corrente'], [8.5, 0.9, null]];
+    // i due bauli dei cavi e un case di ricambio, dentro la palestra:
+    // nell'angolo dietro la regia FOH, contro la parete (celle occupate)
+    const caseSpots = [[0.55, 15.45, 'segnale'], [1.55, 15.45, 'corrente'], [0.55, 14.5, null]];
     caseSpots.forEach(([gx, gy, caseName], i) => {
       const p = gridToScreen(gx, gy);
-      const cg = this.add.graphics().setDepth(1.1 + gy / 100).setPosition(p.x, p.y);
+      const cg = this.add.graphics().setDepth(isoDepth(p.y) - 0.0005).setPosition(p.x, p.y);
       const tape = caseName === 'segnale' ? 0xeaff2b : caseName === 'corrente' ? 0xff4fb4 : null;
       this.drawFlightCase(cg, CASE_ISO, tape);
       if (!caseName) return;
@@ -5811,8 +6805,8 @@ class StageScene extends Phaser.Scene {
       this.casePos[caseName] = p;
       this.add.text(p.x, p.y - 34, CABLE_CASES[caseName].title, {
         fontFamily: 'Barlow Condensed, sans-serif', fontSize: '11px', fontStyle: 'bold', color: '#e6e8eb'
-      }).setOrigin(0.5).setDepth(2);
-      const hit = this.add.rectangle(p.x, p.y - 6, 58, 58, 0xffffff, 0.001).setDepth(2)
+      }).setOrigin(0.5).setDepth(isoDepth(p.y));
+      const hit = this.add.rectangle(p.x, p.y - 6, 58, 58, 0xffffff, 0.001).setDepth(isoDepth(p.y) + 0.0001)
         .setInteractive({ useHandCursor: true });
       hit.on('pointerdown', (pointer, lx, ly, event) => {
         if (event && event.stopPropagation) event.stopPropagation();
@@ -6017,19 +7011,22 @@ class StageScene extends Phaser.Scene {
           bottomV = gridToScreen(gx0 + totalW, gy0 + H), leftV = gridToScreen(gx0, gy0 + H);
 
     const sides = this.add.graphics().setDepth(2);
-    sides.fillStyle(0x2b241c, 1);
+    sides.fillStyle(0x1a1a1d, 1);
     sides.beginPath();
     sides.moveTo(rightV.x, rightV.y); sides.lineTo(bottomV.x, bottomV.y);
     sides.lineTo(bottomV.x, bottomV.y + PLATFORM_HEIGHT); sides.lineTo(rightV.x, rightV.y + PLATFORM_HEIGHT);
     sides.closePath(); sides.fillPath();
-    sides.fillStyle(0x231d17, 1);
+    sides.fillStyle(0x131315, 1);
     sides.beginPath();
     sides.moveTo(bottomV.x, bottomV.y); sides.lineTo(leftV.x, leftV.y);
     sides.lineTo(leftV.x, leftV.y + PLATFORM_HEIGHT); sides.lineTo(bottomV.x, bottomV.y + PLATFORM_HEIGHT);
     sides.closePath(); sides.fillPath();
 
+    // gonnellino nero del palco, a pieghe
+    for (let i = 0.25; i < totalW; i += 0.25) { const a = gridToScreen(gx0 + i, gy0 + H); sides.lineStyle(1, 0x2a2a2e, 0.9); sides.lineBetween(a.x, a.y + 2, a.x, a.y + PLATFORM_HEIGHT); }
+    for (let j = 0.25; j < H; j += 0.25) { const a = gridToScreen(gx0 + totalW, gy0 + j); sides.lineStyle(1, 0x2a2a2e, 0.9); sides.lineBetween(a.x, a.y + 2, a.x, a.y + PLATFORM_HEIGHT); }
     const top = this.add.graphics().setDepth(3);
-    top.fillStyle(0x3a3226, 1);
+    top.fillStyle(0x2c2721, 1);
     top.beginPath();
     top.moveTo(topV.x, topV.y); top.lineTo(rightV.x, rightV.y);
     top.lineTo(bottomV.x, bottomV.y); top.lineTo(leftV.x, leftV.y);
@@ -6050,13 +7047,17 @@ class StageScene extends Phaser.Scene {
         if ((i + j) % 2 === 0) continue;
         const p0 = gridToScreen(gx0 + i, gy0 + j), p1 = gridToScreen(gx0 + i + 1, gy0 + j),
               p2 = gridToScreen(gx0 + i + 1, gy0 + j + 1), p3 = gridToScreen(gx0 + i, gy0 + j + 1);
-        top.fillStyle(0x453b2c, 0.5);
+        top.fillStyle(0x36302a, 0.35);
         top.beginPath();
         top.moveTo(p0.x, p0.y); top.lineTo(p1.x, p1.y); top.lineTo(p2.x, p2.y); top.lineTo(p3.x, p3.y);
         top.closePath(); top.fillPath();
       }
     }
 
+    // nastro bianco di sicurezza sul bordo del palco
+    top.fillStyle(0xe9e4d6, 0.7);
+    top.fillPoints([gridToScreen(gx0, gy0 + H - 0.06), gridToScreen(gx0 + totalW, gy0 + H - 0.06), gridToScreen(gx0 + totalW, gy0 + H), gridToScreen(gx0, gy0 + H)], true);
+    top.fillPoints([gridToScreen(gx0, gy0), gridToScreen(gx0 + 0.06, gy0), gridToScreen(gx0 + 0.06, gy0 + H), gridToScreen(gx0, gy0 + H)], true);
     // contorno della sola pedana spettacolo (ambra, ben visibile: "qui suona la band")
     const coreRightV = gridToScreen(gx0 + STAGE_W, gy0), coreBottomV = gridToScreen(gx0 + STAGE_W, gy0 + H);
     top.lineStyle(2, 0xf2a541, 0.5);
@@ -6081,9 +7082,8 @@ class StageScene extends Phaser.Scene {
 
     const offCx = (coreRightV.x + rightV.x + bottomV.x + coreBottomV.x) / 4;
     const offCy = (coreRightV.y + rightV.y + bottomV.y + coreBottomV.y) / 4;
-    this.add.text(offCx, offCy, 'Off stage', {
-      fontFamily: 'Inter, sans-serif', fontSize: '10px', color: '#6b6e78'
-    }).setOrigin(0.5).setDepth(3);
+    this.floorSticker(STAGE_ORIGIN_X + STAGE_W + OFFSTAGE_W / 2, STAGE_ORIGIN_Y + 0.6, 'OFF STAGE', '#8b8e98').setDepth(3.1);
+    this.floorSticker(STAGE_ORIGIN_X + 0.9, STAGE_ORIGIN_Y + 0.5, 'PALCO', '#f2a541').setDepth(3.1);
 
     this.stageBox = {
       minX: Math.min(topV.x, rightV.x, bottomV.x, leftV.x),
@@ -6094,7 +7094,7 @@ class StageScene extends Phaser.Scene {
   }
 
   drawAllaccio () {
-    const pos = gridToScreen(8.5, CARICO_ROWS + 0.5);
+    const pos = allaccioPos();
     const def = COMPONENT_TYPES.allaccio;
     const visual = this.buildComponentVisual('allaccio', def, pos.x, pos.y);
     this.compVisuals['allaccio'] = visual;
@@ -6108,8 +7108,7 @@ class StageScene extends Phaser.Scene {
     if (!quadroEntry) return;
     const qv = this.compVisuals[quadroEntry.id];
     if (!qv) return;
-    const spec = computeQuadroSpec(totalPowerUsedW());
-    qv.container.setScale(spec.scale);
+    // misura vera e fissa: non cresce più col carico
     this.updateQuadroPhaseBars(quadroEntry.id);
   }
 
@@ -6123,25 +7122,32 @@ class StageScene extends Phaser.Scene {
     const loads = livePhaseLoads(false);
     const g = qv.phaseBars;
     g.clear();
-    // leva di ogni magnetotermico sul fronte: verde armato, rossa scattato,
-    // grigia abbassato
+    // leva di ogni protezione dietro la finestra: su (armata, verde) o giù
+    // (abbassata grigia, scattata rossa), con la spia sopra dello stesso colore
     const prot = quadroProt(gameState.placed[quadroId]);
-    def.ports.filter(p => p.phase).forEach(p => {
-      const a = QUADRO_PHASE_A[['L1', 'L2', 'L3'].indexOf(p.phase)];
-      const c = prot[p.phase] ? 0x49b06a : (prot.tripped[p.phase] ? 0xe0503f : 0x6a6e78);
-      const pts = [[a - 3, 26.5], [a + 3, 26.5], [a + 3, 29], [a - 3, 29]].map(([aa, z]) => QUADRO_ISO(aa, QUADRO_ISO.B, z));
-      g.fillStyle(c, 1); g.fillPoints(pts, true);
+    const P = qv.frame, k = this.isoKit(g, P), B = QUADRO_ISO.B;
+    QUADRO_MODULES.forEach(([key, a, hw]) => {
+      const on = !!prot[key];
+      const c = on ? 0x49b06a : (prot.tripped[key] ? 0xe0503f : 0x2a2c32);
+      const lw = hw - 0.8;
+      const [z0, z1] = on ? [25.6, 28.4] : [22.8, 25.6];
+      k.quadB(B, a - lw, a + lw, z0, z1, c);
+      k.quadB(B, a - lw, a + lw, on ? z1 - 0.7 : z0, on ? z1 : z0 + 0.7, 0xffffff, 0.45);   // punta della leva
     });
+    // coperchio trasparente incernierato, con un riflesso
+    k.quadB(B, 2, QUADRO_ISO.A - 2, 20, 30.5, 0x9fb7c9, 0.12);
+    const r0 = P(QUADRO_ISO.A * 0.55, B, 30.5), r1 = P(QUADRO_ISO.A * 0.55 + 5, B, 20);
+    g.lineStyle(1, 0xffffff, 0.18); g.lineBetween(r0.x, r0.y, r1.x, r1.y);
     // barra subito sotto ogni presa di fase
-    const barW = 14, barH = 4;
+    const barW = 5, barH = 1.5;
     def.ports.filter(p => p.phase).forEach(p => {
-      const barY = p.dy + 7;
+      const q = qv.portPos[p.id], barY = q.dy + 4;
       const frac = Math.min(1, loads[p.phase] / PHASE_BUDGET_W);
       const color = frac >= 1 ? 0xe0503f : (frac >= 0.75 ? 0xf2a541 : 0x49b06a);
       g.fillStyle(0x000000, 0.6);
-      g.fillRect(p.dx - barW / 2, barY, barW, barH);
+      g.fillRect(q.dx - barW / 2, barY, barW, barH);
       g.fillStyle(color, 1);
-      g.fillRect(p.dx - barW / 2, barY, barW * frac, barH);
+      g.fillRect(q.dx - barW / 2, barY, barW * frac, barH);
     });
   }
 
@@ -6196,7 +7202,7 @@ class StageScene extends Phaser.Scene {
   }
 
   /* ---------------- disegno di un componente: forma dedicata per tipo ---------------- */
-  drawComponentBody (g, def, rot, id) {
+  drawComponentBody (g, def, rot, id, frame) {
     const w = def.body.w, h = def.body.h;
     switch (def.shape) {
       case 'sub': {
@@ -6399,31 +7405,48 @@ class StageScene extends Phaser.Scene {
         break;
       }
       case 'quadro': {
-        // armadio di distribuzione bianco da evento: striscia di sicurezza,
-        // finestra con un interruttore per fase sopra ogni presa CEE,
-        // maniglia sul fianco
-        const P = QUADRO_ISO, k = this.isoKit(g, P);
+        // combinazione prese da evento in gomma piena nera (tipo EverGUM):
+        // spigoli smussati e piedini per impilarle, maniglia sul tetto; sul
+        // fronte, sotto il coperchio trasparente con la chiusura inox, i
+        // moduli su guida DIN (generale, salvavita, un magnetotermico per
+        // fase: le leve le disegna updateQuadroPhaseBars) e sotto le tre
+        // prese CEE 16A blu col coperchietto; sul fianco l'ingresso rosso
+        const P = frame || rotFrame(QUADRO_ISO, rot), k = this.isoKit(g, P);
         const { A, B, Z } = P;
-        k.box(0, A, 0, B, 0, Z, { top: 0xf3f4f6, left: 0xd9dbdf, right: 0xc7cad0 });
-        k.quadB(B, 2, A - 2, Z - 5, Z - 2, 0xf2c53d);                   // striscia gialla/nera
-        g.lineStyle(1, 0x1c1d22, 0.8);
-        for (let a = 4; a < A - 4; a += 6) {
-          const p0 = P(a, B, Z - 5), p1 = P(a + 3, B, Z - 2);
-          g.lineBetween(p0.x, p0.y, p1.x, p1.y);
-        }
-        k.quadB(B, 3, A - 3, 24, Z - 8, 0x3a3d45);                      // finestra interruttori
-        def.ports.filter(p => p.phase).forEach(p => {
-          const a = QUADRO_PHASE_A[['L1', 'L2', 'L3'].indexOf(p.phase)];
-          k.quadB(B, a - 6, a + 6, 25, 31, 0x2a2c32);
-          k.quadB(B, a - 3, a + 3, 26.5, 29, 0x6a6e78);
+        // fianco con l'ingresso: a=0, o a=A se girato (l'altro è nascosto)
+        const sa = rot ? A : 0;
+        const rubber = { top: 0x34363c, left: 0x24262b, right: 0x1a1b1f };
+        [[3, 3], [A - 3, 3], [3, B - 3], [A - 3, B - 3]].forEach(([a, b]) => k.box(a - 2, a + 2, b - 2, b + 2, 0, 2, ISO_BLACK)); // piedini
+        k.box(0, A, 0, B, 2, Z - 2, rubber);
+        k.box(1.5, A - 1.5, 1.5, B - 1.5, Z - 2, Z, rubber);           // tetto smussato
+        // incavo sul tetto per impilarle e maniglia stampata
+        k.quadZ(Z, 6, A - 6, 6, B - 6, 0x2a2c31);
+        k.box(9, 12, B / 2 - 2, B / 2 + 2, Z, Z + 3.5, ISO_BLACK);
+        k.box(A - 12, A - 9, B / 2 - 2, B / 2 + 2, Z, Z + 3.5, ISO_BLACK);
+        k.box(9, A - 9, B / 2 - 2, B / 2 + 2, Z + 3.5, Z + 5, ISO_BLACK);
+        // nervature di gomma sul fronte, ai lati
+        [0.8, A - 0.8].forEach(a => k.quadB(B, a - 0.5, a + 0.5, 3, Z - 3, 0x2e3035));
+        // vano interruttori: fondo, guida DIN e moduli bianchi
+        k.quadB(B, 2, A - 2, 20, 30.5, 0x3a3d45);
+        k.quadB(B, 2.6, A - 2.6, 20.6, 29.9, 0x1d1e22);
+        k.quadB(B, 2.6, A - 2.6, 25, 26.2, 0x8a8e98);
+        QUADRO_MODULES.forEach(([key, a, hw]) => {
+          k.quadB(B, a - hw + 0.2, a + hw - 0.2, 21.4, 29.2, 0xf2f2ef);
+          k.quadB(B, a - hw + 0.6, a + hw - 0.6, 22.6, 28.6, 0xd5d7da); // incavo della leva
         });
-        QUADRO_PHASE_A.forEach(a => {                                  // prese CEE blu
-          k.discB(B, a, 12, 7.5, 0x1d4a9a); k.discB(B, a, 12, 6, 0x2f6fd6);
+        k.discB(B, 11 + 1.9, 28.6, 0.5, 0xf2c53d);                     // tasto T del salvavita
+        k.quadB(B, A / 2 - 3, A / 2 + 3, 30.8, 32, 0xc9ccd1);          // chiusura rapida inox
+        // targhetta delle linee sopra le prese
+        k.quadB(B, 1.5, A - 1.5, 16.6, 18.8, 0xf7f7f4);
+        // prese CEE 16A blu col coperchietto a molla
+        QUADRO_PHASE_A.forEach(a => {
+          k.discB(B, a, 9.5, 4, 0x1d4a9a); k.discB(B, a, 9.5, 3.1, 0x2f6fd6);
+          k.quadB(B, a - 3.6, a + 3.6, 13.2, 14.6, 0x3a7fe0);
         });
-        k.quadA(0, 5, 29, 4, 36, 0xcfd2d6);                             // sportello laterale
-        k.discA(0, 17, 14, 7.5, 0x9e2820); k.discA(0, 17, 14, 6, 0xd6392f); // ingresso CEE rosso
-        k.box(0, 0.1, 25, 28, 28, 34, ISO_GREY);                        // maniglia
-        k.quadZ(Z, 6, A - 6, 4, B - 4, 0xe6e8eb);
+        // fianco: nervature e ingresso CEE 32A rosso
+        for (let z = 22; z <= 30; z += 2.5) k.quadA(sa, 4, B - 4, z, z + 0.8, 0x2e3035);
+        k.discA(sa, 15.5, 13, 5.2, 0x9e2820); k.discA(sa, 15.5, 13, 4.2, 0xd6392f);
+        k.quadA(sa, 11, 20, 18.8, 20.3, 0xd6392f);                      // coperchietto dell'ingresso
         break;
       }
       case 'allaccio': {
@@ -6773,12 +7796,12 @@ class StageScene extends Phaser.Scene {
     const body = this.add.graphics();
     // il PAR guarda il palco dal suo stativo; gli altri seguono orientK
     const rot = def.shape === 'par' ? parRot(id) : orientK(def, x, y);
-    this.drawComponentBody(body, def, rot, id);
     // punti di aggancio dei cavi e LED, ruotati insieme al dispositivo
-    const frame = def.frame ? rotFrame(def.frame, rot) : null;
+    const frame = def.shape === 'quadro' ? quadroFrame(x, y) : def.frame ? rotFrame(def.frame, rot) : null;
+    this.drawComponentBody(body, def, rot, id, frame);
     const portPos = {};
     def.ports.forEach(p => {
-      const q = (frame && p.iso) ? frame(...p.iso) : { x: p.dx, y: p.dy };
+      const q = (frame && p.iso) ? frame(...(rot && p.isoTurned || p.iso)) : { x: p.dx, y: p.dy };
       portPos[p.id] = { dx: Math.round(q.x), dy: Math.round(q.y) };
     });
     const ledPos = (frame && def.ledIso) ? frame(...def.ledIso) : def.ledPos;
@@ -6813,7 +7836,8 @@ class StageScene extends Phaser.Scene {
     // sotto il dispositivo solo il conteggio delle prese collegate (es. "2/4"):
     // il nome si legge nel pannello, in scena sarebbe una scritta in più
     const idLabel = this.add.text(0, (def.body.oy || 0) + def.body.h / 2 + 12, '', {
-      fontFamily: 'Inter, sans-serif', fontSize: '11px', color: '#8b8e98'
+      fontFamily: 'Inter, sans-serif', fontStyle: 'bold', fontSize: '10px', color: '#8b8e98',
+      backgroundColor: 'rgba(12,13,16,0.82)', padding: { x: 5, y: 1 }
     }).setOrigin(0.5);
     c.add(idLabel);
 
@@ -6838,6 +7862,8 @@ class StageScene extends Phaser.Scene {
     body.on('pointerdown', (pointer, lx, ly, event) => {
       if (event && event.stopPropagation) event.stopPropagation();
       if (pointer.rightButtonDown()) return;
+      // cavo in mano: i dispositivi non rispondono, si prende solo il cavo
+      if (this.lay) { if (!this.layPointerDown(pointer)) this.layLocked(); return; }
       // un pezzo "armato" dalla barra si posa anche toccando sopra un dispositivo
       if (gameState.selectedPieceType) { this.placeArmedPieceAt(pointer.worldX, pointer.worldY); return; }
       this.onDevicePress(this.pickDeviceAt(pointer.worldX, pointer.worldY, 0) || id, pointer);
@@ -6847,11 +7873,11 @@ class StageScene extends Phaser.Scene {
     if (isRealQuadro) {
       phaseBars = this.add.graphics();
       c.add(phaseBars);
-      // sigla della fase nella finestra degli interruttori, sopra la presa
-      def.ports.filter(p => p.phase).forEach(p => {
-        const at = QUADRO_ISO(QUADRO_PHASE_A[['L1', 'L2', 'L3'].indexOf(p.phase)], QUADRO_ISO.B, 34.5);
-        const tag = this.add.text(at.x, at.y, p.phase, {
-          fontFamily: 'Inter, sans-serif', fontSize: '8px', fontStyle: 'bold', color: '#eee9df'
+      // sigla della fase sulla targhetta, sopra la sua presa
+      QUADRO_MODULES.filter(([key]) => key[0] === 'L').forEach(([key, a]) => {
+        const at = frame(QUADRO_PHASE_A[+key[1] - 1], QUADRO_ISO.B, 17.7);
+        const tag = this.add.text(at.x, at.y, key, {
+          fontFamily: 'Inter, sans-serif', fontSize: '3px', fontStyle: 'bold', color: '#1c1d22', resolution: 8
         }).setOrigin(0.5);
         c.add(tag);
       });
@@ -6861,20 +7887,21 @@ class StageScene extends Phaser.Scene {
       // Ha una hit area propria "sopra" quella del corpo (stesso meccanismo
       // delle porte, incluso stopPropagation) così non fa scattare
       // spostamento/cablaggio quando viene toccato.
-      const badgeX = def.body.w / 2 - 2, badgeY = -def.body.h / 2 - 2;
+      const badgeX = def.body.w / 2 - 2, badgeY = (def.body.oy || 0) - def.body.h / 2 - 2;
       const badgeBg = this.add.circle(badgeX, badgeY, 11, 0x1c1d22, 1)
         .setStrokeStyle(2, 0xf2a541, 1)
         .setInteractive({ useHandCursor: true });
       const badgeIcon = this.add.text(badgeX, badgeY, '🔍', { fontSize: '11px' }).setOrigin(0.5);
       badgeBg.on('pointerdown', (pointer, lx, ly, event) => {
         if (event && event.stopPropagation) event.stopPropagation();
+        if (this.lay) { if (!this.layPointerDown(pointer)) this.layLocked(); return; }
         renderQuadroModal();
         el('#quadro-modal').classList.add('show');
       });
       c.add(badgeBg); c.add(badgeIcon);
     }
 
-    return { container: c, glow, idLabel, def, phaseBars, led, portPos, ledPos, rot };
+    return { container: c, glow, idLabel, def, phaseBars, led, portPos, ledPos, rot, frame };
   }
 
   setGlow (v, on, color) {
@@ -7004,7 +8031,11 @@ class StageScene extends Phaser.Scene {
     }
     const pred = ZONE_PREDICATES[type] || (() => true);
     let n = 0;
-    g.fillStyle(0x49b06a, 0.2);
+    // il resto del locale si abbassa: resta in luce solo dove il pezzo può andare
+    g.fillStyle(0x07080a, 0.45);
+    g.fillPoints([gridToScreen(0, 0), gridToScreen(VENUE_W, 0), gridToScreen(VENUE_W, VENUE_H), gridToScreen(0, VENUE_H)], true);
+    g.fillStyle(0x49b06a, 0.3);
+    g.lineStyle(1, 0x7fe0a0, 0.55);
     for (let cx = 0; cx < VENUE_W; cx += CELL) {
       for (let cy = 0; cy < VENUE_H; cy += CELL) {
         if (!pred(cx, cy) || this.occupied[cellKey(cx, cy)]) continue;
@@ -7012,6 +8043,7 @@ class StageScene extends Phaser.Scene {
         const p0 = gridToScreen(cx + i, cy + i), p1 = gridToScreen(cx + CELL - i, cy + i),
               p2 = gridToScreen(cx + CELL - i, cy + CELL - i), p3 = gridToScreen(cx + i, cy + CELL - i);
         g.fillPoints([p0, p1, p2, p3], true);
+        g.strokePoints([p0, p1, p2, p3], true);
         n++;
       }
     }
@@ -7028,7 +8060,7 @@ class StageScene extends Phaser.Scene {
   /* piazza un componente in una posizione di mondo: usata sia dal trascinamento
      (via handleExternalDrop) sia dal tocco-e-tocco (via placeArmedPieceAt) */
   placeComponentAt (type, worldX, worldY) {
-    if (gameState.stock[type] <= 0) { showToast(type.toUpperCase() + ' esaurito per questo livello.'); return; }
+    if (gameState.stock[type] <= 0) { showToast(/^ciabatta/.test(type) ? CIABATTE_FINITE : type.toUpperCase() + ' esaurito per questo livello.'); return; }
 
     if (MOUNTS[type]) { this.attachToNearestBase(type, { x: worldX, y: worldY }); return; }
 
@@ -7058,7 +8090,6 @@ class StageScene extends Phaser.Scene {
 
     this.updateQuadroVisual();
     setCircuitStatus('untested');
-    gameState.tested = false;
     this.pushHistory();
     tireOut(FATIGUE.perAction);
     SFX.place();
@@ -7121,7 +8152,6 @@ class StageScene extends Phaser.Scene {
 
     this.updateQuadroVisual();
     setCircuitStatus('untested');
-    gameState.tested = false;
     SFX.place();
     showToast(m.done(base.id), 'ok');
     this.pushHistory();
@@ -7205,7 +8235,6 @@ class StageScene extends Phaser.Scene {
     this.highlightPending(pending.componentId, pending.portId, false);
     gameState.pendingPort = null;
     setCircuitStatus('untested');
-    gameState.tested = false;
     this.pushHistory();
     tireOut(FATIGUE.perAction);
     if (edge.signal === 'xlr') presideMicHint();
@@ -7213,8 +8242,8 @@ class StageScene extends Phaser.Scene {
 
   redrawEdges () {
     this.edgeGraphics.clear();
-    // in evidenza: il cavo selezionato, o quelli elencati dal "Quale?"
-    const focus = this.pickEdgeIds || (this.selectedEdgeId != null ? new Set([this.selectedEdgeId]) : null);
+    // in evidenza: il cavo selezionato o in posa, o quelli elencati dal "Quale?"
+    const focus = this.pickEdgeIds || (this.selectedEdgeId != null ? new Set([this.selectedEdgeId]) : this.lay ? new Set([this.lay.id]) : null);
     gameState.edges.forEach(e => {
       const cableKind = CABLE_TYPES[e.signal];
       if (!gameState.visibleSignals[cableKind.layer]) { e._pts = null; return; }
@@ -7223,15 +8252,22 @@ class StageScene extends Phaser.Scene {
       if (!from || !to) { e._pts = null; return; }
       const zoneA = gameState.placed[e.a] && gameState.placed[e.a].zone;
       const zoneB = gameState.placed[e.b] && gameState.placed[e.b].zone;
-      const isSelected = e.id === this.selectedEdgeId;
+      const isSelected = e.id === this.selectedEdgeId || (this.lay && this.lay.id === e.id);
       const color = isSelected ? 0xf2a541 : cableKind.color;
       const width = isSelected ? 5 : 3;
       // con un cavo selezionato, tutti gli altri si "spengono" per farlo
       // risaltare nella matassa; senza selezione restano tutti a piena vista
       const alpha = focus ? (focus.has(e.id) ? 1 : 0.16) : 1;
+      // i cavi per terra: quelli piegati alla posa delle 20:00, se no il
+      // percorso steso al montaggio (o quello automatico) a tratti dritti
       const route = caviRoute(e);
+      const floor = route ? null : this.edgeFloor(e);
+      // sub e testa sullo stesso palo: il cavetto va dritto dall'uno all'altra
+      const baseA = posaBase(gameState.placed[e.a]);
+      const sameBase = baseA && baseA === posaBase(gameState.placed[e.b]);
       const pts = route ? [from, ...route, to]
-        : (zoneA === 'stage' && zoneB === 'stage') ? [from, to]
+        : floor ? [from, ...layToScreen(floor.smooth), to]
+        : (sameBase || (zoneA === 'stage' && zoneB === 'stage')) ? [from, to]
         : computeRoutePoints(from, to, this.stageBox, 30);
       // cavo in neoprene nero (come quelli veri), con un bordo appena più
       // chiaro per staccarlo dal pavimento e un filetto centrale del colore
@@ -7256,9 +8292,11 @@ class StageScene extends Phaser.Scene {
       if (!isSelected) this.drawFlowArrow(pts, color, alpha);
     });
     this.refreshEdgeDeleteButton();
+    this.drawGerryFloor();
+    if (this.lay || this.layGraphics) this.drawLay();
     this.updateConnectionBadges();
     this.refreshLive();
-    updateConnectionCounter();
+    updateConnectionCounter(false);
     this.updateQuadroVisual();
     const modal = el('#quadro-modal');
     if (modal && modal.classList.contains('show')) renderQuadroModal();
@@ -7316,10 +8354,6 @@ class StageScene extends Phaser.Scene {
     });
     return out.sort((x, y) => x.px - y.px);
   }
-  // pixel CSS per unità di mondo, con lo zoom attuale
-  screenScale () {
-    return this.cameras.main.zoom * (this.game.canvas.getBoundingClientRect().width / GAME_W);
-  }
 
   selectEdge (edge) {
     this.clearMoveSelection();
@@ -7368,9 +8402,330 @@ class StageScene extends Phaser.Scene {
     this.selectedEdgeId = null;
     this.redrawEdges();
     setCircuitStatus('untested');
-    gameState.tested = false;
     if (!arced) showToast('Cavo eliminato.', 'ok');
     this.pushHistory();
+  }
+
+  /* ---------------- posa del cavo al montaggio ----------------
+     Appena collegato (o toccandolo), il cavo resta "in mano": gli altri si
+     spengono, i dispositivi non rispondono ai tocchi, e i suoi tratti si
+     trascinano col dito scattando sulla griglia. Fatto (o un tocco sul
+     pavimento) lo lascia così; il percorso si salva sul cavo (e.route). */
+  edgeEnds (e) {
+    const P = gameState.placed, a = posaBase(P[e.a]), b = posaBase(P[e.b]);
+    if (!a || !b || a.id === b.id) return null;
+    const at = c => {
+      if (c.gx != null) return compCenter(c);
+      const v = this.compVisuals[c.id];
+      return v ? worldToFloor(v.container.x, v.container.y) : null;
+    };
+    const A = at(a), B = at(b);
+    return A && B ? { A, B, key: posaBaseKey(a) + '|' + posaBaseKey(b) } : null;
+  }
+
+  edgeFloor (e) {
+    const ends = this.edgeEnds(e);
+    if (!ends) return null;
+    let route;
+    if (this.lay && this.lay.id === e.id) route = this.lay.route;
+    else if (e.route && e.route.key === ends.key) route = e.route.bends ? { bends: e.route.bends.map(b => b.slice()) } : layFromRails(e.route, ends.A, ends.B);
+    else route = layAutoRoute(ends.A, ends.B);
+    const pts = layCorners(route, ends.A, ends.B);
+    return { ...ends, route, pts, smooth: laySmooth(pts) };
+  }
+
+  // pixel di schermo per unità di mondo (per tenere i pallini grandi come un dito)
+  screenScale () {
+    const rc = this.game.canvas.getBoundingClientRect();
+    return this.cameras.main.zoom * (rc.width / GAME_W);
+  }
+
+  startLay (edgeId) {
+    const e = gameState.edges.find(x => x.id === edgeId);
+    const f = e && this.edgeFloor(e);
+    if (!f) return false;
+    this.endLay(true);
+    this.clearMoveSelection();
+    this.exitAssembly();
+    this.cancelPending();
+    this.selectedEdgeId = null;
+    if (this.edgeDeleteBtn) { this.edgeDeleteBtn.destroy(); this.edgeDeleteBtn = null; }
+    this.lay = { id: edgeId, route: { bends: f.route.bends.map(b => b.slice()) }, start: JSON.stringify(f.route.bends), drag: null, cam: null };
+    // sul telefono la scena è piccola: ci si avvicina al cavo, poi si torna
+    if (this.screenScale() < CROWD_SCALE) {
+      const sp = layToScreen(f.smooth);
+      const xs = sp.map(p => p.x), ys = sp.map(p => p.y);
+      const bw = Math.max(80, Math.max(...xs) - Math.min(...xs)), bh = Math.max(60, Math.max(...ys) - Math.min(...ys));
+      const cam = this.cameras.main;
+      const z = Math.min(2.2, GAME_W * 0.65 / bw, GAME_H * 0.5 / bh);
+      if (z > cam.zoom * 1.1) {
+        this.lay.cam = { zoom: cam.zoom, x: cam.midPoint.x, y: cam.midPoint.y };
+        this.camGlide(z, (Math.min(...xs) + Math.max(...xs)) / 2, (Math.min(...ys) + Math.max(...ys)) / 2 + GAME_H * 0.06 / z);
+      }
+    }
+    el('#lay-bar').classList.add('show');
+    this.redrawEdges();
+    return true;
+  }
+
+  // la vista scivola a uno zoom e a un centro (in coordinate del mondo)
+  camGlide (z, x, y) {
+    const cam = this.cameras.main, z0 = cam.zoom, x0 = cam.midPoint.x, y0 = cam.midPoint.y;
+    if (this.camTween) this.camTween.stop();
+    this.camTween = this.tweens.addCounter({
+      from: 0, to: 1, duration: 250, ease: 'Sine.easeOut',
+      onUpdate: tw => { const t = tw.getValue(); cam.setZoom(z0 + (z - z0) * t); cam.centerOn(x0 + (x - x0) * t, y0 + (y - y0) * t); }
+    });
+  }
+
+  // save: il percorso resta sul cavo; altrimenti si lascia com'era
+  endLay (save) {
+    const L = this.lay;
+    if (!L) return;
+    if (L.drag && L.drag.timer) clearTimeout(L.drag.timer);
+    this.lay = null;
+    el('#lay-bar').classList.remove('show');
+    if (this.layGraphics) this.layGraphics.clear();
+    const e = gameState.edges.find(x => x.id === L.id);
+    const ends = e && this.edgeEnds(e);
+    // si salva solo un percorso cambiato (con il suo passo di Annulla)
+    if (save && e && ends && JSON.stringify(L.route.bends) !== L.start) {
+      e.route = { bends: L.route.bends.map(b => b.slice()), key: ends.key };
+      SFX.place();
+      this.pushHistory();
+    }
+    if (L.cam) {
+      this.camGlide(L.cam.zoom, L.cam.x, L.cam.y);
+    }
+    this.redrawEdges();
+  }
+
+  // dove stanno i pallini (le pieghe) sullo schermo
+  layHandles (f) {
+    return f.route.bends.map(([gx, gy]) => layToScreen([{ gx, gy }, { gx, gy }])[0]);
+  }
+
+  // un tocco su un pallino lo prende; tenuto fermo un attimo diventa rosso
+  // e, lasciato lì, la piega si toglie (se il dito si muove, si trascina)
+  layPointerDown (pointer) {
+    const L = this.lay;
+    if (!L || (pointer.downElement && pointer.downElement !== this.game.canvas)) return false;
+    const e = gameState.edges.find(x => x.id === L.id);
+    const f = e && this.edgeFloor(e);
+    if (!f) return false;
+    const tol = 30 / this.screenScale();
+    let best = -1, bestD = tol;
+    this.layHandles(f).forEach((h, i) => {
+      const d = Math.hypot(pointer.worldX - h.x, pointer.worldY - h.y);
+      if (d < bestD) { bestD = d; best = i; }
+    });
+    if (best < 0) return false;
+    const drag = L.drag = { k: best, x: pointer.x, y: pointer.y, moved: false, armed: false, timer: null };
+    drag.timer = setTimeout(() => {
+      if (this.lay !== L || L.drag !== drag || drag.moved) return;
+      drag.armed = true;
+      if (navigator.vibrate) navigator.vibrate(30);
+      this.redrawEdges();
+    }, LAY_REMOVE_MS);
+    if (navigator.vibrate) navigator.vibrate(10);
+    this.redrawEdges();
+    return true;
+  }
+
+  layDragMove (pointer) {
+    const L = this.lay, e = gameState.edges.find(x => x.id === L.id);
+    const ends = e && this.edgeEnds(e);
+    if (!ends) return;
+    const d = L.drag;
+    if (!d.moved) {
+      if (Math.hypot(pointer.x - d.x, pointer.y - d.y) < 8) return;
+      d.moved = true; d.armed = false;
+      if (d.timer) { clearTimeout(d.timer); d.timer = null; }
+    }
+    const m = worldToFloor(pointer.worldX, pointer.worldY);
+    const pts = layCorners(L.route, ends.A, ends.B), prev = pts[d.k], next = pts[d.k + 2];
+    let gx = laySnap(m.gx), gy = laySnap(m.gy);
+    // in riga con la piega o il capo accanto: tratti dritti, paralleli ai muri
+    [prev, next].forEach(q => {
+      if (Math.abs(m.gx - q.gx) < CELL * 0.8) gx = q.gx;
+      if (Math.abs(m.gy - q.gy) < CELL * 0.8) gy = q.gy;
+    });
+    gx = Math.min(VENUE_W - CELL / 2, Math.max(CELL / 2, gx));
+    gy = Math.min(VENUE_H - CELL / 2, Math.max(CELL / 2, gy));
+    const cur = L.route.bends[d.k];
+    if (Math.abs(cur[0] - gx) < 1e-6 && Math.abs(cur[1] - gy) < 1e-6) return;
+    const bends = L.route.bends.map(b => b.slice());
+    bends[d.k] = [gx, gy];
+    const max = layMaxLen(e);
+    const len = layLength(laySmooth(layCorners({ bends }, ends.A, ends.B))), was = layLength(laySmooth(pts));
+    if (max && len > max + 1e-6 && len > was) {
+      // il cavo è teso: non si allunga oltre la sua misura
+      if (!L.taut) { L.taut = true; this.updateLayBar(e, was, max); if (navigator.vibrate) navigator.vibrate([15, 40, 15]); }
+      return;
+    }
+    L.taut = false;
+    L.route.bends = bends;
+    this.redrawEdges();
+  }
+
+  layDragEnd () {
+    const L = this.lay, e = gameState.edges.find(x => x.id === L.id);
+    const ends = e && this.edgeEnds(e);
+    const d = L.drag;
+    if (d && d.timer) clearTimeout(d.timer);
+    L.drag = null; L.taut = false;
+    // pallino tenuto premuto e lasciato lì: la piega si toglie
+    if (d && d.armed && !d.moved) { L.route.bends.splice(d.k, 1); SFX.cableOut('xlr'); }
+    // una piega messa in riga con le vicine non serve più: sparisce
+    if (ends) L.route.bends = layClean(L.route.bends, ends.A, ends.B);
+    this.redrawEdges();
+  }
+
+  // + Piega: una piega nuova a metà del tratto più lungo
+  layAddBend () {
+    const L = this.lay, e = L && gameState.edges.find(x => x.id === L.id);
+    const ends = e && this.edgeEnds(e);
+    if (!ends) return;
+    if (L.route.bends.length >= LAY_MAX_BENDS) { showToast('Bastano ' + LAY_MAX_BENDS + ' pieghe: spostale, o tienine premuta una per toglierla.'); return; }
+    const pts = layCorners(L.route, ends.A, ends.B);
+    let k = 0, best = -1;
+    for (let i = 0; i < pts.length - 1; i++) {
+      const l = Math.hypot(pts[i + 1].gx - pts[i].gx, pts[i + 1].gy - pts[i].gy);
+      if (l > best) { best = l; k = i; }
+    }
+    const a = pts[k], b = pts[k + 1];
+    L.route.bends.splice(k, 0, [laySnap((a.gx + b.gx) / 2), laySnap((a.gy + b.gy) / 2)]);
+    this.redrawEdges();
+  }
+
+  layReset () {
+    const L = this.lay, e = L && gameState.edges.find(x => x.id === L.id);
+    const ends = e && this.edgeEnds(e);
+    if (!ends) return;
+    L.route = layAutoRoute(ends.A, ends.B);
+    this.redrawEdges();
+  }
+
+  updateLayBar (e, len, max) {
+    const name = (cableItem(e.signal) || {}).name || cableName(e.signal);
+    const over = max && len > max + 1e-6;
+    el('#lay-text').innerHTML = `<b>${escapeHtml(name)}</b> · <span class="${over || this.lay.taut ? 'lay-over' : ''}">${fmtM(len)}${max ? ' / ' + max + ' m' : ''}</span>`
+      + (this.layIssue && !this.lay.taut ? `<small class="lay-over">${escapeHtml(this.layIssue.text)}</small>`
+        : `<small>${this.lay.taut ? 'Il cavo è teso: non arriva più in là.' : over ? 'Troppo corto: cerca una strada più breve.'
+          : this.lay.drag && this.lay.drag.armed ? 'Lascia il dito: la piega si toglie (oppure trascinala).'
+          : this.lay.route.bends.length ? 'Trascina un pallino per piegare il cavo; tienilo premuto e lascia per toglierlo.' : 'Il cavo va dritto: con «+ Piega» lo pieghi dove vuoi.'}</small>`);
+  }
+
+  /* via di fuga e passaggi sul pavimento (le regole di Gerry), e i punti
+     dei cavi che Gerry boccerebbe: quelli del cavo in mano mentre lo si
+     stende, tutti dopo un giro di Gerry finché non apre le porte */
+  drawGerryFloor () {
+    if (!this.gerryGraphics) {
+      this.gerryGraphics = this.add.graphics().setDepth(1.6);
+      this.gerryMarkGraphics = this.add.graphics().setDepth(5.8);
+      this.gerryLabels = {};
+    }
+    const g = this.gerryGraphics, mg = this.gerryMarkGraphics;
+    g.clear(); mg.clear();
+    const { passages, exits } = gerryZones();
+    const quad = (x0, y0, x1, y1) => [gridToScreen(x0, y0), gridToScreen(x1, y0), gridToScreen(x1, y1), gridToScreen(x0, y1)];
+    const fillQuad = (q, color, alpha) => { g.fillStyle(color, alpha); g.fillPoints(q, true); };
+    const label = (id, text, q, color) => {
+      let t = this.gerryLabels[id];
+      if (!t) t = this.gerryLabels[id] = this.add.text(0, 0, text, { fontFamily: 'Inter, sans-serif', fontSize: '10px', fontStyle: 'bold', color }).setOrigin(0.5).setDepth(1.7);
+      t.setPosition((q[0].x + q[2].x) / 2, (q[0].y + q[2].y) / 2).setVisible(true);
+    };
+    Object.values(this.gerryLabels).forEach(t => t.setVisible(false));
+    exits.forEach(z => {
+      const [i, j, w, h] = z.r, q = quad(i * CELL, j * CELL, (i + w) * CELL, (j + h) * CELL);
+      fillQuad(q, 0xe0503f, 0.22);
+      // strisce rosse in diagonale, come il nastro a terra
+      for (let k = 0; k < w + h; k++) {
+        const a = gridToScreen(Math.min(i + k, i + w) * CELL, (j + Math.max(0, k - w)) * CELL);
+        const b = gridToScreen(Math.max(i, i + k - h) * CELL, (j + Math.min(k, h)) * CELL);
+        g.lineStyle(2, 0xe0503f, 0.7); g.lineBetween(a.x, a.y, b.x, b.y);
+      }
+      g.lineStyle(2, 0xe0503f, 0.9); g.strokePoints(q, true);
+      label(z.id, 'VIA DI FUGA', q, '#ff8b7d');
+    });
+    passages.forEach(z => {
+      const [i, j, w, h] = z.r;
+      // strisce pedonali: si attraversa dritti (lungo gx)
+      for (let k = 0; k < h; k++) if (k % 2 === 0) fillQuad(quad(i * CELL, (j + k) * CELL, (i + w) * CELL, (j + k + 1) * CELL), 0xf2c53d, 0.2);
+      const q = quad(i * CELL, j * CELL, (i + w) * CELL, (j + h) * CELL);
+      g.lineStyle(1.5, 0xf2c53d, 0.6); g.strokePoints(q, true);
+      label(z.id, 'PASSAGGIO', q, '#f2c53d');
+    });
+    // i punti da sistemare
+    let issues = [];
+    if (this.gerryMarks || this.lay) {
+      issues = gerryIssues();
+      if (!this.gerryMarks) issues = issues.filter(x => x.ids.includes(this.lay.id));
+    }
+    issues.forEach(is => is.cells.forEach(c => {
+      const q = [[0, 0], [1, 0], [1, 1], [0, 1]].map(([di, dj]) => {
+        const x = (c.i + di) * CELL, y = (c.j + dj) * CELL, p = gridToScreen(x, y);
+        return isStageCell(c.i * CELL, c.j * CELL) ? { x: p.x, y: p.y - PLATFORM_HEIGHT } : p;
+      });
+      mg.fillStyle(0xe0503f, 0.35); mg.fillPoints(q, true);
+      mg.lineStyle(1.5, 0xe0503f, 0.95); mg.strokePoints(q, true);
+    }));
+    this.layIssue = this.lay ? (issues.find(x => x.ids.includes(this.lay.id)) || null) : null;
+  }
+
+  // pallini sui tratti del cavo in mano e il cavo che avanza, arrotolato
+  drawLay () {
+    if (!this.layGraphics) this.layGraphics = this.add.graphics().setDepth(7);
+    const g = this.layGraphics;
+    g.clear();
+    const L = this.lay, e = L && gameState.edges.find(x => x.id === L.id);
+    const f = e && this.edgeFloor(e);
+    if (!f) return;
+    const k = this.screenScale(), r = 12 / k;
+    const max = layMaxLen(e), len = layLength(f.smooth);
+    // un pallino per piega: si trascina (o si tiene premuto per toglierla)
+    this.layHandles(f).forEach((h, i) => {
+      const on = L.drag && L.drag.k === i, armed = on && L.drag.armed;
+      const col = armed ? 0xe0503f : 0xf2a541;
+      g.fillStyle(on ? col : 0x1c1d22, 1);
+      g.lineStyle(2.5 / k, col, 1);
+      g.fillCircle(h.x, h.y, on ? r * 1.3 : r);
+      g.strokeCircle(h.x, h.y, on ? r * 1.3 : r);
+      if (armed) {
+        // ✕: lasciandolo qui la piega si toglie
+        g.lineStyle(3 / k, 0xffffff, 1);
+        g.lineBetween(h.x - r * 0.5, h.y - r * 0.5, h.x + r * 0.5, h.y + r * 0.5);
+        g.lineBetween(h.x - r * 0.5, h.y + r * 0.5, h.x + r * 0.5, h.y - r * 0.5);
+      } else {
+        g.fillStyle(on ? 0x1c1d22 : 0xf2a541, 1);
+        g.fillCircle(h.x, h.y, r * 0.32);
+      }
+    });
+    // quello che avanza si arrotola a otto accanto al pezzo di arrivo
+    if (max && max - len >= 1) {
+      const B = layToScreen([f.B, f.B])[0], s = Math.min(1.6, 0.6 + (max - len) / 10);
+      g.lineStyle(2, 0x17181b, 1);
+      g.strokeEllipse(B.x + 14 * s, B.y + 6, 12 * s, 7 * s);
+      g.strokeEllipse(B.x + 24 * s, B.y + 6, 12 * s, 7 * s);
+      g.lineStyle(1, CABLE_TYPES[e.signal].color, 1);
+      g.strokeEllipse(B.x + 14 * s, B.y + 6, 12 * s, 7 * s);
+      g.strokeEllipse(B.x + 24 * s, B.y + 6, 12 * s, 7 * s);
+    }
+    this.updateLayBar(e, len, max);
+  }
+
+  // Togli: il cavo in mano torna nel baule
+  layDelete () {
+    const L = this.lay;
+    if (!L) return;
+    this.endLay(false);
+    this.selectedEdgeId = L.id;
+    this.deleteSelectedEdge();
+  }
+
+  // un tocco su un dispositivo mentre si stende un cavo: non succede niente
+  layLocked () {
+    showToast('Stai sistemando un cavo: tocca Fatto (o il pavimento) prima di passare ad altro.');
   }
 
   /* ---------------- livelli: filtro di visibilità per tipo di cavo ---------------- */
@@ -7465,6 +8820,7 @@ class StageScene extends Phaser.Scene {
       first.edge > 0 ? x.edge - first.edge < 6 : (x.edge === 0 && x.center < first.center * 1.35 + 4)));
     if (!close.length) { openRearPanel(first.id); return true; }
     this.showPickMenu([first, ...close].slice(0, 4).map(x => ({ id: x.id })), wx, wy);
+    this.zoomToCrowd(wx, wy);
     return true;
   }
 
@@ -7486,6 +8842,9 @@ class StageScene extends Phaser.Scene {
     const close = items.filter(x => x !== best && x.d - best.d < PICK_TIE_PX);
     if (close.length) { this.showPickMenu([best, ...close].slice(0, PICK_MAX), wx, wy); return true; }
     if (best.id) { this.clearEdgeSelection(); return this.openPanelAt(wx, wy, pressedId || null); }
+    // un cavo per terra si prende in mano per sistemarlo; quelli sul
+    // tavolo della regia (niente pavimento) si selezionano e basta
+    if (this.startLay(best.edge.id)) return true;
     if (this.selectedEdgeId === best.edge.id) this.clearEdgeSelection();
     else this.selectEdge(best.edge);
     return true;
@@ -7524,7 +8883,7 @@ class StageScene extends Phaser.Scene {
       menu.classList.remove('show');
       ids.forEach(i => { const v = this.compVisuals[i]; if (v && i !== this.assemblyId) this.setGlow(v, false); });
       this.showPickTags(null);
-      setTimeout(() => { if (!rearPanelId && !openCaseName) setSceneInput(true); }, 0);
+      setTimeout(() => { if (!sceneCovered()) setSceneInput(true); }, 0);
       if (act) act();
     };
     box.querySelectorAll('.pick-opt').forEach(b => b.addEventListener('click', ev => {
@@ -7532,7 +8891,7 @@ class StageScene extends Phaser.Scene {
       if (b.dataset.id) done(() => openRearPanel(b.dataset.id));
       else if (b.dataset.edge) {
         const e = gameState.edges.find(x => String(x.id) === b.dataset.edge);
-        done(() => { if (e) this.selectEdge(e); });
+        done(() => { if (e && !this.startLay(e.id)) this.selectEdge(e); });
       } else done(() => this.zoomAt(wx, wy, PICK_ZOOM_STEP));
     }));
     menu.onclick = ev => { if (ev.target === menu) done(null); };
@@ -7596,6 +8955,13 @@ class StageScene extends Phaser.Scene {
 
   // trascinamento di un dispositivo in montaggio: anteprima della cella
   onScenePointerMove (pointer) {
+    if (this.lay && this.lay.drag) {
+      // due dita: si zooma, il cavo resta dov'è
+      const p2 = this.input.pointer2;
+      if (p2 && p2.isDown) { this.layDragEnd(); return false; }
+      if (pointer.isDown) this.layDragMove(pointer);
+      return true;
+    }
     const pr = this.press;
     if (!pr || !pointer.isDown) return false;
     if (!pr.moved && Phaser.Math.Distance.Between(pointer.x, pointer.y, pr.x, pr.y) > 8) {
@@ -7613,6 +8979,7 @@ class StageScene extends Phaser.Scene {
   }
 
   onScenePointerUp (pointer) {
+    if (this.lay && this.lay.drag) { this.layDragEnd(); return; }
     const pr = this.press;
     if (!pr) return;
     this.press = null;
@@ -7715,7 +9082,6 @@ class StageScene extends Phaser.Scene {
     this.updateQuadroVisual();
     this.redrawEdges();
     setCircuitStatus('untested');
-    gameState.tested = false;
     SFX.remove();
     showToast(name + ' tolto e rimesso tra i pezzi' + (lost ? ', insieme ai suoi ' + lost + ' cavi' : '') + '.', 'ok');
     this.pushHistory();
@@ -7747,9 +9113,11 @@ class StageScene extends Phaser.Scene {
     this.compVisuals[id].container.setPosition(pos.x, pos.y).setDepth(isoDepth(pos.y));
     // PC e scheda audio cambiano verso tra quinta e FOH: si ridisegnano
     const def = COMPONENT_TYPES[comp.type];
-    if (def.front && orientK(def, pos.x, pos.y) !== this.compVisuals[id].rot) {
+    // (il Quadro anche quando cambia muro: si riappoggia)
+    if (def.front && (comp.type === 'quadro' || orientK(def, pos.x, pos.y) !== this.compVisuals[id].rot)) {
       this.compVisuals[id].container.destroy();
       this.compVisuals[id] = this.buildComponentVisual(id, def, pos.x, pos.y);
+      if (comp.type === 'quadro') this.updateQuadroVisual();
     }
 
     mountedAll(comp).forEach(child => {
@@ -7768,7 +9136,6 @@ class StageScene extends Phaser.Scene {
     this.clearMoveSelection();
     this.redrawEdges();
     setCircuitStatus('untested');
-    gameState.tested = false;
     SFX.place();
     showToast('Dispositivo spostato.', 'ok');
     this.pushHistory();
@@ -7884,7 +9251,6 @@ class StageScene extends Phaser.Scene {
   runSystemTest () {
     this.stopFx();
     const result = runValidation();
-    gameState.tested = true;
     Object.values(this.compVisuals).forEach(v => this.setGlow(v, false));
     this.refreshLive();
 
@@ -7918,7 +9284,7 @@ class StageScene extends Phaser.Scene {
       saveLevel();
       setCircuitStatus('error');
       const exact = miss && n >= 3 ? ' ' + bossName() + ' ti indica il foglio: «' + miss.what + '».' : '';
-      if (kind === 'power') { showToast('Scintille! ' + hint + exact, 'bad'); this.fxSparks(); }
+      if (kind === 'power') { showToast((quadroLive() ? 'Scintille! ' : 'Tutto spento: ') + hint + exact, 'bad'); this.fxSparks(); }
       else if (kind === 'audio') { showToast('L\'impianto gracchia: ' + hint + exact, 'bad'); this.fxCrackle(); }
       else { showToast('Le luci vanno in tilt: ' + hint + exact, 'bad'); this.fxLightsTilt(); }
       // dopo gli effetti, così il rosso non viene spento da chi li ferma
@@ -8003,12 +9369,24 @@ class StageScene extends Phaser.Scene {
     this.updateSignalFlow();
     this.drawLiveBeams();
   }
+  fxDead () {
+    this.fxStart();
+    SFX.button();
+    const q = findQuadro();
+    const v = q && this.compVisuals[q.id];
+    if (!v) { this.fxEvery(400, 1, () => {}, () => this.stopFx()); return; }
+    this.fxHold(v);
+    this.fxEvery(260, 6, i => this.setGlow(v, i % 2 === 0, 0x8a8e98), () => this.stopFx());
+  }
   visualsOf (...types) {
     return Object.values(gameState.placed).filter(c => types.includes(c.type)).map(c => this.compVisuals[c.id]).filter(Boolean);
   }
 
-  // corrente: raffica di scintille dal Quadro (o dall'allaccio, se manca)
+  // corrente: raffica di scintille dal Quadro (o dall'allaccio, se manca).
+  // Le scintille vogliono tensione: col Quadro senza corrente o non armato
+  // non succede niente, resta tutto spento e il Quadro lampeggia grigio
   fxSparks () {
+    if (!quadroLive()) { this.fxDead(); return; }
     this.fxStart();
     SFX.trip();
     const q = findQuadro();
@@ -8184,7 +9562,7 @@ class StageScene extends Phaser.Scene {
     };
     const label = (gx, gy, text, color) => {
       const p = gridToScreen(gx, gy);
-      const t = this.add.text(p.x, p.y, text, { fontFamily: FONT_MARKER, fontSize: '10px', color }).setOrigin(0.5).setDepth(3.6).setAlpha(0.9);
+      const t = this.add.text(p.x, p.y, text, { fontFamily: FONT_MARKER, fontSize: '12px', color: '#141414', backgroundColor: color, padding: { x: 5, y: 0 } }).setOrigin(0.5).setDepth(3.6).setAlpha(0.88).setAngle(-4);
       this.tapeObjs.push(t);
     };
     TAPE_MARKS.forEach(m => {
@@ -8198,10 +9576,10 @@ class StageScene extends Phaser.Scene {
         });
         label(m.gx + m.w + 0.25, m.gy + m.h / 2, m.text, m.color);
       } else {
-        const r = 0.16;
-        strip(m.gx - r, m.gy - r, m.gx + r, m.gy + r, 0.06, color);
-        strip(m.gx - r, m.gy + r, m.gx + r, m.gy - r, 0.06, color);
-        label(m.gx + 0.05, m.gy + 0.42, m.text, m.color);
+        const r = 0.22;
+        strip(m.gx - r, m.gy - r, m.gx + r, m.gy + r, 0.08, color);
+        strip(m.gx - r, m.gy + r, m.gx + r, m.gy - r, 0.08, color);
+        label(m.gx + 0.05, m.gy + 0.5, m.text, m.color);
       }
     });
   }
@@ -8495,6 +9873,8 @@ class StageScene extends Phaser.Scene {
 
   /* ---------------- reset ---------------- */
   resetLevel (quiet) {
+    // giro e conti di prima: un Annulla subito dopo il reset li rimette
+    const before = { giro: gameState.giro || 0, giroFails: (gameState.giroFails || [0, 0, 0]).slice(), stats: { ...freshStats(), ...gameState.stats }, trips: gameState.trips || 0, rcdTrips: gameState.rcdTrips || 0, procErrors: (gameState.procErrors || []).slice() };
     this.stopFx();
     this.clearEdgeSelection();
     this.clearMoveSelection();
@@ -8503,7 +9883,7 @@ class StageScene extends Phaser.Scene {
 
     Object.values(this.compVisuals).forEach(v => v.container.destroy());
     this.compVisuals = {};
-    this.occupied = {};
+    this.occupied = {}; this.blockSceneryCells();
     this.edgeGraphics.clear();
 
     gameState.placed = {};
@@ -8515,7 +9895,6 @@ class StageScene extends Phaser.Scene {
     gameState.selectedCable = null;
     gameState.pendingPort = null;
     closeRearPanel();
-    gameState.tested = false;
     gameState.trips = 0; gameState.rcdTrips = 0; gameState.procErrors = []; gameState.inrush = [];
     gameState.stats = freshStats();
     gameState.giro = 0; gameState.giroFails = [0, 0, 0];
@@ -8532,6 +9911,15 @@ class StageScene extends Phaser.Scene {
     this.updateQuadroVisual();
     if (!quiet) showToast('Livello resettato.');
     this.pushHistory();
+    this.history[this.historyIndex].resetFrom = before;
+  }
+  // giro e conti che un reset azzera: tornano con l'Annulla, si riazzerano col Ripeti
+  applyResetCounters (c) {
+    gameState.giro = c.giro; gameState.giroFails = c.giroFails.slice();
+    gameState.stats = { ...c.stats };
+    gameState.trips = c.trips; gameState.rcdTrips = c.rcdTrips; gameState.procErrors = c.procErrors.slice();
+    updateGiroUI();
+    saveLevel();
   }
 
   /* ---------------- cronologia: indietro/avanti tramite snapshot dello stato ----------------
@@ -8542,11 +9930,13 @@ class StageScene extends Phaser.Scene {
     this.history = (this.history || []).slice(0, this.historyIndex + 1);
     this.history.push({
       placed: JSON.parse(JSON.stringify(gameState.placed)),
-      edges: JSON.parse(JSON.stringify(gameState.edges)),
+      edges: JSON.parse(JSON.stringify(gameState.edges.map(edgeData))),
       stock: { ...gameState.stock },
       nextIndex: { ...gameState.nextIndex },
       edgeSeq: gameState.edgeSeq
     });
+    // gli ultimi HISTORY_MAX passi bastano: la memoria non cresce per tutta la partita
+    if (this.history.length > HISTORY_MAX) this.history.splice(0, this.history.length - HISTORY_MAX);
     this.historyIndex = this.history.length - 1;
     this.updateHistoryButtons();
     saveLevel();
@@ -8554,17 +9944,22 @@ class StageScene extends Phaser.Scene {
 
   undo () {
     if (this.historyIndex <= 0) return;
+    const from = this.history[this.historyIndex];
     this.historyIndex--;
     this.restoreSnapshot(this.history[this.historyIndex]);
+    if (from.resetFrom) this.applyResetCounters(from.resetFrom);
   }
 
   redo () {
     if (this.historyIndex >= this.history.length - 1) return;
     this.historyIndex++;
-    this.restoreSnapshot(this.history[this.historyIndex]);
+    const to = this.history[this.historyIndex];
+    this.restoreSnapshot(to);
+    if (to.resetFrom) this.applyResetCounters({ giro: 0, giroFails: [0, 0, 0], stats: freshStats(), trips: 0, rcdTrips: 0, procErrors: [] });
   }
 
   restoreSnapshot (snap) {
+    if (this.lay) { this.lay = null; el('#lay-bar').classList.remove('show'); }
     this.stopFx();
     this.clearEdgeSelection();
     this.clearMoveSelection();
@@ -8572,9 +9967,10 @@ class StageScene extends Phaser.Scene {
 
     Object.values(this.compVisuals).forEach(v => v.container.destroy());
     this.compVisuals = {};
-    this.occupied = {};
+    this.occupied = {}; this.blockSceneryCells();
 
     gameState.placed = JSON.parse(JSON.stringify(snap.placed));
+    alignScreens(gameState.placed);
     gameState.edges = JSON.parse(JSON.stringify(snap.edges));
     gameState.stock = { ...snap.stock };
     // partita salvata prima di un pezzo nuovo (es. il tavolo regia): la sua
@@ -8601,7 +9997,6 @@ class StageScene extends Phaser.Scene {
     updateStockUI();
     updatePowerMeter();
     setCircuitStatus('untested');
-    gameState.tested = false;
     this.updateHistoryButtons();
     this.updateSignalFlow();
     saveLevel();

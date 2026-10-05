@@ -50,6 +50,23 @@ Invece di livelli più facili, strumenti veri che semplificano il lavoro:
 tester per cavi, sequencer di accensione, cavi già etichettati, multicore,
 ciabatte con interruttore generale, rack precablati.
 
+## Assistente (dal livello 2)
+
+Dal livello 2 il capo tutor non c'è più: al suo posto un **assistente** da
+assumere a inizio serata. La reputazione è una soglia (non si spende), i
+favori nei guasti grossi si pagano a birre. Tre caratteri (proposta): Nico
+«Cavetto» (rep. 10, stagista), Sabri «Nastro Nero» (rep. 20, come il capo),
+Tonino «Ventennale» (rep. 35, il più bravo, due birre a favore). Design in
+`docs/assistente.md`.
+- Già fatto: i dati (`ASSISTANTS` in `main.js`), assunzione e favori
+  (`hireAssistant`, `assistantFavor`), `assistant` nel salvataggio
+  (in ogni slot, le partite vecchie senza assistente si leggono con nessuno
+  assunto). Nel livello 1 non si assume nessuno.
+- Da fare col livello 2: la scheda «Assistente» nella scaletta, il ritratto
+  in testata, la scelta «Chi ci va?» nello spettacolo, i ritratti in
+  `img/personaggi.svg`. Più avanti: aiuto allo scarico e alla posa,
+  esperienza, due assistenti nei palchi grandi.
+
 ## Guasti nei livelli successivi (proposta)
 
 Il guasto del microfono del preside (vedi `docs/livello1-festa-scuola.md`) è il
@@ -87,10 +104,10 @@ cambiano da una fase all'altra.
 
 ## Posa dei cavi
 
-- **Minigioco della posa dei cavi** (20:00 in scaletta): nel gioco per il
-  livello 1. `posa-cavi.html` si apre alla fine dello show del primo
-  collaudo con i cavi come tirati al montaggio; si sistemano piegandoli
-  come corde, a tempo fino alle 20:30. Gerry il bidello controlla via di
+- **Posa dei cavi** (20:00 in scaletta): nel gioco per il livello 1 i cavi
+  si stendono al montaggio, a tratti dritti; alle 20:00 passa Gerry a
+  controllarli. `posa-cavi.html` resta come minigioco a sé (pagina da sola):
+  i cavi si sistemano piegandoli come corde, a tempo fino alle 20:30. Gerry il bidello controlla via di
   fuga, passacavi nei passaggi, cavi in scena, nastro e ronzio. Le stelle
   danno reputazione. Nell'isometrico i cavi seguono le pieghe; gli errori
   lasciati alle 20:30 passano al discorso del preside (`caviLeftovers()`).
@@ -106,7 +123,17 @@ cambiano da una fase all'altra.
   Il discorso resta col suo palco disegnato di fronte, non va
   nell'isometrico (deciso); lo stesso vale per il DJ set e il cantante. Il microfono va bene su qualsiasi ingresso MIC,
   purché cablato.
-- Da fare: il DJ set (21:15) come fase successiva. Dopo il DJ: da decidere.
+- Dopo il DJ set (fatto): Gerry ha cacciato il DJ e **Macio** improvvisa
+  un **karaoke** (`karaoke.html`): il tecnico manda avanti il testo a mano,
+  sillaba per sillaba, sceglie le parole che Macio dimentica, fa partire il
+  coro del pubblico, riattacca la spina che Gerry stacca e tiene la voce di
+  Macio (accento di Chieti) nella zona verde. Prende il posto del cantante
+  con chitarra. Design in `docs/livello1-festa-scuola.md`.
+- **Carico del furgone** (23:00): prima versione nel gioco, `carico.html`
+  dopo il karaoke. Il tetris del furgone
+  col marciapiede da tre posti, la roba della scuola da ridare a Gerry,
+  l'assetto, tre cinghie e la prova su strada. Da provare giocando. Design
+  in `docs/minigioco-carico.md`.
 
 ## Show del DJ set
 
@@ -123,8 +150,9 @@ cambiano da una fase all'altra.
   testata; sale col tempo di gioco e con le azioni, scende con una birra
   (che esce dal punteggio). Effetto leggero: sopra 70 il connettore a volte
   scivola di mano. Regole in `docs/livello1-festa-scuola.md`.
-- Da fare: passarla a scarico e posa dei cavi; nello spettacolo del DJ
-  stringe la finestra delle note; nei livelli successivi effetti più forti
+- Il discorso del preside e lo spettacolo del DJ partono con la stanchezza
+  del tecnico (nel DJ stringe la finestra delle note).
+- Da fare: passarla allo scarico; nei livelli successivi effetti più forti
   (cavo nella presa sbagliata, tocchi meno precisi) e numeri più duri.
 - Riparare col ricambio nel furgone costerà stanchezza (vedi *Guasti* in
   `docs/livello1-festa-scuola.md`).
@@ -138,6 +166,9 @@ cambiano da una fase all'altra.
 - Il capo squadra tutor vale solo per il livello 1 (`TUTOR_LEVELS`):
   `tests/capo.js` controlla che fermi ogni errore una volta sola. I test che
   provocano errori apposta spengono i consigli (`settings().bossTips`).
+- L'assistente vale dove il capo non c'è: `tests/assistente.js` controlla
+  che nel livello 1 non si assuma nessuno, soglie, birre, guasti e favori
+  per set. Col livello 2 va esteso alla scelta «Chi ci va?» nello spettacolo.
 - `tests/scarico.js`: lo scarico dentro il gioco e le sue conseguenze sul
   montaggio. Senza rete servono `PHASER_PATH` e `MATTER_PATH`.
 - `tests/posa-cavi.js` (la pagina da sola) e `tests/posa-cavi-gioco.js` (la
@@ -145,8 +176,13 @@ cambiano da una fase all'altra.
   discorso del preside dentro il gioco, dopo collaudo e posa;
   `tests/preside-cavi.js`: i cavi lasciati dalla posa nel discorso (pagina da
   sola).
+- `tests/carico.js`: il carico del furgone, da solo (trascinare, girare,
+  Gerry, cinghie e viaggio) e dentro il gioco (scaletta, reputazione, birra).
 - `tests/stanchezza.js`: la stanchezza del tecnico (tasto 🍺, tempo, azioni,
   birra con conferma, connettore che scivola, ricarica, nuova partita).
+- `tests/robustezza.js`: frecce e WASD, ripresa con un altro schermo,
+  Annulla dopo il reset, file importati, impostazioni nei minigiochi.
+- `sh tests/tutti.sh` lancia tutti i test e dice quali falliscono.
 
 ## Partita, menù e highscore
 

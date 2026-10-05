@@ -1,6 +1,7 @@
 # Minigioco — La posa dei cavi (bozza di design)
 
-Stato: **nel gioco** (livello 1, vedi *Integrazione nel gioco*):
+Stato: **sostituito** nel gioco dalla posa al montaggio con il giro di Gerry
+(vedi *Posa al montaggio*). Prima era nel gioco (livello 1, *Integrazione nel gioco*):
 `posa-cavi.html`, test `tests/posa-cavi.js` (la pagina da sola, con due
 scenari fissi) e `tests/posa-cavi-gioco.js` (dentro il gioco).
 
@@ -127,6 +128,50 @@ nastro basti con margine (≤ 85% del rotolo) ma non sia infinito (≥ 45%).
 **Da fare:**
 - Passaggi e via di fuga anche al montaggio (posa guidata), così non si
   perdono sotto un pezzo.
+
+## Posa al montaggio
+
+Dal 3 ottobre 2026 i cavi si stendono già al montaggio (`main.js`,
+*POSA AL MONTAGGIO* e `StageScene.startLay`):
+
+- Ogni cavo per terra va dal centro della base di un pezzo a quello
+  dell'altro passando per al massimo 5 **pieghe** (`e.route.bends`, in
+  metri). Agli angoli il cavo fa una **curva morbida** (raggio 0,9 m), come
+  un cavo vero. Senza posa il gioco sceglie il percorso più corto a L o a Z
+  che gira intorno alla pedana.
+- Appena collegato (o toccandolo) il cavo **resta in mano**: gli altri si
+  spengono e **i dispositivi non rispondono ai tocchi**. Le pieghe sono
+  pallini che si **trascinano** col dito (o col mouse): scattano sui centri
+  delle celle da 50 cm e si mettono in riga con le vicine. Le pieghe non
+  nascono mai da sole (dopo la prova di Luca del 4 ottobre): si aggiungono
+  con **+ Piega** (a metà del tratto più lungo). Per toglierne una la si
+  **tiene premuta** finché diventa rossa con la ✕ e si lascia il dito
+  (muovendola si annulla). Le pieghe in riga con le vicine spariscono.
+- La barra in basso dice i metri usati sulla lunghezza del cavo del baule:
+  oltre non si tira (il cavo è teso), quello che avanza si arrotola accanto
+  al pezzo. Pulsanti: **+ Piega**, **Com'era** (percorso automatico), **Togli**, **Fatto**
+  (anche un tocco sul pavimento, Invio). Sul telefono la vista si avvicina
+  al cavo e poi torna com'era.
+- Il percorso si salva sul cavo (`e.route`, con la posizione delle due basi):
+  se una base si sposta, il cavo torna al percorso automatico. Annulla e
+  Ripeti lo comprendono.
+- Sul pavimento del montaggio ci sono **via di fuga** (strisce rosse) e
+  **passaggi** (strisce gialle, si attraversano dritti). Mentre si stende un
+  cavo, i punti che Gerry boccerebbe diventano rossi e la barra dice perché.
+  Passacavi e nastro li mette la crew da sola: conta solo da dove passa il cavo.
+
+**Alle 20:00 niente minigioco: passa solo Gerry** (deciso il 3 ottobre 2026,
+`openCavi` e `gerryIssues` in `main.js`). Guarda i cavi come sono stesi al
+montaggio con le regole della tabella sopra: via di fuga, passaggi lungo,
+scena, ronzio (segnale XLR/jack affiancato alla corrente per almeno 1 m).
+- Tutto a posto: «Apri le porte», ★★★ al primo giro, ★★ al secondo, poi ★
+  (reputazione come prima). I giri si contano in `Profile.data.caviGiri`.
+- Errori: la scheda li elenca e restano segnati in rosso. **Sistemo** torna
+  al montaggio (la scaletta dice «Chiama Gerry»); **Apri così** apre con i
+  cavi in giro, senza stelle né reputazione, e lo show ne trova le
+  conseguenze come prima (`cavi.left`).
+- `posa-cavi.html` resta come prototipo a sé (`tests/posa-cavi.js`), il
+  gioco non lo apre più. Il test dentro il gioco è `tests/posa-cavi-gioco.js`.
 
 ## Decisi dopo la prova
 

@@ -112,8 +112,6 @@
   .opt .pos{color:var(--green)}.opt .neg{color:var(--red)}
   .countdown{height:4px;border-radius:2px;background:#0c0d10;overflow:hidden}.countdown i{display:block;height:100%;background:var(--red)}
   #quadro{position:absolute;inset:0;z-index:4;background:var(--bg-panel);padding:10px 16px calc(10px + env(safe-area-inset-bottom,0px));display:grid;gap:10px;align-content:start;overflow:auto}
-  #quadro.mini{inset:auto 8px 8px auto;width:min(300px,calc(100% - 16px));border:2px solid var(--red);border-radius:12px;padding:8px;gap:6px;max-height:calc(100% - 16px)}
-  #quadro.mini .q-help{display:none}
   .q-head{display:flex;justify-content:space-between;align-items:baseline;gap:8px}
   .q-head b{font-family:var(--display);font-size:20px;letter-spacing:.05em}
   .q-head span{font-family:var(--display);font-size:18px;font-variant-numeric:tabular-nums;color:var(--amber)}
@@ -456,7 +454,7 @@
       </div>
     </div>
     <div id="toast"></div>
-    <div class="stage-msg" id="stage-msg" hidden>Il bidello ha cacciato via i musicisti. Ora si può ripristinare il palco per l'ultima band.</div>
+    <div class="stage-msg" id="stage-msg" hidden>Il bidello ha cacciato via i musicisti: la festa è rimasta senza musica.</div>
     <div id="pausa" hidden>PAUSA</div>
   </div>
 
@@ -535,7 +533,7 @@
       </div>
       <div><div class="tag">Obiettivo 3 · fine</div><h2 id="outro-title">Che notte!</h2></div>
     </div>
-    <p class="outro-msg" id="outro-msg">Il bidello ha cacciato via i musicisti. Ora si può ripristinare il palco per l'ultima band.</p>
+    <p class="outro-msg" id="outro-msg">Il bidello ha cacciato via i musicisti: la festa è rimasta senza musica.</p>
     <div class="stars" id="r-stars"></div>
     <div class="results">
       <div><b id="r-grad">0%</b><span>Pubblico</span></div>
@@ -557,7 +555,9 @@
   const rnd = (a, b) => a + Math.random() * (b - a);
   const clamp = (v, a = 0, b = 100) => Math.max(a, Math.min(b, v));
   const store = { get (k, d) { try { const v = localStorage.getItem(k); return v == null ? d : JSON.parse(v); } catch (e) { return d; } }, set (k, v) { try { localStorage.setItem(k, JSON.stringify(v)); } catch (e) {} } };
-  const EMBED = new URLSearchParams(location.search).has('embed');
+  const QS = new URLSearchParams(location.search), EMBED = QS.has('embed');
+  // volume (0-1) e «Effetti ridotti» delle impostazioni del gioco, dall'indirizzo dell'iframe
+  const VOL = QS.has('vol') && Number.isFinite(+QS.get('vol')) ? Math.max(0, Math.min(1, +QS.get('vol'))) : 1;
 
   const M = window.DJ_MAPPA;
   const BEAT = 60 / M.bpm, BAR = BEAT * 4;
@@ -589,7 +589,7 @@
   const REPS = { set: 5, small: 1, dmx: 3, tuFast: 5, gerry: -5, larsen: -5 };
   const FASE_KW = { L1: 2.4, L2: 0.4, L3: 0.2 };        // carichi senza la ciabattina
   const CIABATTINA_KW = 3.4, FASE_MAX = 3.6;
-  const AWAY_FAST = 15, CAPO_PATIENCE = 30, CHOICE_S = 10, CAPO_FIX_S = 6, GERRY_S = 20, REWIND_MAX = 8 * BAR;
+  const AWAY_FAST = 15, CHOICE_S = 10, CAPO_FIX_S = 6, GERRY_S = 20, REWIND_MAX = 8 * BAR;
 
   const SEC = [];
   M.sezioni.forEach(([a, b, k]) => { const s = { k, a, b }; for (let i = a; i <= b; i++) SEC[i] = s; });
@@ -598,9 +598,11 @@
   const mouthAt = t => { const i = Math.floor(t * 25); return i >= 0 && i < M.bocca.length ? +M.bocca[i] / 9 : 0; };
 
   let diff = store.get('dj-diff', 'normale');
-  let realStrobe = store.get('dj-strobe', false);
+  // con «Effetti ridotti» lo strobo parte morbido (si può sempre riaccendere)
+  let realStrobe = QS.has('rfx') ? false : store.get('dj-strobe', false);
   let lag = store.get('dj-lag', 0);
   let pocket = 2, boss = 'il capo', pars = ['PAR 1', 'PAR 2', 'PAR 3', 'PAR 4'];
+  let tired = 30;   // stanchezza all'inizio, 0-100 (nel gioco quella del tecnico)
   let S;
 
   function buildNotes () {
@@ -615,7 +617,7 @@
       running: false, paused: false, auto: !!auto, over: false, sent: false,
       t: -2, grad: 60, score: 0, combo: 0, maxCombo: 0, mult: 1,
       perfect: 0, good: 0, miss: 0, lost: 0, stray: 0, holdsBroken: 0,
-      fatigue: 30, beers: pocket, drunk: 0, favours: 0,
+      fatigue: tired, beers: pocket, drunk: 0, favours: 0,
       notes, specials: [],
       down: [false, false, false], holding: [null, null, null],
       colori: 0, chase: 0, chaseIdx: 0, strobe: 0, flash: 0, lastQ: -1,
@@ -634,6 +636,7 @@
   /* ---------- il tempo del brano: l'audio comanda, il resto lo segue ---------- */
   const song = $('#song');
   song.src = M.file;
+  song.volume = VOL;
   const clock = {
     virtual: false, vt: -2, startPerf: 0, base: 0, basePerf: 0, lastA: -1,
     now () {
@@ -1207,23 +1210,15 @@
       S.repParts.push([fast ? 'Fase del Quadro riarmata in fretta (ci sei andato tu)' : 'Fase del Quadro riarmata, ma con calma', fast ? REPS.tuFast : 0]);
       endFault(f, fast, 'Fase riarmata in ' + Math.round(away) + ' s: le luci tornano.');
       backToLights();
-    } else if (B && B.forced) {
-      S.repParts.push(['Fase del Quadro riarmata dopo che il capo ti ha rimandato alle luci', 0]);
-      endFault(f, false, 'Fase riarmata: le luci tornano.');
-      $('#quadro').hidden = true;
     }
   }
   // si torna alle luci: il DJ fa lo scratch e riporta il brano indietro
-  function backToLights (forced) {
+  function backToLights () {
     const away = S.t - S.away.from;
     S.away = null; S.capo = false; S.capoPress = false;
     for (let l = 0; l < NL; l++) S.down[l] = false;
     paintPads();
-    if (forced) {
-      S.big.forced = true;
-      $('#stage').appendChild($('#quadro')); $('#quadro').classList.add('mini'); renderQuadro();
-      toast(capName() + ': «Basta, torna alle luci! Il Quadro finiscilo da lì.»', 'bad');
-    } else $('#quadro').hidden = true;
+    $('#quadro').hidden = true;
     rewind(away);
   }
   function rewind (away) {
@@ -1249,7 +1244,6 @@
     if (S.away) {
       const away = S.t - S.away.from;
       $('#q-time').textContent = Math.floor(away) + ' s';
-      if (away >= CAPO_PATIENCE && S.phaseDown) backToLights(true);
     }
     if (B.fixAt && S.phaseDown && S.t >= B.fixAt) {
       S.phaseDown = false; paintPads(); f.plug = 'L3'; f.moved = true;
@@ -1507,7 +1501,7 @@
     S.repParts.forEach(([what, v]) => notes.push(what + (v ? ` (${v > 0 ? '+' : ''}${v})` : '') + '.'));
     const rep = REPS.set + Math.round((R.grad - 60) / 10) + S.repParts.reduce((a, p) => a + p[1], 0);
     result = { type: 'dj', grad: R.grad, rep, beers, drunk: S.drunk, larsens: S.larsens, stars: R.stars, acc: Math.round(R.acc * 100),
-      msg: 'Il bidello ha cacciato via i musicisti. Ora si può ripristinare il palco per l\'ultima band.', maxCombo: R.maxCombo, score: R.score, favours: S.favours, fase: S.big ? S.big.who || 'gerry' : null, rewinds: S.rewinds, notes };
+      msg: 'Il bidello ha cacciato via i musicisti: la festa è rimasta senza musica.', maxCombo: R.maxCombo, score: R.score, favours: S.favours, fase: S.big ? S.big.who || 'gerry' : null, rewinds: S.rewinds, notes };
     $('#outro-title').textContent = S.auto ? 'Così fa il capo.' : R.grad >= 75 ? 'La palestra è venuta giù!' : R.grad >= 45 ? 'Si è ballato.' : 'Il pubblico è andato al bar.';
     $('#r-stars').innerHTML = '★'.repeat(R.stars) + '<i>' + '★'.repeat(5 - R.stars) + '</i>';
     $('#r-grad').textContent = R.grad + '%';
@@ -1553,21 +1547,22 @@
 
   /* ---------- suoni: solo effetti brevi, la musica è il brano ---------- */
   const sfx = (() => {
-    let ac, noiseBuf;
+    let ac, out, noiseBuf;
     const noise = (dur, vol, fl, type) => {
       if (!ac) return;
       const s = ac.createBufferSource(); s.buffer = noiseBuf;
       const f = ac.createBiquadFilter(); f.type = type || 'bandpass'; f.frequency.value = fl;
-      const g = ac.createGain(); s.connect(f).connect(g).connect(ac.destination);
+      const g = ac.createGain(); s.connect(f).connect(g).connect(out);
       const t0 = ac.currentTime; g.gain.setValueAtTime(0.0001, t0); g.gain.exponentialRampToValueAtTime(vol, t0 + 0.02); g.gain.exponentialRampToValueAtTime(0.0001, t0 + dur);
       s.start(); s.stop(t0 + dur + 0.1);
       return f;
     };
-    const tone = (f, dur, type, vol) => { if (!ac) return; const o = ac.createOscillator(), g = ac.createGain(); o.type = type || 'sine'; o.frequency.value = f; o.connect(g).connect(ac.destination); const t0 = ac.currentTime; g.gain.setValueAtTime(0.0001, t0); g.gain.exponentialRampToValueAtTime(vol || 0.15, t0 + 0.01); g.gain.exponentialRampToValueAtTime(0.0001, t0 + dur); o.start(); o.stop(t0 + dur + 0.05); return o; };
+    const tone = (f, dur, type, vol) => { if (!ac) return; const o = ac.createOscillator(), g = ac.createGain(); o.type = type || 'sine'; o.frequency.value = f; o.connect(g).connect(out); const t0 = ac.currentTime; g.gain.setValueAtTime(0.0001, t0); g.gain.exponentialRampToValueAtTime(vol || 0.15, t0 + 0.01); g.gain.exponentialRampToValueAtTime(0.0001, t0 + dur); o.start(); o.stop(t0 + dur + 0.05); return o; };
     return {
       init () {
         if (ac) return;
         try { ac = new (window.AudioContext || window.webkitAudioContext)(); } catch (e) { return; }
+        out = ac.createGain(); out.gain.value = VOL; out.connect(ac.destination);
         noiseBuf = ac.createBuffer(1, ac.sampleRate * 2, ac.sampleRate);
         const d = noiseBuf.getChannelData(0); for (let i = 0; i < d.length; i++) d[i] = Math.random() * 2 - 1;
       },
@@ -1582,7 +1577,7 @@
         [[110, 'sawtooth', 0.12], [55, 'sine', 0.25]].forEach(([f0, type, vol]) => {
           const o = ac.createOscillator(), g = ac.createGain();
           o.type = type; o.frequency.setValueAtTime(f0, t0); o.frequency.exponentialRampToValueAtTime(f0 * 0.25, t0 + 0.7);
-          o.connect(g).connect(ac.destination);
+          o.connect(g).connect(out);
           g.gain.setValueAtTime(vol, t0); g.gain.exponentialRampToValueAtTime(0.0001, t0 + 0.8);
           o.start(t0); o.stop(t0 + 0.85);
         });
@@ -1592,7 +1587,7 @@
         if (!ac) return;
         const t0 = ac.currentTime, f = ac.createBiquadFilter(), g = ac.createGain();
         f.type = 'bandpass'; f.frequency.value = 380; f.Q.value = 2.5;
-        f.connect(g).connect(ac.destination);
+        f.connect(g).connect(out);
         g.gain.setValueAtTime(0.0001, t0); g.gain.exponentialRampToValueAtTime(0.16, t0 + 0.5);
         g.gain.setValueAtTime(0.16, t0 + dur - 1); g.gain.exponentialRampToValueAtTime(0.0001, t0 + dur);
         for (let i = 0; i < 10; i++) {
@@ -1613,7 +1608,7 @@
         const f0 = 2200 + Math.random() * 700;
         o.frequency.setValueAtTime(f0 * 0.8, t0); o.frequency.linearRampToValueAtTime(f0 * 1.15, t0 + 0.15); o.frequency.linearRampToValueAtTime(f0, t0 + 0.45); o.frequency.linearRampToValueAtTime(f0 * 0.7, t0 + 0.7);
         lfo.frequency.value = 9; lg.gain.value = 40; lfo.connect(lg).connect(o.frequency);
-        o.connect(g).connect(ac.destination);
+        o.connect(g).connect(out);
         g.gain.setValueAtTime(0.0001, t0); g.gain.exponentialRampToValueAtTime(0.07, t0 + 0.05); g.gain.setValueAtTime(0.07, t0 + 0.5); g.gain.exponentialRampToValueAtTime(0.0001, t0 + 0.75);
         o.start(t0); lfo.start(t0); o.stop(t0 + 0.8); lfo.stop(t0 + 0.8);
       },
@@ -1622,7 +1617,7 @@
         if (!ac) return;
         const t0 = ac.currentTime, f = ac.createBiquadFilter(), g = ac.createGain();
         f.type = 'bandpass'; f.frequency.value = 520; f.Q.value = 3;
-        f.connect(g).connect(ac.destination);
+        f.connect(g).connect(out);
         g.gain.setValueAtTime(0.0001, t0); g.gain.exponentialRampToValueAtTime(0.18, t0 + 0.25); g.gain.exponentialRampToValueAtTime(0.0001, t0 + 2.2);
         for (let i = 0; i < 9; i++) {
           const o = ac.createOscillator(); o.type = 'sawtooth';
@@ -1633,7 +1628,7 @@
       },
       clack () { tone(90, 0.12, 'square', 0.25); noise(0.08, 0.2, 1200); },
       crackle () { noise(0.05, 0.12, 4000, 'highpass'); },
-      larsen () { if (!ac) return; const o = ac.createOscillator(), g = ac.createGain(); o.frequency.value = 2750; o.connect(g).connect(ac.destination); const t0 = ac.currentTime; g.gain.setValueAtTime(0.001, t0); g.gain.exponentialRampToValueAtTime(0.2, t0 + 0.4); g.gain.exponentialRampToValueAtTime(0.001, t0 + 2.2); o.start(); o.stop(t0 + 2.3); },
+      larsen () { if (!ac) return; const o = ac.createOscillator(), g = ac.createGain(); o.frequency.value = 2750; o.connect(g).connect(out); const t0 = ac.currentTime; g.gain.setValueAtTime(0.001, t0); g.gain.exponentialRampToValueAtTime(0.2, t0 + 0.4); g.gain.exponentialRampToValueAtTime(0.001, t0 + 2.2); o.start(); o.stop(t0 + 2.3); },
       scratch () {
         if (!ac) return;
         const f = noise(0.6, 0.25, 900);
@@ -1667,8 +1662,9 @@
     $('#again').textContent = 'Torna al palco';
     window.addEventListener('message', e => {
       const d = e.data;
-      if (!d || d.type !== 'dj-dati') return;
+      if (!d || d.type !== 'dj-dati' || e.source !== window.parent) return;
       pocket = Math.max(0, Math.floor(d.beers) || 0);
+      if (Number.isFinite(+d.fatigue)) tired = Math.max(0, Math.min(100, +d.fatigue));
       if (d.boss) boss = String(d.boss);
       if (Array.isArray(d.pars) && d.pars.length) pars = d.pars.slice(0, 4).map(String);
       paintParLabels();

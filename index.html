@@ -13,7 +13,8 @@
 <body>
 <div id="app">
 
-  <header>
+  <!-- HUD sopra la scena: menù, strumenti, scaletta; a destra annulla/ripeti -->
+  <header class="hud">
     <div class="level-wrap">
       <span class="service-logo" id="service-logo"></span>
       <div class="level-id">
@@ -21,18 +22,18 @@
         <h1>Livello 1: Festa della scuola</h1>
       </div>
     </div>
-
-    <div class="meters">
+    <button class="rack hbtn" id="menu-btn" title="Menù: partita e impostazioni" aria-label="Menù"><span class="screw tl"></span><span class="screw br"></span><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 6h16M4 12h16M4 18h16"/></svg></button>
+    <div class="rack meters"><span class="screw tl"></span><span class="screw br"></span>
       <div class="meter-power">
-        <div class="label">CABLAGGI <span class="val" id="conn-val">0 / 24</span></div>
+        <div class="label"><span class="lab-long">CABLAGGI</span><span class="lab-short">CAVI</span> <span class="val" id="conn-val">0 / 24</span></div>
         <div class="gauge"><div class="gauge-fill" id="conn-fill"></div></div>
       </div>
-
+      <span class="vsep"></span>
       <div class="meter-power">
-        <div class="label">POTENZA <span class="val" id="power-val">0.00 / 3.0 kW</span></div>
+        <div class="label"><span class="lab-long">POTENZA</span><span class="lab-short">kW</span> <span class="val" id="power-val">0.00 / 3.0 kW</span></div>
         <div class="gauge"><div class="gauge-fill" id="power-fill"></div></div>
       </div>
-
+      <span class="vsep"></span>
       <div class="circuit-status">
         <div class="lamp" id="circuit-lamp"></div>
         <div class="status-text">
@@ -40,13 +41,14 @@
           <span class="val" id="circuit-text">DA TESTARE</span>
         </div>
       </div>
-
-      <button class="reset-btn history-btn" id="menu-btn" title="Menù: partita e impostazioni">☰</button>
-      <button class="reset-btn history-btn" id="schedule-btn" title="Scaletta della serata">📋</button>
-      <button class="reset-btn history-btn beer-btn" id="beer-btn" title="Stanchezza e birre" hidden><span>🍺 <span id="beer-n">0</span></span><span class="fat"><i id="fat-fill"></i></span></button>
-      <button class="reset-btn history-btn" id="undo-btn" title="Annulla ultima azione" disabled>↶</button>
-      <button class="reset-btn history-btn" id="redo-btn" title="Ripeti azione" disabled>↷</button>
-      <button class="reset-btn" id="reset-btn">Reset livello</button>
+    </div>
+    <button class="rack hbtn" id="schedule-btn" title="Scaletta della serata" aria-label="Scaletta"><span class="screw tl"></span><span class="screw br"></span><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><rect x="5" y="4" width="14" height="18" rx="2"/><path d="M9 4V2h6v2M8 10h8M8 14h8M8 18h5"/></svg><span class="hbtn-txt">Scaletta</span></button>
+    <span class="hud-spacer"></span>
+    <button class="rack hbtn beer-btn" id="beer-btn" title="Stanchezza e birre" hidden><span class="screw tl"></span><span class="screw br"></span><span>🍺 <span id="beer-n">0</span></span><span class="fat"><i id="fat-fill"></i></span></button>
+    <div class="rack hgroup history"><span class="screw tl"></span><span class="screw br"></span>
+      <button class="hbtn" id="undo-btn" title="Annulla ultima azione" aria-label="Annulla" disabled>↶</button>
+      <span class="vsep"></span>
+      <button class="hbtn" id="redo-btn" title="Ripeti azione" aria-label="Ripeti" disabled>↷</button>
     </div>
   </header>
 
@@ -63,6 +65,7 @@
         <button class="menu-btn" id="menu-slots">Partite salvate</button>
         <button class="menu-btn" id="menu-levels">Livelli</button>
         <button class="menu-btn" id="menu-settings">Impostazioni</button>
+        <button class="menu-btn" id="reset-btn" type="button">Ricomincia il livello</button>
       </div>
 
       <div class="menu-page" data-page="slots" hidden>
@@ -123,6 +126,58 @@
       <ol class="schedule-list" id="schedule-list"></ol>
       <div class="schedule-foot">
         <button class="menu-btn primary" id="schedule-go">Al lavoro!</button>
+      </div>
+    </div>
+  </div>
+
+  <div class="modal-overlay" id="gerry-modal">
+    <div class="modal-box gerry-box">
+      <div class="modal-header">
+        <div class="schedule-title">
+          <span class="tag">20:00 · MESSA IN SICUREZZA DEI CAVI</span>
+          <h2 id="gerry-title">Fermi tutti!</h2>
+        </div>
+      </div>
+      <div class="gerry-card">
+        <svg class="gerry-pic" width="72" height="100" viewBox="0 0 100 140" aria-hidden="true"><defs><symbol id="gerry" viewBox="0 0 100 140">
+    <!-- camice da bidello blu, spalle larghe -->
+    <path d="M2 140 L6 104 Q12 92 32 88 Q50 84 68 88 Q88 92 94 104 L98 140 Z" fill="#2f5d8a"/>
+    <path d="M34 88 L50 112 L66 88 L58 86 L50 98 L42 86 Z" fill="#23476b"/>
+    <path d="M40 88 L50 106 L60 88 L54 86 L50 94 L46 86 Z" fill="#a9c8e8"/>
+    <path d="M46 88 L50 100 L54 88 Z" fill="#cf8c68"/>
+    <rect x="64" y="108" width="15" height="12" rx="1.5" fill="#23476b"/>
+    <rect x="67" y="104" width="2" height="8" rx="1" fill="#e9c23f"/>
+    <rect x="20" y="110" width="17" height="7" rx="1.5" fill="#f4f1ea"/>
+    <!-- collo largo -->
+    <rect x="34" y="76" width="32" height="14" rx="4" fill="#cf8c68"/>
+    <!-- orecchie -->
+    <ellipse cx="16" cy="56" rx="5" ry="8" fill="#cf8c68"/><ellipse cx="84" cy="56" rx="5" ry="8" fill="#cf8c68"/>
+    <!-- testone a pera: cranio alto e pelato, mascelle larghissime -->
+    <path d="M50 4 Q76 4 78 34 Q86 50 86 64 Q86 86 50 92 Q14 86 14 64 Q14 50 22 34 Q24 4 50 4 Z" fill="#e8a883"/>
+    <ellipse cx="44" cy="17" rx="11" ry="5" fill="#f4c7a4"/>
+    <path d="M34 10 Q44 3 56 5 M40 12 Q50 6 62 8" stroke="#7d7570" stroke-width="1.4" fill="none" stroke-linecap="round"/>
+    <!-- ciuffi grigi solo ai lati, gonfi -->
+    <path d="M14 58 Q8 38 16 26 Q22 20 28 20 Q22 32 22 44 Q20 52 20 58 Z" fill="#7d7570"/>
+    <path d="M86 58 Q92 38 84 26 Q78 20 72 20 Q78 32 78 44 Q80 52 80 58 Z" fill="#7d7570"/>
+    <!-- sopracciglia alte e sornione -->
+    <path d="M28 40 Q36 33 44 38 M56 36 Q64 29 72 36" stroke="#5f5752" stroke-width="3" fill="none" stroke-linecap="round"/>
+    <!-- occhi a fessura -->
+    <path d="M30 48 Q37 43.5 44 47.5 Q37 50 30 48 Z M56 47 Q63 42.5 70 47.5 Q63 49.5 56 47 Z" fill="#f4e8de"/>
+    <circle cx="38" cy="47" r="1.9" fill="#6d8a92"/><circle cx="64" cy="46.4" r="1.9" fill="#6d8a92"/>
+    <path d="M30 48 Q37 43 44 47.5 M56 47.5 Q63 42.5 70 47.5" stroke="#2a1d12" stroke-width="2.2" fill="none" stroke-linecap="round"/>
+    <!-- nasone carnoso -->
+    <path d="M47 46 Q45 56 42 61 Q40 68 50 68 Q60 68 58 61 Q55 56 53 46 Z" fill="#d6926c"/>
+    <!-- solchi del sorriso -->
+    <path d="M38 62 Q28 68 31 79 M62 62 Q73 66 72 74" stroke="#c07e5c" stroke-width="2" fill="none" stroke-linecap="round"/>
+    <!-- sorrisone da una guancia all'altra -->
+    <path d="M30 75 Q48 94 73 68 Q52 77 30 75 Z" fill="#5e2220"/>
+    <path d="M33 75.6 Q52 78.4 70 69.6 L68 73.6 Q52 82 35 79 Z" fill="#fbfaf5"/>
+    </symbol></defs><use href="#gerry"/></svg>
+        <div class="gerry-bubble"><div id="gerry-text"></div><ol class="gerry-list" id="gerry-list"></ol></div>
+      </div>
+      <div class="schedule-foot">
+        <button class="menu-btn" id="gerry-go">Apri così</button>
+        <button class="menu-btn primary" id="gerry-fix">Sistemo</button>
       </div>
     </div>
   </div>
@@ -189,6 +244,7 @@
   </div>
 
   <div id="stage-wrap">
+    <div id="lay-bar"><div id="lay-text"></div><div class="lay-btns"><button id="lay-add" title="Aggiungi una piega al cavo">+ Piega</button><button id="lay-auto" title="Rimetti il percorso automatico">↺ Com'era</button><button id="lay-del">Togli</button><button id="lay-done" class="lay-ok">✓ Fatto</button></div></div>
     <div id="cable-banner"><span id="cable-banner-text"></span><button id="cable-banner-cancel">Annulla</button></div>
     <div id="game-container"></div>
     <div class="layers-panel">
@@ -202,25 +258,25 @@
       <button class="layer-toggle active" data-signal="jack" title="Jack"><span class="dot" style="background:var(--c-jack);"></span>JCK</button>
       <button class="layer-toggle active" data-signal="usbc" title="USB"><span class="dot" style="background:var(--c-usb);"></span>USB</button>
     </div>
-    <div class="zoom-controls">
+    <div class="zoom-controls rack"><span class="screw tl"></span><span class="screw br"></span>
+      <button id="layers-btn" title="Cavi da vedere" aria-label="Cavi da vedere"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3 2 8l10 5 10-5z"/><path d="m2 13 10 5 10-5"/></svg></button>
       <button id="zoom-in" title="Aumenta zoom">+</button>
       <button id="zoom-out" title="Riduci zoom">−</button>
       <button id="zoom-reset" title="Adatta alla vista">⤢</button>
     </div>
     <div id="foglio"></div>
-    <div id="toast"></div>
   </div>
   <div id="piece-info"></div>
 
   <div id="toolbar">
     <div class="tabs">
-      <button class="tab-btn active" data-tab="corrente">Corrente</button>
-      <button class="tab-btn" data-tab="strutture">Strutture</button>
-      <button class="tab-btn" data-tab="audio">Audio</button>
-      <button class="tab-btn" data-tab="regia">Regia</button>
-      <button class="tab-btn" data-tab="luci">Luci</button>
-      <button class="tab-btn" data-tab="dj" hidden>DJ</button>
-      <button class="tab-btn" data-tab="cavi">Cavi</button>
+      <button class="tab-btn active" data-tab="corrente"><span class="num">1</span><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M13 2 4 14h7l-1 8 9-12h-7z"/></svg><b>Corrente</b></button>
+      <button class="tab-btn" data-tab="strutture"><span class="num">2</span><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M3 9h18M5 9v12M19 9v12M3 9l3-5h12l3 5"/></svg><b>Strutture</b></button>
+      <button class="tab-btn" data-tab="audio"><span class="num">3</span><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><rect x="6" y="2" width="12" height="20" rx="2"/><circle cx="12" cy="14" r="4"/><circle cx="12" cy="6.5" r="1.5"/></svg><b>Audio</b></button>
+      <button class="tab-btn" data-tab="regia"><span class="num">4</span><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M6 3v18M12 3v18M18 3v18"/><rect x="4" y="13" width="4" height="3" rx="1"/><rect x="10" y="6" width="4" height="3" rx="1"/><rect x="16" y="10" width="4" height="3" rx="1"/></svg><b>Regia</b></button>
+      <button class="tab-btn" data-tab="luci"><span class="num">5</span><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M5 10a7 7 0 0 1 14 0v3H5z"/><path d="M8 13l-2 7M16 13l2 7M12 13v8"/></svg><b>Luci</b></button>
+      <button class="tab-btn" data-tab="dj" hidden><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><circle cx="8" cy="13" r="5"/><circle cx="8" cy="13" r="1.5"/><path d="M15 6h6v14h-6zM18 10v6"/></svg><b>DJ</b></button>
+      <button class="tab-btn" data-tab="cavi"><span class="num">6</span><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M5 19c5 0 4-7 7-7s2-7 7-7"/><rect x="2" y="16" width="5" height="6" rx="1"/><rect x="17" y="2" width="5" height="6" rx="1"/></svg><b>Cavi</b></button>
     </div>
 
     <div class="tab-panel active" data-panel="corrente">
@@ -336,12 +392,14 @@
         <button class="case-btn" data-case="corrente"><svg viewBox="0 0 64 44" class="case-ico"><rect x="3" y="6" width="58" height="34" rx="4" fill="#232428" stroke="#b9bcc1" stroke-width="3"/><rect x="3" y="6" width="9" height="9" rx="2" fill="#d7dadd"/><rect x="52" y="6" width="9" height="9" rx="2" fill="#d7dadd"/><rect x="3" y="31" width="9" height="9" rx="2" fill="#d7dadd"/><rect x="52" y="31" width="9" height="9" rx="2" fill="#d7dadd"/><rect x="18" y="2" width="10" height="7" rx="2" fill="#c9ccd1"/><rect x="36" y="2" width="10" height="7" rx="2" fill="#c9ccd1"/><rect x="24" y="21" width="16" height="4" rx="2" fill="#0c0d10"/></svg><span>CORRENTE</span></button>
         <div class="cable-hand" id="cable-hand"></div>
       </div>
-      <span class="panel-hint">Apri un baule (anche toccando i case vicino al furgone) e prendi un cavo, poi tocca un dispositivo e scegli la presa nel suo pannello; ripeti sul secondo dispositivo. Ogni presa accetta un solo cavo, tranne quelle del Quadro. Gli adattatori hanno due connettori diversi (es. CEE / PowerCON) e accolgono anche le spine di ciabatte e PC. Cabla a impianto spento: staccare o attaccare un cavo di corrente sotto carico fa scattare il salvavita. Poi arma il Quadro e accendi i dispositivi dal loro pannello, finali e sub per ultimi, uno alla volta.</span>
+      <span class="panel-hint">Apri un baule (anche toccando i case dietro la regia FOH) e prendi un cavo, poi tocca un dispositivo e scegli la presa nel suo pannello; ripeti sul secondo dispositivo. Ogni presa accetta un solo cavo, tranne quelle del Quadro. Gli adattatori hanno due connettori diversi (es. CEE / PowerCON) e accolgono anche le spine di ciabatte e PC. Cabla a impianto spento: staccare o attaccare un cavo di corrente sotto carico fa scattare il salvavita. Poi arma il Quadro e accendi i dispositivi dal loro pannello, finali e sub per ultimi, uno alla volta.</span>
     </div>
 
+    <div id="toast"><span id="toast-msg"></span><button id="toast-x" type="button" aria-label="Chiudi" title="Chiudi"></button></div>
     <div id="run-bar">
       <button id="run-btn">▶ TEST IMPIANTO</button>
     </div>
+    <span class="case-corner l"></span><span class="case-corner r"></span>
   </div>
 
 </div>

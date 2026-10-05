@@ -154,7 +154,7 @@
   <div id="keys" hidden>
     <span><kbd>WASD</kbd> muovi</span>
     <span><kbd>Spazio</kbd> prendi / lascia</span>
-    <span><kbd>E</kbd> aiuto Tonino</span>
+    <span><kbd>E</kbd> aiuto Macio</span>
     <span><kbd>Q</kbd> oh-issa</span>
     <span><kbd>Shift</kbd> passo attento</span>
     <span><kbd>F</kbd> fermo!</span>
@@ -174,8 +174,9 @@
         <li>Fino a 25 kg il case si porta in mano. Quelli più pesanti si spingono: partono piano e si fermano piano.</li>
         <li>I bauli con le ruote sulla rampa scappano. Se li lasci andare, vanno da soli.</li>
         <li>Sopra ogni case c'è la barra del suo stato. Se il case si accende di rosso stai andando troppo forte per quanto è fragile: un urto adesso lo danneggia. Rallenta (Shift, o joystick poco inclinato).</li>
-        <li>Tonino, se non lo chiami, porta da solo i case leggeri, ma non la valigetta del PC e i PAR: quelli sono tuoi. Rack regia e baule CORRENTE si spingono in due: premi <b>AIUTO</b> e arriva. Ti segue con un attimo di ritardo, quindi curva largo.</li>
-        <li>Quando spingi un case contro il gradino della palestra, Tonino conta «uno, due, ISSA!»: premi <b>OH-ISSA</b> sull'ISSA e il case passa.</li>
+        <li>Macio, se non lo chiami, porta da solo i case leggeri, ma non la valigetta del PC e i PAR: quelli sono tuoi. Rack regia e baule CORRENTE si spingono in due: premi <b>AIUTO</b> e arriva. Ti segue con un attimo di ritardo, quindi curva largo. Da solo vai piano e il case sbanda.</li>
+        <li>Un case lasciato fermo nella sua zona resta frenato: urtandolo non si sposta. Per spostarlo di nuovo, riprendilo.</li>
+        <li>Quando spingi un case contro il gradino della palestra, Macio conta «uno, due, ISSA!»: premi <b>OH-ISSA</b> sull'ISSA e il case passa.</li>
       </ul>
       <div class="legend" id="start-legend"></div>
       <button class="primary" id="btn-start">Apri i portelloni</button>
@@ -204,6 +205,8 @@ const SERVICE = (QS.get('service') || '').slice(0, 28);
 // colori del marchio del service (livrea del furgone); solo #rgb/#rrggbb
 const hexOr = (v, d) => /^#[0-9a-f]{3,6}$/i.test(v || '') ? v : d;
 const LIVERY = { bg: hexOr(QS.get('bg'), '#1c1d22'), fg: hexOr(QS.get('fg'), '#f2a541') };
+// volume (0-1) e «Effetti ridotti» delle impostazioni del gioco, dall'indirizzo dell'iframe
+const VOL = QS.has('vol') && Number.isFinite(+QS.get('vol')) ? Math.max(0, Math.min(1, +QS.get('vol'))) : 1;
 function sendResult (result) { try { parent.postMessage({ type: 'scarico-fine', result }, '*'); } catch (e) { /* niente genitore */ } }
 if (EMBED) {
   const skip = document.getElementById('btn-skip');
@@ -227,6 +230,7 @@ const CAT = { WALL: 1, CASE: 2, WORKER: 4, STEP: 8, NPC: 16, DOLLY: 32 };
 const DOOR_X = 400;                    // portellone del furgone
 const RAMP = { x: 400, y: 445, w: 120, h: 110 };
 const GYM_X = 1160;                    // muro della palestra (porta con gradino)
+const SHOVE_VMAX = 0.45;               // a mani vuote contro un case: si sposta appena
 const STEP_BAND = { y1: 450, y2: 550 };
 const WORLD = { x1: -170, y1: 60, x2: 1900, y2: 940 };
 
@@ -236,11 +240,13 @@ const ZONES = {
   pit:   { name: 'Pit',       color: '#4fb7ff', x: 1470, y: 320, w: 150, h: 360 },
   foh:   { name: 'Regia FOH', color: '#49e07a', x: 1190, y: 660, w: 200, h: 180 }
 };
+// i flight case sono fatti per prendere colpi: si rovina qualcosa solo con
+// un urto vero (correre contro un muro, far cadere, lanciare un case)
 const FRAG = {
-  bassa:     { thr: 3.6, mult: 0.6 },
-  media:     { thr: 2.3, mult: 1.0 },
-  alta:      { thr: 1.9, mult: 1.4 },
-  altissima: { thr: 1.3, mult: 1.5 }
+  bassa:     { thr: 4.6, mult: 0.5 },
+  media:     { thr: 3.4, mult: 0.8 },
+  alta:      { thr: 2.9, mult: 1.0 },
+  altissima: { thr: 2.4, mult: 1.1 }
 };
 // smorzamento al secondo: f = in avanti, s = di lato, a = rotazione
 const WHEEL = {
@@ -264,7 +270,7 @@ const CASES = [
     dif: 'il quadro scatta alla prima accensione: +10 min' },
   { id: 'sub2', name: 'Sub 2', short: 'SUB', what: 'cassa sub', kg: 40, w: 70, h: 70, wheel: 'fixed', frag: 'media', zone: 'pit', unique: true, x: 185, y: 568,
     dif: 'la cassa vibra: +10 min per controllarla' },
-  { id: 'stativi', name: 'Borsa stativi', short: 'STATIVI', what: '4 stativi + asta mic', kg: 22, w: 150, h: 26, wheel: 'hand', frag: 'bassa', zone: 'palco', x: 315, y: 407,
+  { id: 'stativi', name: 'Borsa stativi', short: 'STATIVI', what: '4 stativi + asta mic', kg: 22, w: 90, h: 34, wheel: 'hand', frag: 'bassa', zone: 'palco', x: 300, y: 407,
     dif: 'uno stativo duro da aprire: +10 min' },
   { id: 'top1', name: 'Top 1', short: 'TOP', what: 'cassa top', kg: 20, w: 44, h: 44, wheel: 'hand', frag: 'media', zone: 'pit', unique: true, x: 262, y: 452,
     dif: 'il tweeter gracchia: +10 min' },
@@ -310,7 +316,11 @@ function fmtClock (t) {
    --------------------------------------------------------------------- */
 const AU = {
   ctx: null, last: 0,
-  init () { try { this.ctx = this.ctx || new (window.AudioContext || window.webkitAudioContext)(); } catch (e) { this.ctx = null; } },
+  init () {
+    if (this.ctx) return;
+    try { this.ctx = new (window.AudioContext || window.webkitAudioContext)(); } catch (e) { this.ctx = null; return; }
+    this.out = this.ctx.createGain(); this.out.gain.value = VOL; this.out.connect(this.ctx.destination);
+  },
   noise (dur, freq, type, gain) {
     const c = this.ctx; if (!c) return;
     const n = Math.floor(c.sampleRate * dur), buf = c.createBuffer(1, n, c.sampleRate), d = buf.getChannelData(0);
@@ -318,14 +328,14 @@ const AU = {
     const s = c.createBufferSource(); s.buffer = buf;
     const f = c.createBiquadFilter(); f.type = type; f.frequency.value = freq;
     const g = c.createGain(); g.gain.value = gain;
-    s.connect(f); f.connect(g); g.connect(c.destination); s.start();
+    s.connect(f); f.connect(g); g.connect(this.out); s.start();
   },
   tone (f1, f2, dur, gain, type) {
     const c = this.ctx; if (!c) return;
     const o = c.createOscillator(), g = c.createGain();
     o.type = type || 'triangle'; o.frequency.setValueAtTime(f1, c.currentTime); o.frequency.exponentialRampToValueAtTime(f2, c.currentTime + dur);
     g.gain.setValueAtTime(gain, c.currentTime); g.gain.exponentialRampToValueAtTime(0.001, c.currentTime + dur);
-    o.connect(g); g.connect(c.destination); o.start(); o.stop(c.currentTime + dur);
+    o.connect(g); g.connect(this.out); o.start(); o.stop(c.currentTime + dur);
   },
   thud (v) { const now = performance.now(); if (now - this.last < 70) return; this.last = now; this.noise(0.18, 180 + v * 60, 'lowpass', clamp(v / 5, 0.08, 0.6)); },
   crack () { this.noise(0.12, 2500, 'highpass', 0.35); this.tone(2400, 900, 0.1, 0.08, 'square'); },
@@ -401,10 +411,10 @@ function newGame () {
   G.dolly = { kind: 'dolly', body: db, pv: { x: 0, y: 0 } }; db.plugin.ent = G.dolly;
   Composite.add(world, db);
 
-  // --- tu e Tonino
+  // --- tu e Macio
   G.player = makeWorker('Tu', 600, 470, 15, { tee: '#101114', trim: '#f2a541', skin: '#e0b48f', fmax: 0.05, vmax: 3.8 });
-  G.tonino = makeWorker('Tonino', 610, 560, 18, { tee: '#6d737d', trim: '#c9ccd1', skin: '#c99670', fmax: 0.06, vmax: 3.3 });
-  G.tonino.ai = { state: 'idle', t: 0, stuckT: 0, side: 0, sideT: 0 };
+  G.macio = makeWorker('Macio', 610, 560, 18, { tee: '#6d737d', trim: '#c9ccd1', skin: '#c99670', fmax: 0.06, vmax: 3.3 });
+  G.macio.ai = { state: 'idle', t: 0, stuckT: 0, side: 0, sideT: 0 };
 
   // --- bambini in cortile
   G.kids.push(makeKid(760, 180, '#ff7a59'));
@@ -412,7 +422,7 @@ function newGame () {
 
   Events.on(engine, 'collisionStart', onCollision);
 
-  bubble(G.tonino, 'Dai che alle 16:30 si monta!', 2.6);
+  bubble(G.macio, 'Dai che alle 16:30 si monta!', 2.6);
 }
 
 function makeWorker (name, x, y, r, o) {
@@ -462,7 +472,7 @@ function surface (ce, p) {
   return { local: { x: cx, y: cy }, dist: inside ? -d : d, world: add(ce.body.position, rot({ x: cx, y: cy }, ce.body.angle)) };
 }
 function carriable (ce) { return ce.def.wheel === 'hand'; }
-// l'elettronica delicata la porti tu: Tonino non la tocca
+// l'elettronica delicata la porti tu: Macio non la tocca
 function delicate (ce) { return ce.def.id === 'valigetta' || ce.def.id === 'par'; }
 function isCarried (ce) { return !!ce.carrier; }
 function speedOf (b) { return len(b.velocity); }
@@ -495,6 +505,8 @@ function grab (w, ce) {
   if (ce.tipped) { if (w === G.player) toast('È ribaltato: OH-ISSA per tirarlo su (in due se pesa più di 45 kg).', 'warn'); return false; }
   if (ce.stuck) { if (w === G.player) toast('Il cavo è incastrato nella ruota: tieni premuto PRENDI per liberarlo.', 'warn'); return false; }
   if (ce.carrier) return false;
+  if (carriable(ce) && ce.grabbers.length) return false;
+  unpark(ce);
   if (carriable(ce)) {
     if (ce.grabbers.length) return false;
     const dir = norm(sub(ce.body.position, w.body.position));
@@ -514,6 +526,22 @@ function grab (w, ce) {
   }
   refreshFilter(ce);
   return true;
+}
+/* Un case lasciato fermo nella SUA zona si «parcheggia»: freni tirati, non
+   lo sposta più nessuno urtandolo (prima bastava sfiorarlo per far partire
+   un effetto flipper fra Pit, Palco e Backstage, che sono attaccati).
+   Riprendendolo con PRENDI si sblocca. */
+function park (ce) {
+  if (ce.parked || !Body) return;
+  ce.parked = true;
+  Body.setVelocity(ce.body, { x: 0, y: 0 }); Body.setAngularVelocity(ce.body, 0);
+  Body.setStatic(ce.body, true);
+}
+function unpark (ce) {
+  if (!ce.parked) return;
+  ce.parked = false;
+  Body.setStatic(ce.body, false);
+  Body.setMass(ce.body, ce.def.kg);
 }
 function release (w, why) {
   const ce = w.grab; if (!ce) return;
@@ -538,7 +566,8 @@ function damage (ce, amt, cause) {
   ce.flash = 0.5;
   if (amt >= 5) puff(ce.body.position.x, ce.body.position.y, 6, 'rgba(242,164,61,', 1.6);
   if (ce.def.id === 'par') { // un PAR si rompe ogni 25 punti di danno accumulati
-    const left = Math.max(0, 4 - Math.floor((100 - ce.integrity) / 25));
+    // al massimo un PAR per colpo: il case li tiene separati
+    const left = Math.max(ce.pars - 1, 4 - Math.floor((100 - ce.integrity) / 25));
     if (left < ce.pars) { ce.pars = left; AU.crack(); bubble(ce, 'Crack! Un PAR rotto (' + ce.pars + '/4)', 2); }
   }
   const after = stateOf(ce.integrity);
@@ -564,13 +593,18 @@ function hitCase (ce, other, rel, otherBody) {
   if (other && other.kind === 'kid') { if (rel > 1.3) kidHit(other); return; }
   if (rel > 1.4) AU.thud(rel);
   if (rel > 1.8) puff(ce.body.position.x, ce.body.position.y, Math.min(10, Math.round(rel * 2)), 'rgba(190,190,196,', 1 + rel / 3);
+  // in mano il case viene «tirato» verso chi lo porta: quella spinta non è
+  // un urto, conta solo quanto andava davvero chi lo porta (anche quando è
+  // il case in mano a urtarne un altro)
+  if (ce.carrier) rel = Math.min(rel, speedOf(ce.carrier.body) + 0.3);
+  if (other && other.carrier) rel = Math.min(rel, speedOf(other.carrier.body) + 0.3);
   const f = FRAG[ce.def.frag];
-  if (rel <= f.thr || G.t - ce.lastHit < 0.25) return;
+  if (rel <= f.thr || G.t - ce.lastHit < 0.5) return;
   ce.lastHit = G.t;
-  let dmg = (rel - f.thr) * 12 * f.mult;
+  let dmg = (rel - f.thr) * 10 * f.mult;
   if (other && other.kind === 'case') dmg *= clamp(other.def.kg / ce.def.kg, 0.5, 1.6);
-  // Tonino è lento ma sicuro: quello che porta lui si fa poco male
-  if (ce.carrier === G.tonino || (other && other.carrier === G.tonino)) dmg *= 0.15;
+  // Macio è lento ma sicuro: quello che porta lui si fa poco male
+  if (ce.carrier === G.macio || (other && other.carrier === G.macio)) dmg *= 0.15;
   const what = otherBody === G.stepBody ? 'contro il gradino' : other && other.kind === 'case' ? 'contro ' + other.def.name : other && other.kind === 'cart' ? 'contro il carrello' : 'urto';
   damage(ce, dmg, what);
   if (ce.def.tall && rel > 3.2 && !ce.tipped) tip(ce);
@@ -582,12 +616,13 @@ function kidHit (k) {
   toast('Hai preso un bambino con un case: −1 reputazione.', 'bad');
 }
 function tip (ce) {
+  unpark(ce);
   ce.tipped = true;
   for (const w of [...ce.grabbers]) release(w);
   damage(ce, 18 * FRAG[ce.def.frag].mult, 'ribaltato');
   AU.thud(5);
-  bubble(G.tonino, 'Occhio! Si è ribaltato!', 1.8);
-  toast(ce.def.name + ' ribaltato! Chiama Tonino e fai OH-ISSA per tirarlo su.', 'bad');
+  bubble(G.macio, 'Occhio! Si è ribaltato!', 1.8);
+  toast(ce.def.name + ' ribaltato! Chiama Macio e fai OH-ISSA per tirarlo su.', 'bad');
 }
 
 /* ---------------------------------------------------------------------
@@ -602,32 +637,32 @@ function pressGrab () {
   const ce = nearestCase(p, 14);
   if (!ce) { toast('Avvicinati a un case per prenderlo.'); return; }
   if (ce.stuck) { G.freeing = { ce, t: 0 }; return; }
-  if (ce.carrier) { toast('Lo sta portando Tonino.'); return; }
+  if (ce.carrier) { toast('Lo sta portando Macio.'); return; }
   grab(p, ce);
 }
 function pressHelp () {
   if (G.mode !== 'play') return;
-  const p = G.player, T = G.tonino;
+  const p = G.player, T = G.macio;
   // un passante sulla rampa? prima si chiede permesso
   const blocker = G.kids.find(k => k.block > G.t && len(sub(k.body.position, p.body.position)) < 110);
   if (blocker) { bubble(p, 'Permesso!', 1.2); blocker.block = 0; blocker.wait = 0; blocker.target = { x: rand(700, 1000), y: rand(150, 300) }; bubble(blocker, 'Oh, scusi!', 1.2); return; }
-  if (T.ai.state === 'phone') { toast('Tonino è al telefono…'); return; }
+  if (T.ai.state === 'phone') { toast('Macio è al telefono…'); return; }
   if (p.grab && p.mode === 'push') {
     if (T.grab === p.grab) { bubble(T, 'Ci sono già!', 1); return; }
-    tonino('help', { ce: p.grab }); bubble(T, 'Arrivo!', 1.2); AU.hey(); return;
+    macio('help', { ce: p.grab }); bubble(T, 'Arrivo!', 1.2); AU.hey(); return;
   }
   const near = nearestCase(p, 60);
-  if (near && near.tipped) { tonino('goto', { to: () => near.body.position, stop: 55 }); bubble(T, 'Arrivo a tirarlo su!', 1.4); return; }
+  if (near && near.tipped) { macio('goto', { to: () => near.body.position, stop: 55 }); bubble(T, 'Arrivo a tirarlo su!', 1.4); return; }
   if (near && carriable(near) && !near.carrier && delicate(near)) {
     bubble(T, near.def.id === 'par' ? 'I PAR? No no, quelli li porti tu, capo.' : 'La valigetta del PC? No no, quella la porti tu, capo.', 2); return;
   }
   if (near && carriable(near) && !near.carrier) {
-    tonino('carry', { ce: near }); bubble(T, 'Lo porto io: ' + ZONES[near.def.zone].name + '!', 1.6); AU.hey(); return;
+    macio('carry', { ce: near }); bubble(T, 'Lo porto io: ' + ZONES[near.def.zone].name + '!', 1.6); AU.hey(); return;
   }
   if (p.grab && p.mode === 'carry') { toast('I case leggeri li porti da solo. AIUTO serve per spingere quelli pesanti.'); return; }
-  tonino('goto', { to: () => G.player.body.position, stop: 60 }); bubble(T, 'Eccomi, capo!', 1.2);
+  macio('goto', { to: () => G.player.body.position, stop: 60 }); bubble(T, 'Eccomi, capo!', 1.2);
 }
-/* OH-ISSA: Tonino conta «uno… due… ISSA!» e si preme una volta sola
+/* OH-ISSA: Macio conta «uno… due… ISSA!» e si preme una volta sola
    sull'ISSA. Al gradino parte da solo quando il case lo tocca; per un case
    ribaltato si preme OH-ISSA lì vicino. */
 const BEATS = [0.35, 0.95, 1.55], WIN = 0.25;
@@ -642,8 +677,8 @@ function startQte (ce, kind) {
 }
 function autoLift () {
   if (G.qte || G.mode !== 'play' || G.t < G.qteCool) return;
-  const P = G.player, T = G.tonino;
-  if (G.raiseWait) { // ribaltato: si aspetta che arrivi Tonino
+  const P = G.player, T = G.macio;
+  if (G.raiseWait) { // ribaltato: si aspetta che arrivi Macio
     const ce = G.raiseWait;
     if (!ce.tipped || len(sub(P.body.position, ce.body.position)) > 130) { G.raiseWait = null; return; }
     if (len(sub(T.body.position, ce.body.position)) < 110) { G.raiseWait = null; startQte(ce, 'raise'); }
@@ -652,8 +687,8 @@ function autoLift () {
   const ce = P.grab;
   if (!ce || P.mode !== 'push' || G.t < ce.liftUntil || !nearStep(ce)) return;
   if (ce.def.kg > 45 && T.grab !== ce) {
-    if (T.ai.state === 'phone') { if (!G.phoneWarned) { G.phoneWarned = true; toast('Da solo non lo alzi: aspetta che Tonino finisca di telefonare.', 'warn'); } }
-    else if (T.ai.state !== 'help') { tonino('help', { ce }); bubble(T, 'Aspetta, lo alziamo in due!', 1.6); AU.hey(); }
+    if (T.ai.state === 'phone') { if (!G.phoneWarned) { G.phoneWarned = true; toast('Da solo non lo alzi: aspetta che Macio finisca di telefonare.', 'warn'); } }
+    else if (T.ai.state !== 'help') { macio('help', { ce }); bubble(T, 'Aspetta, lo alziamo in due!', 1.6); AU.hey(); }
     return;
   }
   startQte(ce, 'step');
@@ -661,12 +696,12 @@ function autoLift () {
 function pressLift () {
   if (G.mode !== 'play') return;
   if (G.qte) { resolveQte(); return; }
-  const P = G.player, T = G.tonino;
+  const P = G.player, T = G.macio;
   const n = nearestCase(P, 30);
   if (n && n.tipped) {
     if (n.def.kg > 45 && len(sub(T.body.position, n.body.position)) > 110) {
-      if (T.ai.state === 'phone') { toast('Da solo non lo alzi: aspetta che Tonino finisca di telefonare.', 'warn'); return; }
-      G.raiseWait = n; tonino('goto', { to: () => n.body.position, stop: 55 }); bubble(T, 'Arrivo a tirarlo su!', 1.4); return;
+      if (T.ai.state === 'phone') { toast('Da solo non lo alzi: aspetta che Macio finisca di telefonare.', 'warn'); return; }
+      G.raiseWait = n; macio('goto', { to: () => n.body.position, stop: 55 }); bubble(T, 'Arrivo a tirarlo su!', 1.4); return;
     }
     startQte(n, 'raise'); return;
   }
@@ -680,7 +715,7 @@ function updateQte (dt) {
   let beat = -1; for (let i = 0; i < 3; i++) if (q.t >= BEATS[i]) beat = i;
   if (beat !== q.beat) {
     q.beat = beat;
-    bubble(G.tonino, ['Uno…', 'Due…', 'ISSA!'][beat], 0.55);
+    bubble(G.macio, ['Uno…', 'Due…', 'ISSA!'][beat], 0.55);
     AU.tone(beat === 2 ? 660 : 440, beat === 2 ? 990 : 440, 0.12, 0.12);
   }
   if (q.t > BEATS[2] + WIN) failQte('Troppo tardi!');
@@ -702,7 +737,7 @@ function resolveQte () {
 function failQte (why) {
   const q = G.qte; G.qte = null; $('#qte').hidden = true;
   damage(q.ce, 3 * FRAG[q.ce.def.frag].mult, 'OH-ISSA fuori tempo'); AU.thud(2);
-  bubble(G.tonino, why + ' Riproviamo.', 1.3);
+  bubble(G.macio, why + ' Riproviamo.', 1.3);
   G.qteCool = G.t + 0.9;
 }
 function drawQteUI () {
@@ -715,8 +750,8 @@ function drawQteUI () {
 /* ---------------------------------------------------------------------
    TONINO, IL COLLEGA CPU
    --------------------------------------------------------------------- */
-function tonino (state, data) {
-  const T = G.tonino;
+function macio (state, data) {
+  const T = G.macio;
   if (T.grab && !(state === 'help' && T.grab === data.ce)) release(T);
   T.ai = Object.assign({ state, t: 0, stuckT: 0, side: 0, sideT: 0 }, data || {});
 }
@@ -772,17 +807,17 @@ function pickJob (T) {
   }
   return best;
 }
-function updateTonino (dt) {
-  const T = G.tonino, ai = G.tonino.ai, P = G.player;
+function updateMacio (dt) {
+  const T = G.macio, ai = G.macio.ai, P = G.player;
   ai.t += dt;
   let dir = { x: 0, y: 0 }, vmax = T.vmax * (G.coffee.until > G.t ? 1.2 : 1);
   if (G.coffee.pauseUntil > G.t) { drive(T, dir, 0); return; }
 
   if (ai.state === 'phone') {
-    if (ai.t > 12) { tonino('idle'); bubble(T, 'Scusa capo, eccomi.', 1.6); }
+    if (ai.t > 12) { macio('idle'); bubble(T, 'Scusa capo, eccomi.', 1.6); }
   } else if (ai.state === 'help') {
     const ce = ai.ce;
-    if (!P.grab || P.grab !== ce || ce.tipped || ce.stuck) { tonino('idle'); }
+    if (!P.grab || P.grab !== ce || ce.tipped || ce.stuck) { macio('idle'); }
     else if (T.grab === ce) {
       // spinge nella direzione che davi 0,4 s fa (0,2 s col caffè)
       const lag = G.coffee.until > G.t ? 12 : 24;
@@ -791,35 +826,35 @@ function updateTonino (dt) {
       vmax = pushVmax(ce);
     } else {
       const hp = helpPoint(ce, P);
-      if (!hp) { if (ai.t > 1) { bubble(T, 'Da qui non ci arrivo, spostalo un po\'!', 1.8); tonino('idle'); } }
+      if (!hp) { if (ai.t > 1) { bubble(T, 'Da qui non ci arrivo, spostalo un po\'!', 1.8); macio('idle'); } }
       else {
         dir = steer(T, hp.world, 4);
         if (len(sub(hp.world, T.body.position)) < 16) grab(T, ce);
-        if (ai.t > 7) { bubble(T, 'Da qui non ci arrivo, spostalo un po\'!', 1.8); tonino('idle'); }
+        if (ai.t > 7) { bubble(T, 'Da qui non ci arrivo, spostalo un po\'!', 1.8); macio('idle'); }
       }
     }
   } else if (ai.state === 'carry') {
     const ce = ai.ce;
     if (T.grab !== ce) {
-      if (ce.carrier && ce.carrier !== T || ce.grabbers.length) { tonino('idle'); }
+      if (ce.carrier && ce.carrier !== T || ce.grabbers.length) { macio('idle'); }
       else {
         dir = steer(T, ce.body.position, 0);
         const s = surface(ce, T.body.position);
-        if (s.dist - T.r < 12) { if (!grab(T, ce)) tonino('idle'); else { const z = ZONES[ce.def.zone]; ai.dest = { x: z.x + rand(40, z.w - 40), y: z.y + rand(35, z.h - 35) }; } }
-        if (ai.t > 10) { ce.skipUntil = G.t + 8; if (!ai.auto) bubble(T, 'Non ci arrivo, liberamelo!', 1.6); tonino('idle'); }
+        if (s.dist - T.r < 12) { if (!grab(T, ce)) macio('idle'); else { const z = ZONES[ce.def.zone]; ai.dest = { x: z.x + rand(40, z.w - 40), y: z.y + rand(35, z.h - 35) }; } }
+        if (ai.t > 10) { ce.skipUntil = G.t + 8; if (!ai.auto) bubble(T, 'Non ci arrivo, liberamelo!', 1.6); macio('idle'); }
       }
     } else {
       dir = steer(T, ai.dest, 0);
       vmax = T.vmax * clamp(1 - ce.def.kg / 90, 0.6, 1);
-      if (len(sub(ai.dest, T.body.position)) < 22 + T.carry.dist) { release(T); bubble(T, 'Fatto!', 1); tonino('idle'); }
+      if (len(sub(ai.dest, T.body.position)) < 22 + T.carry.dist) { release(T); bubble(T, 'Fatto!', 1); macio('idle'); }
     }
   } else if (ai.state === 'goto') {
     const to = ai.to();
     dir = steer(T, to, ai.stop || 50);
-    if (len(sub(to, T.body.position)) < (ai.stop || 50) || ai.t > 8) tonino('idle');
+    if (len(sub(to, T.body.position)) < (ai.stop || 50) || ai.t > 8) macio('idle');
   } else { // idle: se non lo chiami, porta da solo un case leggero
     const job = ai.t > 1.2 && G.mode === 'play' && pickJob(T);
-    if (job) { tonino('carry', { ce: job, auto: true }); bubble(T, 'Porto io ' + job.def.name + '!', 1.4); drive(T, dir, vmax); return; }
+    if (job) { macio('carry', { ce: job, auto: true }); bubble(T, 'Porto io ' + job.def.name + '!', 1.4); drive(T, dir, vmax); return; }
     const d = len(sub(P.body.position, T.body.position));
     if (d > 190) dir = steer(T, P.body.position, 120);
     if (ai.t > 9 && !ai.said) { ai.said = true; bubble(T, ['Che faccio, capo?', 'Questo pesa come mia suocera…', 'Dimmi tu, io spingo.'][Math.floor(Math.random() * 3)], 1.8); }
@@ -868,6 +903,17 @@ function updatePlayer (dt) {
   if (P.mode === 'carry') vmax *= clamp(1 - P.grab.def.kg / 90, 0.6, 1);
   if (P.mode === 'carry' && P.grab.def.frag === 'altissima') vmax = Math.min(vmax, 2.0);
   if (inp.slow) vmax *= 0.5;
+  // a mani vuote contro un case: lo sposti appena, a spallate non conviene
+  if (!P.grab) {
+    const ce = nearestCase(P, 4);
+    if (ce && !ce.parked && !ce.carrier && !ce.grabbers.length && len(dir) > 0.1) {
+      const to = norm(sub(ce.body.position, P.body.position));
+      if (to.x * dir.x + to.y * dir.y > 0.3) {
+        vmax = Math.min(vmax, SHOVE_VMAX * clamp(30 / ce.def.kg, 0.35, 1));
+        if (!G.shoveHint && G.mode === 'play') { G.shoveHint = true; toast('A spallate non si sposta: prendilo con PRENDI.'); }
+      }
+    }
+  }
   drive(P, dir, vmax);
   if (len(dir) > 0.1 && P.mode !== 'push') turnTo(P, Math.atan2(dir.y, dir.x), P.mode === 'carry' ? 0.075 : 0.35);
   if (P.mode === 'push' && P.con) { const a = add(P.grab.body.position, P.con.pointB); P.facing = Math.atan2(a.y - P.body.position.y, a.x - P.body.position.x); }
@@ -886,8 +932,8 @@ function updatePlayer (dt) {
   const c = G.coffee;
   if (!c.used && !P.grab && len(sub(P.body.position, { x: 662, y: 175 })) < 45) {
     c.used = true; c.pauseUntil = G.t + 2.5; c.until = G.t + 2.5 + 45;
-    bubble(P, 'Pausa caffè…', 2.4); bubble(G.tonino, 'Un caffè al volo!', 2.4);
-    toast('Caffè: per 45 secondi tu e Tonino siete più svelti.', 'ok');
+    bubble(P, 'Pausa caffè…', 2.4); bubble(G.macio, 'Un caffè al volo!', 2.4);
+    toast('Caffè: per 45 secondi tu e Macio siete più svelti.', 'ok');
   }
 }
 
@@ -899,12 +945,28 @@ function updateCase (ce, dt) {
     const w = ce.carrier, f = { x: Math.cos(w.facing), y: Math.sin(w.facing) };
     const target = add(w.body.position, mul(f, w.carry.dist));
     const err = sub(target, b.position);
-    if (len(err) > 38) { const who = w; release(w, 'slip'); if (who === G.player) toast('Ti è sfuggito di mano!', 'bad'); else bubble(who, 'Oops!', 1); return; }
+    // case bloccato (contro un muro o un altro case): chi lo porta si ferma,
+    // non gli sfugge di mano; sfugge solo se viene proprio strappato via
+    if (len(err) > 38) Body.setVelocity(w.body, mul(w.body.velocity, 0.2));
+    if (len(err) > 70) { const who = w; release(w, 'slip'); if (who === G.player) toast('Ti è sfuggito di mano!', 'bad'); else bubble(who, 'Oops!', 1); return; }
     let v = mul(err, 0.35); if (len(v) > 6) v = mul(norm(v), 6);
     Body.setVelocity(b, add(mul(w.body.velocity, 0.9), v));
     Body.setAngularVelocity(b, angDiff(w.facing + w.carry.rel, b.angle) * 0.3);
     return;
   }
+  if (ce.parked) return;
+  // un case da due spinto da solo non va dritto: ogni tanto sbanda di lato
+  if (ce.def.heavy2 && ce.grabbers.length === 1 && speedOf(b) > 0.3 && G.mode === 'play') {
+    ce.soloT = (ce.soloT || 0) + dt;
+    if (ce.soloT > 2.2) {
+      ce.soloT = -rand(0, 1.2);
+      const v = norm(b.velocity), side = Math.random() < 0.5 ? -1 : 1;
+      Body.setVelocity(b, add(b.velocity, mul({ x: -v.y, y: v.x }, side * 2.2)));
+      Body.setAngularVelocity(b, side * 0.04);
+      bubble(ce, 'Sbanda!', 1.2); AU.thud(2);
+      if (!G.soloHint) { G.soloHint = true; toast('Da solo non lo tieni dritto: chiama Macio con AIUTO.', 'warn'); }
+    }
+  } else if (ce.soloT > 0) ce.soloT = 0;
   // attrito del pavimento, diverso per tipo di ruote
   const W = WHEEL[ce.wheel];
   let kf = W.f, ks = W.s, ka = W.a;
@@ -979,8 +1041,8 @@ function scriptEvents () {
     bubble(G.cart, 'Buonasera ragazzi! Sono Gerry, passo col carrello!', 3);
   });
   once('telefono', 150, () => {
-    const T = G.tonino; tonino('phone'); bubble(T, 'È mia moglie, un attimo…', 3);
-    toast('Tonino è al telefono per qualche secondo.', 'warn');
+    const T = G.macio; macio('phone'); bubble(T, 'È mia moglie, un attimo…', 3);
+    toast('Macio è al telefono per qualche secondo.', 'warn');
   });
   once('passante2', 210, () => passante(G.kids[1]));
   // cavo incastrato: la prima volta che il baule SEGNALE va in cortile a spinta
@@ -1017,7 +1079,7 @@ function stepSim () {
     updateQte(dt); autoLift();
   }
   updatePlayer(dt);
-  updateTonino(dt);
+  updateMacio(dt);
   updateKids(dt);
   for (const ce of G.cases) updateCase(ce, dt);
   if (G.dolly) { const b = G.dolly.body; Body.setVelocity(b, mul(b.velocity, 1 - 1.5 * dt)); Body.setAngularVelocity(b, b.angularVelocity * (1 - 3 * dt)); }
@@ -1041,6 +1103,7 @@ function stepSim () {
     if (!held && speedOf(ce.body) < 1.2) {
       const z = zoneAt(p);
       if (z !== ce.zone) { ce.zone = z; if (z === ce.def.zone && G.mode === 'play') { AU.ding(); bubble(ce, '✓ ' + ZONES[z].name, 1.2); ring(p.x, p.y, ZONES[z].color); } }
+      if (z === ce.def.zone && !ce.tipped && !ce.stuck && speedOf(ce.body) < 0.3 && G.mode === 'play') park(ce);
     } else if (held) ce.zone = null;
   });
 
@@ -1297,7 +1360,7 @@ function drawCase (ce) {
     const r = seeded(ce.seed); ctx.strokeStyle = 'rgba(210,214,222,.45)'; ctx.lineWidth = 1.2;
     for (let i = 0; i < n; i++) { const x = (r() - 0.5) * (w - 8), y = (r() - 0.5) * (h - 8), l = 6 + r() * 12, a = r() * Math.PI; ctx.beginPath(); ctx.moveTo(x, y); ctx.lineTo(x + Math.cos(a) * l, y + Math.sin(a) * l); ctx.stroke(); }
   }
-  if (!ce.tipped && ce.carrier !== G.tonino && speedOf(b) > FRAG[d.frag].thr * 0.92 && speedOf(b) > 0.8) {
+  if (!ce.tipped && ce.carrier !== G.macio && (ce.carrier ? speedOf(ce.carrier.body) + 0.3 : speedOf(b)) > FRAG[d.frag].thr * 0.92 && speedOf(b) > 0.8) {
     ctx.strokeStyle = 'rgba(224,80,63,' + (0.65 + 0.35 * Math.sin(performance.now() / 70)) + ')'; ctx.lineWidth = 4;
     rr(-w / 2 - 4, -h / 2 - 4, w + 8, h + 8, 6); ctx.stroke();
   }
@@ -1333,12 +1396,12 @@ function drawWorker (w) {
   if (w === G.player) { // cappellino
     ctx.fillStyle = '#141519'; ctx.beginPath(); ctx.arc(1, 0, r * 0.46, Math.PI * 0.5, Math.PI * 1.5); ctx.fill();
     ctx.fillStyle = w.trim; ctx.fillRect(r * 0.35, -r * 0.3, r * 0.3, r * 0.6);
-  } else { // Tonino: pelato coi baffi
+  } else { // Macio: pelato coi baffi
     ctx.strokeStyle = '#8a8d93'; ctx.lineWidth = 3; ctx.beginPath(); ctx.arc(2, 0, r * 0.45, Math.PI * 0.65, Math.PI * 1.35); ctx.stroke();
     ctx.strokeStyle = '#3a2a1e'; ctx.lineWidth = 3; ctx.beginPath(); ctx.moveTo(r * 0.45, -r * 0.22); ctx.lineTo(r * 0.45, r * 0.22); ctx.stroke();
   }
   ctx.restore();
-  if (w === G.tonino && w.ai.state === 'phone') { ctx.fillStyle = '#eee9df'; ctx.fillRect(p.x + 10, p.y - 18, 7, 12); }
+  if (w === G.macio && w.ai.state === 'phone') { ctx.fillStyle = '#eee9df'; ctx.fillRect(p.x + 10, p.y - 18, 7, 12); }
   // gocce di sudore spingendo da solo un case da due
   if (w.grab && w.grab.def.heavy2 && w.grab.grabbers.length < 2 && speedOf(w.body) > 0.2) {
     const tt = (performance.now() / 500) % 1;
@@ -1414,7 +1477,7 @@ function drawScreenUI () {
     const ce = nearestCase(G.player, 14);
     if (ce) {
       const s = worldToScreen(ce.body.position);
-      const hint = ce.stuck ? 'tieni premuto PRENDI: libera il cavo' : ce.tipped ? 'ribaltato: OH-ISSA' : ce.carrier ? 'lo porta Tonino' :
+      const hint = ce.stuck ? 'tieni premuto PRENDI: libera il cavo' : ce.tipped ? 'ribaltato: OH-ISSA' : ce.carrier ? 'lo porta Macio' :
         carriable(ce) ? 'in mano' : ce.def.heavy2 ? 'si spinge in due' : 'si spinge · ' + WHEEL[ce.wheel].label;
       label(s.x, s.y - ce.def.h * G.cam.scale / 2 - 16, ce.def.name + ' · ' + ce.def.kg + ' kg', hint, ZONES[ce.def.zone].color);
     }
@@ -1592,7 +1655,7 @@ function endGame (reason) {
       <div class="montaggio"><b>AL MONTAGGIO</b><br>
         PAR: ${Math.min(parAvail, 4)} su 4 · Stativi: ${Math.min(staAvail, 4)} su 4 · Pezzi da sistemare: ${G.cases.filter(c => stateOf(c.integrity) === 'difettoso').length}
         ${spareNote.length ? '<br>Dal case ricambi: ' + spareNote.join(', ') + '.' : ''}
-        ${rushed.length ? '<br>Scaricati di corsa da Tonino e dal bidello: ' + rushed.map(c => c.def.name).join(', ') + '.' : ''}
+        ${rushed.length ? '<br>Scaricati di corsa da Macio e dal bidello: ' + rushed.map(c => c.def.name).join(', ') + '.' : ''}
       </div>
       <div class="tw"><table>
         <thead><tr><th>Case</th><th>Zona</th><th>Stato</th><th>Al montaggio</th></tr></thead>
@@ -1710,8 +1773,8 @@ function loop (now) {
 }
 
 $('#start-legend').innerHTML = touchUI
-  ? '<span>Joystick a sinistra per muoverti (poco inclinato = passo attento). A destra: PRENDI, AIUTO (Tonino), OH-ISSA, FERMO!</span>'
-  : '<span><kbd>WASD</kbd> muovi</span><span><kbd>Spazio</kbd> prendi / lascia</span><span><kbd>E</kbd> aiuto Tonino</span><span><kbd>Q</kbd> oh-issa</span><span><kbd>Shift</kbd> passo attento</span><span><kbd>F</kbd> fermo!</span>';
+  ? '<span>Joystick a sinistra per muoverti (poco inclinato = passo attento). A destra: PRENDI, AIUTO (Macio), OH-ISSA, FERMO!</span>'
+  : '<span><kbd>WASD</kbd> muovi</span><span><kbd>Spazio</kbd> prendi / lascia</span><span><kbd>E</kbd> aiuto Macio</span><span><kbd>Q</kbd> oh-issa</span><span><kbd>Shift</kbd> passo attento</span><span><kbd>F</kbd> fermo!</span>';
 resize();
 if (window.Matter) {
   $('#btn-start').addEventListener('click', startGame);

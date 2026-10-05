@@ -157,6 +157,7 @@ const os = require('os');
   check(JSON.stringify(after.logo) === JSON.stringify(pick.logo), 'logo perso dopo la ricarica: ' + JSON.stringify(after.logo));
 
   // ---- Nuova partita: in un altro slot, livello da capo, impostazioni e record restano
+  await ev(() => { Profile.data.assistant = { id: 'nico', favors: 1 }; });
   await p.click('#menu-btn');
   await p.click('#menu-new');
   check(await p.isVisible('#new-warning') && /slot 2/.test(await p.textContent('#new-warning')), 'manca l\'avviso con lo slot della nuova partita: ' + await p.textContent('#new-warning'));
@@ -171,7 +172,8 @@ const os = require('os');
   await p.waitForSelector('#scarico-frame');
   await p.frameLocator('#scarico-frame').locator('#btn-skip').click();
   await p.waitForFunction(() => !document.querySelector('#scarico-frame'));
-  const fresh = await ev(() => ({ placed: Object.keys(gameState.placed), edges: gameState.edges.length, tests: gameState.stats.tests, vol: SFX.volume, recs: (Profile.data.records[LEVEL_ID] || []).length, rep: reputation() }));
+  const fresh = await ev(() => ({ placed: Object.keys(gameState.placed), edges: gameState.edges.length, tests: gameState.stats.tests, vol: SFX.volume, recs: (Profile.data.records[LEVEL_ID] || []).length, rep: reputation(), assistant: Profile.data.assistant }));
+  check(JSON.stringify(fresh.assistant) === JSON.stringify({ id: null, favors: 0 }), 'il nuovo tecnico si trova l\'assistente del vecchio: ' + JSON.stringify(fresh.assistant));
   check(fresh.placed.length === 1 && fresh.edges === 0 && fresh.tests === 0, 'Nuova partita non azzera il livello: ' + JSON.stringify(fresh));
   check(fresh.vol === 0.3 && fresh.recs === 2, 'Nuova partita perde impostazioni o record: ' + JSON.stringify(fresh));
   check(fresh.rep === 0, 'il nuovo tecnico non parte da reputazione 0');
@@ -185,9 +187,9 @@ const os = require('os');
   const cards = await slotCards();
   check(cards.length === 3, 'non ci sono tre slot: ' + cards.length);
   check(!cards[0].empty && cards[0].text.includes(pick.name) && cards[0].text.includes('Marco') && cards[0].logo
-    && /Livello 1 · Festa della scuola: Messa in sicurezza dei cavi \(2\/6\)/.test(cards[0].text) && /★ 5/.test(cards[0].text)
+    && /Livello 1 · Festa della scuola: Messa in sicurezza dei cavi \(2\/8\)/.test(cards[0].text) && /★ 5/.test(cards[0].text)
     && /Ultima partita: \d/.test(cards[0].text), 'slot 1 incompleto: ' + cards[0].text);
-  check(cards[1].active && cards[1].text.includes('Nuova Tecnica') && /in gioco/.test(cards[1].text) && /Montaggio e test impianto \(1\/6\)/.test(cards[1].text) && /★ 0/.test(cards[1].text), 'slot 2 sbagliato: ' + cards[1].text);
+  check(cards[1].active && cards[1].text.includes('Nuova Tecnica') && /in gioco/.test(cards[1].text) && /Montaggio e test impianto \(1\/8\)/.test(cards[1].text) && /★ 0/.test(cards[1].text), 'slot 2 sbagliato: ' + cards[1].text);
   check(cards[2].empty, 'lo slot 3 non è vuoto');
 
   // ---- scelta del livello: il livello 1 aperto con le sue fasi, gli altri

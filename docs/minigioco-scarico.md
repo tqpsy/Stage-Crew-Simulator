@@ -11,7 +11,7 @@ portelloni, dentro c'è tutto il materiale caricato stretto, e va portato
 nelle zone giuste della venue prima delle 16:30. Visuale dall'alto, fisica
 vera: i bauli pesanti hanno inerzia, i case con le ruote scappano sulla
 rampa, gli oggetti fragili si rompono se sbattono. Al tuo fianco c'è
-**Tonino**, il collega CPU: forte, un po' lento, da chiamare quando un
+**Macio**, il collega CPU: forte, un po' lento, da chiamare quando un
 case è troppo grosso per una persona sola.
 
 Quello che rompi **ti manca al montaggio**. Si gioca in circa 5 minuti e si
@@ -50,13 +50,13 @@ può saltare.
    Zona giusta: il case "si aggancia" con una spunta. Zona sbagliata: il
    case resta lì e al montaggio c'è da riportarlo al suo posto (costa
    tempo in scaletta).
-5. Torni al mezzo per il prossimo. Intanto Tonino può portare da solo un
+5. Torni al mezzo per il prossimo. Intanto Macio può portare da solo un
    case leggero (vedi *Il collega CPU*).
 
 ### 3. Fine dello scarico
 
 - **Tutto consegnato prima delle 16:30**: bonus (vedi *Punteggio*).
-- **Alle 16:30 manca ancora qualcosa**: niente game over. Tonino e il
+- **Alle 16:30 manca ancora qualcosa**: niente game over. Macio e il
   bidello scaricano il resto **di corsa**. Ogni case scaricato così ha
   una probabilità di danno (più alta per i fragili), e il montaggio parte
   in ritardo.
@@ -80,7 +80,7 @@ il disegno usa la stessa prospettiva isometrica del gioco (`isoFrame`,
 |---|---|---|
 | Muoversi | joystick virtuale a sinistra | WASD / frecce |
 | Prendi / lascia | tasto grande a destra | Spazio |
-| Chiama Tonino | tasto AIUTO (tocco = aiutami, tenuto = "porta tu") | E |
+| Chiama Macio | tasto AIUTO (tocco = aiutami, tenuto = "porta tu") | E |
 | Oh-issa (sollevare insieme) | tasto OH-ISSA a tempo | Q |
 | Passo attento | joystick poco inclinato | Shift |
 | Frena / FERMO! | rilasciare il joystick; tasto FERMO! | F |
@@ -119,32 +119,32 @@ Niente mira fine: il personaggio si aggancia al lato del case più vicino.
   **velocità di curva massima**. Se sterzi troppo forte, cadono di lato:
   animazione, colpo forte, poi vanno raddrizzati con un OH-ISSA.
 
-### Spinta di coppia (tu + Tonino)
+### Spinta di coppia (tu + Macio)
 
 - I case **ingombranti** hanno una **resistenza** più alta della forza di
   una persona. Da solo li muovi al 20% della velocità e ruotano, perché
   spingi da un lato solo.
-- **AIUTO** vicino al case: Tonino arriva (ci mette qualche secondo, ed è
+- **AIUTO** vicino al case: Macio arriva (ci mette qualche secondo, ed è
   una scelta di tempi) e si attacca al **lato opposto** al tuo. Le due
   forze si sommano e le rotazioni si compensano: il case va dritto.
-- Tonino **segue la tua direzione con 0,4 s di ritardo**. In rettilineo
+- Macio **segue la tua direzione con 0,4 s di ritardo**. In rettilineo
   va benissimo. In curva stretta, o se inverti di colpo, il case gira su
   se stesso. Il divertimento è qui: bisogna guidare "in largo", pensando
   a un'altra persona che reagisce in ritardo.
-- **FERMO!** Tonino frena subito. Serve in discesa sulla rampa.
+- **FERMO!** Macio frena subito. Serve in discesa sulla rampa.
 - **OH-ISSA** per sollevare sopra un gradino, un cordolo o il bordo della
   sponda. Parte **da solo** quando spingi un case contro l'ostacolo (se
-  pesa più di 45 kg, Tonino arriva da solo a darti una mano). Tonino conta
+  pesa più di 45 kg, Macio arriva da solo a darti una mano). Macio conta
   «uno… due… ISSA!» e si preme una volta sola sull'ISSA (circa ±¼ di
   secondo). Riuscito: il case viene alzato e passa da solo. Troppo presto
-  o troppo tardi: il case sbatte (piccolo danno) e dopo un attimo Tonino
+  o troppo tardi: il case sbatte (piccolo danno) e dopo un attimo Macio
   ricomincia a contare. Per un case ribaltato si preme OH-ISSA lì vicino.
   (Nel prototipo la prima versione, una barra che oscillava e andava
   premuta due volte, era poco chiara.)
 - I case lunghi (borsa stativi, truss) hanno anche il problema delle
   **porte**: vanno girati per passare, e con due persone si gira meglio.
 
-### Il collega CPU: Tonino
+### Il collega CPU: Macio
 
 | Parametro | Valore (proposta) |
 |---|---|
@@ -167,7 +167,7 @@ Due ordini:
   alla sua zona. È lento ma sicuro, e **non si ferma per gli imprevisti**:
   il passante lo scansa, ma si prende un colpo. Intanto tu fai altro.
 
-Tonino ha anche una sua **stanchezza**: dopo 4–5 spinte pesanti rallenta e
+Macio ha anche una sua **stanchezza**: dopo 4–5 spinte pesanti rallenta e
 sbuffa. Il caffè lo rimette in sesto. Non si arrabbia mai: commenta
 (fumetti brevi: "Piano, piano…", "Questo pesa come mia suocera").
 
@@ -246,7 +246,7 @@ livelli futuri.
 - **Accesso**: il furgone entra in cortile. Rampa di alluminio corta dal
   portellone, poi asfalto liscio fino alla palestra.
 - **Ostacoli**: il **gradino della porta** della palestra (primo OH-ISSA,
-  spiegato da Tonino); la porta antipanico che si richiude da sola se
+  spiegato da Macio); la porta antipanico che si richiude da sola se
   nessuno la tiene; bambini che corrono in cortile (passanti veloci ma
   prevedibili); Gerry Scotti, il bidello, che passa col carrello delle
   pulizie.
@@ -346,7 +346,7 @@ trascina a fatica, 5 = scappa da sola. Ingombro in celle da 0,5 m.
 ### Power-up
 
 - **Pausa caffè** (la moka in cabina o il bar di fronte): 20 secondi
-  fermi, poi per 45 secondi tu e Tonino siete più veloci e Tonino reagisce
+  fermi, poi per 45 secondi tu e Macio siete più veloci e Macio reagisce
   più in fretta. Ma **conta nella stanchezza** del montaggio: il caffè ti
   presta energia, la birra ti riposa. Uno per scarico.
 - **Dolly** (piattaforma con ruote): metti sopra un case senza ruote e
@@ -359,7 +359,7 @@ trascina a fatica, 5 = scappa da sola. Ingombro in celle da 0,5 m.
   peggiori (la maniglia che si stacca, il coperchio che si apre). Tre
   pezzi per scarico.
 - **Telo**: copre un case dalla pioggia.
-- **Radio "Oh-issa!"**: per 30 secondi Tonino è sincronizzato, senza
+- **Radio "Oh-issa!"**: per 30 secondi Macio è sincronizzato, senza
   ritardo e con OH-ISSA sempre perfetti.
 
 ### Imprevisti del settore
@@ -374,7 +374,7 @@ rigiocabilità. Nel livello 1 al massimo uno alla volta.
   proprio sulla rampa. Il tasto AIUTO lontano da un case diventa
   "Permesso!" e lo fa spostare dopo un secondo; spingergli addosso un case costa
   reputazione.
-- **La porta antipanico** che si richiude: la tiene Tonino (ma allora non
+- **La porta antipanico** che si richiude: la tiene Macio (ma allora non
   spinge), un case usato come fermaporta, o il cuneo.
 - **Il vigile**: il mezzo è in divieto di sosta. A metà scarico va
   spostato di 20 metri: la rampa cambia posto e il percorso si allunga.
@@ -382,14 +382,14 @@ rigiocabilità. Nel livello 1 al massimo uno alla volta.
   da lì si può solo spingere.
 - **La ruota che si blocca**: il case tira da un lato, come un carrello
   della spesa rotto.
-- **Tonino al telefono**: "È mia moglie, un attimo…". Per 15 secondi è
+- **Macio al telefono**: "È mia moglie, un attimo…". Per 15 secondi è
   fermo. Arriva sempre nel momento peggiore.
 - **Il fonico della band che arriva presto e "dà una mano"**: prende un
   case a caso e lo porta nella zona sbagliata.
 - **Scroscio di pioggia** (solo scenari all'aperto): 30 secondi di
   rampa bagnata e danni da acqua ai case scoperti.
 - **Le pizze del catering**: il fattorino in motorino taglia il
-  percorso. Se ne salvi il cartone, Tonino è più veloce per 30 secondi.
+  percorso. Se ne salvi il cartone, Macio è più veloce per 30 secondi.
 
 ## Punteggio e record
 
@@ -472,17 +472,19 @@ non toccano la scena di Phaser.
 
 ## Da decidere
 
-- Il nome e il carattere del collega (proposta: Tonino).
-- Il carico all'uscita (a fine serata, smontaggio): stesso minigioco al
-  contrario, con il "tetris" del mezzo da riempire. Può essere il motivo
-  per cui le **cinghie** contano.
+- Il carattere di Macio. Deciso il nome: **Macio** (prima era Tonino).
+  L'aspetto resta quello di oggi: pelato, baffi scuri, aria seria.
+- Il carico all'uscita (a fine serata, dopo il karaoke): un **minigioco a
+  sé, tipo puzzle**, non lo scarico al contrario. Prima versione nel gioco:
+  il tetris del furgone, le cinghie e la prova su strada, in
+  `docs/minigioco-carico.md`.
 
 ## Il minigioco
 
 `scarico.html` (nato come prototipo in `prototipi/`): scenario 1 completo,
-con i 12 case del livello 1, Tonino, rampa, gradino con OH-ISSA,
+con i 12 case del livello 1, Macio, rampa, gradino con OH-ISSA,
 ribaltamento del rack, dolly, pausa caffè, cavo incastrato, passanti,
-bidello col carrello, Tonino al telefono e bolla di scarico finale. La
+bidello col carrello, Macio al telefono e bolla di scarico finale. La
 vista è dall'alto (la fisica è la stessa che servirà in isometrico). I
 numeri da tarare sono in cima al file (`WHEEL`, `FRAG`, `CASES`,
 `GAME_SECONDS`).

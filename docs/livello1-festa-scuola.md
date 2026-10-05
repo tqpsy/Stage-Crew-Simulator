@@ -12,7 +12,8 @@ Il livello è una serata divisa in fasi, sbloccate una dopo l'altra:
 | 0 | **Montaggio impianto** | subito | quello che il gioco chiede già oggi: corrente, PC → scheda → mixer → finale → sub/teste, 4 PAR in DMX, Test impianto superato |
 | 1 | **Discorso del preside** | Test impianto superato | microfono su asta sul palco, XLR fino al mixer, canale aperto e udibile |
 | 2 | **DJ set** | discorso finito | consolle DJ (mixer DJ + 2 piatti) alimentata; uscita del mixer DJ → DI → XLR → mixer di sala |
-| 3 | **Cantante con chitarra** | DJ set finito | microfono voce XLR → mixer; chitarra → DI → XLR → mixer |
+| 3 | **Karaoke di Macio** (fatto, al posto del cantante) | DJ cacciato da Gerry | il microfono ancora collegato al mixer acceso: vedi *Dopo il DJ: il karaoke di Macio* |
+| 4 | **Carico del furgone** | fine serata (dopo il karaoke) | `carico.html`: incastrare i case nel furgone, tre cinghie, la prova su strada. Vedi `docs/minigioco-carico.md` |
 
 Ogni fase si chiude con un proprio test: se passa parte un'**animazione di 10 secondi**
 che mostra cosa succede (il preside parla e il pubblico applaude, la gente balla
@@ -147,7 +148,8 @@ Test: `tests/aiuti.js`.
 **Fatto: scaletta della serata.** A ogni nuova partita, prima del montaggio, si
 apre il foglio di lavoro (cliente, luogo, service, tecnico) con gli orari della
 serata: 16:00 scarico, 16:30 montaggio, 19:30 test impianto, 20:30 porte,
-21:00 preside, 21:10 cambio palco, 21:15 DJ, 22:00 cantante, 23:00 smontaggio. Ogni voce ha il suo
+21:00 preside, 21:10 cambio palco, 21:15 DJ, 23:00 smontaggio. Il karaoke di
+Macio delle 22:00 è fuori programma: compare solo dopo il DJ set. Ogni voce ha il suo
 stato (fatto / adesso / da fare / in arrivo); si riapre dal tasto 📋 in testata.
 Le fasi di spettacolo, quando arriveranno nel gioco, si agganciano qui
 (`SCHEDULE` in `main.js`).
@@ -340,14 +342,15 @@ scegliere chi va a sistemarli.
 
 - **Il capo alle luci è peggio di te**: prende le note in automatico ma ne
   manca una su tre e la combo si azzera.
-- **Il capo si spazientisce**: se stai via troppo (proposta: 30 s) torna lui
-  alle luci e il guasto lo finisci con la pista che scorre; reputazione ridotta.
+- **Il capo non si spazientisce** (deciso): se vai tu al guasto, resta lui
+  alle luci finché non torni, senza limite di tempo.
 - **La birra ha un costo vero**: è una birra in meno contro la stanchezza.
   Senza birre in tasca la scelta non c'è: ci vai tu.
 - Il capo solo per i guasti grossi (fase che scatta, PAR senza DMX); i
   guasti-nota restano del giocatore. Al massimo **due favori per set**.
 - Dal livello 2 il capo non c'è più (tutor solo al livello 1): al suo posto
-  un **assistente** da assumere con la reputazione, pagato a birre.
+  un **assistente** da assumere con la reputazione, pagato a birre (design
+  in `docs/assistente.md`).
 
 **Il rewind del DJ**
 - Quando torni alle luci dopo aver sistemato un guasto grosso, DJ
@@ -381,6 +384,90 @@ poco prima della fine del brano.
 **Fatto** (`dj.html`, dopo il cambio palco): com'è stato costruito, coi
 numeri, è in `docs/spettacolo-dj.md`. Dell'audio restano da fare la catena
 simulata e il brano caricato dal giocatore.
+
+## Dopo il DJ: il karaoke di Macio (fatto)
+
+Gerry ha cacciato il DJ e la serata non può finire così. Niente gruppo di
+musicisti (Luca preferisce evitarlo): **Macio**, il collega dello scarico,
+prende il microfono e improvvisa un **karaoke**, a metà fra il discorso
+del preside (voce nella zona verde, larsen) e il DJ Hero (pista a tempo).
+È un'improvvisazione: non è sulla locandina (la serata era solo DJ set) e
+nemmeno sulla scaletta finché il DJ set non è finito.
+
+**L'idea**: non c'è un programma di karaoke. Macio ha scritto la canzone
+lì per lì e il testo sul portatile girato verso il palco lo manda avanti
+il tecnico, **a mano, sillaba per sillaba a tempo**. Macio canta quello
+che legge: se la sillaba non arriva in tempo si perde («ehm», «boh»).
+
+- **La pista del testo**: una corsia sola, orizzontale; le sillabe
+  arrivano da destra e si tocca **AVANTI** (Spazio) quando sono sulla
+  riga. Le sillabe lunghe in fondo a ogni verso si **tengono premute**.
+  Lo schermo del karaoke in alto si colora man mano, come un karaoke vero.
+- **Macio si gasa e urla**: canta intonato, ma a tratti si esalta e urla
+  nel microfono («!!» dalla bocca spalancata). Il fader **VOCE MACIO** va
+  tenuto nella **zona verde**: alta quando canta normale (sennò non si
+  sente), bassa quando urla (sennò il pubblico si tappa le orecchie). La zona si sposta **un tempo prima**, così si vede
+  arrivare. Nei ritornelli più lo abbassi, più si sente il pubblico che
+  canta.
+- **Il larsen**: due volte Macio va verso una cassa e scende la **zona
+  rossa**: con la voce lì sopra per più di un terzo di secondo parte il
+  larsen (−6 pubblico, −3 reputazione), poi un attimo di tregua.
+- **Macio dimentica le parole** (quattro volte): l'ultima parola del verso
+  è «???» e sopra la platea compaiono tre parole (tasti 1 2 3). Quella che
+  fa rima piace (+6 pubblico), quella buffa fa ridere («panino», «il
+  preside», «Gerry»…, +3), quella sbagliata fa fischiare (−6). Se non
+  scegli in tempo Macio canta «ehm» (−4). Macio canta la parola scelta.
+- **Botta e risposta** (il ponte, 4 battute): la base resta cassa e
+  battimani, Macio canta «Oh-oh!» e la palestra risponde «OH! OH!» sul
+  terzo e sul quarto tempo: bolle azzurre e tasto **CORO** (C).
+- **Gerry stacca la spina** all'inizio del ponte: base e microfono tacciono,
+  le luci si spengono e il pubblico cala finché non la riattacchi (tre
+  tocchi sul bottone, o R). Il coro si sente lo stesso: la palestra canta
+  anche senza impianto.
+- **Ritornello finale**: se il pubblico è almeno al 50% si accendono i
+  telefoni e la palestra canta con lui. In fondo «MA-CIO! MA-CIO!».
+- **Stanchezza e birra** come nel DJ set: la stanchezza stringe la
+  finestra, la birra la riallarga. Facile: finestre e zona verde più
+  larghe.
+- **Esito**: stelle da sillabe e «OH!» a tempo (60%) e tempo nella zona verde
+  (40%); reputazione 5 + (pubblico − 60) / 10 − 3 per larsen; 🍺 senza
+  larsen e 🍺 col pubblico almeno al 70%. Una volta sola, come le altre
+  fasi.
+
+**La canzone**: «Salviamo la serata», testo e musica originali (niente
+diritti). 112 BPM, 32 battute (circa un minuto): intro parlata, strofa,
+ritornello, ponte (botta e risposta), ritornello finale. Più corta e
+veloce della prima versione, che Luca trovava noiosa. La base (batteria,
+basso, accordi Do-Sol-La-Fa) e il coro del pubblico sono suonati dal codice
+con Web Audio. La **voce di Macio** ha l'**accento di Chieti** (Macio è di Chieti; non
+il dialetto: «spèndo», «quando», «cando», «anghe», «inzième»): una voce
+italiana maschile sintetica dice ogni verso e il vocoder WORLD fa cantare
+ogni sillaba sulla sua nota, un'ottava sotto, **intonata giusta** (controllata
+nota per nota), con un vibrato leggero; dove urla è solo più forte. Dice
+anche le frasi dell'intro, «Ehm…» quando si perde una sillaba e «Grazie a
+tutti, vajù!» alla fine, le parole sbagliate da scegliere e l'«Oh-oh!» del
+ponte. Sta in `karaoke-voce.js` (un mp3 in base64, così
+funziona anche aprendo `index.html` dal disco), generato da
+`strumenti/voce-macio.py`. Se manca, canta il suono sintetico.
+
+**Nel gioco**: finito il DJ set, il messaggio dice che Macio prende il
+microfono e il karaoke si apre da solo (o dal foglio, «Macio prende il
+microfono», o dalla scaletta). Serve il microfono ancora collegato a un
+ingresso MIC del mixer acceso: se manca, Macio aspetta e il foglio dice
+cosa fare. Dopo il karaoke la scaletta e il foglio portano al **carico del furgone**
+(23:00). Prende il posto della fase del cantante con chitarra: Dante e
+la sua fase escono di scena; le voci *cantante* qui sotto restano come
+appunti.
+
+Codice: `karaoke.html` (la pagina), `openKaraoke`, `finishKaraoke` e
+`karaokeReady` in `main.js`; stato in `Profile.data.karaoke`. Test:
+`tests/karaoke.js` (la pagina da sola) e `tests/karaoke-gioco.js` (dentro
+il gioco).
+
+Dopo il karaoke la serata chiude col **carico del furgone** (`carico.html`):
+Macio porta fuori i case, tu li incastri nel furgone a quadretti, li leghi
+con tre cinghie e si parte; frenata, curve e dosso fanno scivolare quello
+che è slegato. Regole in `docs/minigioco-carico.md`.
 
 ## Personaggi (proposta)
 
