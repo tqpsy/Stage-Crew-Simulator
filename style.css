@@ -322,6 +322,14 @@
     min-height:44px; padding:0 14px; text-align:left; font-size:16px; font-weight:600;
     background:var(--bg-panel-raised); color:var(--text-main); border:1px solid var(--hairline); border-radius:8px; cursor:pointer;
   }
+  #pick-menu .pick-box{ max-width:calc(100vw - 16px); max-height:calc(100vh - 16px); overflow-y:auto; }
+  #pick-menu .pick-cable{ display:flex; align-items:center; gap:10px; padding:6px 12px; }
+  #pick-menu .pick-cable small{ display:block; font-size:12px; font-weight:500; color:var(--text-muted); }
+  #pick-menu .pick-num{
+    flex:none; width:24px; height:24px; border-radius:50%; border:2.5px solid; background:#1c1d22;
+    display:grid; place-items:center; font-size:13px; font-weight:700; color:#fff;
+  }
+  #pick-menu .pick-zoom{ color:var(--amber); border-style:dashed; }
 
   /* ---------- BAULI DEI CAVI ---------- */
   .case-bar{ align-items:center; gap:12px; flex-wrap:wrap; }
@@ -377,6 +385,18 @@
   /* vista della regia (tavolo): i pannelli uno sotto l'altro, scorrendo */
   .rear-svg-wrap.table-view{ max-height:66vh; overflow-y:auto; display:flex; flex-direction:column; gap:14px; }
   .rear-svg-wrap.table-view .rear-svg{ max-height:30vh; }
+  /* telefono: in regia ogni pannello prende tutta la larghezza (si scorre),
+     invece di rimpicciolirsi fino a prese e scritte minuscole */
+  @media (max-width:640px){ .rear-svg-wrap.table-view .rear-svg{ max-height:none; } }
+  .rear-jump{
+    position:sticky; top:-14px; z-index:2; display:flex; flex-wrap:wrap; gap:6px;
+    margin:-14px -16px 0; padding:10px 16px 8px; background:var(--bg-panel); border-bottom:1px solid var(--hairline);
+  }
+  .rear-jump-btn{
+    min-height:36px; padding:0 12px; border-radius:18px; font:600 14px var(--font-display); letter-spacing:.04em;
+    background:var(--bg-panel-raised); color:var(--text-main); border:1px solid var(--hairline); cursor:pointer;
+  }
+  .rear-jump-btn.ok{ border-color:#49b06a; color:#7ee39b; }
   .rear-block-head{
     font-family:var(--font-display); font-size:15px; letter-spacing:.04em; color:var(--amber);
     margin:0 0 6px 2px;
