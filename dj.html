@@ -80,6 +80,7 @@
   .pop.par{position:relative}
   .pop.par .act{padding:6px 4px;grid-column:span 3;text-align:center}
   .pop.par .act[data-k^=a]{grid-column:span 2}
+  .pop.par .act.alt{grid-column:span 2;font-size:11.5px;border-style:dashed}
   .pop .act{background:#15161a;border:1px solid var(--hairline);border-radius:8px;padding:8px;font-size:13px;font-weight:600;text-align:left}
   .pop .act:disabled{opacity:.4}
   .pop .x{justify-self:end;background:none;border:0;color:var(--muted);font-size:16px;padding:0 4px;margin-top:-4px}
@@ -728,7 +729,7 @@
   // la luce di ogni PAR adesso: [intensità, colore]
   function parLight (i, pal) {
     if (S.phaseDown || (S.finale && !finaleLit())) return [0, '#000'];
-    if (i === 3 && S.dmxDead) return [0, '#000'];
+    if (i === 3 && (S.dmxDead || S.par4Off)) return [0, '#000'];
     let v = 0, c = pal[0];
     if (i === 1 || i === 2) { v = 0.28; c = '#fff6e0'; }           // i frontali tengono Musa in luce
     if (S.colori > v) { v = S.colori; c = pal[0]; }
@@ -1054,7 +1055,7 @@
       // tre cause possibili, a caso: si capiscono solo guardando il PAR
       S.dmxDead = true; f.cause = PAR_CAUSES[Math.floor(Math.random() * PAR_CAUSES.length)];
       f.shown = ['001', '007', '013'][Math.floor(Math.random() * 3)];   // l'indirizzo sbagliato sul display
-      $('#dmx-chip').hidden = false; sfx.miss(); toast('PAR 4 non risponde più: la corsia CHASE è spenta.', 'bad'); paintPads();
+      $('#dmx-chip').textContent = 'PAR 4 non risponde: tocca per controllarlo'; $('#dmx-chip').hidden = false; sfx.miss(); toast('PAR 4 non risponde più: la corsia CHASE è spenta.', 'bad'); paintPads();
     }
     if (id === 'fase') {
       S.phaseDown = true; sfx.clack(); paintPads();
@@ -1130,10 +1131,17 @@
       corrente: ['spento', 'spenta', 'ferma']
     }[f.cause];
     $('#par-clue').innerHTML = `Display: <b>${look[0]}</b> · spia DMX: <b>${look[1]}</b> · ventola: <b>${look[2]}</b><br>`
-      + '<span style="opacity:.75">Patch: 001 · 004 · 007 · <b>PAR 4 = 010</b>. Spia DMX accesa = il segnale arriva.</span>';
+      + '<span style="opacity:.75">DMX: consolle → 1 → 2 → 3 → 4, i primi tre vanno. Patch <b>PAR 4 = 010</b>. Spia accesa = il segnale arriva.</span>';
     const acts = [['plug', 'Rinfila DMX'], ['power', 'Rinfila PowerCON'], ['a001', '001'], ['a010', '010'], ['a013', '013']];
-    $('#par-acts').innerHTML = acts.map(([k, l]) => `<button class="act" data-k="${k}">${l}</button>`).join('');
-    $('#par-acts').querySelectorAll('button').forEach(b => b.onclick = () => fixPar(b.dataset.k));
+    // o non ci vai tu: il capo per una birra, il ripiego sui tre PAR buoni, o dopo
+    const capo = S.beers > 0 && (S.favours || 0) < 2 && !f.capoAt;
+    const other = [['capo', '🍺 Ci va il capo', !capo], ['ripiego', 'Chase su 3 PAR', !!f.ripiego], ['dopo', 'Dopo', false]];
+    $('#par-acts').innerHTML = acts.map(([k, l]) => `<button class="act" data-k="${k}">${l}</button>`).join('')
+      + other.map(([k, l, off]) => `<button class="act alt" data-k="${k}"${off ? ' disabled' : ''}>${l}</button>`).join('');
+    $('#par-acts').querySelectorAll('button').forEach(b => b.onclick = () => {
+      const k = b.dataset.k;
+      if (k === 'capo') parCapo(); else if (k === 'ripiego') parRipiego(); else if (k === 'dopo') $('#pop-par').hidden = true; else fixPar(k);
+    });
   }
   function fixPar (k) {
     const f = S.faults.dmx;
@@ -1146,10 +1154,40 @@
       toast(k === 'plug' || k === 'power' ? 'Era già infilato bene: non cambia niente.' : 'Non cambia niente: guarda di nuovo display e spia.', 'bad');
       return;
     }
-    S.dmxDead = false; $('#dmx-chip').hidden = true; $('#pop-par').hidden = true; paintPads();
+    S.dmxDead = false; S.par4Off = false; $('#dmx-chip').hidden = true; $('#pop-par').hidden = true; paintPads();
     const quick = S.t - f.start <= 12;
     if (quick) S.repParts.push(['PAR 4 senza DMX sistemato in fretta', REPS.dmx]);
     endFault(f, quick, 'PAR 4 di nuovo in DMX: torna la corsia CHASE.');
+  }
+  /* le altre scelte davanti al PAR che non risponde: non tutti i guasti
+     vanno sistemati subito.
+     - il capo, per una birra (come per il Quadro, al massimo due favori):
+       ci mette CAPO_FIX_S secondi, tu resti alle luci, reputazione 0;
+     - il ripiego: la memoria chase gira sui tre PAR buoni, la corsia torna
+       subito ma il PAR 4 resta spento (si può sempre sistemare dopo);
+     - dopo: si chiude e si torna alle luci, la corsia resta grigia. */
+  function parCapo () {
+    const f = S.faults.dmx;
+    if (!f || f.state !== 'on' || f.capoAt || S.beers <= 0 || (S.favours || 0) >= 2) return;
+    S.beers--; S.favours = (S.favours || 0) + 1; f.capoAt = S.t + CAPO_FIX_S;
+    $('#pop-par').hidden = true;
+    toast(capName() + ' prende la birra e va al PAR 4. Tu resta alle luci.', 'ok');
+  }
+  function parRipiego () {
+    const f = S.faults.dmx;
+    if (!f || f.state !== 'on' || f.ripiego) return;
+    f.ripiego = true; S.dmxDead = false; S.par4Off = true;
+    $('#pop-par').hidden = true; paintPads();
+    $('#dmx-chip').textContent = 'PAR 4 spento (ripiego): tocca per sistemarlo';
+    toast('Ripiego: il chase gira sui tre PAR buoni. Il PAR 4 resta spento.', 'ok');
+  }
+  function stepPar () {
+    const f = S.faults.dmx;
+    if (!f || f.state !== 'on' || !f.capoAt || S.t < f.capoAt) return;
+    S.dmxDead = false; S.par4Off = false; $('#dmx-chip').hidden = true; $('#pop-par').hidden = true; paintPads();
+    f.byCapo = true;
+    S.repParts.push(['PAR 4 sistemato dal capo (una birra)', 0]);
+    endFault(f, false, capName() + ' ha sistemato il PAR 4: torna tutto il chase.');
   }
   $('#dmx-chip').onclick = openParPanel;
   parHit.addEventListener('click', openParPanel);
@@ -1357,6 +1395,7 @@
     const t = S.t - lag / 1000;
     S.fatigue = Math.min(100, S.fatigue + dt * 0.25);
     if (S.auto) autoFaults(t);
+    stepPar();
     if (S.auto || S.capo) autoplay(t);
     const [, GOOD] = windows(), dead = deadLanes();
 
@@ -1520,7 +1559,7 @@
     result = { type: 'dj', grad: R.grad, rep, beers, drunk: S.drunk, larsens: S.larsens, stars: R.stars, acc: Math.round(R.acc * 100),
       msg: 'Il bidello ha cacciato via i musicisti: la festa è rimasta senza musica.', maxCombo: R.maxCombo, score: R.score, favours: S.favours, fase: S.big ? S.big.who || 'gerry' : null,
       faseFast: S.repParts.some(p => p[1] === REPS.tuFast),
-      par: S.faults.dmx ? { ok: 'fast', late: 'ok' }[S.faults.dmx.state] || 'no' : null, parCause: S.faults.dmx ? S.faults.dmx.cause : null, rewinds: S.rewinds, notes };
+      par: S.faults.dmx ? (S.faults.dmx.byCapo ? 'capo' : { ok: 'fast', late: 'ok' }[S.faults.dmx.state] || (S.faults.dmx.ripiego ? 'ripiego' : 'no')) : null, parCause: S.faults.dmx ? S.faults.dmx.cause : null, parPaid: S.faults.dmx && S.faults.dmx.capoAt ? 1 : 0, rewinds: S.rewinds, notes };
     $('#outro-title').textContent = S.auto ? 'Così fa il capo.' : R.grad >= 75 ? 'La palestra è venuta giù!' : R.grad >= 45 ? 'Si è ballato.' : 'Il pubblico è andato al bar.';
     $('#r-stars').innerHTML = '★'.repeat(R.stars) + '<i>' + '★'.repeat(5 - R.stars) + '</i>';
     $('#r-grad').textContent = R.grad + '%';

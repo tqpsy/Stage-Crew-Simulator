@@ -49,7 +49,16 @@ pannello non la dice: mostra display, spia DMX e ventola del faro, più il
 patch sheet (PAR 4 = 010). Display spento e ventola ferma: manca la corrente
 (rinfila la PowerCON). Display acceso ma spia DMX spenta: il segnale non
 arriva (rinfila il DMX tra PAR 3 e PAR 4). Spia accesa ma indirizzo diverso
-dal patch: rimetti 010. Si può sistemare subito o in un momento calmo.
+dal patch: rimetti 010.
+
+Non tutti i guasti vanno sistemati subito: davanti al PAR si sceglie.
+
+| Scelta | Cosa succede | Valutazione |
+|---|---|---|
+| **Sistemi tu** (cavo, indirizzo, corrente) | la cura giusta riaccende il PAR; quella sbagliata costa un secondo e mezzo | in fretta = pieno, tardi = 60% |
+| **🍺 Ci va il capo** | una birra (massimo due favori, come per il Quadro): ci mette qualche secondo, tu resti alle luci | 60%, reputazione 0 |
+| **Chase su 3 PAR** (ripiego) | la memoria chase gira sui tre PAR buoni: la corsia torna subito, il PAR 4 resta spento; si può sempre sistemare dopo | 40% |
+| **Dopo** | si torna alle luci, la corsia resta grigia finché non lo sistemi | 0 se non lo sistemi mai |
 
 Le note normali vicine a una nota speciale spariscono: un pollice resta
 libero. Un fader non abbassato in tempo distorce finché non lo abbassi. La
