@@ -1,8 +1,8 @@
 /* La stanchezza del tecnico: un valore solo (0-100) nel salvataggio,
    mostrato sotto il tasto 🍺 in testata. Sale col tempo di gioco e con le
    azioni (pezzi posati, cavi collegati), scende con la pausa del tasto 🍺:
-   caffè (poco, tre a serata) o seduto sul case (molto, ma passano 5
-   minuti; non durante il cambio palco). Le birre non si bevono: sono il
+   caffè (poco, tre a serata) o seduto sul case (molto, ma l'orologio va
+   avanti di 20 minuti; non durante il cambio palco). Le birre non si bevono: sono il
    premio della crew. Da stanco ogni
    tanto il connettore scivola di mano: il cavo resta in mano e si riprova.
    Resta dopo la ricarica; una nuova partita riparte riposata.
@@ -72,8 +72,8 @@ const path = require('path');
   check(await ev(() => el('#pausa-coffee').disabled && /vuoto/.test(el('#pausa-coffee-n').textContent)), 'il thermos non finisce');
   const ms0 = await ev(() => gameState.stats.playMs);
   await p.click('#pausa-sit');
-  const sit = await ev(() => ({ f: fatigue(), ms: gameState.stats.playMs, open: pausaOpen }));
-  check(nearT(sit.f, 28) && sit.ms - ms0 >= 300000 && !sit.open, 'pausa seduto sbagliata: ' + JSON.stringify(sit));
+  const sit = await ev(() => ({ f: fatigue(), ms: gameState.stats.playMs, open: pausaOpen, pauseMs: FATIGUE.pauseMs }));
+  check(nearT(sit.f, 28) && sit.pauseMs > 0 && sit.ms - ms0 >= sit.pauseMs && !sit.open, 'pausa seduto sbagliata: ' + JSON.stringify(sit));
   await ev(() => { Profile.data.cambioDj = { at: Date.now(), done: false }; openPausa(); });
   check(await ev(() => el('#pausa-sit').disabled && /pubblico/.test(el('#pausa-sit-n').textContent)), 'ci si siede col pubblico che aspetta');
   await ev(() => { closePausa(); Profile.data.cambioDj = null; setFatigue(45); });

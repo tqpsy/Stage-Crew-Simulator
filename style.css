@@ -581,6 +581,11 @@
     padding:6px 10px; text-align:left;
   }
   #foglio .fg-caret{ margin-left:auto; color:var(--text-muted); }
+  /* l'orologio del montaggio, sotto il titolo: ambra a mezz'ora dal collaudo, rosso in ritardo */
+  #foglio .fg-head{ flex-wrap:wrap; row-gap:0; }
+  #foglio .fg-clock{ flex-basis:100%; font-size:13px; color:var(--text-muted); }
+  #foglio .fg-clock.tight{ color:var(--amber); }
+  #foglio .fg-clock.late{ color:#ff8f80; font-weight:700; }
   #foglio .fg-body{ padding:0 10px 8px; max-height:40vh; overflow-y:auto; }
   #foglio .fg-steps{ display:flex; align-items:center; gap:5px; margin-bottom:6px; font-size:11px; color:var(--text-muted); }
   #foglio .fg-step.now{ color:var(--amber); font-weight:700; }
@@ -944,6 +949,11 @@
 .fault-box span{flex:1;min-width:180px}
 .fault-box .fault-fix{background:#f2843d;color:#141519;border:0;border-radius:8px;padding:8px 12px;font-weight:700;cursor:pointer}
 .fault-box .fault-fix:disabled{opacity:.7;cursor:progress}
+.fault-box .fault-acts{display:flex;gap:8px;flex-wrap:wrap;flex:0 1 auto;min-width:0}
+.fault-box .fault-crew{background:none;color:var(--text-main);border:2px solid #f2843d;border-radius:8px;padding:6px 10px;font-weight:700;cursor:pointer}
+.fault-box .fault-crew:disabled{opacity:.5;cursor:default}
+.fault-box button small{display:block;font-weight:400;font-size:12px;opacity:.85}
+.fault-box .fault-crew-on{color:#f2c27a}
 .case-svg-wrap.tangled{filter:saturate(.4) blur(1px);opacity:.6;pointer-events:none}
 
 /* =====================================================================

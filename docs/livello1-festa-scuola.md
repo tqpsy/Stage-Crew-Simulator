@@ -124,8 +124,14 @@ corti) e in FOH va solo il mixer.
   PC → … → testa per l'audio, consolle → PAR per le luci, allaccio → Quadro
   → ciabatta per la corrente): in verde gli anelli buoni, in rosso il primo
   che non va, con il motivo (da posare, non collegato alla corrente, senza
-  corrente, spento, fase abbassata, non gli arriva la musica, non sente la
-  consolle). Si toglie dalle impostazioni (`traceChain`, `showTrace`);
+  corrente, spento, fase abbassata). Tra un pezzo e l'altro c'è il cavo
+  (PC → USB-C → scheda → jack → mixer → XLR → finale → Speakon → sub →
+  LINK → testa; consolle → DMX → PAR): se il pezzo è acceso ma il segnale
+  non gli arriva, il guasto è nel cavo e la catena dice tra quali pezzi si
+  ferma, senza dire se manca, è nella presa sbagliata o è il cavo
+  sbagliato. Il pezzo che aspetta il segnale è in ambra. Alla seconda prova
+  di un giro fallita di fila il gioco segue il segnale da solo dalla
+  sorgente. Si toglie dalle impostazioni (`traceChain`, `showTrace`, `traceLine`);
 - **segni di nastro** (punto 9): croci di nastro fluo per quadro, sub,
   frontali, tagli e asta, angoli per il tavolo regia. Solo livello 1, si
   tolgono dalle impostazioni (`TAPE_MARKS`);
@@ -235,8 +241,8 @@ errori. Si recupera con una pausa: caffè o seduti sul case.
   errori del montaggio rendono più difficili gli show, che ricevono la stanchezza.
 - **Scende** con la pausa: il tasto 🍺 apre «Una pausa?» con due scelte.
   ☕ **Caffè dal thermos**: −12 subito, 3 a serata (`Profile.data.coffees`).
-  🪑 **Seduto sul case**: −35, ma il tempo di gioco va avanti di 5 minuti
-  (e si vede nella valutazione); non si può col pubblico che aspetta il
+  🪑 **Seduto sul case**: −35, ma l'orologio del montaggio va avanti di 20
+  minuti (vedi *L'orologio del montaggio*); non si può col pubblico che aspetta il
   cambio palco o con Gerry che controlla i cavi. Le birre non si bevono al
   montaggio: la finestra ricorda a cosa servono.
 - **Effetti nel montaggio (livello 1, leggeri)**: sopra 70 ogni tanto il
@@ -833,3 +839,35 @@ reazione: tempo limite × (1 − stanchezza / 250), quindi fino a −40% a
 stanchezza 100; ogni controllo e riparazione dura (1 + stanchezza / 100)
 volte di più. Nel gioco la stanchezza di partenza è quella del tecnico;
 aperta da sola la pagina parte da 30. Il prossimo imprevisto arriva solo dopo il tempo limite del guasto.
+
+## L'orologio del montaggio
+
+Il montaggio ha un'ora vera: parte alle 16:30 (più il ritardo dello scarico)
+e il collaudo è alle 19:30. Si legge sotto il titolo del foglio (ambra a
+mezz'ora dal collaudo, rosso in ritardo). Corre col tempo di gioco, 7 secondi
+per minuto (`CLOCK.msPerMin`), cioè circa 21 minuti reali per tre ore di
+montaggio; un reset del palco non lo riporta indietro.
+
+Le scelte che lo usano:
+- **Pezzo difettoso dallo scarico** (finale, sub, testa, Quadro, PC, PAR):
+  «Controlla e sistema» da te costa 10 minuti sull'orologio; «Lascialo a
+  Macio» lo rende pronto 25 minuti dopo mentre tu fai altro (uno alla volta,
+  il giro non passa finché non ha finito). Lo stativo e i bauli restano come
+  prima.
+- **Pausa**: il caffè non costa tempo ma sono tre; seduto sul case costa 20
+  minuti (e intanto Macio va avanti).
+- **Collaudo in anticipo**: ogni 2 minuti d'anticipo 1 punto di stanchezza
+  in meno prima della posa dei cavi (massimo 35). In ritardo nessun
+  riposo, e nella valutazione la qualità del montaggio perde 1 punto ogni 3
+  minuti di ritardo (massimo 25). L'ora del collaudo è nel salvataggio
+  (`collaudo.clock`) e nei record della serata; le partite di prima non ce
+  l'hanno e non perdono niente.
+
+## Il guasto del microfono: le strade
+
+Come per il PAR del DJ, il guasto del microfono nel discorso del preside
+si può gestire in più modi: cercarlo lungo la catena (in fretta vale
+applausi e reputazione), mandare il capo per una 🍺 (ci mette circa 14 s,
+niente applausi ma niente figuraccia, tu resti al mixer a tenere il
+pubblico con la musica del PC; nella valutazione vale come un guasto
+risolto tardi), o lasciarlo: allo scadere arriva Gerry (−5 reputazione).
