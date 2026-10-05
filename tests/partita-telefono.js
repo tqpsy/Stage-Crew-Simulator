@@ -204,7 +204,9 @@ const OUT = process.env.SHOTS || null;
       else if (await p.evaluate(() => el('#pick-menu').classList.contains('show'))) { problems.push('cavo ' + id + ' non nel menu Quale? nemmeno ingrandendo'); await p.evaluate(() => el('#pick-menu').click()); }
       await p.waitForTimeout(120);
     }
-    if (await p.evaluate(() => window.__scene.selectedEdgeId) !== id) {
+    // un cavo per terra si prende in mano (posa), quelli sul tavolo si selezionano
+    const took = await p.evaluate(() => { const s = window.__scene, got = s.lay ? s.lay.id : s.selectedEdgeId; s.endLay(true); return got; });
+    if (took !== id) {
       problems.push('cavo ' + id + ' non selezionabile col dito');
       await p.evaluate(() => { closeRearPanel(); });
     }
