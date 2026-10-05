@@ -5134,6 +5134,7 @@ function rearPanelSvg (id) {
 }
 
 // prese, tasti e interruttori di un pannello disegnato dentro root
+const SWITCH_CLOSE_MS = 350;
 function bindRearSvg (root, id) {
   const comp = gameState.placed[id];
   root.querySelectorAll('.rp-port').forEach(node => {
@@ -5143,7 +5144,13 @@ function bindRearSvg (root, id) {
     node.addEventListener('click', () => onParButton(comp, node.dataset.act));
   });
   root.querySelectorAll('.rp-switch').forEach(node => {
-    node.addEventListener('click', () => toggleDevicePower(id));
+    node.addEventListener('click', () => {
+      const was = comp.on;
+      toggleDevicePower(id);
+      // acceso dal suo pannello: si torna alla scena, dove si vede partire
+      // (spento resta aperto: di solito si sta cercando un guasto)
+      if (!was && comp.on && rearPanelId === id) setTimeout(() => { if (rearPanelId === id) closeRearPanel(); }, SWITCH_CLOSE_MS);
+    });
   });
   root.querySelectorAll('.rp-brk').forEach(node => {
     node.addEventListener('click', () => node.dataset.brk === 'rcd_test' ? testRcd() : toggleProtection(node.dataset.brk));
@@ -5221,6 +5228,16 @@ function showCableChoice (compId, portId) {
   const box = el('#rear-detail');
   const items = cablesFor(p.signal);
   const held = gameState.selectedCable;
+  // un solo cavo che entra qui (Speakon, DMX, jack...): niente da scegliere,
+  // si prende quello e il primo capo è già infilato (la barra in alto dice
+  // quale cavo è in mano)
+  const caseOf = c => Object.keys(CABLE_CASES).find(k => CABLE_CASES[k].items.some(i => i.cable === c));
+  if (items.length === 1 && !faultsLeft('baule:' + caseOf(items[0].cable))) {
+    SFX.pick();
+    selectCable(items[0].cable);
+    onRearPortClick(compId, portId);
+    return;
+  }
   box.innerHTML = '<div class="rear-detail-head">' + escapeHtml(portLabel(compId, portId)) + ' · ' + escapeHtml(SIGNAL_LABEL[p.signal])
     + (held ? ' — il cavo ' + escapeHtml(cableName(held)) + ' non entra qui. Prendi' : ' — prendi') + ' un cavo dal baule:</div>'
     + '<div class="rear-picks">' + items.map(it => '<button class="rear-pick" data-cable="' + it.cable + '"><span class="tape-fluo" style="background:' + tapeColorOf(it.cable) + '">'
@@ -5468,6 +5485,19 @@ function chainNext (edge) {
   scene.highlightPending(edge.b, thru.id, true);
   scene.redrawEdges();
 }
+/* DALLA STESSA PRESA — un cavo partito da una presa del Quadro (che
+   prende più cavi): il prossimo dello stesso tipo riparte da lì, sulla
+   stessa fase, già in mano. Si tocca il prossimo dispositivo in verde; per
+   un'altra fase si sceglie la presa nel Quadro. Un pezzo da posare o un
+   cavo preso dal baule lo fanno cadere. */
+function fanOutNext (from) {
+  const scene = window.__scene, p = getPortDef(from.componentId, from.portId);
+  if (!scene || !p || !p.multi || !cableItem(gameState.selectedCable)) return;
+  gameState.pendingPort = { componentId: from.componentId, portId: from.portId, auto: true };
+  if (!scene.compatibleTargets().length) { gameState.pendingPort = null; return; }
+  scene.highlightPending(from.componentId, from.portId, true);
+  scene.redrawEdges();
+}
 const CIABATTE_FINITE = 'Ciabatte finite: non ne servono altre. Le prese del Quadro accettano più cavi, e con gli adattatori del baule (CEE / Schuko, CEE / PowerCON) ci colleghi qualunque spina.';
 function onRearPortClick (compId, portId, viaTap) {
   const scene = window.__scene;
@@ -5562,6 +5592,7 @@ function onRearPortClick (compId, portId, viaTap) {
       const edge = gameState.edges[gameState.edges.length - 1];
       scene.startLay(edge.id);
       chainNext(edge);
+      if (!gameState.pendingPort && pending) fanOutNext(pending);
     }
     return;
   }
@@ -6048,7 +6079,7 @@ function disarmPiece () {
 
 function armPiece (type, pieceEl) {
   if (gameState.selectedPieceType === type) { disarmPiece(); showToast('Selezione annullata.'); return; }
-  if (window.__scene) { window.__scene.clearMoveSelection(); window.__scene.clearEdgeSelection(); window.__scene.cancelPending(); }
+  if (window.__scene) { window.__scene.endLay(true); window.__scene.clearMoveSelection(); window.__scene.clearEdgeSelection(); window.__scene.cancelPending(); }
   gameState.selectedPieceType = type;
   document.querySelectorAll('.piece').forEach(p => p.classList.toggle('armed', p === pieceEl));
   closeDrawerAfterTap();
@@ -6386,6 +6417,9 @@ const HISTORY_MAX = 200;
 // pixel di schermo per unità di mondo a cui si avvicina la scena quando un
 // tocco cade in mezzo a più dispositivi (su telefono a zoom base è ≈ 0,3)
 const CROWD_SCALE = 0.6;
+// nel mezzo di un dispositivo il tocco è suo: entro 6 px di schermo dal
+// centro, o entro il 60% del suo mezzo lato più corto se è più grande
+const PICK_CORE_PX = 6, PICK_CORE_PART = 0.6, PICK_CORE_MARGIN = 6;
 // "Quale?": cose entro PICK_TIE_PX (pixel di schermo) dalla più vicina sono
 // ambigue; al massimo PICK_MAX voci; "Ingrandisci qui" moltiplica lo zoom
 const PICK_TIE_PX = 8, PICK_ON_CABLE_PX = 5, PICK_MAX = 8, PICK_ZOOM_STEP = 2, PICK_ZOOM_MIN = 2.2;
@@ -7036,8 +7070,12 @@ class StageScene extends Phaser.Scene {
       this.floorDown = null;
       if (moved) return;
 
-      // cavo in mano: un tocco sul pavimento lo lascia così com'è
-      if (this.lay) { this.endLay(true); return; }
+      // cavo in mano: un tocco sul pavimento lo lascia così com'è; accanto
+      // a un dispositivo si va anche avanti con quello (come toccandolo)
+      if (this.lay) {
+        this.endLay(true);
+        if (!this.devicesNear(pointer.worldX, pointer.worldY, TOUCH_SLOP_PX).length) return;
+      }
       // un pezzo armato si posa; altrimenti un tocco su un cavo lo seleziona,
       // e un tocco sul pavimento vuoto chiude montaggio e cavo in attesa
       if (gameState.selectedPieceType) { this.placeArmedPieceAt(pointer.worldX, pointer.worldY); return; }
@@ -8344,13 +8382,10 @@ class StageScene extends Phaser.Scene {
     body.on('pointerdown', (pointer, lx, ly, event) => {
       if (event && event.stopPropagation) event.stopPropagation();
       if (pointer.rightButtonDown()) return;
-      // cavo in mano: i dispositivi non rispondono, si prende solo il cavo
+      // cavo in mano: un tocco sul cavo ne prende il tratto; un tocco sul
+      // dispositivo lascia giù il cavo così com'è e va avanti (senza Fatto)
       if (this.lay) {
-        if (this.layPointerDown(pointer)) return;
-        // cavo della catena pronto: toccare il prossimo in verde lascia
-        // giù questo e collega quello
-        const tid = this.pickDeviceAt(pointer.worldX, pointer.worldY, 0) || id;
-        if (!gameState.pendingPort || !(this.targetIds || []).includes(tid)) { this.layLocked(); return; }
+        if (this.layPointerDown(pointer, this.pickDeviceAt(pointer.worldX, pointer.worldY, 0) || id)) return;
         this.endLay(true);
       }
       // un pezzo "armato" dalla barra si posa anche toccando sopra un dispositivo
@@ -8383,7 +8418,7 @@ class StageScene extends Phaser.Scene {
       const badgeIcon = this.add.text(badgeX, badgeY, '🔍', { fontSize: '11px' }).setOrigin(0.5);
       badgeBg.on('pointerdown', (pointer, lx, ly, event) => {
         if (event && event.stopPropagation) event.stopPropagation();
-        if (this.lay) { if (!this.layPointerDown(pointer)) this.layLocked(); return; }
+        if (this.lay) { if (this.layPointerDown(pointer)) return; this.endLay(true); }
         renderQuadroModal();
         el('#quadro-modal').classList.add('show');
       });
@@ -8897,9 +8932,9 @@ class StageScene extends Phaser.Scene {
 
   /* ---------------- posa del cavo al montaggio ----------------
      Appena collegato (o toccandolo), il cavo resta "in mano": gli altri si
-     spengono, i dispositivi non rispondono ai tocchi, e i suoi tratti si
-     trascinano col dito scattando sulla griglia. Fatto (o un tocco sul
-     pavimento) lo lascia così; il percorso si salva sul cavo (e.route). */
+     spengono e i suoi tratti si trascinano col dito scattando sulla griglia.
+     Fatto, un tocco sul pavimento o sul prossimo dispositivo lo lascia così;
+     il percorso si salva sul cavo (e.route). */
   edgeEnds (e) {
     const P = gameState.placed, a = posaBase(P[e.a]), b = posaBase(P[e.b]);
     if (!a || !b || a.id === b.id) return null;
@@ -8996,7 +9031,7 @@ class StageScene extends Phaser.Scene {
 
   // un tocco su un pallino lo prende; tenuto fermo un attimo diventa rosso
   // e, lasciato lì, la piega si toglie (se il dito si muove, si trascina)
-  layPointerDown (pointer) {
+  layPointerDown (pointer, devId) {
     const L = this.lay;
     if (!L || (pointer.downElement && pointer.downElement !== this.game.canvas)) return false;
     const e = gameState.edges.find(x => x.id === L.id);
@@ -9009,7 +9044,7 @@ class StageScene extends Phaser.Scene {
       if (d < bestD) { bestD = d; best = i; }
     });
     if (best < 0) return false;
-    const drag = L.drag = { k: best, x: pointer.x, y: pointer.y, moved: false, armed: false, timer: null };
+    const drag = L.drag = { k: best, x: pointer.x, y: pointer.y, moved: false, armed: false, timer: null, dev: devId || null };
     drag.timer = setTimeout(() => {
       if (this.lay !== L || L.drag !== drag || drag.moved) return;
       drag.armed = true;
@@ -9215,11 +9250,6 @@ class StageScene extends Phaser.Scene {
     this.deleteSelectedEdge();
   }
 
-  // un tocco su un dispositivo mentre si stende un cavo: non succede niente
-  layLocked () {
-    showToast('Stai sistemando un cavo: tocca Fatto (o il pavimento) prima di passare ad altro.');
-  }
-
   /* ---------------- livelli: filtro di visibilità per tipo di cavo ---------------- */
   applyLayerVisibility () {
     this.selectedEdgeId = null;
@@ -9289,7 +9319,7 @@ class StageScene extends Phaser.Scene {
       const cy = c.y + (v.def.body.oy || 0) * Math.abs(c.scaleY);
       const dx = Math.max(0, Math.abs(wx - c.x) - hw), dy = Math.max(0, Math.abs(wy - cy) - hh);
       const edge = Math.hypot(dx, dy) * k;
-      if (edge <= slopPx) out.push({ id, edge, center: Math.hypot(wx - c.x, wy - cy) * k });
+      if (edge <= slopPx) out.push({ id, edge, center: Math.hypot(wx - c.x, wy - cy) * k, half: Math.min(hw, hh) * k });
     });
     // il tavolo è grande e sta sotto la regia: se il tocco prende anche un
     // apparecchio, vince l'apparecchio
@@ -9321,11 +9351,23 @@ class StageScene extends Phaser.Scene {
      cavo che passa lì. Si prende la cosa più vicina; se altre sono quasi
      alla stessa distanza, "Quale?" le elenca tutte (cavi compresi). */
   pickNear (wx, wy, pressedId) {
-    const devs = this.devicesNear(wx, wy, TOUCH_SLOP_PX);
+    const only = this.onlyTargetNear(wx, wy);
+    if (only) { this.clearEdgeSelection(); tapDevice(only); return true; }
+    let devs = this.devicesNear(wx, wy, TOUCH_SLOP_PX);
+    // tra dispositivi vale la regola di openPanelAt: col dito sopra il
+    // disegno di uno (il mixer sul tavolo), quello sotto (il finale nel
+    // rack) conta solo se il dito è quasi al suo centro
+    const d0 = devs[0];
+    devs = devs.filter(x => x === d0 || (d0.edge > 0 ? x.edge - d0.edge < 6 : (x.edge === 0 && x.center < d0.center * 1.35 + 4)));
     let cables = this.edgesNear(wx, wy, TOUCH_SLOP_PX);
     // tocco sul disegno di un dispositivo: vince lui, a meno che il dito
-    // non sia proprio sopra un cavo che ci passa davanti
-    if (pressedId) cables = cables.filter(c => c.px < PICK_ON_CABLE_PX);
+    // non sia proprio sopra un cavo che ci passa davanti. Nel mezzo del
+    // disegno vince lui anche sui cavi che si possono prendere più in là,
+    // lungo la strada (se no "Quale?", come prima)
+    if (pressedId) {
+      const core = d0 && this.inCore(d0);
+      cables = cables.filter(c => c.px < PICK_ON_CABLE_PX && !(core && this.edgeFreeElsewhere(c.edge)));
+    }
     if (!devs.length && !cables.length) return pressedId ? this.openPanelAt(wx, wy, pressedId) : false;
     if (!cables.length) { this.clearEdgeSelection(); return this.openPanelAt(wx, wy, pressedId || null); }
     const items = [...devs.map(d => ({ id: d.id, d: d.edge })), ...cables.map(c => ({ edge: c.edge, at: c.at, d: c.px }))]
@@ -9340,6 +9382,39 @@ class StageScene extends Phaser.Scene {
     if (this.selectedEdgeId === best.edge.id) this.clearEdgeSelection();
     else this.selectEdge(best.edge);
     return true;
+  }
+
+  // il dito è nel mezzo del disegno di un dispositivo (vedi devicesNear)?
+  // (extra: px di margine in più)
+  inCore (d, extra) { return d.edge === 0 && d.center < Math.max(PICK_CORE_PX, d.half * PICK_CORE_PART) + (extra || 0); }
+  // il cavo ha un punto ben fuori dal mezzo dei dispositivi (dove si prende
+  // col dito, che non cade mai preciso)?
+  edgeFreeElsewhere (e) {
+    const pts = e._pts || [];
+    for (let i = 0; i < pts.length - 1; i++) for (let t = 0.1; t < 1; t += 0.1) {
+      const x = pts[i].x + (pts[i + 1].x - pts[i].x) * t, y = pts[i].y + (pts[i + 1].y - pts[i].y) * t;
+      if (!this.devicesNear(x, y, 0).some(d => this.inCore(d, PICK_CORE_MARGIN))) return true;
+    }
+    return false;
+  }
+
+  /* cavo in mano e dispositivi fitti (la regia, il palco): se lì sotto
+     l'altro capo entra in uno solo (quello in verde), il tocco va a lui
+     senza "Quale?": negli altri non c'è una presa adatta libera. Si chiede
+     ancora se il dito è proprio sopra un altro dispositivo e non sopra
+     quello in verde. */
+  onlyTargetNear (wx, wy) {
+    const pend = gameState.pendingPort;
+    if (!pend || !gameState.selectedCable) return null;
+    const c = this.devicesNear(wx, wy, TOUCH_SLOP_PX + 8);
+    if (!c.length) return null;
+    const targets = new Set(this.compatibleTargets());
+    // stativo e asta contano per il faro o il microfono che reggono
+    const real = id => { const comp = gameState.placed[id]; const held = comp && (comp.type === 'stativo' || comp.type === 'asta') && !isFaulty(id) && mountedOn(comp); return held ? held.id : id; };
+    const hits = c.filter(x => targets.has(real(x.id)));
+    if (!hits.length || hits.some(x => real(x.id) !== real(hits[0].id))) return null;
+    if (c[0].edge === 0 && hits[0].edge > 0) return null;
+    return real(hits[0].id);
   }
 
   /* "Quale?": dispositivi ({id}) e cavi ({edge, at}) a portata del dito. I
@@ -9471,7 +9546,14 @@ class StageScene extends Phaser.Scene {
   }
 
   onScenePointerUp (pointer) {
-    if (this.lay && this.lay.drag) { this.layDragEnd(); return; }
+    if (this.lay && this.lay.drag) {
+      // tocco breve su una piega che cade sopra un dispositivo (di solito
+      // vicino alla sua presa): si voleva il dispositivo, il cavo resta così
+      const d = this.lay.drag, dev = !d.moved && !d.armed && d.dev;
+      this.layDragEnd();
+      if (dev && gameState.placed[dev]) { this.endLay(true); this.pickNear(pointer.worldX, pointer.worldY, dev); }
+      return;
+    }
     const pr = this.press;
     if (!pr) return;
     this.press = null;

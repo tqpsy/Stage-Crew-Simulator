@@ -863,6 +863,32 @@ Le scelte che lo usano:
   (`collaudo.clock`) e nei record della serata; le partite di prima non ce
   l'hanno e non perdono niente.
 
+## Montaggio con meno tocchi (fatto)
+
+5 ottobre 2026: il montaggio minimo sul telefono (`tests/partita-telefono.js`)
+passa da 233 a 183 tocchi senza togliere scelte: si sono tolti solo i tocchi
+che non decidono niente.
+- **Niente Fatto tra un cavo e l'altro**: col cavo appena collegato in mano,
+  un tocco sul prossimo dispositivo lo lascia giù com'è e va avanti. Le
+  pieghe si trascinano come prima; un tocco breve su una piega che cade
+  sopra un dispositivo vale come tocco sul dispositivo.
+- **Meno «Quale?»**: col cavo in mano, se lì sotto l'altro capo entra in un
+  solo dispositivo (quello in verde) il tocco va a lui. Col dito nel mezzo
+  di un dispositivo vince lui sui cavi che si possono prendere più in là
+  (`inCore`, `edgeFreeElsewhere`; un cavo che sta tutto lì resta nel
+  «Quale?», così ogni cavo si prende ancora col dito); il mixer sul tavolo non
+  si confonde più col finale nel rack sotto.
+- **Acceso, il pannello si chiude da solo** (spento resta aperto: di solito
+  si cerca un guasto). L'ordine di accensione lo decidi sempre tu.
+- **Dalla stessa presa del Quadro**: dopo un cavo partito da una presa del
+  Quadro il prossimo dello stesso tipo riparte da lì (stessa fase), come la
+  catena dal THRU. Per un'altra fase si sceglie la presa nel Quadro; un pezzo
+  da posare o un cavo preso dal baule lo fanno cadere.
+- **Un solo cavo adatto**: toccando una presa libera senza il cavo giusto,
+  se nel baule ne entra uno solo (Speakon, DMX, jack, XLR) si prende quello
+  senza chiedere. Prendendo i cavi così (`PRESA_PRIMA=1`) il montaggio
+  minimo è di 161 tocchi.
+
 ## Il guasto del microfono: le strade
 
 Come per il PAR del DJ, il guasto del microfono nel discorso del preside
