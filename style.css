@@ -1118,3 +1118,95 @@ body.rfx #run-btn.ready{ animation:none; }
   #toolbar.open #run-bar{ display:block; }
   .zoom-controls, .layers-panel{ bottom:calc(var(--bar-h) + 16px); }
 }
+
+/* ---------- DIAGNOSTICA: patch sheet, tester cavi, VU meter (diagnostica.js) ---------- */
+@media (min-width:1000px){ #patch-btn{ padding:0 14px 0 12px; } }
+.dg-mute{ color:var(--text-muted); }
+.dg-empty{ padding:14px 16px; color:var(--text-muted); font-size:13px; }
+.ph-chip{ display:inline-flex; align-items:center; gap:4px; white-space:nowrap; font-weight:600; }
+.ph-chip i{ width:10px; height:10px; border-radius:50%; box-shadow:0 0 0 1.5px #c9ccd3; }
+.modal-box.patch-box{ width:min(760px, 96vw); }
+.patch-body{ padding:6px 12px 4px; overflow-x:auto; }
+.patch-table{ width:100%; border-collapse:collapse; font-size:13px; }
+.patch-table thead th{ text-align:left; font:600 10.5px var(--font-display); letter-spacing:.08em; text-transform:uppercase; color:var(--text-muted);
+  padding:6px 8px; border-bottom:1px solid var(--hairline); }
+.patch-table .pt-group th{ text-align:left; font:700 12px var(--font-display); letter-spacing:.06em; text-transform:uppercase; color:var(--amber);
+  padding:10px 8px 4px; }
+.patch-table td{ padding:6px 8px; border-bottom:1px dashed var(--hairline); vertical-align:top; }
+.pt-row{ cursor:pointer; }
+.pt-row:hover td{ background:var(--bg-panel-raised); }
+.pt-row.bad{ box-shadow:inset 3px 0 0 var(--red); }
+.pt-dev{ font-weight:700; white-space:nowrap; }
+.pt-route{ font-size:12px; line-height:1.4; }
+.pt-route div{ white-space:nowrap; }
+.pt-bad{ color:var(--red); font-weight:600; }
+.pt-state{ white-space:nowrap; font-weight:600; }
+.pt-state.ok{ color:var(--green); } .pt-state.warn{ color:var(--amber); } .pt-state.bad{ color:var(--red); } .pt-state.mute{ color:var(--text-muted); font-weight:400; }
+.patch-foot{ display:flex; flex-wrap:wrap; gap:6px 14px; align-items:center; padding:10px 8px 6px; font-size:12.5px; }
+.patch-hint, .tester-hint{ padding:8px 16px 14px; }
+@media (max-width:699px){
+  .patch-table{ font-size:12px; }
+  .patch-table td{ padding:5px 5px; }
+  .pt-route div{ white-space:normal; }
+  .pt-state{ white-space:normal; }
+}
+/* tester: corpo giallo con il display, sotto le linee da provare */
+.modal-box.tester-box{ width:min(560px, 96vw); }
+.tester-body{ padding:12px 14px 4px; display:flex; flex-direction:column; gap:12px; }
+.tester-dev{ background:linear-gradient(180deg,#f2c53d,#d9a91f); border:2px solid #8a6d12; border-radius:16px; padding:12px; box-shadow:0 6px 16px rgba(0,0,0,.45); }
+.tester-lcd{ min-height:96px; background:#9fb39a; color:#1d2a1b; border-radius:6px; padding:9px 11px; font:500 13px ui-monospace,Menlo,Consolas,monospace;
+  box-shadow:inset 0 2px 6px rgba(0,0,0,.35); display:flex; flex-direction:column; gap:3px; }
+.lcd-idle{ margin:auto; font-weight:700; letter-spacing:.04em; opacity:.75; text-align:center; }
+.lcd-title{ font-weight:700; margin-bottom:4px; line-height:1.35; }
+.lcd-title .tape-fluo{ font-size:12px; padding:0 6px; }
+.lcd-row{ display:grid; grid-template-columns:104px 1fr; gap:8px; line-height:1.3; }
+.lcd-row b{ font-weight:700; }
+.lcd-row.ok span::before{ content:''; }
+.lcd-row.warn span{ color:#6b4a00; font-weight:700; }
+.lcd-row.bad span{ color:#8b1a12; font-weight:700; }
+.tester-lines{ display:flex; flex-direction:column; gap:4px; max-height:38vh; overflow-y:auto; }
+.tl-group{ font:700 11px var(--font-display); letter-spacing:.08em; text-transform:uppercase; color:var(--amber); margin-top:6px; }
+.tl-line{ display:grid; grid-template-columns:12px 1fr auto; gap:8px; align-items:center; text-align:left; padding:7px 10px; border-radius:8px;
+  background:var(--bg-panel-raised); border:1px solid var(--hairline); color:var(--text-main); font:500 12.5px var(--font-ui); cursor:pointer; }
+.tl-line i{ width:12px; height:12px; border-radius:3px; }
+.tl-line small{ color:var(--text-muted); font-size:11px; white-space:nowrap; }
+.tl-line.sel{ border-color:var(--amber); box-shadow:0 0 0 2px rgba(242,165,65,.3); }
+@media (max-width:699px){ .lcd-row{ grid-template-columns:84px 1fr; } .tester-lcd{ font-size:12px; } }
+/* VU meter nel pannello posteriore di mixer e scheda */
+.rear-vu{ margin:8px 16px 0; padding:8px 10px; border:1px solid var(--hairline); border-radius:8px; background:#111215; display:flex; flex-wrap:wrap; gap:8px 18px; }
+.rear-vu[hidden]{ display:none; }
+.vu-head{ font:700 11px var(--font-display); letter-spacing:.08em; text-transform:uppercase; color:var(--text-main); margin-bottom:6px; }
+.vu-head .dg-mute{ text-transform:none; letter-spacing:0; font:500 11.5px var(--font-ui); }
+.vu-row{ display:flex; gap:6px; align-items:flex-end; }
+.vu-ch{ display:flex; flex-direction:column; align-items:center; gap:2px; width:52px; }
+.vu-ch.main{ width:46px; }
+.vu-ch:not(.main) + .vu-ch.main{ margin-left:8px; }
+.vu-ch b{ font:700 10.5px var(--font-display); letter-spacing:.04em; }
+.vu-ch small{ font-size:9.5px; color:var(--text-muted); text-align:center; line-height:1.15; max-width:100%; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+.vu-bar{ display:flex; flex-direction:column; gap:2px; width:12px; padding:3px; background:#08090b; border-radius:3px; border:1px solid #2a2c32; }
+.vu-bar i{ display:block; height:4px; border-radius:1px; background:#1f2a20; }
+.vu-bar i.y{ background:#2e2a17; } .vu-bar i.r{ background:#2e1715; }
+.vu-bar i.on{ background:var(--green); box-shadow:0 0 4px rgba(73,176,106,.7); }
+.vu-bar i.y.on{ background:#e9c23f; box-shadow:0 0 4px rgba(233,194,63,.7); }
+.vu-bar i.r.on{ background:var(--red); box-shadow:0 0 4px rgba(224,80,63,.7); }
+.vu-row.off{ opacity:.55; }
+@media (max-width:699px){ .vu-ch{ width:38px; } .vu-ch.main{ width:38px; } .vu-ch small{ display:none; } .vu-row{ gap:3px; } }
+/* telefono in verticale: nell'HUD non c'è posto, il pulsante del patch sheet
+   sta accanto ad annulla/ripeti */
+@media (max-width:699px) and (min-height:501px){
+  .hud #patch-btn{ position:fixed; left:110px; bottom:calc(var(--bar-h) + 64px); min-width:42px; height:42px; width:42px; }
+  body.drawer-open .hud #patch-btn{ display:none; }
+}
+/* telefono: ogni riga del patch sheet diventa una scheda (nome, fase, stato; sotto i canali) */
+@media (max-width:699px){
+  .patch-table thead{ display:none; }
+  .patch-table, .patch-table tbody{ display:block; }
+  .patch-table tr.pt-group{ display:block; }
+  .patch-table tr.pt-row{ display:grid; grid-template-columns:auto auto 1fr; grid-template-areas:"dev phase state" "route route route"; column-gap:10px;
+    border-bottom:1px dashed var(--hairline); padding:6px 4px; }
+  .patch-table tr.pt-row td{ border:0; padding:0; }
+  .pt-dev{ grid-area:dev; } .pt-phase{ grid-area:phase; } .pt-state{ grid-area:state; text-align:right; }
+  .pt-route{ grid-area:route; padding-top:3px !important; color:var(--text-muted); }
+  .pt-route .pt-bad{ color:var(--red); }
+  .pt-row.bad{ padding-left:8px !important; }
+}
