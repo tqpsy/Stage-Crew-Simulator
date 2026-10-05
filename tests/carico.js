@@ -177,7 +177,8 @@ const SOL = { corrente: [0, 0, 4, 2], segnale: [4, 0, 2, 4], sub1: [0, 2, 3, 3],
     await ev(() => openSchedule(false));
     const row = await p.textContent('#schedule-list li:last-child');
     check(/Fatto/.test(row) && /★★★★★/.test(row), 'la scaletta non racconta il carico: ' + row);
-    check((await p.textContent('#schedule-go')) === 'Torna al palco', 'la scaletta riporta al carico già fatto');
+    // a serata finita la scaletta porta alla valutazione, non al carico già fatto
+    check((await p.textContent('#schedule-go')) === 'Com\'è andata la serata', 'la scaletta riporta al carico già fatto');
     await ev(() => closeSchedule());
     await ev(() => openCarico());
     check(!(await p.$('#carico-frame')), 'il carico si rifà');

@@ -474,10 +474,11 @@
       ok: () => S.micOk && voiceOut() > 0.3,
       onSolved () {
         const secs = Math.round(S.t - this.at);
+        S.faultFix = secs <= FAULT_TIME[S.faultCause].bonus ? 'fast' : 'ok';
         if (secs <= FAULT_TIME[S.faultCause].bonus) { S.grad = clamp(S.grad + 6); S.repDelta += 3; sfx.applause(85); toast('Applausi per il tecnico!', 'ok'); S.notes.push('Guasto risolto in ' + secs + ' s: il pubblico ha applaudito il tecnico (+3 reputazione).'); }
         else S.notes.push('Guasto risolto in ' + secs + ' s.');
       },
-      fail () { endFault(); S.micCh = S.wired; S.micOk = true; S.mute[S.wired] = false; $('#mute-' + S.wired).setAttribute('aria-pressed', 'false'); S.fad[S.wired] = Math.max(S.fad[S.wired], 0.55); S.repDelta -= 5; S.notes.push(GERRY_FACE + 'Il guasto l\'ha trovato Gerry, il bidello, al posto tuo (−5 reputazione).'); S.gerryUntil = S.t + 5; hit(-10, 'Gerry, il bidello, ha trovato il guasto prima di te. Figuraccia.'); } }),
+      fail () { endFault(); S.faultFix = 'gerry'; S.micCh = S.wired; S.micOk = true; S.mute[S.wired] = false; $('#mute-' + S.wired).setAttribute('aria-pressed', 'false'); S.fad[S.wired] = Math.max(S.fad[S.wired], 0.55); S.repDelta -= 5; S.notes.push(GERRY_FACE + 'Il guasto l\'ha trovato Gerry, il bidello, al posto tuo (−5 reputazione).'); S.gerryUntil = S.t + 5; hit(-10, 'Gerry, il bidello, ha trovato il guasto prima di te. Figuraccia.'); } }),
     sigla: () => ({ win: 5, dur: 8, target: 'preside', icon: '🎺', text: 'Vuole la sua sigla musicale', hint: 'alza il PC, poi riabbassalo', tab: 'mixer',
       start () { S.jingle = true; }, end () { S.jingle = false; }, hold: 0.5,
       ok: () => chOut(PC) >= 0.55, fail: () => hit(-6, 'Niente sigla: il preside è offeso.') }),
@@ -1022,7 +1023,7 @@
     notes.push(...S.notes);
     const rep = 5 + Math.round((S.grad - 60) / 10) - S.larsens * 5 + S.repDelta;
     result = { type: 'preside', grad: Math.round(S.grad), rep, beers, drunk: S.drunk, fatigue: Math.round(S.fatigue), larsens: S.larsens, pops: S.pops,
-      fault: S.events.some(e => e.id === 'cavo' && e.started), notes: notes.map(n => n.replace(/<[^>]+>/g, '').trim()).filter(Boolean) };
+      fault: S.events.some(e => e.id === 'cavo' && e.started), faultFix: S.faultFix || null, notes: notes.map(n => n.replace(/<[^>]+>/g, '').trim()).filter(Boolean) };
     $('#outro-title').textContent = S.grad >= 70 ? 'Il miglior tecnico della storia!' : S.grad >= 40 ? 'Applausi tiepidi.' : 'Siete licenziati!';
     $('#r-grad').textContent = Math.round(S.grad) + '%';
     $('#r-beer').textContent = '+' + beers;
