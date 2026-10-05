@@ -6,10 +6,12 @@
    copre la scena.
 
    Uso:  node tests/partita-telefono.js [larghezza] [altezza]   (default 390 844)
+         PRESA_PRIMA=1 prende i cavi toccando la presa nel pannello, non dal baule
    Richiede Playwright. Senza rete, PHASER_PATH=/percorso/phaser.min.js. */
 const { chromium } = require(process.env.PLAYWRIGHT_PATH || 'playwright');
 const path = require('path');
 const OUT = process.env.SHOTS || null;
+const PRESA_PRIMA = !!process.env.PRESA_PRIMA;
 (async () => {
   const b = await chromium.launch();
   const ctx = await b.newContext({ viewport: { width: +(process.argv[2] || 390), height: +(process.argv[3] || 844) }, deviceScaleFactor: 2, hasTouch: true, isMobile: true });
@@ -20,16 +22,18 @@ const OUT = process.env.SHOTS || null;
   await p.goto('file://' + path.join(__dirname, '..', 'index.html'));
   await p.waitForFunction(() => window.__scene, null, { timeout: 20000 });
   await p.waitForTimeout(300);
+  let K = 'avvio'; const by = {}; const seq = []; let step = '';
+  const cnt = () => { taps++; by[K] = (by[K] || 0) + 1; seq.push(step + ':' + K); };
   let taps = 0, menus = 0, zoomResets = 0, lays = 0, quicks = 0, chained = 0; const log = []; const problems = [];
   // menù iniziale: nome del tecnico, un service tra i tre e via
   await p.locator('#player-input').fill('Tecnico Telefono');
-  taps++; await p.locator('#service-offers .offer-card').first().tap();
-  taps++; await p.locator('#new-start').tap(); await p.waitForTimeout(150);
+  cnt(); await p.locator('#service-offers .offer-card').first().tap();
+  cnt(); await p.locator('#new-start').tap(); await p.waitForTimeout(150);
   // la scaletta della serata, poi al lavoro
-  taps++; await p.locator('#schedule-go').tap(); await p.waitForTimeout(150);
+  cnt(); await p.locator('#schedule-go').tap(); await p.waitForTimeout(150);
   // lo scarico (minigioco a parte, tests/scarico.js): qui si salta
   await p.waitForSelector('#scarico-frame');
-  taps++; await p.frameLocator('#scarico-frame').locator('#btn-skip').tap();
+  cnt(); await p.frameLocator('#scarico-frame').locator('#btn-skip').tap();
   await p.waitForFunction(() => !document.querySelector('#scarico-frame'));
   const toast = () => p.evaluate(() => el('#toast').textContent);
   const shot = n => OUT ? p.screenshot({ path: path.join(OUT, 'telefono-' + n + '.png') }) : null;
@@ -47,7 +51,7 @@ const OUT = process.env.SHOTS || null;
     let pt = await w2p0(wx, wy);
     // con un pannello aperto il pulsante è coperto: il tocco va comunque al pannello
     if (pt.out && !(await p.evaluate(() => document.querySelector('.modal-overlay.show')))) {
-      zoomResets++; taps++; await p.locator('#zoom-reset').tap();
+      zoomResets++; const k0 = K; K = 'zoom'; cnt(); K = k0; await p.locator('#zoom-reset').tap();
       // worldView si aggiorna solo al disegno: si aspettano due fotogrammi
       const f = await p.evaluate(() => window.__scene.game.loop.frame);
       await p.waitForFunction(f => window.__scene.game.loop.frame > f + 1, f);
@@ -55,13 +59,15 @@ const OUT = process.env.SHOTS || null;
     }
     return pt;
   };
-  const tapAt = async pt => { taps++; await p.touchscreen.tap(pt.x, pt.y); await p.waitForTimeout(120); };
-  const tapSel = async sel => { taps++; await p.locator(sel).first().tap(); await p.waitForTimeout(120); };
+  const tapAt = async pt => { cnt(); await p.touchscreen.tap(pt.x, pt.y); await p.waitForTimeout(120); };
+  const tapSel = async sel => { cnt(); await p.locator(sel).first().tap(); await p.waitForTimeout(120); };
   // la scheda si tocca se non è quella attiva o se il suo cassetto è chiuso
-  const tab = async t => { if (!(await p.evaluate(t => document.querySelector('.tab-btn[data-tab="' + t + '"]').classList.contains('active') && el('#toolbar').classList.contains('open'), t))) await tapSel('.tab-btn[data-tab="' + t + '"]'); };
+  const tab = async t => { const k0 = K; K = 'scheda'; await tab0(t); K = k0; };
+  const tab0 = async t => { if (!(await p.evaluate(t => document.querySelector('.tab-btn[data-tab="' + t + '"]').classList.contains('active') && el('#toolbar').classList.contains('open'), t))) await tapSel('.tab-btn[data-tab="' + t + '"]'); };
   const cell = async (gx, gy) => { const w = await p.evaluate(([a, b]) => gridToScreen(a + .5, b + .5), [gx, gy]); return w2p(w.x, w.y); };
   const place = async (tabName, type, cells) => {
-    await tab(tabName); await tapSel('.piece[data-type="' + type + '"]');
+    step = 'posa ' + type;
+    K = 'scheda'; await tab(tabName); K = 'pezzo'; await tapSel('.piece[data-type="' + type + '"]'); K = 'posa';
     for (const c of cells) {
       const before = await p.evaluate(t => gameState.stock[t], type);
       await tapAt(await cell(...c));
@@ -80,49 +86,62 @@ const OUT = process.env.SHOTS || null;
     await tapAt(dp);
     await p.waitForTimeout(80);
     const menu = await p.evaluate(() => { const m = document.getElementById('pick-menu'); return m && m.classList.contains('show') ? [...m.querySelectorAll('.pick-opt')].map(b => b.dataset.id) : null; });
-    if (menu) { menus++; if (!menu.includes(id)) problems.push('menu Quale? senza ' + id + ': ' + menu); await tapSel('#pick-menu .pick-opt[data-id="' + (menu.includes(id) ? id : menu[0]) + '"]'); }
+    if (menu) seq.push(step + ':MENU ' + await p.evaluate(() => [...document.querySelectorAll('#pick-menu .pick-opt')].map(b => b.dataset.id || (b.dataset.edge ? 'cavo' + b.dataset.edge : 'zoom')).join(',')));
+    if (menu) { menus++; const k0 = K; K = 'quale@' + K; if (!menu.includes(id)) problems.push('menu Quale? senza ' + id + ': ' + menu); await tapSel('#pick-menu .pick-opt[data-id="' + (menu.includes(id) ? id : menu[0]) + '"]'); K = k0; }
     const opened = await p.evaluate(() => el('#rear-modal').classList.contains('show') && rearPanelId);
     if (quick && !opened && await p.evaluate(() => gameState.edges.length) === n0 + 1) return 'quick';
     if (opened !== id) { problems.push('tocco su ' + id + ' ha aperto ' + opened + ' pre=' + JSON.stringify(pre) + ' pt=' + JSON.stringify(dp) + ' el=' + hit + ' dopo=' + JSON.stringify(await p.evaluate(() => ({ input: window.__scene.input.enabled, asm: window.__scene.assemblyId, toast: el('#toast').textContent, pend: gameState.pendingPort })))); if (opened) await p.evaluate(() => closeRearPanel()); await p.evaluate(id => openRearPanel(id), id); }
   };
-  const port = async (id, pid) => { await openDev(id); await tapSel('#rear-svg .rp-port[data-port="' + pid + '"]'); };
+  const port = async (id, pid) => { K = 'apri-da'; await openDev(id); K = 'presa-da'; await tapSel('#rear-svg .rp-port[data-port="' + pid + '"]'); };
   const take = async cable => {
     if (await p.evaluate(c => gameState.selectedCable === c, cable)) return;
     await tab('cavi');
     const cs = await p.evaluate(c => Object.keys(CABLE_CASES).find(k => CABLE_CASES[k].items.some(i => i.cable === c)), cable);
-    await tapSel('.case-btn[data-case="' + cs + '"]'); await tapSel('#case-svg .cc-coil[data-cable="' + cable + '"]');
+    K = 'baule'; await tapSel('.case-btn[data-case="' + cs + '"]'); K = 'matassa'; await tapSel('#case-svg .cc-coil[data-cable="' + cable + '"]');
   };
   const layShown = () => p.evaluate(() => el('#lay-bar').classList.contains('show'));
   const wire = async (cable, a, ap, bb, bp) => {
+    step = (cable || '-') + ' ' + a + '.' + ap + '>' + bb + '.' + bp;
     const n = await p.evaluate(() => gameState.edges.length);
-    if (cable) await take(cable);
+    // PRESA_PRIMA=1: il cavo non si prende dal baule ma dal pannello, toccando
+    // la presa (che propone i cavi che ci entrano); il baule solo se il cavo
+    // in mano entra lì ma è un altro
+    const wrongFits = () => p.evaluate(([c, a, ap]) => { const s = gameState.selectedCable, d = getPortDef(a, ap);
+      return !!s && s !== c && !!d && CABLE_TYPES[s].endpoints.includes(d.signal); }, [cable, a, ap]);
+    if (cable && (!PRESA_PRIMA || await wrongFits())) await take(cable);
     // catena: il cavo è già pronto nel THRU del dispositivo di prima
-    const ready = await p.evaluate(([a, ap]) => { const q = gameState.pendingPort; return !!q && q.componentId === a && q.portId === ap; }, [a, ap]);
+    const ready = await p.evaluate(([a, ap, c]) => { const q = gameState.pendingPort; return !!q && q.componentId === a && q.portId === ap && (!c || gameState.selectedCable === c); }, [a, ap, cable]);
     if (ready) chained++;
     else {
-      if (await layShown()) { lays++; await tapSel('#lay-done'); }
+      // il cavo di prima, se è ancora in mano, si lascia giù toccando il
+      // prossimo dispositivo (niente Fatto)
+      if (await layShown()) lays++;
       await port(a, ap);
+      if (PRESA_PRIMA && cable && await p.evaluate(c => gameState.selectedCable !== c, cable)) { K = 'matassa'; await tapSel('#rear-detail .rear-pick[data-cable="' + cable + '"]'); }
     }
-    if (await openDev(bb, true) === 'quick') quicks++;
-    else await tapSel('#rear-svg .rp-port[data-port="' + bp + '"]');
+    K = 'apri-a'; if (await openDev(bb, true) === 'quick') quicks++;
+    else { K = 'presa-a'; await tapSel('#rear-svg .rp-port[data-port="' + bp + '"]'); }
     const n2 = await p.evaluate(() => gameState.edges.length);
     const last = await p.evaluate(() => { const e = gameState.edges[gameState.edges.length - 1]; return e && [e.a, e.aPort, e.b, e.bPort].join('.'); });
     if (n2 === n + 1 && !last.includes(bb + '.' + bp)) problems.push('collegato alla presa sbagliata: ' + last + ' invece di ' + bb + '.' + bp);
-    // il cavo collegato resta in mano da stendere: qui va bene com'è (con
-    // la catena pronta si tocca direttamente il prossimo)
-    if (await layShown() && !(await p.evaluate(() => gameState.pendingPort && gameState.pendingPort.auto))) { lays++; await tapSel('#lay-done'); }
+    // il cavo collegato resta in mano da stendere: qui va bene com'è, si
+    // passa al prossimo senza Fatto
     if (await p.evaluate(() => el('#rear-modal').classList.contains('show'))) { problems.push('pannello rimasto aperto dopo ' + a + '->' + bb); await p.evaluate(() => closeRearPanel()); }
     if (n2 !== n + 1) { problems.push('cavo ' + cable + ' ' + a + '.' + ap + ' -> ' + bb + '.' + bp + ' NON collegato: ' + await toast()); await shot('fail-' + a + '-' + bb); }
   };
   // prova del giro in corso (il pulsante in basso) e controllo del giro dopo
   const prova = async (giro) => {
-    await tapSel('#run-btn');
+    step = 'prova';
+    K = 'prova'; await tapSel('#run-btn');
     const now = await p.evaluate(() => gameState.giro);
     log.push('prova giro ' + giro + ': ' + await toast());
     if (now !== giro + 1) { problems.push('prova del giro ' + giro + ' non superata: ' + await toast()); await p.evaluate(g => { gameState.giro = g; updateGiroUI(); }, giro + 1); }
   };
-  const brk = async keys => { await openDev('quadro_1'); for (const k of keys) await tapSel('#rear-svg .rp-brk[data-brk="' + k + '"]'); await tapSel('#rear-close'); };
-  const switchOn = async ids => { for (const id of ids) { await openDev(id); await tapSel('#rear-svg .rp-switch'); await tapSel('#rear-close'); await p.waitForTimeout(750); } };
+  const brk = async keys => { step = 'quadro ' + keys; K = 'quadro-apri'; await openDev('quadro_1'); K = 'interruttore'; for (const k of keys) await tapSel('#rear-svg .rp-brk[data-brk="' + k + '"]'); K = 'chiudi'; await tapSel('#rear-close'); };
+  const switchOn = async ids => { for (const id of ids) { step = 'accendi ' + id; K = 'accendi-apri'; await openDev(id); K = 'accendi'; await tapSel('#rear-svg .rp-switch');
+    // acceso, il pannello si chiude da solo
+    await p.waitForFunction(() => !el('#rear-modal').classList.contains('show'), null, { timeout: 2000 }).catch(() => {});
+    if (await p.evaluate(() => el('#rear-modal').classList.contains('show'))) { problems.push(id + ' acceso: il pannello non si chiude da solo'); K = 'chiudi'; await tapSel('#rear-close'); } await p.waitForTimeout(750); } };
   // all'inizio si possono aprire solo Corrente e Cavi
   if (!(await p.evaluate(() => document.querySelector('.tab-btn[data-tab="audio"]').classList.contains('locked')))) problems.push('scheda Audio aperta prima del giro audio');
   // ---------- giro 1: corrente
@@ -139,7 +158,8 @@ const OUT = process.env.SHOTS || null;
   // si posano toccando il tavolo
   await place('strutture', 'tavolo', [[7, 5]]);
   const onTable = async (tabName, type) => {
-    await tab(tabName); await tapSel('.piece[data-type="' + type + '"]');
+    step = 'tavolo ' + type;
+    await tab(tabName); K = 'pezzo'; await tapSel('.piece[data-type="' + type + '"]'); K = 'posa';
     const before = await p.evaluate(t => gameState.stock[t], type);
     await tapAt(await devPt('tavolo_1'));
     if (await p.evaluate(t => gameState.stock[t], type) !== before - 1) problems.push(type + ' sul tavolo non posato: ' + await toast());
@@ -187,10 +207,16 @@ const OUT = process.env.SHOTS || null;
   // regia e backstage fitti: ogni cavo si deve poter prendere col dito, al
   // primo tocco o dal menu "Quale?" (anche quelli che passano accanto ai
   // dispositivi)
+  const montaggio = taps;
+  if (process.env.DUMP) require('fs').writeFileSync(process.env.DUMP, await p.evaluate(() => JSON.stringify(localStorage)));
+  K = 'verifica-cavi';
   const edgeIds = await p.evaluate(() => gameState.edges.map(e => e.id));
   let viaMenu = 0, zooms = 0;
   for (const id of edgeIds) {
-    await p.evaluate(() => { window.__scene.clearEdgeSelection(); window.__scene.resetView(); });
+    // l'avvicinamento del "Quale?" di prima (o la vista che torna dalla posa)
+    // non deve finire dopo la vista intera
+    await p.evaluate(() => { const s = window.__scene, c = s.cameras.main; c.zoomEffect.reset(); c.panEffect.reset(); if (s.camTween) s.camTween.stop(); s.clearEdgeSelection(); s.resetView(); });
+    { const f = await p.evaluate(() => window.__scene.game.loop.frame); await p.waitForFunction(f => window.__scene.game.loop.frame > f + 1, f); }
     // il punto del cavo più "libero" (dove un giocatore lo toccherebbe)
     const pt = await p.evaluate(id => { const s = window.__scene, e = gameState.edges.find(x => x.id === id);
       let best = null;
@@ -201,7 +227,9 @@ const OUT = process.env.SHOTS || null;
         const hit = document.elementFromPoint(px, py);
         const near = s.edgesNear(x, y, TOUCH_SLOP_PX);
         if (!(hit && hit.tagName === 'CANVAS' && near.some(c => c.edge.id === id && c.px < 3))) continue;
-        const n = near.length + s.devicesNear(x, y, TOUCH_SLOP_PX).length;
+        // nel mezzo di un dispositivo vince lui (inCore, col margine di
+        // edgeFreeElsewhere): il cavo si prende più in là, se c'è posto
+        const n = near.length + s.devicesNear(x, y, TOUCH_SLOP_PX).length + (s.devicesNear(x, y, 0).some(d => s.inCore(d, PICK_CORE_MARGIN)) ? 100 : 0);
         if (!best || n < best.n) best = { n, wx: x, wy: y };
       }
       return best; }, id);
@@ -222,11 +250,14 @@ const OUT = process.env.SHOTS || null;
     // un cavo per terra si prende in mano (posa), quelli sul tavolo si selezionano
     const took = await p.evaluate(() => { const s = window.__scene, got = s.lay ? s.lay.id : s.selectedEdgeId; s.endLay(true); return got; });
     if (took !== id) {
-      problems.push('cavo ' + id + ' non selezionabile col dito');
+      problems.push('cavo ' + id + ' non selezionabile col dito: ' + JSON.stringify(await p.evaluate(([id, pt]) => { const s = window.__scene, e = gameState.edges.find(x => x.id === id);
+        return { pt, signal: e.signal, a: e.a, b: e.b, devs: s.devicesNear(pt.wx, pt.wy, TOUCH_SLOP_PX).map(d => d.id + ':' + d.edge.toFixed(1) + '/' + d.center.toFixed(1)),
+          free: s.edgeFreeElsewhere && s.edgeFreeElsewhere(e), panel: rearPanelId, pend: gameState.pendingPort, sel: s.selectedEdgeId, toast: el('#toast').textContent }; }, [id, pt])));
       await p.evaluate(() => { closeRearPanel(); });
     }
   }
   await p.evaluate(() => { window.__scene.clearEdgeSelection(); window.__scene.resetView(); });
+  K = 'collaudo';
   log.push('cavi presi col dito: ' + edgeIds.length + ' (dal Quale?: ' + viaMenu + ', ingrandendo: ' + zooms + ')');
   await tapSel('#run-btn');
   log.push('TEST: ' + await toast() + ' | ' + await p.evaluate(() => el('#circuit-text').textContent));
@@ -238,7 +269,10 @@ const OUT = process.env.SHOTS || null;
   const rep = await p.evaluate(() => reputation());
   log.push('reputazione: ' + rep);
   if (rep !== 5 || !/Reputazione \+5\./.test(await toast())) problems.push('reputazione del collaudo sbagliata: ' + rep);
-  log.push('TOTALE tocchi: ' + taps + ' (menu Quale?: ' + menus + ', ritorni alla vista intera: ' + zoomResets + ', cavi stesi con Fatto: ' + lays + ', collegati al volo: ' + quicks + ', in catena: ' + chained + ')');
+  log.push('MONTAGGIO tocchi (fino al collaudo, senza la verifica dei cavi): ' + montaggio);
+  log.push('TOCCHI PER TIPO: ' + JSON.stringify(by));
+  if (process.env.SEQ) require('fs').writeFileSync(process.env.SEQ, seq.join('\n'));
+  log.push('TOTALE tocchi: ' + taps + ' (menu Quale?: ' + menus + ', ritorni alla vista intera: ' + zoomResets + ', cavi lasciati giù toccando il prossimo: ' + lays + ', collegati al volo: ' + quicks + ', in catena: ' + chained + ')');
   await shot('fine');
   console.log(log.join('\n')); console.log('PROBLEMI:', JSON.stringify(problems, null, 1)); console.log('ERRORI JS:', errs);
   await b.close();

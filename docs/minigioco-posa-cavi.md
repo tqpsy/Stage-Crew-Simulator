@@ -140,7 +140,9 @@ Dal 3 ottobre 2026 i cavi si stendono già al montaggio (`main.js`,
   un cavo vero. Senza posa il gioco sceglie il percorso più corto a L o a Z
   che gira intorno alla pedana.
 - Appena collegato (o toccandolo) il cavo **resta in mano**: gli altri si
-  spengono e **i dispositivi non rispondono ai tocchi**. Le pieghe sono
+  spengono. Dal 5 ottobre 2026 un tocco su un dispositivo lascia giù il
+  cavo così com'è e va avanti con quel dispositivo (prima serviva Fatto:
+  era un tocco in più a ogni cavo). Le pieghe sono
   pallini che si **trascinano** col dito (o col mouse): scattano sui centri
   delle celle da 50 cm e si mettono in riga con le vicine. Le pieghe non
   nascono mai da sole (dopo la prova di Luca del 4 ottobre): si aggiungono
