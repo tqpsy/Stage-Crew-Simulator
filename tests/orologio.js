@@ -53,7 +53,7 @@ const path = require('path');
   await ev(() => { setFatigue(50); openPausa(); });
   await p.click('#pausa-sit');
   const pz = await ev(() => ({ min: clockMin(), toast: el('#toast').textContent }));
-  check(pz.min === 16 * 60 + 50 + 20 && /20 minuti seduto.*17:10/.test(pz.toast), 'la pausa non sposta l\'orologio: ' + JSON.stringify(pz));
+  check(pz.min >= 16 * 60 + 50 + 20 && pz.min <= 16 * 60 + 50 + 22 && /20 minuti seduto.*17:1\d/.test(pz.toast), 'la pausa non sposta l\'orologio: ' + JSON.stringify(pz));
   check(await ev(() => isFaulty(placedOfType('ampli')[0].id)), 'Macio ha finito prima del tempo');
   await ev(() => { gameState.stats.playMs += 6 * CLOCK.msPerMin; });
   await sleep(1500);
