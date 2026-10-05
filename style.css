@@ -703,6 +703,8 @@
   #piece-info b{ font-family:var(--font-display); font-size:16px; letter-spacing:.03em; color:var(--amber); }
   #piece-info p{ margin:4px 0; color:var(--text-main); }
   #piece-info small{ color:var(--text-muted); }
+  #piece-info .pi-lvl{ float:right; font-size:10px; font-weight:700; letter-spacing:.08em; color:var(--text-muted); border:1px solid var(--hairline); border-radius:4px; padding:1px 5px; }
+  #piece-info .pi-other{ display:block; margin-top:6px; padding:0; border:0; background:none; font:inherit; font-size:12px; font-weight:700; color:var(--amber); cursor:pointer; }
 
   /* ---------- MENÙ DI GIOCO ---------- */
   #menu-modal{ z-index:120; }
@@ -840,6 +842,18 @@
   }
   /* ---------- CAMBIO PALCO: la carta del personaggio che arriva ---------- */
   #gerry-modal{ z-index:110; }
+  /* la pausa contro la stanchezza */
+  #pausa-modal{ z-index:110; }
+  .modal-box.pausa-box{ width:min(420px, 94vw); }
+  .pausa-fat{ display:flex; flex-direction:column; gap:6px; margin:12px 16px 4px; font-size:13px; }
+  .pausa-fat .fat{ display:block; height:6px; border-radius:3px; background:var(--hairline); overflow:hidden; }
+  .pausa-fat .fat i{ display:block; height:100%; background:var(--amber); }
+  .pausa-fat .fat i.high{ background:var(--red); }
+  .pausa-opts{ display:flex; flex-direction:column; gap:8px; padding:8px 16px; }
+  .pausa-opts .menu-btn{ display:flex; flex-direction:column; align-items:flex-start; text-align:left; }
+  .pausa-opts .menu-btn small{ font-size:12px; font-weight:400; opacity:.75; }
+  .pausa-opts .menu-btn:disabled{ opacity:.5; cursor:default; }
+  .pausa-beer{ margin:4px 16px 16px; font-size:12px; color:var(--text-muted); line-height:1.4; }
   /* la valutazione della serata */
   #serata-modal{ z-index:110; }
   .modal-box.serata-box{ width:min(520px, 94vw); }

@@ -36,14 +36,14 @@ const path = require('path');
     return serataReport();
   });
   check(perfect.stars === 5 && perfect.title === 'CREW EXCELLENT', 'serata perfetta senza 5 stelle: ' + JSON.stringify(perfect));
-  check(perfect.rows.length === 8, 'le voci della valutazione non sono 8');
+  check(perfect.rows.length === 9, 'le voci della valutazione non sono 9');
 
   // il carico chiude la serata e apre la valutazione
   await ev(() => { caricoOpen = true; finishCarico({ stars: 4, rep: 3, depart: '23:10', damaged: [], taken: [] }); });
   await p.waitForFunction(() => serataOpen, null, { timeout: 4000 }).catch(() => {});
   const st = await ev(() => ({ open: serataOpen, title: el('.serata-title') && el('.serata-title').textContent, rows: document.querySelectorAll('#serata-rows li').length,
     rec: (Profile.data.records['serata-1'] || []).length, saved: !!Profile.data.serata, record: el('#serata-record').textContent }));
-  check(st.open && st.rows === 8 && st.title === 'CREW EXCELLENT', 'la valutazione non si apre dopo il carico: ' + JSON.stringify(st));
+  check(st.open && st.rows === 9 && st.title === 'CREW EXCELLENT', 'la valutazione non si apre dopo il carico: ' + JSON.stringify(st));
   check(st.rec === 1 && st.saved && /Prima serata/.test(st.record), 'la valutazione non entra nei record: ' + JSON.stringify(st));
   // riaperta (dalla scaletta o dal foglio): niente secondo record
   await ev(() => { closeSerata(); openSerata(); });

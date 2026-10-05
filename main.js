@@ -1714,7 +1714,7 @@ const SAVE_FILE_KIND = 'stage-crew-simulator';   // firma del file esportato
 const SHARED_KEYS = ['settings', 'records', 'usedServices'];
 
 function defaultProfile () {
-  return { v: SAVE_VERSION, player: '', service: '', serviceInfo: null, usedServices: [], settings: { volume: 0.8, reducedFx: false, skipShow: false, skipScarico: false, testMusic: true, bossTips: true, tapeMarks: true, traceSignal: true }, tutorSeen: {}, logo: null, level: null, scarico: null, cavi: null, preside: null, cambioDj: null, dj: null, karaoke: null, carico: null, collaudo: null, serata: null, beers: 0, assistant: defaultAssistant(), fatigue: 0, records: {}, reputation: { total: 0, earned: {}, log: [] }, levelsSeen: 1, savedAt: 0 };
+  return { v: SAVE_VERSION, player: '', service: '', serviceInfo: null, usedServices: [], settings: { volume: 0.8, reducedFx: false, skipShow: false, skipScarico: false, testMusic: true, bossTips: true, tapeMarks: true, traceSignal: true }, tutorSeen: {}, logo: null, level: null, scarico: null, cavi: null, preside: null, cambioDj: null, dj: null, karaoke: null, carico: null, collaudo: null, serata: null, beers: 0, coffees: 0, assistant: defaultAssistant(), fatigue: 0, records: {}, reputation: { total: 0, earned: {}, log: [] }, levelsSeen: 1, savedAt: 0 };
 }
 // l'assistente della serata (dal livello 2, vedi ASSISTANTS): chi è e
 // quanti favori ha già fatto nel set in corso. Le partite salvate prima
@@ -2560,16 +2560,20 @@ function assistantFavor (fault) {
    (Profile.data.fatigue) e mostrato sotto il tasto 🍺 in testata:
    - sale col tempo di gioco (FATIGUE.perMinute) e con le azioni: ogni
      pezzo posato e ogni cavo collegato (FATIGUE.perAction);
-   - scende bevendo una birra dal tasto 🍺 (FATIGUE.beer). La birra bevuta
-     non conta più nel punteggio finale: è una scelta, per questo il tasto
-     chiede conferma;
+   - scende con una pausa dal tasto 🍺 (openPausa): ☕ caffè dal thermos,
+     poco ma subito (FATIGUE.coffee, FATIGUE.coffees a serata); 🪑 pausa
+     seduto sul case, molto ma costa tempo (FATIGUE.pause, FATIGUE.pauseMs
+     sul tempo di gioco) e non si fa col pubblico che aspetta il cambio
+     palco. Al montaggio le birre non si bevono: sono il premio della crew.
+     Negli show restano come prima (una contro la stanchezza, o un favore
+     del capo) e quelle rimaste si bevono con Macio a fine serata (valutazione);
    - effetti leggeri, il livello 1 perdona: da FATIGUE.slipFrom in su ogni
      tanto il connettore scivola di mano (il cavo resta in mano, si
      riprova). Nel discorso del preside fader più tremolanti e tempo limite
      del guasto più corto: li calcola preside.html dalla stanchezza che
      riceve, e alla fine la restituisce.
    Nuova partita = tecnico riposato. */
-const FATIGUE = { max: 100, perMinute: 1, perAction: 0.25, scare: 4, failedTest: 2, beer: 30, slipFrom: 70, slipMax: 0.15, confirmMs: 4000 };
+const FATIGUE = { max: 100, perMinute: 1, perAction: 0.25, scare: 4, failedTest: 2, coffee: 12, coffees: 3, pause: 35, pauseMs: 5 * 60000, slipFrom: 70, slipMax: 0.15 };
 const fatigue = () => Profile.data.fatigue || 0;
 // quiet: senza salvare subito (il tempo che passa ogni secondo si salva con
 // la prossima azione o all'uscita dalla pagina)
@@ -2593,25 +2597,57 @@ function paintBeerBtn () {
   const fill = el('#fat-fill');
   fill.style.width = fatigue() + '%';
   fill.classList.toggle('high', fatigue() >= FATIGUE.slipFrom);
-  b.title = 'Stanchezza ' + Math.round(fatigue()) + '% (' + fatigueWord() + ') · birre in tasca: ' + (Profile.data.beers || 0)
-    + '. Tocca per bere: stanchezza −' + FATIGUE.beer + ', una birra in meno nel punteggio.';
+  b.title = 'Stanchezza ' + Math.round(fatigue()) + '% (' + fatigueWord() + ') · birre della crew: ' + (Profile.data.beers || 0)
+    + '. Tocca per una pausa: caffè o seduto sul case.';
+  if (pausaOpen) paintPausa();
 }
-let beerAskAt = 0;
-function drinkBeer () {
-  if (!gameActive || minigameOpen()) return;
-  const f = Math.round(fatigue());
-  if (!Profile.data.beers) { showToast('Stanchezza ' + f + '% (' + fatigueWord() + '). Niente birre in tasca: si guadagnano lavorando bene.'); return; }
-  if (f < 1) { showToast('Sei riposato: tieni la birra per dopo.'); return; }
-  if (Date.now() - beerAskAt > FATIGUE.confirmMs) {
-    beerAskAt = Date.now();
-    showToast('Stanchezza ' + f + '% (' + fatigueWord() + '). Tocca ancora 🍺 per bere: −' + FATIGUE.beer + ' di stanchezza, ma una birra in meno nel punteggio finale.');
-    return;
-  }
-  beerAskAt = 0;
-  Profile.data.beers--;
-  setFatigue(fatigue() - FATIGUE.beer);
-  applySettings();
-  showToast('Glu glu. Stanchezza giù: ' + Math.round(fatigue()) + '%.', 'ok');
+// la pausa: caffè (poco, subito, pochi a serata) o seduto sul case (molto,
+// ma passano 5 minuti). La birra resta il premio della crew
+let pausaOpen = false;
+const coffeesLeft = () => Math.max(0, FATIGUE.coffees - (Profile.data.coffees || 0));
+function pausaBlock () {
+  if (cambioDjOn()) return 'Il pubblico aspetta il cambio palco: niente pausa adesso.';
+  if (gerryOpen) return 'Gerry sta controllando i cavi.';
+  return '';
+}
+function paintPausa () {
+  const f = Math.round(fatigue()), c = coffeesLeft(), block = pausaBlock(), beers = Profile.data.beers || 0;
+  el('#pausa-fat').textContent = 'Stanchezza ' + f + '% · ' + fatigueWord() + (f > FATIGUE.slipFrom ? ': i connettori scivolano di mano' : '');
+  el('#pausa-fill').style.width = f + '%';
+  el('#pausa-fill').classList.toggle('high', f >= FATIGUE.slipFrom);
+  const cb = el('#pausa-coffee'), sb = el('#pausa-sit');
+  cb.disabled = !c || f < 1;
+  el('#pausa-coffee-n').textContent = c ? '−' + FATIGUE.coffee + ' subito · ne restano ' + c : 'thermos vuoto';
+  sb.disabled = !!block || f < 1;
+  el('#pausa-sit-n').textContent = block || '−' + FATIGUE.pause + ' · passano ' + Math.round(FATIGUE.pauseMs / 60000) + ' minuti';
+  el('#pausa-beer').textContent = '🍺 ' + beers + (beers === 1 ? ' birra' : ' birre') + ' della crew: al montaggio non si bevono. Negli show una ti rimette in sesto o vale un favore del capo; quelle che restano si bevono con Macio a fine serata.';
+}
+function openPausa () {
+  if (!gameActive || minigameOpen() || panelOpen()) return;
+  pausaOpen = true;
+  paintPausa();
+  el('#pausa-modal').classList.add('show');
+  setSceneInput(false);
+}
+function closePausa () {
+  if (!pausaOpen) return;
+  pausaOpen = false;
+  el('#pausa-modal').classList.remove('show');
+  setTimeout(() => { if (!sceneCovered()) setSceneInput(true); }, 0);
+}
+function drinkCoffee () {
+  if (!pausaOpen || !coffeesLeft() || fatigue() < 1) return;
+  Profile.data.coffees = (Profile.data.coffees || 0) + 1;
+  setFatigue(fatigue() - FATIGUE.coffee);
+  closePausa();
+  showToast('☕ Caffè dal thermos. Stanchezza ' + Math.round(fatigue()) + '%.', 'ok');
+}
+function takePause () {
+  if (!pausaOpen || pausaBlock() || fatigue() < 1) return;
+  gameState.stats.playMs += FATIGUE.pauseMs;   // il tempo passa anche per la valutazione
+  setFatigue(fatigue() - FATIGUE.pause);
+  closePausa();
+  showToast('🪑 Cinque minuti seduto sul case. Stanchezza ' + Math.round(fatigue()) + '%, ma l\'orologio è andato avanti.', 'ok');
 }
 
 // tempo di gioco: conta solo con la pagina in vista e il menù chiuso. Nel
@@ -2690,6 +2726,7 @@ function showMenuPage (page, keep) {
     el('#set-skipscarico').checked = !!settings().skipScarico;
     el('#set-testmusic').checked = settings().testMusic !== false;
     el('#set-bosstips').checked = settings().bossTips !== false;
+    el('#set-proinfo').checked = proInfo();
     el('#set-tapemarks').checked = settings().tapeMarks !== false;
     el('#set-trace').checked = settings().traceSignal !== false;
     el('#set-player').value = Profile.data.player;
@@ -2765,6 +2802,7 @@ function startNewGame (player, offer, offers) {
   if (el('#karaoke-frame')) el('#karaoke-frame').remove();
   karaokeOpen = false;
   Profile.data.beers = 0;
+  Profile.data.coffees = 0;
   Profile.data.assistant = defaultAssistant();   // il nuovo tecnico non ha ancora nessuno
   Profile.data.fatigue = 0;      // la serata comincia: tecnico riposato
   Profile.data.tutorSeen = {};   // il nuovo tecnico non ha ancora sentito i consigli del capo
@@ -3435,7 +3473,7 @@ let replaySlot = null;           // slot della serata finita che si rigioca
 const presideDone = () => !!Profile.data.preside;
 const minigameOpen = () => scaricoOpen || gerryOpen || presideOpen || djOpen || karaokeOpen || caricoOpen;
 // una finestra del gioco sopra la scena (menù, scaletta, pannello posteriore, baule)
-const panelOpen = () => scheduleOpen || menuOpen || serataOpen || !!rearPanelId || !!openCaseName || (typeof diagOpen === 'function' && diagOpen());
+const panelOpen = () => scheduleOpen || menuOpen || serataOpen || pausaOpen || !!rearPanelId || !!openCaseName || (typeof diagOpen === 'function' && diagOpen());
 // qualcosa copre la scena: i tocchi non le arrivano finché non si chiude tutto
 const sceneCovered = () => panelOpen() || minigameOpen() || cambioCardOpen;
 // cosa manca perché il preside possa parlare (null se è tutto pronto)
@@ -3720,10 +3758,10 @@ function finishDj (r) {
   const skipped = !!r.skipped;
   const num = (v, d) => Number.isFinite(+v) ? Math.round(+v) : d;
   const beers = skipped ? 0 : Math.max(0, num(r.beers, 0)), drunk = skipped ? 0 : Math.max(0, num(r.drunk, 0));
-  const paid = skipped || r.fase !== 'capo' ? 0 : 1;          // la birra pagata al capo
+  const paid = skipped ? 0 : (r.fase === 'capo' ? 1 : 0) + (r.parPaid ? 1 : 0);   // le birre pagate al capo (Quadro e PAR)
   Profile.data.dj = { skipped, grad: skipped ? 0 : num(r.grad, 0), rep: skipped ? 0 : num(r.rep, 0), beers, drunk: drunk + paid,
     stars: skipped ? 0 : num(r.stars, 0), larsens: skipped ? 0 : num(r.larsens, 0), fase: skipped ? null : (['tu', 'capo', 'gerry'].includes(r.fase) ? r.fase : null),
-    faseFast: skipped || r.fase !== 'tu' ? null : r.faseFast !== false, par: skipped || !['fast', 'ok', 'no'].includes(r.par) ? null : r.par };
+    faseFast: skipped || r.fase !== 'tu' ? null : r.faseFast !== false, par: skipped || !['fast', 'ok', 'capo', 'ripiego', 'no'].includes(r.par) ? null : r.par };
   Profile.data.beers = Math.max(0, (Profile.data.beers || 0) - drunk - paid + beers);
   const rep = skipped ? 0 : addReputation(Profile.data.dj.rep, 'Notte fuori controllo: le luci del DJ set', 'L' + LEVEL_ID + ':dj');
   Profile.save();
@@ -3931,7 +3969,7 @@ function serataReport () {
   if (!pr.skipped && (pr.fault || pr.faultFix)) fixes.push({ fast: 1, ok: 0.6, gerry: 0 }[pr.faultFix] ?? 0.6);
   const dj = d.dj || {};
   if (!dj.skipped && dj.fase) fixes.push(dj.fase === 'tu' ? (dj.faseFast === false ? 0.6 : 1) : dj.fase === 'capo' ? 0.6 : 0);
-  if (!dj.skipped && dj.par) fixes.push({ fast: 1, ok: 0.6, no: 0 }[dj.par] ?? 0.6);
+  if (!dj.skipped && dj.par) fixes.push({ fast: 1, ok: 0.6, capo: 0.6, ripiego: 0.4, no: 0 }[dj.par] ?? 0.6);
   const cb = d.cambioDj || {};
   if (cb.done) fixes.push(cb.slow ? 0.2 : 1);
   const guasti = fixes.length ? clamp(100 * fixes.reduce((a, x) => a + x, 0) / fixes.length) : 70;
@@ -3940,7 +3978,7 @@ function serataReport () {
   if (nf) gBits.push(nf + (nf === 1 ? ' pezzo difettoso sistemato' : ' pezzi difettosi sistemati'));
   if (pr.faultFix) gBits.push({ fast: 'microfono del preside riparato in fretta', ok: 'microfono del preside riparato, ma con calma', gerry: 'il microfono del preside l\'ha sistemato Gerry' }[pr.faultFix]);
   if (!dj.skipped && dj.fase) gBits.push({ tu: 'fase del DJ riarmata da te', capo: 'fase del DJ riarmata dal capo', gerry: 'fase del DJ lasciata a Gerry' }[dj.fase]);
-  if (!dj.skipped && dj.par) gBits.push({ fast: 'PAR senza DMX trovato in fretta', ok: 'PAR senza DMX trovato tardi', no: 'PAR senza DMX mai sistemato' }[dj.par]);
+  if (!dj.skipped && dj.par) gBits.push({ fast: 'PAR che non rispondeva sistemato in fretta', ok: 'PAR che non rispondeva sistemato tardi', capo: 'PAR che non rispondeva mandato al capo', ripiego: 'PAR aggirato col ripiego sui tre buoni', no: 'PAR che non rispondeva mai sistemato' }[dj.par]);
   if (cb.done) gBits.push(cb.slow ? 'cambio palco a pazienza finita' : 'cambio palco in ' + mmss(n(cb.ms)));
 
   // gli show: il gradimento del pubblico, le fasi saltate contano zero, ogni larsen pesa
@@ -4001,7 +4039,8 @@ function serataReport () {
       ['Qualità del montaggio', montaggio, mBits.join(' · ')],
       ['Qualità del troubleshooting', guasti, gBits.join(' · ') || 'nessun guasto da risolvere'],
       ['Performance negli show', show, sBits.join(' · ')],
-      ['Reputazione guadagnata', '★ ' + reputation(), 'la soglia del livello 2 è ' + levelInfo(2).rep]
+      ['Reputazione guadagnata', '★ ' + reputation(), 'la soglia del livello 2 è ' + levelInfo(2).rep],
+      ['Birre della crew', '🍺 ' + (d.beers || 0), (d.beers ? 'si bevono con Macio, a furgone chiuso' : 'nessuna: si guadagnano lavorando bene')]
     ]
   };
 }
@@ -4062,7 +4101,11 @@ el('#cambio-go').addEventListener('click', () => { SFX.button(); closeCambioCard
 el('#cambio-close').addEventListener('click', () => { SFX.button(); closeCambioCard(); });
 
 el('#schedule-btn').addEventListener('click', () => { SFX.button(); openSchedule(false); });
-el('#beer-btn').addEventListener('click', () => { SFX.button(); drinkBeer(); });
+el('#beer-btn').addEventListener('click', () => { SFX.button(); openPausa(); });
+el('#pausa-coffee').addEventListener('click', () => { SFX.button(); drinkCoffee(); });
+el('#pausa-sit').addEventListener('click', () => { SFX.button(); takePause(); });
+el('#pausa-close').addEventListener('click', () => { SFX.button(); closePausa(); });
+el('#pausa-modal').addEventListener('click', ev => { if (ev.target.id === 'pausa-modal') closePausa(); });
 el('#schedule-go').addEventListener('click', () => {
   SFX.button();
   const next = scheduleNext;
@@ -4128,6 +4171,7 @@ el('#set-reduced').addEventListener('change', ev => { settings().reducedFx = ev.
 el('#set-skipshow').addEventListener('change', ev => { settings().skipShow = ev.target.checked; Profile.save(); });
 el('#set-skipscarico').addEventListener('change', ev => { settings().skipScarico = ev.target.checked; Profile.save(); });
 el('#set-bosstips').addEventListener('change', ev => { settings().bossTips = ev.target.checked; Profile.save(); });
+el('#set-proinfo').addEventListener('change', ev => { settings().proInfo = ev.target.checked; Profile.save(); });
 el('#set-tapemarks').addEventListener('change', ev => { settings().tapeMarks = ev.target.checked; Profile.save(); if (window.__scene) window.__scene.drawTapeMarks(); });
 el('#set-trace').addEventListener('change', ev => { settings().traceSignal = ev.target.checked; Profile.save(); });
 el('#set-testmusic').addEventListener('change', ev => { settings().testMusic = ev.target.checked; Profile.save(); if (window.__scene) window.__scene.updateSignalFlow(); });
@@ -5853,11 +5897,40 @@ const PIECE_INFO = {
   dj: ['La consolle di DJ Inestimabile: due lettori e il mixer DJ. Ha la sua spina Schuko; le uscite MASTER L e R (jack) vanno in una DI, e dalla DI due XLR al mixer di sala.', 'Va sul palco.'],
   djluci: ['Lo stativo luci del DJ: quattro PAR LED cinesi e una strobo LED in mezzo, già montati sulla barra e collegati tra loro. Servono una spina Schuko e un solo DMX dalla consolle luci; i fari sono già indirizzati (canali ' + DJ_LUCI_DMX.from + '-' + DJ_LUCI_DMX.to + ').', 'Va sul palco, dietro la consolle.']
 };
-function showPieceInfo (type, pieceEl) {
+/* Spiegazioni a due livelli. CREW (di partenza): a parole semplici, cosa fa
+   il pezzo e a cosa serve. PRO (impostazioni): i dati tecnici di PIECE_INFO,
+   e negli avvisi delle prove fallite anche il perché da tecnico (PRO_WHY).
+   Nel riquadro del pezzo un tasto passa all'altro livello. */
+const proInfo = () => !!settings().proInfo;
+const PIECE_CREW = {
+  quadro: 'Il cuore della corrente: la prende dall\'allaccio della scuola e la divide in tre prese, ognuna con il suo interruttore.',
+  ciabatta: 'Una ciabatta di casa: porta la corrente dove serve, per esempio al PC.',
+  ciabatta_cee: 'Una ciabatta da palco: la spina blu va nel Quadro, le prese normali danno corrente agli apparecchi.',
+  tavolo: 'Il tavolo del tecnico: sopra mixer, consolle luci e PC, sotto il finale.',
+  stativo: 'Il treppiede su cui si monta un faro.',
+  sub: 'La cassa dei bassi. Il suono arriva dal finale e passa anche alla testa che ci sta sopra.',
+  top: 'La cassa delle voci e degli alti: si monta sopra il sub e prende il suono da lì.',
+  mixer: 'Raccoglie microfoni e musica, regola i volumi e manda tutto al finale.',
+  asta: 'L\'asta che tiene il microfono all\'altezza della bocca.',
+  mic: 'Il microfono per chi parla: col suo cavo va nel mixer.',
+  ampli: 'Dà la forza al suono per far suonare le casse. Si accende per ultimo e si spegne per primo.',
+  pc: 'Il portatile con la musica della serata.',
+  scheda: 'Porta la musica dal PC al mixer.',
+  par: 'Un faro colorato: vuole corrente e il cavo dei comandi dalla consolle luci, poi li passa al faro dopo.',
+  controller: 'La consolle che accende e colora i fari.',
+  di: 'Una scatoletta che rende il suono del DJ adatto al mixer di sala. Al montaggio non serve.',
+  dj: 'La consolle di DJ Inestimabile: vuole una presa e due cavi verso il mixer di sala, passando dalla DI.',
+  djluci: 'Le luci del DJ già montate e collegate fra loro: servono una presa e un cavo DMX dalla consolle luci.'
+};
+function showPieceInfo (type, pieceEl, pro) {
   const info = PIECE_INFO[type];
   if (!info) return false;
+  if (pro === undefined) pro = proInfo();
   const box = el('#piece-info');
-  box.innerHTML = '<b>' + escapeHtml(COMPONENT_TYPES[type].label) + '</b><p>' + escapeHtml(info[0]) + '</p><small>' + escapeHtml(info[1]) + '</small>';
+  box.innerHTML = '<b>' + escapeHtml(COMPONENT_TYPES[type].label) + '</b><span class="pi-lvl">' + (pro ? 'PRO' : 'CREW') + '</span><p>' + escapeHtml(pro || !PIECE_CREW[type] ? info[0] : PIECE_CREW[type]) + '</p><small>' + escapeHtml(info[1]) + '</small>'
+    + (PIECE_CREW[type] ? '<button type="button" class="pi-other">' + (pro ? '‹ Più semplice' : 'Più tecnico ›') + '</button>' : '');
+  const other = box.querySelector('.pi-other');
+  if (other) other.addEventListener('click', () => showPieceInfo(type, pieceEl, !pro));
   box.classList.add('show');
   const r = pieceEl.getBoundingClientRect(), bw = box.offsetWidth, bh = box.offsetHeight;
   box.style.left = Math.max(8, Math.min(window.innerWidth - bw - 8, r.left + r.width / 2 - bw / 2)) + 'px';
@@ -5989,6 +6062,29 @@ function unlockedTabs (giro) {
    Test impianto) più quello che non è un cavo (quadro armato, apparecchi
    accesi, stereo, frontali e tagli). Ogni voce: { ok, what, ids, kind }
    dove kind dice che indizio dare se manca. */
+// il perché da tecnico, solo con le spiegazioni PRO (vedi PIECE_CREW)
+const PRO_WHY = {
+  overPhase: 'Ogni fase del Quadro ha il suo magnetotermico: somma gli assorbimenti di quello che c\'è su ogni presa e sposta un carico su un\'altra fase.',
+  overBudget: 'L\'allaccio ha una potenza massima: somma i watt degli apparecchi accesi.',
+  place: 'Il foglio del giro elenca ogni pezzo: confrontalo con le celle del palco.',
+  wire: {
+    corrente: 'Linea di alimentazione: allaccio CEE 400 V trifase → ingresso del Quadro.',
+    audio: 'Signal flow: PC → USB-C → scheda → jack nei CH 5-6 → MAIN L/R in XLR → finale → Speakon al sub → LINK alla testa. Ogni apparecchio vuole anche la sua corrente.',
+    luci: 'DMX in catena: consolle OUT → IN del primo PAR → THRU → IN del successivo. Ogni PAR vuole anche la sua corrente (PowerCON).'
+  },
+  arm: 'Senza generale e salvavita alzati nessuna presa del Quadro è sotto tensione.',
+  on: 'Ordine di accensione: sorgenti e mixer prima, finale e sub per ultimi (al contrario si sente il colpo nelle casse).',
+  stereo: 'Il CH 5 va a sinistra e il CH 6 a destra; il finale manda IN L su OUT L: segui il cavo dalla cassa all\'indietro.',
+  lights: 'Frontali nel Pit davanti al palco, tagli ai lati: ogni posizione illumina il palco da un lato diverso.',
+  dmx: 'Ogni PAR occupa un blocco di canali a partire dal suo indirizzo: due blocchi non devono sovrapporsi.',
+  fault: 'Un pezzo che arriva ammaccato dallo scarico si controlla prima di usarlo.'
+};
+const proWhy = (kind, giroId) => {
+  if (!proInfo() || !kind) return '';
+  const w = PRO_WHY[kind];
+  return w ? ' PRO: ' + (typeof w === 'string' ? w : w[giroId] || '') : '';
+};
+
 function giroChecks (giro) {
   const g = GIRI[giro];
   if (!g) return [];
@@ -8522,7 +8618,7 @@ class StageScene extends Phaser.Scene {
     if (tutorOn() && wouldArc(edge, true) && tutorWarn('live')) return;
     // tecnico stanco: ogni tanto il connettore scivola di mano (il cavo
     // resta in mano, basta riprovare). Vedi FATIGUE.
-    if (fatigueSlip()) { showToast('Sei stanco: il connettore ti scivola di mano. Riprova (una 🍺 ti rimette in sesto).'); return; }
+    if (fatigueSlip()) { showToast('Sei stanco: il connettore ti scivola di mano. Riprova, o fai una pausa dal tasto 🍺.'); return; }
     gameState.edgeSeq++;
     // collegare sotto tensione fa scattare il salvavita; altrimenti il
     // dispositivo appena alimentato (se già acceso) parte davvero
@@ -9390,7 +9486,7 @@ class StageScene extends Phaser.Scene {
     }[miss.kind];
     // secondo tentativo: il pezzo colpevole in rosso; dal terzo parla il capo
     if (miss && n >= 2) miss.ids.forEach(id => { const v = this.compVisuals[id]; if (v) this.setGlow(v, true); });
-    const exact = miss && n >= 3 ? ' ' + boss + ' ti indica il foglio: «' + miss.what + '».' : '';
+    const exact = (miss && n >= 3 ? ' ' + boss + ' ti indica il foglio: «' + miss.what + '».' : '') + proWhy(result.overPhase ? 'overPhase' : result.overBudget ? 'overBudget' : miss && miss.kind, g.id);
     setCircuitStatus('error');
     saveLevel();
     if (g.id === 'corrente') { showToast('Niente corrente: ' + hint + exact, 'bad'); this.fxSparks(); }
@@ -9507,7 +9603,8 @@ class StageScene extends Phaser.Scene {
         : buildExpectedConnections().find(x => !x.ok && x.cat === kind) || giroChecks(giro).find(x => !x.ok);
       saveLevel();
       setCircuitStatus('error');
-      const exact = miss && n >= 3 ? ' ' + bossName() + ' ti indica il foglio: «' + miss.what + '».' : '';
+      const exact = (miss && n >= 3 ? ' ' + bossName() + ' ti indica il foglio: «' + miss.what + '».' : '')
+        + proWhy(result.overPhase ? 'overPhase' : result.overBudget ? 'overBudget' : miss && (miss.kind || 'wire'), GIRI[giro].id);
       if (kind === 'power') { showToast((quadroLive() ? 'Scintille! ' : 'Tutto spento: ') + hint + exact, 'bad'); this.fxSparks(); }
       else if (kind === 'audio') { showToast('L\'impianto gracchia: ' + hint + exact, 'bad'); this.fxCrackle(); }
       else { showToast('Le luci vanno in tilt: ' + hint + exact, 'bad'); this.fxLightsTilt(); }

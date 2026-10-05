@@ -231,6 +231,29 @@ const path = require('path');
   st = await S(() => ({ down: __dj.state().phaseDown, rep: __dj.state().repParts.filter(p => /Quadro/.test(p[0])).map(p => p[1]) }));
   check(!st.down && st.rep.length === 1 && st.rep[0] === 0, 'finire il Quadro con calma: ' + JSON.stringify(st));
 
+  // ---- PAR che non risponde: il capo per una birra, oppure il ripiego sui tre PAR buoni ----
+  await open();
+  await ev(() => { __dj.start(false); __dj.state().beers = 2; });
+  await goTo(T(42, 0.5));
+  await ev(() => document.querySelector('#dmx-chip').click());
+  await ev(() => document.querySelector('#par-acts [data-k="capo"]').click());
+  st = await S(() => ({ beers: __dj.state().beers, dead: __dj.state().dmxDead, open: !document.querySelector('#pop-par').hidden }));
+  check(st.beers === 1 && st.dead && !st.open, 'il capo non prende la birra per il PAR: ' + JSON.stringify(st));
+  await goTo(T(42, 0.5) + 7);
+  st = await S(() => ({ dead: __dj.state().dmxDead, chip: !document.querySelector('#dmx-chip').hidden, by: __dj.state().faults.dmx.byCapo }));
+  check(!st.dead && !st.chip && st.by, 'il capo non sistema il PAR: ' + JSON.stringify(st));
+  await open();
+  await ev(() => __dj.start(false));
+  await goTo(T(42, 0.5));
+  await ev(() => document.querySelector('#dmx-chip').click());
+  await ev(() => document.querySelector('#par-acts [data-k="ripiego"]').click());
+  st = await S(() => ({ dead: __dj.state().dmxDead, off: __dj.state().par4Off, pad: document.querySelector('.pad[data-l="1"]').classList.contains('dead'), chip: !document.querySelector('#dmx-chip').hidden }));
+  check(!st.dead && st.off && !st.pad && st.chip, 'il ripiego non riapre la corsia CHASE col PAR 4 spento: ' + JSON.stringify(st));
+  await ev(() => document.querySelector('#dmx-chip').click());
+  const fix = await S(() => ({ cavo: 'plug', indirizzo: 'a010', corrente: 'power' }[__dj.state().faults.dmx.cause]));
+  await ev(k => document.querySelector(`#par-acts [data-k="${k}"]`).click(), fix);
+  check(await S(() => !__dj.state().par4Off && __dj.state().faults.dmx.state !== 'on'), 'dopo il ripiego il PAR 4 non si sistema');
+
   // ---- chi non tocca niente ----
   await open();
   await ev(() => __dj.start(false));
