@@ -174,7 +174,7 @@ const path = require('path');
   st = await S(() => ({ dead: __dj.state().dmxDead, chip: !document.querySelector('#dmx-chip').hidden, pad: document.querySelector('.pad[data-l="1"]').classList.contains('dead'), cause: __dj.state().faults.dmx.cause }));
   check(st.dead && st.chip && st.pad, 'il PAR 4 non perde il DMX a battuta 42: ' + JSON.stringify(st));
   await ev(() => document.querySelector('#dmx-chip').click());
-  const wrong = st.cause === 'cavo' ? 'a010' : 'plug', right = st.cause === 'cavo' ? 'plug' : 'a010';
+  const right = { cavo: 'plug', indirizzo: 'a010', corrente: 'power' }[st.cause], wrong = right === 'plug' ? 'a010' : 'plug';
   await ev(k => document.querySelector(`#par-acts [data-k="${k}"]`).click(), wrong);
   check(await S(() => __dj.state().dmxDead), 'la cura sbagliata sistema il PAR');
   await goTo(T(42, 0.5) + 2);

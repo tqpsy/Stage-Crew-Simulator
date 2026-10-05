@@ -58,6 +58,7 @@ Lo spettacolo del DJ (21:15, `dj.html`, dopo il cambio palco) ha
 il gioco). Il karaoke di Macio (fuori programma dopo il DJ, `karaoke.html`)
 ha `tests/karaoke.js` (la pagina da sola) e `tests/karaoke-gioco.js` (dentro
 il gioco). Il carico del furgone (23:00, `carico.html`, dopo il karaoke) ha
-`tests/carico.js`. `tests/robustezza.js` prova frecce e WASD, la ripresa di una
+`tests/carico.js`. La valutazione della serata, che si apre dopo il carico, ha
+`tests/serata.js`. `tests/robustezza.js` prova frecce e WASD, la ripresa di una
 partita con uno schermo diverso, Annulla dopo il reset, i file importati e
 volume ed «Effetti ridotti» nei minigiochi.

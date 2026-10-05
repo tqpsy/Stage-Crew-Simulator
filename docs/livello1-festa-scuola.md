@@ -143,6 +143,26 @@ Test: `tests/aiuti.js`.
   ha fallito, se no la prima voce del suo giro che non va. Un collaudo
   riuscito azzera il conto (`giroFails[GIRO_COLLAUDO]`).
 
+## Collaudo come ricompensa e valutazione della serata (fatto)
+
+- **Accensione a catena**: al Test impianto superato cala il buio e
+  l'impianto si accende un pezzo alla volta nell'ordine del segnale (quadro
+  e ciabatte, PC → scheda → mixer → finale → sub → teste, consolle luci),
+  ognuno col suo suono di avvio; poi i PAR e il beat («SI VA IN SCENA!»).
+  Ogni prova di giro superata accende in verde la catena del suo giro
+  (`playSuccessSequence`, `giroCascade`).
+- **Pronti per la prova**: quando tutte le voci del foglio sono a posto il
+  pulsante della prova si illumina; ogni voce appena spuntata fa salire un ✓
+  verde dai suoi pezzi (`updateFoglio`, `floatCheck`).
+- **Valutazione della serata**: dopo il carico si apre «Com'è andata»:
+  tempo, errori, guasti risolti, danni, qualità del montaggio, del
+  troubleshooting e degli show, reputazione; punteggio su 100 (pesi
+  montaggio 30, troubleshooting 25, show 30, danni 15), stelle, titolo (da
+  DEVI FARE ANCORA PRATICA a CREW EXCELLENT) e il perché, con un consiglio.
+  La prima valutazione entra nei record (comuni a tutte le partite);
+  «Rigioca la serata» riparte nello stesso slot. Si riapre dalla scaletta e
+  dal foglio (`serataReport`, `openSerata`; test `tests/serata.js`).
+
 ## Scheda obiettivi
 
 **Fatto: scaletta della serata.** A ogni nuova partita, prima del montaggio, si
@@ -194,6 +214,9 @@ errori. Si recupera bevendo una birra.
   suggerimento del tasto e nel messaggio quando lo si tocca.
 - **Sale** di 1 per ogni minuto di gioco (conta come il tempo di gioco: non
   col menù aperto) e di 0,25 per ogni pezzo posato e ogni cavo collegato.
+  Gli errori mettono tensione: +4 per ogni protezione che scatta (magnetotermico
+  o salvavita) e ogni colpo nelle casse, +2 per ogni prova fallita. Così gli
+  errori del montaggio rendono più difficili gli show, che ricevono la stanchezza.
 - **Scende** di 30 bevendo una birra dal tasto 🍺. Serve un secondo tocco
   di conferma: la birra bevuta esce dal punteggio finale. Senza birre, o da
   riposati, non si beve.

@@ -40,9 +40,16 @@ blackout: il battito prima di ogni drop è una pausa.
 |---|---|---|---|
 | 10 | il DJ alza il suo volume, in rosso | nota speciale | tirare giù il **fader DJ** (trascinare, o V) prima che la nota arrivi |
 | 17 (break) | la ciabattina del DJ fa scattare **L2**: PAR spenti, corsie COLORI e CHASE grigie | guasto grosso | scegliere chi va al Quadro |
-| 42 | PAR 4 perde il DMX: corsia CHASE grigia | rompe la pista | toccare il PAR (o P): connettore da rinfilare o indirizzo da rimettere (010) |
+| 42 | PAR 4 non risponde: corsia CHASE grigia | rompe la pista | toccare il PAR (o P) e capire la causa dagli indizi (vedi sotto) |
 | 49 | Musa va verso la cassa mentre canta | nota speciale | **MUTE MIC** (M) in tempo, o larsen |
 | 67 | Musa si mangia il microfono | nota speciale | tirare giù il **fader MIC** |
+
+**Il PAR che non risponde** ha una causa pescata a caso fra tre, e il
+pannello non la dice: mostra display, spia DMX e ventola del faro, più il
+patch sheet (PAR 4 = 010). Display spento e ventola ferma: manca la corrente
+(rinfila la PowerCON). Display acceso ma spia DMX spenta: il segnale non
+arriva (rinfila il DMX tra PAR 3 e PAR 4). Spia accesa ma indirizzo diverso
+dal patch: rimetti 010. Si può sistemare subito o in un momento calmo.
 
 Le note normali vicine a una nota speciale spariscono: un pollice resta
 libero. Un fader non abbassato in tempo distorce finché non lo abbassi. La
