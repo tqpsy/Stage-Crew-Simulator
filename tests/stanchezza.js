@@ -1,7 +1,9 @@
 /* La stanchezza del tecnico: un valore solo (0-100) nel salvataggio,
    mostrato sotto il tasto 🍺 in testata. Sale col tempo di gioco e con le
-   azioni (pezzi posati, cavi collegati), scende bevendo una birra (con
-   conferma, perché la birra bevuta esce dal punteggio). Da stanco ogni
+   azioni (pezzi posati, cavi collegati), scende con la pausa del tasto 🍺:
+   caffè (poco, tre a serata) o seduto sul case (molto, ma passano 5
+   minuti; non durante il cambio palco). Le birre non si bevono: sono il
+   premio della crew. Da stanco ogni
    tanto il connettore scivola di mano: il cavo resta in mano e si riprova.
    Resta dopo la ricarica; una nuova partita riparte riposata.
    Il passaggio al discorso del preside è in tests/preside-gioco.js.
@@ -56,17 +58,25 @@ const path = require('path');
   const bar = await ev(() => ({ w: el('#fat-fill').style.width, high: el('#fat-fill').classList.contains('high'), title: el('#beer-btn').title }));
   check(nearT(parseFloat(bar.w), 75) && bar.high && /Stanchezza 75% \(stanco\)/.test(bar.title), 'tasto 🍺 sbagliato: ' + JSON.stringify(bar));
 
-  // senza birre non si beve; con le birre ci vuole la conferma
-  await p.click('#beer-btn');
-  check(/Niente birre/.test(await p.textContent('#toast')) && nearT(await ev(() => fatigue()), 75), 'si beve senza birre');
+  // la pausa: le birre non si toccano, il caffè toglie poco e finisce,
+  // seduti sul case si recupera molto ma il tempo passa
   await ev(() => { Profile.data.beers = 2; applySettings(); });
   check(await p.textContent('#beer-n') === '2', 'le birre non sono nel tasto');
   await p.click('#beer-btn');
-  const ask = await ev(() => ({ f: fatigue(), n: Profile.data.beers, toast: el('#toast').textContent }));
-  check(nearT(ask.f, 75) && ask.n === 2 && /Tocca ancora/.test(ask.toast), 'la birra si beve senza conferma: ' + JSON.stringify(ask));
-  await p.click('#beer-btn');
-  const drunk = await ev(() => ({ f: fatigue(), n: Profile.data.beers, btn: el('#beer-n').textContent }));
-  check(nearT(drunk.f, 45) && drunk.n === 1 && drunk.btn === '1', 'bere una birra: ' + JSON.stringify(drunk));
+  check(await ev(() => pausaOpen && el('#pausa-modal').classList.contains('show')), 'il tasto 🍺 non apre la pausa');
+  check(/2 birre della crew/.test(await p.textContent('#pausa-beer')), 'la pausa non parla delle birre');
+  await p.click('#pausa-coffee');
+  const cof = await ev(() => ({ f: fatigue(), n: Profile.data.beers, c: Profile.data.coffees, open: pausaOpen }));
+  check(nearT(cof.f, 63) && cof.n === 2 && cof.c === 1 && !cof.open, 'caffè sbagliato: ' + JSON.stringify(cof));
+  await ev(() => { Profile.data.coffees = 3; openPausa(); });
+  check(await ev(() => el('#pausa-coffee').disabled && /vuoto/.test(el('#pausa-coffee-n').textContent)), 'il thermos non finisce');
+  const ms0 = await ev(() => gameState.stats.playMs);
+  await p.click('#pausa-sit');
+  const sit = await ev(() => ({ f: fatigue(), ms: gameState.stats.playMs, open: pausaOpen }));
+  check(nearT(sit.f, 28) && sit.ms - ms0 >= 300000 && !sit.open, 'pausa seduto sbagliata: ' + JSON.stringify(sit));
+  await ev(() => { Profile.data.cambioDj = { at: Date.now(), done: false }; openPausa(); });
+  check(await ev(() => el('#pausa-sit').disabled && /pubblico/.test(el('#pausa-sit-n').textContent)), 'ci si siede col pubblico che aspetta');
+  await ev(() => { closePausa(); Profile.data.cambioDj = null; setFatigue(45); });
 
   // da stanco il connettore scivola: il cavo resta in mano, si riprova
   const wire = () => {
@@ -92,12 +102,12 @@ const path = require('path');
   await ev(() => continueGame());
   await p.waitForFunction(() => !menuOpen);
   const reload = await ev(() => ({ f: fatigue(), n: el('#beer-n').textContent, shown: !el('#beer-btn').hidden }));
-  check(reload.f >= 42.5 && reload.f < 43 && reload.n === '1' && reload.shown, 'stanchezza persa ricaricando: ' + JSON.stringify(reload));
+  check(reload.f >= 42.5 && reload.f < 43 && reload.n === '2' && reload.shown, 'stanchezza persa ricaricando: ' + JSON.stringify(reload));
 
   // nuova partita: tecnico riposato
   await ev(() => startNewGame('Riposato', serviceOffers([])[0]));
   await p.waitForFunction(() => !menuOpen);
-  check(near(await ev(() => fatigue()), 0), 'la nuova partita non riparte riposata');
+  check(near(await ev(() => fatigue()), 0) && await ev(() => Profile.data.coffees) === 0, 'la nuova partita non riparte riposata');
 
   check(errs.length === 0, 'errori JS: ' + errs.join(' | '));
   await b.close();
