@@ -3720,10 +3720,10 @@ function finishDj (r) {
   const skipped = !!r.skipped;
   const num = (v, d) => Number.isFinite(+v) ? Math.round(+v) : d;
   const beers = skipped ? 0 : Math.max(0, num(r.beers, 0)), drunk = skipped ? 0 : Math.max(0, num(r.drunk, 0));
-  const paid = skipped || r.fase !== 'capo' ? 0 : 1;          // la birra pagata al capo
+  const paid = skipped ? 0 : (r.fase === 'capo' ? 1 : 0) + (r.parPaid ? 1 : 0);   // le birre pagate al capo (Quadro e PAR)
   Profile.data.dj = { skipped, grad: skipped ? 0 : num(r.grad, 0), rep: skipped ? 0 : num(r.rep, 0), beers, drunk: drunk + paid,
     stars: skipped ? 0 : num(r.stars, 0), larsens: skipped ? 0 : num(r.larsens, 0), fase: skipped ? null : (['tu', 'capo', 'gerry'].includes(r.fase) ? r.fase : null),
-    faseFast: skipped || r.fase !== 'tu' ? null : r.faseFast !== false, par: skipped || !['fast', 'ok', 'no'].includes(r.par) ? null : r.par };
+    faseFast: skipped || r.fase !== 'tu' ? null : r.faseFast !== false, par: skipped || !['fast', 'ok', 'capo', 'ripiego', 'no'].includes(r.par) ? null : r.par };
   Profile.data.beers = Math.max(0, (Profile.data.beers || 0) - drunk - paid + beers);
   const rep = skipped ? 0 : addReputation(Profile.data.dj.rep, 'Notte fuori controllo: le luci del DJ set', 'L' + LEVEL_ID + ':dj');
   Profile.save();
@@ -3931,7 +3931,7 @@ function serataReport () {
   if (!pr.skipped && (pr.fault || pr.faultFix)) fixes.push({ fast: 1, ok: 0.6, gerry: 0 }[pr.faultFix] ?? 0.6);
   const dj = d.dj || {};
   if (!dj.skipped && dj.fase) fixes.push(dj.fase === 'tu' ? (dj.faseFast === false ? 0.6 : 1) : dj.fase === 'capo' ? 0.6 : 0);
-  if (!dj.skipped && dj.par) fixes.push({ fast: 1, ok: 0.6, no: 0 }[dj.par] ?? 0.6);
+  if (!dj.skipped && dj.par) fixes.push({ fast: 1, ok: 0.6, capo: 0.6, ripiego: 0.4, no: 0 }[dj.par] ?? 0.6);
   const cb = d.cambioDj || {};
   if (cb.done) fixes.push(cb.slow ? 0.2 : 1);
   const guasti = fixes.length ? clamp(100 * fixes.reduce((a, x) => a + x, 0) / fixes.length) : 70;
@@ -3940,7 +3940,7 @@ function serataReport () {
   if (nf) gBits.push(nf + (nf === 1 ? ' pezzo difettoso sistemato' : ' pezzi difettosi sistemati'));
   if (pr.faultFix) gBits.push({ fast: 'microfono del preside riparato in fretta', ok: 'microfono del preside riparato, ma con calma', gerry: 'il microfono del preside l\'ha sistemato Gerry' }[pr.faultFix]);
   if (!dj.skipped && dj.fase) gBits.push({ tu: 'fase del DJ riarmata da te', capo: 'fase del DJ riarmata dal capo', gerry: 'fase del DJ lasciata a Gerry' }[dj.fase]);
-  if (!dj.skipped && dj.par) gBits.push({ fast: 'PAR senza DMX trovato in fretta', ok: 'PAR senza DMX trovato tardi', no: 'PAR senza DMX mai sistemato' }[dj.par]);
+  if (!dj.skipped && dj.par) gBits.push({ fast: 'PAR che non rispondeva sistemato in fretta', ok: 'PAR che non rispondeva sistemato tardi', capo: 'PAR che non rispondeva mandato al capo', ripiego: 'PAR aggirato col ripiego sui tre buoni', no: 'PAR che non rispondeva mai sistemato' }[dj.par]);
   if (cb.done) gBits.push(cb.slow ? 'cambio palco a pazienza finita' : 'cambio palco in ' + mmss(n(cb.ms)));
 
   // gli show: il gradimento del pubblico, le fasi saltate contano zero, ogni larsen pesa
