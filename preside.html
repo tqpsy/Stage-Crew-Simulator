@@ -128,6 +128,10 @@
   .callout{border:1px solid var(--red);background:#2a1614;border-radius:10px;padding:10px 12px;display:grid;gap:8px}
   .callout.ready{border-color:var(--amber);background:#2a2114}
   .callout p{margin:0;font-size:15px;line-height:1.35}
+  .strat{display:grid;gap:6px}
+  .strat:empty{display:none}
+  .strat .act small{display:block;font-weight:400;opacity:.8}
+  .strat-note{margin:0;font-size:13px;line-height:1.35;color:var(--muted, #a3acb8)}
   .opts{display:grid;gap:6px}
   .opts .act{display:grid;justify-items:center;gap:2px;padding:7px 4px;line-height:1.1}
   .opts .act small{font-size:10px;font-weight:500;color:var(--muted);letter-spacing:.02em}
@@ -328,6 +332,7 @@
       <div class="fault-q">Dove si è interrotto il segnale?</div>
       <div class="chain" id="chain"></div>
       <div class="callout" id="callout" hidden></div>
+      <div class="strat" id="strat"></div>
     </div>
   </section>
 </div>
@@ -344,7 +349,7 @@
       <li>Tieni la sua voce nella <b>zona verde</b>. Ogni sera è diversa: lui non parla mai uguale.</li>
       <li>Se va verso le casse il <b>larsen</b> cresce: abbassa quanto basta, senza zittirlo.</li>
       <li>Il suo microfono è collegato all'<b>ingresso MIC <span class="wired-n">1</span></b> del mixer, cioè il <b>CH <span class="wired-n">1</span></b>. Ricordatelo.</li>
-      <li>Se qualcosa si guasta, <b>guarda bene il palco e il mixer</b>. Risolverlo in fretta ti fa guadagnare reputazione. Intanto un po' di <b>musica dal PC</b> fa aspettare il pubblico: quando il preside torna a sentirsi, riabbassala.</li>
+      <li>Se qualcosa si guasta, scegli tu: <b>cercalo</b> lungo la catena (in fretta vale reputazione), <b>manda il capo</b> per una 🍺 e resta al mixer, o lascialo e ci pensa Gerry (figuraccia). Intanto un po' di <b>musica dal PC</b> fa aspettare il pubblico: quando il preside torna a sentirsi, riabbassala.</li>
     </ul>
     <div class="pick" id="cause-pick">Guasto (per provare il discorso)<div>
       <button data-c="" aria-pressed="true">A caso</button><button data-c="mic" aria-pressed="false">Microfono</button><button data-c="cavo" aria-pressed="false">Cavo</button><button data-c="ing" aria-pressed="false">Ingresso</button><button data-c="mixer" aria-pressed="false">Mixer</button>
@@ -468,11 +473,12 @@
     tap: () => ({ win: 3.5, dur: 5, target: 'preside', icon: '👊', text: 'Batte sul microfono per provarlo', hint: 'premi MUTE, poi riapri il canale', tab: 'mixer',
       ok: () => S.mute[S.micCh] || voiceOut() < 0.2 || !S.micOk,
       fail () { S.pops++; sfx.pop(); hit(-8, 'BUM BUM nelle casse.'); }, after: 'Ora riapri il canale!' }),
-    cavo: () => ({ win: 24, dur: 60, target: 'preside', icon: '🔇', text: 'Non si sente più niente!', hint: 'guarda palco e mixer, poi apri GUASTO', tab: 'guasto',
+    cavo: () => ({ win: 24, dur: 60, target: 'preside', icon: '🔇', text: 'Non si sente più niente!', hint: 'apri GUASTO: cercalo tu o manda il capo', tab: 'guasto',
       // tempo limite secondo la causa: più lavoro serve, più tempo c'è (la stanchezza lo accorcia)
       start () { startFault(); this.win = FAULT_TIME[S.faultCause].limit; this.deadline = S.t + this.win * (1 - S.fatigue / 250); },
       ok: () => S.micOk && voiceOut() > 0.3,
       onSolved () {
+        if (S.faultFix === 'capo') return;   // l'ha sistemato il capo: niente applausi per te
         const secs = Math.round(S.t - this.at);
         S.faultFix = secs <= FAULT_TIME[S.faultCause].bonus ? 'fast' : 'ok';
         if (secs <= FAULT_TIME[S.faultCause].bonus) { S.grad = clamp(S.grad + 6); S.repDelta += 3; sfx.applause(85); toast('Applausi per il tecnico!', 'ok'); S.notes.push('Guasto risolto in ' + secs + ' s: il pubblico ha applaudito il tecnico (+3 reputazione).'); }
@@ -553,6 +559,7 @@
   // secondi entro cui arrivano gli applausi (+3 reputazione) e tempo limite prima che arrivi il bidello:
   // circa 5 s e 15 s di margine sul tempo che serve giocando senza errori
   const FAULT_TIME = { mixer: { bonus: 8, limit: 20 }, ing: { bonus: 11, limit: 22 }, mic: { bonus: 12, limit: 24 }, cavo: { bonus: 17, limit: 32 } };
+  let boss = 'il capo';     // nel gioco il nome del capo del service
   let forceCause = null;   // per provare il prototipo: quale guasto far uscire (null = a caso)
   /* cosa è rimasto da sistemare alla posa dei cavi (posa-cavi.html; nel gioco
      Profile.data.cavi.left): passaggio → qualcuno inciampa nel cavo e lo
@@ -575,7 +582,7 @@
     $('#tab-guasto').hidden = false; $('#desk').classList.add('faulting');
     renderFault();
   }
-  function endFault () { $('#desk').classList.remove('faulting'); S.fault = null; S.patchNeeded = false; S.task = null; $('#tab-guasto').hidden = true; if (!$('#panel-guasto').hidden) showTab('mixer'); }
+  function endFault () { $('#desk').classList.remove('faulting'); S.fault = null; S.capoAt = 0; S.patchNeeded = false; S.task = null; $('#tab-guasto').hidden = true; if (!$('#panel-guasto').hidden) showTab('mixer'); }
   const busy = () => { if (S.task) { toast('Sei da solo: finisci prima quello che stai facendo.'); return true; } return false; };
   // kind: check (controllo), step (passo intermedio), fix (riparato), oops (errore: solo tempo perso)
   function startTask (node, kind, time, label, then) {
@@ -679,6 +686,35 @@
     } else if (bad && bad.id === 'mixer') {
       p('<b>Mixer:</b> ' + CAUSES.mixer() + ' Sistemalo dal banco.'); toMixer();
     } else c.hidden = true;
+    renderStrat();
+  }
+  /* le altre strade, come per il PAR del DJ: il capo per una birra (ci
+     mette un po' e non porta applausi, ma tu resti al mixer a tenere il
+     pubblico con la musica), o lasciar perdere: allo scadere arriva Gerry */
+  const CAPO_S = 14;
+  const capName = () => boss === 'il capo' ? 'Il capo' : boss;
+  function renderStrat () {
+    const box = $('#strat'); box.textContent = '';
+    if (!S.fault) return;
+    if (S.capoAt) { box.innerHTML = `<p class="strat-note">${capName()} è sul palco e ci pensa lui. Tu resta al mixer: la musica del PC tiene il pubblico.</p>`; return; }
+    const b = btn('act strat-capo', `🍺 Manda ${boss}<small>${S.beers > 0 ? 'ci pensa lui in una quindicina di secondi, costa una birra' : 'niente birre in tasca: niente favori'}</small>`, sendCapo);
+    b.disabled = S.beers <= 0;
+    box.appendChild(b);
+    box.insertAdjacentHTML('beforeend', '<p class="strat-note">Oppure lascialo: allo scadere ci pensa Gerry, davanti a tutti.</p>');
+  }
+  function sendCapo () {
+    if (!S.fault || S.capoAt || S.beers <= 0) return;
+    S.beers--; S.capoPaid = 1; S.capoAt = S.t + CAPO_S;
+    const e = S.events.find(x => x.id === 'cavo' && x.live);
+    if (e && e.deadline < S.capoAt + 1) e.deadline = S.capoAt + 1;
+    toast(capName() + ' va a vedere. Tu resta al mixer.', 'ok'); paintHeader(); renderFault();
+  }
+  function capoFix () {
+    const where = { mic: 'il connettore del microfono', cavo: 'il cavo, l\'ho cambiato', ing: 'il cavo uscito dall\'ingresso', mixer: 'il canale sul mixer' }[S.faultCause];
+    S.capoAt = 0; S.faultFix = 'capo'; S.task = null;
+    S.micCh = S.wired; S.micOk = true; S.mute[S.wired] = false; $('#mute-' + S.wired).setAttribute('aria-pressed', 'false'); S.fad[S.wired] = Math.max(S.fad[S.wired], 0.55);
+    S.notes.push(capName() + ' ha sistemato il guasto del microfono per una birra: niente applausi, ma niente figuraccia.');
+    toast(capName() + ': «Fatto, era ' + where + '».', 'ok');
   }
   function plugInto (n) {
     if (busy()) return;
@@ -940,6 +976,8 @@
     }
     sfx.ring(S.ring);
 
+    // il capo mandato a sistemare il guasto
+    if (S.capoAt && S.fault && S.t >= S.capoAt) capoFix();
     // eventi: partono, si risolvono, scadono
     S.events.forEach(e => {
       if (!e.started && S.t >= e.at) { e.started = true; e.live = true; e.deadline = e.until != null ? e.until : S.t + e.win * k; e.start && e.start(); sfx.ding(); }
@@ -1023,7 +1061,7 @@
     notes.push(...S.notes);
     const rep = 5 + Math.round((S.grad - 60) / 10) - S.larsens * 5 + S.repDelta;
     result = { type: 'preside', grad: Math.round(S.grad), rep, beers, drunk: S.drunk, fatigue: Math.round(S.fatigue), larsens: S.larsens, pops: S.pops,
-      fault: S.events.some(e => e.id === 'cavo' && e.started), faultFix: S.faultFix || null, notes: notes.map(n => n.replace(/<[^>]+>/g, '').trim()).filter(Boolean) };
+      fault: S.events.some(e => e.id === 'cavo' && e.started), faultFix: S.faultFix || null, paid: S.capoPaid || 0, notes: notes.map(n => n.replace(/<[^>]+>/g, '').trim()).filter(Boolean) };
     $('#outro-title').textContent = S.grad >= 70 ? 'Il miglior tecnico della storia!' : S.grad >= 40 ? 'Applausi tiepidi.' : 'Siete licenziati!';
     $('#r-grad').textContent = Math.round(S.grad) + '%';
     $('#r-beer').textContent = '+' + beers;
@@ -1149,6 +1187,7 @@
       FRONT = PARS.map((p, i) => p.role === 'frontale' ? i : -1).filter(i => i >= 0);
     }
     pocket = Math.max(0, Math.floor(d.beers) || 0);
+    if (typeof d.boss === 'string' && d.boss.trim()) boss = d.boss.trim().slice(0, 40);
     if (Number.isFinite(+d.fatigue)) tired = Math.max(0, Math.min(100, +d.fatigue));
     buildStagePars(); S = fresh(); buildDesk(); drawStage(); paintHeader(); paintIntro();
   }

@@ -79,8 +79,10 @@ const path = require('path');
   check(!wired.fails.length && wired.mic === null, 'montaggio non cablato: ' + JSON.stringify(wired));
 
   // Test impianto, poi la posa
-  const test = await ev(() => { window.__scene.runSystemTest(); return { status: el('#circuit-text').textContent, msg: el('#toast').textContent }; });
+  const test = await ev(() => { setFatigue(50); window.__scene.runSystemTest(); return { status: el('#circuit-text').textContent, msg: el('#toast').textContent, clock: Profile.data.collaudo && Profile.data.collaudo.clock, f: fatigue() }; });
   check(test.status === 'IMPIANTO OK' && /Monta l'asta|collegalo con un XLR/.test(test.msg), 'Test impianto non superato: ' + JSON.stringify(test));
+  // l'orologio del montaggio: collaudo in anticipo = riposo prima della posa
+  check(Number.isFinite(test.clock) && test.clock < 19 * 60 + 30 && /Collaudo alle \d+:\d\d, .*d'anticipo/.test(test.msg) && test.f < 50, 'collaudo senza l\'ora o senza riposo: ' + JSON.stringify(test));
   // fine dello show senza aspettare i timer di Phaser (come tests/posa-cavi-gioco.js)
   await ev(() => { const s = window.__scene; s.stopFx(); s.afterShow(); });
   await p.waitForSelector('#gerry-modal.show', { timeout: 10000 });

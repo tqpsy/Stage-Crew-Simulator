@@ -56,11 +56,12 @@ const path = require('path');
     check(broken('mixer_1') === 'SCHEDA 1 senza USB dal PC', 'scheda senza USB: ' + broken('mixer_1'));
     W(null, 'scheda_1', 'usb', 'pc_1', 'usb');
     toggleDevicePower('mixer_1');
-    check(broken('mixer_1') === 'MIX 1 non gli arriva la musica da SCHEDA', 'mixer senza jack: ' + broken('mixer_1'));
+    // il segnale si ferma nel cavo tra la scheda e il mixer (acceso)
+    check(broken('mixer_1') === 'jack il segnale si ferma qui, tra SCHEDA e MIX 1: guarda il cavo e le prese ai due capi', 'mixer senza jack: ' + broken('mixer_1'));
     W('jack', 'scheda_1', 'out_L', 'mixer_1', 'in_5');
     check(broken('mixer_1') === 'FINALE 1 spento', 'finale spento: ' + broken('mixer_1'));
     toggleDevicePower('ampli_1');
-    check(broken('mixer_1') === 'FINALE 1 non gli arriva la musica da MIX', 'finale senza XLR: ' + broken('mixer_1'));
+    check(broken('mixer_1') === 'XLR il segnale si ferma qui, tra MIX e FINALE 1: guarda il cavo e le prese ai due capi', 'finale senza XLR: ' + broken('mixer_1'));
     W('xlr', 'mixer_1', 'main_L', 'ampli_1', 'in_L');
     check(broken('mixer_1') === 'SUB da posare', 'sub da posare: ' + broken('mixer_1'));
     // il pulsante nel pannello illumina la catena; si toglie dalle impostazioni

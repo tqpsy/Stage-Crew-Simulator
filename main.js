@@ -692,27 +692,48 @@ function isFaulty (id) {
   const n = c ? faultsLeft(c.type) : 0;
   return n > 0 && placedOfType(c.type).slice(0, n).some(x => x.id === id);
 }
-function fixFault (t) {
+function fixFault (t, who) {
   const s = Profile.data.scarico;
   if (!s || !faultsLeft(t)) return;
   s.fixed = s.fixed || {};
   s.fixed[t] = (s.fixed[t] || 0) + 1;
   Profile.save();
   SFX.success();
-  showToast(FAULTS[t].fix, 'ok');
+  showToast((who || '') + FAULTS[t].fix, 'ok');
   if (window.__scene) window.__scene.refreshFaultMarks();
   updateFoglio();
 }
-// il pulsante "Controlla e sistema" aspetta un attimo: si sta lavorando
+// il pulsante "Controlla e sistema" aspetta un attimo: si sta lavorando.
+// Durante il montaggio un pezzo (non i bauli) si può sistemare da sé, e
+// l'orologio va avanti di CLOCK.fixMin, o lasciare a Macio, che lo rende
+// pronto dopo CLOCK.crewMin mentre tu fai altro (un pezzo alla volta)
+const FAULT_NAME = { ampli: 'il finale', sub: 'il sub', top: 'la testa', quadro: 'il Quadro', pc: 'il PC', par: 'il PAR' };
 function faultBox (box, t, onDone) {
   box.hidden = false;
-  box.innerHTML = '<span><b>⚠ Arrivato difettoso dallo scarico:</b> ' + escapeHtml(FAULTS[t].what) + '.</span>'
-    + '<button type="button" class="fault-fix">' + (t.startsWith('baule:') ? 'Sbroglia i cavi' : 'Controlla e sistema') + '</button>';
+  const baule = t.startsWith('baule:'), crew = !baule && clockOn(), job = crewJob();
+  const what = '<span><b>⚠ Arrivato difettoso dallo scarico:</b> ' + escapeHtml(FAULTS[t].what) + '.</span>';
+  if (crew && job && job.t === t && faultsLeft(t) === 1) {
+    box.innerHTML = what + '<span class="fault-crew-on">Ci sta lavorando Macio: pronto verso le ' + fmtClock(job.at) + '. Intanto lavora sul resto.</span>';
+    return;
+  }
+  box.innerHTML = what + '<span class="fault-acts"><button type="button" class="fault-fix">' + (baule ? 'Sbroglia i cavi' : 'Controlla e sistema') + (crew ? ' <small>tu, ' + CLOCK.fixMin + ' min</small>' : '') + '</button>'
+    + (crew ? '<button type="button" class="fault-crew"' + (job ? ' disabled' : '') + '>Lascialo a Macio <small>'
+      + (job ? 'occupato con ' + (FAULT_NAME[job.t] || 'un altro pezzo') : 'pronto verso le ' + fmtClock(clockMin() + CLOCK.crewMin)) + '</small></button>' : '') + '</span>';
   const b = box.querySelector('.fault-fix');
   b.addEventListener('click', () => {
-    b.disabled = true; b.textContent = t.startsWith('baule:') ? 'Sbrogli…' : 'Controlli…';
+    b.disabled = true; b.textContent = baule ? 'Sbrogli…' : 'Controlli…';
     SFX.button();
-    setTimeout(() => { fixFault(t); box.hidden = true; box.innerHTML = ''; if (onDone) onDone(); }, 1200);
+    setTimeout(() => { if (crew) advanceClock(CLOCK.fixMin); fixFault(t); box.hidden = true; box.innerHTML = ''; if (onDone) onDone(); }, 1200);
+  });
+  const m = box.querySelector('.fault-crew');
+  if (m) m.addEventListener('click', () => {
+    if (crewJob() || !faultsLeft(t)) return;
+    SFX.button();
+    Profile.data.scarico.crew = { t, at: clockMin() + CLOCK.crewMin };
+    Profile.save();
+    showToast('Macio prende ' + (FAULT_NAME[t] || 'il pezzo') + ': pronto verso le ' + fmtClock(Profile.data.scarico.crew.at) + '. Intanto cabla il resto.', 'ok');
+    faultBox(box, t, onDone);
+    updateFoglio();
   });
 }
 
@@ -2573,7 +2594,42 @@ function assistantFavor (fault) {
      del guasto più corto: li calcola preside.html dalla stanchezza che
      riceve, e alla fine la restituisce.
    Nuova partita = tecnico riposato. */
-const FATIGUE = { max: 100, perMinute: 1, perAction: 0.25, scare: 4, failedTest: 2, coffee: 12, coffees: 3, pause: 35, pauseMs: 5 * 60000, slipFrom: 70, slipMax: 0.15 };
+/* l'orologio del montaggio: parte alle 16:30 (più il ritardo dello scarico)
+   e il collaudo è alle 19:30. Corre col tempo di gioco (CLOCK.msPerMin per
+   minuto); la pausa seduti e un pezzo difettoso sistemato da te lo mandano
+   avanti di colpo, mentre Macio sistema un pezzo in parallelo. Arrivare al
+   collaudo in anticipo vale riposo prima della posa dei cavi; in ritardo
+   pesa sulla qualità del montaggio nella valutazione. */
+const CLOCK = { msPerMin: 7000, collaudo: 19 * 60 + 30, fixMin: 10, crewMin: 25, latePerPoint: 3, lateMax: 25, restPerMin: 0.5, restMax: 35 };
+const FATIGUE = { max: 100, perMinute: 1, perAction: 0.25, scare: 4, failedTest: 2, coffee: 12, coffees: 3, pause: 35, pauseMin: 20, slipFrom: 70, slipMax: 0.15 };
+FATIGUE.pauseMs = FATIGUE.pauseMin * CLOCK.msPerMin;
+const montaggioStartMin = () => 16 * 60 + 30 + ((Profile.data.scarico && Profile.data.scarico.delay) || 0);
+const clockMin = () => montaggioStartMin() + Math.floor((gameState.stats.playMs || 0) / CLOCK.msPerMin);
+const fmtClock = m => Math.floor(m / 60) + ':' + String(Math.round(m) % 60).padStart(2, '0');
+const fmtMin = m => m < 60 ? m + ' min' : Math.floor(m / 60) + ' h' + (m % 60 ? ' ' + String(m % 60).padStart(2, '0') : '');
+// l'orologio conta dallo scarico finito al primo collaudo riuscito
+const clockOn = () => gameActive && scaricoDone() && !Profile.data.collaudo && !collaudoDone();
+function advanceClock (min) { if (clockOn()) gameState.stats.playMs += min * CLOCK.msPerMin; }
+function paintClock () {
+  const c = el('#fg-clock');
+  if (!c) return;
+  const m = clockMin(), left = CLOCK.collaudo - m;
+  c.textContent = '🕒 ' + fmtClock(m) + (left >= 0 ? ' · collaudo tra ' + fmtMin(left) : ' · ritardo ' + fmtMin(-left));
+  c.className = 'fg-clock' + (left < 0 ? ' late' : left <= 30 ? ' tight' : '');
+}
+// Macio sistema un pezzo difettoso mentre tu lavori: pronto a un'ora fissa
+function crewJob () {
+  const s = Profile.data.scarico, j = s && s.crew;
+  return j && FAULTS[j.t] && Number.isFinite(+j.at) ? j : null;
+}
+function crewTick () {
+  const j = crewJob();
+  if (!j || clockMin() < j.at) return;
+  Profile.data.scarico.crew = null;
+  if (faultsLeft(j.t)) fixFault(j.t, 'Macio ha finito: ');
+  else Profile.save();
+  if (rearPanelId && (gameState.placed[rearPanelId] || {}).type === j.t) { el('#rear-fault').hidden = true; el('#rear-fault').innerHTML = ''; }
+}
 const fatigue = () => Profile.data.fatigue || 0;
 // quiet: senza salvare subito (il tempo che passa ogni secondo si salva con
 // la prossima azione o all'uscita dalla pagina)
@@ -2619,7 +2675,7 @@ function paintPausa () {
   cb.disabled = !c || f < 1;
   el('#pausa-coffee-n').textContent = c ? '−' + FATIGUE.coffee + ' subito · ne restano ' + c : 'thermos vuoto';
   sb.disabled = !!block || f < 1;
-  el('#pausa-sit-n').textContent = block || '−' + FATIGUE.pause + ' · passano ' + Math.round(FATIGUE.pauseMs / 60000) + ' minuti';
+  el('#pausa-sit-n').textContent = block || '−' + FATIGUE.pause + ' · passano ' + FATIGUE.pauseMin + ' minuti' + (clockOn() ? ': collaudo alle 19:30, ora sono le ' + fmtClock(clockMin()) : '');
   el('#pausa-beer').textContent = '🍺 ' + beers + (beers === 1 ? ' birra' : ' birre') + ' della crew: al montaggio non si bevono. Negli show una ti rimette in sesto o vale un favore del capo; quelle che restano si bevono con Macio a fine serata.';
 }
 function openPausa () {
@@ -2647,7 +2703,7 @@ function takePause () {
   gameState.stats.playMs += FATIGUE.pauseMs;   // il tempo passa anche per la valutazione
   setFatigue(fatigue() - FATIGUE.pause);
   closePausa();
-  showToast('🪑 Cinque minuti seduto sul case. Stanchezza ' + Math.round(fatigue()) + '%, ma l\'orologio è andato avanti.', 'ok');
+  showToast('🪑 ' + FATIGUE.pauseMin + ' minuti seduto sul case. Stanchezza ' + Math.round(fatigue()) + '%, ma l\'orologio è andato avanti' + (clockOn() ? ': sono le ' + fmtClock(clockMin()) + '.' : '.'), 'ok');
 }
 
 // tempo di gioco: conta solo con la pagina in vista e il menù chiuso. Nel
@@ -2656,6 +2712,7 @@ setInterval(() => {
   if (gameActive && !menuOpen && !document.hidden) {
     gameState.stats.playMs += 1000; cambioTick(1000);
     if (!presideOpen) tireOut(FATIGUE.perMinute / 60, true);
+    crewTick(); paintClock();
   }
 }, 1000);
 
@@ -3527,7 +3584,10 @@ function presideMicHint () {
 window.addEventListener('message', ev => {
   const d = ev.data, f = el('#preside-frame');
   if (!presideOpen || !d || !f || ev.source !== f.contentWindow) return;
-  if (d.type === 'preside-pronto') f.contentWindow.postMessage({ type: 'preside-dati', wired: micChannel(), left: caviLeftovers(), beers: Profile.data.beers || 0, fatigue: fatigue(), pars: presidePars() }, '*');
+  if (d.type === 'preside-pronto') {
+    const info = Profile.data.serviceInfo;
+    f.contentWindow.postMessage({ type: 'preside-dati', wired: micChannel(), left: caviLeftovers(), beers: Profile.data.beers || 0, boss: info && info.boss ? info.boss : '', fatigue: fatigue(), pars: presidePars() }, '*');
+  }
   if (d.type === 'preside-fine') finishPreside(d.result || { skipped: true });
 });
 function finishPreside (r) {
@@ -3537,9 +3597,10 @@ function finishPreside (r) {
   const skipped = !!r.skipped;
   const num = (v, d) => Number.isFinite(+v) ? Math.round(+v) : d;
   const beers = skipped ? 0 : Math.max(0, num(r.beers, 0)), drunk = skipped ? 0 : Math.max(0, num(r.drunk, 0));
-  Profile.data.preside = { skipped, grad: skipped ? 0 : num(r.grad, 0), rep: skipped ? 0 : num(r.rep, 0), beers, drunk,
-    larsens: skipped ? 0 : num(r.larsens, 0), fault: !skipped && !!r.fault, faultFix: skipped || !['fast', 'ok', 'gerry'].includes(r.faultFix) ? null : r.faultFix };
-  Profile.data.beers = Math.max(0, (Profile.data.beers || 0) - drunk + beers);
+  const paid = skipped ? 0 : Math.min(1, Math.max(0, num(r.paid, 0)));   // la birra del capo, se l'hai mandato al guasto
+  Profile.data.preside = { skipped, grad: skipped ? 0 : num(r.grad, 0), rep: skipped ? 0 : num(r.rep, 0), beers, drunk: drunk + paid,
+    larsens: skipped ? 0 : num(r.larsens, 0), fault: !skipped && !!r.fault, faultFix: skipped || !['fast', 'ok', 'capo', 'gerry'].includes(r.faultFix) ? null : r.faultFix };
+  Profile.data.beers = Math.max(0, (Profile.data.beers || 0) - drunk - paid + beers);
   // la stanchezza a fine discorso (salito col tempo, sceso con le birre bevute)
   if (!skipped && Number.isFinite(+r.fatigue)) setFatigue(+r.fatigue);
   const rep = skipped ? 0 : addReputation(Profile.data.preside.rep, 'Discorso del preside alla festa della scuola', 'L' + LEVEL_ID + ':preside');
@@ -3954,8 +4015,13 @@ function serataReport () {
   // qualità del montaggio: prove fallite, scatti, colpi nelle casse, posa dei cavi
   const cavi = d.cavi || {};
   const caviCut = cavi.skipped || cavi.late ? 30 : ({ 3: 0, 2: 10, 1: 20 }[n(cavi.stars)] || 0);
-  const montaggio = clamp(100 - 10 * failed - 15 * trips - 15 * pops - caviCut);
+  // l'ora del collaudo (le partite di prima non l'hanno: nessun ritardo)
+  const at = col && Number.isFinite(+col.clock) ? +col.clock : null;
+  const late = at == null ? 0 : Math.max(0, at - CLOCK.collaudo);
+  const lateCut = Math.min(CLOCK.lateMax, Math.ceil(late / CLOCK.latePerPoint));
+  const montaggio = clamp(100 - 10 * failed - 15 * trips - 15 * pops - caviCut - lateCut);
   const mBits = [failed ? failed + (failed === 1 ? ' prova fallita' : ' prove fallite') : 'collaudo senza prove fallite'];
+  if (at != null) mBits.push('collaudo alle ' + fmtClock(at) + (late ? ', ' + fmtMin(late) + ' di ritardo' : at < CLOCK.collaudo ? ', ' + fmtMin(CLOCK.collaudo - at) + ' d\'anticipo' : ', in orario'));
   if (trips) mBits.push(trips + (trips === 1 ? ' protezione scattata' : ' protezioni scattate'));
   if (pops) mBits.push(pops + (pops === 1 ? ' colpo nelle casse' : ' colpi nelle casse'));
   mBits.push(cavi.skipped ? 'posa dei cavi saltata' : cavi.late ? 'cavi ancora in giro alle 20:30' : 'posa dei cavi ' + '★'.repeat(n(cavi.stars)) + '☆'.repeat(3 - n(cavi.stars)));
@@ -3966,7 +4032,7 @@ function serataReport () {
   const nf = (Array.isArray(sc.faultyIds) ? sc.faultyIds : []).filter(id => FAULT_BY_CASE[id]).length;
   for (let i = 0; i < nf; i++) fixes.push(1);
   const pr = d.preside || {};
-  if (!pr.skipped && (pr.fault || pr.faultFix)) fixes.push({ fast: 1, ok: 0.6, gerry: 0 }[pr.faultFix] ?? 0.6);
+  if (!pr.skipped && (pr.fault || pr.faultFix)) fixes.push({ fast: 1, ok: 0.6, capo: 0.6, gerry: 0 }[pr.faultFix] ?? 0.6);
   const dj = d.dj || {};
   if (!dj.skipped && dj.fase) fixes.push(dj.fase === 'tu' ? (dj.faseFast === false ? 0.6 : 1) : dj.fase === 'capo' ? 0.6 : 0);
   if (!dj.skipped && dj.par) fixes.push({ fast: 1, ok: 0.6, capo: 0.6, ripiego: 0.4, no: 0 }[dj.par] ?? 0.6);
@@ -3976,7 +4042,7 @@ function serataReport () {
   const solved = fixes.filter(x => x > 0).length, fast = fixes.filter(x => x >= 1).length, slow = solved - fast, left = fixes.length - solved;
   const gBits = [];
   if (nf) gBits.push(nf + (nf === 1 ? ' pezzo difettoso sistemato' : ' pezzi difettosi sistemati'));
-  if (pr.faultFix) gBits.push({ fast: 'microfono del preside riparato in fretta', ok: 'microfono del preside riparato, ma con calma', gerry: 'il microfono del preside l\'ha sistemato Gerry' }[pr.faultFix]);
+  if (pr.faultFix) gBits.push({ fast: 'microfono del preside riparato in fretta', ok: 'microfono del preside riparato, ma con calma', capo: 'microfono del preside mandato al capo', gerry: 'il microfono del preside l\'ha sistemato Gerry' }[pr.faultFix]);
   if (!dj.skipped && dj.fase) gBits.push({ tu: 'fase del DJ riarmata da te', capo: 'fase del DJ riarmata dal capo', gerry: 'fase del DJ lasciata a Gerry' }[dj.fase]);
   if (!dj.skipped && dj.par) gBits.push({ fast: 'PAR che non rispondeva sistemato in fretta', ok: 'PAR che non rispondeva sistemato tardi', capo: 'PAR che non rispondeva mandato al capo', ripiego: 'PAR aggirato col ripiego sui tre buoni', no: 'PAR che non rispondeva mai sistemato' }[dj.par]);
   if (cb.done) gBits.push(cb.slow ? 'cambio palco a pazienza finita' : 'cambio palco in ' + mmss(n(cb.ms)));
@@ -4006,13 +4072,14 @@ function serataReport () {
 
   // il perché: il punto forte e quello da migliorare, con un consiglio pratico
   const praise = {
-    montaggio: 'Montaggio pulito' + (failed ? ' (' + mBits[0] + ')' : ': collaudo al primo colpo') + (trips || pops ? '.' : ', niente scatti né colpi nelle casse.'),
+    montaggio: 'Montaggio pulito' + (failed ? ' (' + mBits[0] + ')' : ': collaudo al primo colpo') + (trips || pops ? '.' : ', niente scatti né colpi nelle casse.') + (at != null && !late ? ' E in orario.' : ''),
     guasti: guasti >= 90 ? 'Ottimo troubleshooting: i guasti li hai trovati tu, e in fretta.' : 'Buon troubleshooting: ' + solved + ' guasti su ' + fixes.length + ' risolti.',
     show: 'Gli show sono andati forte: il pubblico era con te.',
     danni: 'Materiale trattato bene: niente rotto, niente dimenticato.'
   };
   const tip = {
     montaggio: failed ? 'prima di premere la prova guarda il foglio: tutte le voci spuntate, poi prova.'
+      : late ? 'sei arrivato al collaudo in ritardo: lascia i pezzi difettosi a Macio mentre cabli, e il caffè costa meno tempo della pausa seduto.'
       : trips ? 'cabla con l\'impianto spento e accendi i pesanti uno alla volta.'
       : pops ? 'accendi finale e sub per ultimi, e spegnili per primi.'
       : 'alla posa dei cavi tieni libera la via di fuga e attraversa i passaggi dritto.',
@@ -4030,9 +4097,10 @@ function serataReport () {
 
   const ms = col ? n(col.ms) : 0;
   return {
-    score, stars, title, why, quality, ms,
+    score, stars, title, why, quality, ms, at,
     rows: [
-      ['Tempo', ms ? mmss(ms) : '—', 'montaggio fino al collaudo · serata intera ' + mmss(n(d.serata ? d.serata.ms : lv.stats && lv.stats.playMs))],
+      ['Tempo', at != null ? 'collaudo ' + fmtClock(at) : ms ? mmss(ms) : '—', (at != null ? (late ? fmtMin(late) + ' di ritardo · ' : at < CLOCK.collaudo ? fmtMin(CLOCK.collaudo - at) + ' d\'anticipo · ' : 'in orario · ') : '')
+        + 'montaggio in ' + (ms ? mmss(ms) : '—') + ' · serata intera ' + mmss(n(d.serata ? d.serata.ms : lv.stats && lv.stats.playMs))],
       ['Errori', String(failed + trips + pops + larsens), [failed && 'prove fallite ' + failed, trips && 'protezioni ' + trips, pops && 'colpi ' + pops, larsens && 'larsen ' + larsens].filter(Boolean).join(' · ') || 'nessuno'],
       ['Guasti risolti', solved + ' su ' + fixes.length, fixes.length ? [fast && fast + ' bene e in fretta', slow && slow + ' tardi o con un aiuto', left && left + ' lasciati ad altri'].filter(Boolean).join(' · ') : 'nessun guasto'],
       ['Danni', String(broken + damaged + taken), dBits.join(' · ')],
@@ -4051,7 +4119,7 @@ function serataRecord (r) {
   const best = list[0] || null;
   if (!d.serata) {
     d.serata = { score: r.score, stars: r.stars, ms: gameState.stats.playMs, montaggioMs: r.ms, at: Date.now() };
-    d.records[key] = list.concat({ at: d.serata.at, player: d.player, service: d.service, score: r.score, stars: r.stars, montaggioMs: r.ms })
+    d.records[key] = list.concat({ at: d.serata.at, player: d.player, service: d.service, score: r.score, stars: r.stars, montaggioMs: r.ms, clock: r.at })
       .sort((a, b) => b.score - a.score || (a.montaggioMs || 9e9) - (b.montaggioMs || 9e9)).slice(0, SERATA_KEEP);
     Profile.save();
     return { best, fresh: true, newBest: !best || r.score > best.score };
@@ -4075,7 +4143,7 @@ function openSerata () {
   el('#serata-why').innerHTML = r.why.map(w => '<span>' + escapeHtml(w) + '</span>').join('');
   const b = rec.best;
   el('#serata-record').textContent = rec.newBest ? (b ? 'Nuovo record! Prima il meglio era ' + b.score + ' punti.' : 'Prima serata registrata: rigiocala per battere questo punteggio.')
-    : b ? 'Il tuo record: ' + '★'.repeat(b.stars) + ' ' + b.score + ' punti' + (b.montaggioMs ? ', montaggio in ' + mmss(b.montaggioMs) : '') + '.' : '';
+    : b ? 'Il tuo record: ' + '★'.repeat(b.stars) + ' ' + b.score + ' punti' + (Number.isFinite(b.clock) ? ', collaudo alle ' + fmtClock(b.clock) : b.montaggioMs ? ', montaggio in ' + mmss(b.montaggioMs) : '') + '.' : '';
   el('#serata-modal').classList.add('show');
   setSceneInput(false);
   if (rec.fresh) (r.stars >= 4 ? SFX.success : SFX.button)();
@@ -4197,7 +4265,11 @@ applySettings();
 /* Reset */
 el('#reset-btn').addEventListener('click', () => {
   closeMenu();
-  if (window.__scene) window.__scene.resetLevel();
+  if (!window.__scene) return;
+  // si ricomincia il montaggio, ma l'orologio non torna indietro
+  const ms = gameState.stats.playMs;
+  window.__scene.resetLevel();
+  if (clockOn()) { gameState.stats.playMs = ms; saveLevel(); updateFoglio(); }
 });
 
 /* Undo/Redo */
@@ -5208,6 +5280,7 @@ function musicReach () {
    ok, why }; la catena si ferma al primo rotto. */
 const TRACE_AUDIO = ['pc', 'scheda', 'mixer', 'ampli', 'sub', 'top'];
 const TRACE_LIGHTS = ['controller', 'par'];
+const TRACE_CABLE = { scheda: 'USB-C', mixer: 'jack', ampli: 'XLR', sub: 'Speakon', top: 'Speakon LINK' };
 function whyDown (c) {
   const def = COMPONENT_TYPES[c.type];
   if (def.busPowered) return 'senza USB dal PC';
@@ -5221,15 +5294,24 @@ function traceChain (compId) {
   if (!comp) return null;
   const steps = [];
   const typeLabel = t => COMPONENT_TYPES[t].label;
-  const add = (ids, label, ok, why) => { steps.push({ ids, label, ok, why }); return ok; };
+  // ok: true passa, false si ferma qui, null non raggiunto (dopo il punto in cui si ferma)
+  const add = (ids, label, ok, why, cable) => { steps.push({ ids, label, ok, why, cable: !!cable }); return ok; };
+  // tra un pezzo e l'altro il cavo (SORGENTE → CAVO → PEZZO → CAVO → USCITA):
+  // se il pezzo è acceso ma il segnale non gli arriva, si è fermato nel cavo
+  // (manca, è nella presa sbagliata o è il cavo sbagliato)
+  const hop = (cable, prev, bad) => {
+    if (bad && !whyDown(bad)) return add([], cable, false, 'il segnale si ferma qui, tra ' + prev + ' e ' + compLabel(bad.id) + ': guarda il cavo e le prese ai due capi', true);
+    return bad ? true : add([], cable, true);
+  };
   if (TRACE_AUDIO.includes(comp.type)) {
     const reach = musicReach();
     TRACE_AUDIO.every((t, i) => {
       const cs = placedOfType(t);
       if (!cs.length) return add([], typeLabel(t), false, 'da posare');
       const bad = cs.find(c => !reach.has(c.id));
+      if (i && !hop(TRACE_CABLE[t], typeLabel(TRACE_AUDIO[i - 1]), bad)) { add([bad.id], compLabel(bad.id), null); return false; }
       if (!bad) return add(cs.map(c => c.id), cs.length > 1 ? typeLabel(t) + ' ×' + cs.length : compLabel(cs[0].id), true);
-      return add([bad.id], compLabel(bad.id), false, whyDown(bad) || (i ? 'non gli arriva la musica da ' + typeLabel(TRACE_AUDIO[i - 1]) : 'spento'));
+      return add([bad.id], compLabel(bad.id), false, whyDown(bad) || 'spento');
     });
     return { title: 'Musica', steps };
   }
@@ -5241,8 +5323,9 @@ function traceChain (compId) {
       if (!pars.length) add([], typeLabel('par'), false, 'da posare');
       else {
         const bad = pars.find(p => !isRunning(p.id) || dmxUniverse(p.id) == null);
-        if (!bad) add(pars.map(p => p.id), 'PAR ×' + pars.length, true);
-        else add([bad.id], compLabel(bad.id), false, whyDown(bad) || 'non sente la consolle (DMX)');
+        if (!bad) { add([], 'DMX', true, null, true); add(pars.map(p => p.id), 'PAR ×' + pars.length, true); }
+        else if (whyDown(bad)) add([bad.id], compLabel(bad.id), false, whyDown(bad));
+        else { add([], 'DMX', false, 'il segnale si ferma prima di ' + compLabel(bad.id) + ': segui la catena OUT → IN → THRU dalla consolle', true); add([bad.id], compLabel(bad.id), null); }
       }
     }
     return { title: 'DMX', steps };
@@ -5298,6 +5381,13 @@ function traceChain (compId) {
     return add([c.id], compLabel(c.id), !why, why);
   });
   return { title: 'Corrente', steps };
+}
+
+// la catena a parole: PC ✓ → USB-C ✓ → SCHEDA ✓ → jack ✗ → MIX 1, poi dove si ferma e perché
+function traceLine (tr) {
+  const broken = tr.steps.find(x => x.ok === false);
+  return tr.title + ': ' + tr.steps.map(x => x.label + (x.ok ? ' ✓' : x.ok === false ? ' ✗' : '')).join(' → ')
+    + (broken ? '. ' + (broken.cable ? broken.why[0].toUpperCase() + broken.why.slice(1) : broken.label + ': ' + broken.why) + '.' : '  —  tutto a posto.');
 }
 
 // seleziona un cavo come farebbe il suo pulsante nella scheda Cavi
@@ -6224,9 +6314,13 @@ function updateFoglio () {
       checks.filter(x => x.ok && !foglioSeen.ok.has(x.what)).forEach(x => window.__scene.floatCheck(x.ids || []));
     foglioSeen = { key, ok: okNow };
   } else foglioSeen = null;
-  box.innerHTML = '<button class="fg-head" id="foglio-toggle">' + icon + head + '<span class="fg-caret">' + (foglioOpen ? '▾' : '▸') + '</span></button>'
+  const job = giro < GIRO_COLLAUDO && crewJob();
+  if (job && foglioOpen) body += '<p class="fg-note">Macio sta sistemando ' + escapeHtml(FAULT_NAME[job.t] || 'un pezzo') + ': pronto verso le ' + fmtClock(job.at) + '.</p>';
+  box.innerHTML = '<button class="fg-head" id="foglio-toggle">' + icon + head + '<span class="fg-caret">' + (foglioOpen ? '▾' : '▸') + '</span>'
+    + (clockOn() ? '<small class="fg-clock" id="fg-clock"></small>' : '') + '</button>'
     + (patience ? '<div class="fg-patience">' + patienceHtml() + '</div>' : '')
     + (foglioOpen ? '<div class="fg-body">' + (giro < GIRO_COLLAUDO || !caviDone() ? '<div class="fg-steps">' + steps + '</div>' : '') + body + '</div>' : '');
+  paintClock();
   el('#foglio-toggle').addEventListener('click', () => { foglioOpen = !foglioOpen; SFX.button(); updateFoglio(); });
   const go = el('#foglio-cambio');
   if (go) go.addEventListener('click', () => { SFX.button(); startCambioDj(); });
@@ -9589,14 +9683,25 @@ class StageScene extends Phaser.Scene {
       dmx: 'due PAR si pestano i piedi sull\'indirizzo.',
       fault: 'un pezzo arrivato difettoso dallo scarico va ancora controllato: toccalo (ha il segno arancione).'
     }[miss.kind];
-    // secondo tentativo: il pezzo colpevole in rosso; dal terzo parla il capo
-    if (miss && n >= 2) miss.ids.forEach(id => { const v = this.compVisuals[id]; if (v) this.setGlow(v, true); });
+    // secondo tentativo: si segue il segnale dalla sorgente (verde fin dove
+    // passa, rosso dove si ferma); se il guasto non è nella catena, il pezzo
+    // colpevole in rosso. Dal terzo parla il capo
+    let tr = null;
+    if (miss && n >= 2 && ['wire', 'on', 'place'].includes(miss.kind)) {
+      const src = { corrente: findQuadro(), audio: placedOfType('pc')[0], luci: placedOfType('controller')[0] }[g.id];
+      tr = src && traceChain(src.id);
+      if (tr && !tr.steps.some(x => x.ok === false)) tr = null;
+    }
+    if (tr) hint = 'segui il segnale. ' + traceLine(tr);
     const exact = (miss && n >= 3 ? ' ' + boss + ' ti indica il foglio: «' + miss.what + '».' : '') + proWhy(result.overPhase ? 'overPhase' : result.overBudget ? 'overBudget' : miss && miss.kind, g.id);
     setCircuitStatus('error');
     saveLevel();
     if (g.id === 'corrente') { showToast('Niente corrente: ' + hint + exact, 'bad'); this.fxSparks(); }
     else if (g.id === 'audio') { showToast('Le casse restano mute: ' + hint + exact, 'bad'); this.fxCrackle(); }
     else { showToast('Le luci non rispondono: ' + hint + exact, 'bad'); this.fxLightsTilt(); }
+    // dopo gli effetti, così il colore non viene spento da chi li ferma
+    if (tr) this.glowTrace(tr);
+    else if (miss && n >= 2) miss.ids.forEach(id => { const v = this.compVisuals[id]; if (v) this.setGlow(v, true); });
   }
 
   // una voce del foglio appena spuntata: un ✓ verde sale dai suoi pezzi
@@ -9744,14 +9849,28 @@ class StageScene extends Phaser.Scene {
     const ch = micChannel();
     const next = ch ? ' Microfono pronto sul CH ' + ch + ': il preside può salire sul palco.'
       : ' Prossimo: arriva il preside. Monta l\'asta sul palco, il microfono sulla giraffa e collegalo con un XLR a un ingresso MIC del mixer.';
+    // l'ora del collaudo: in anticipo ci si siede prima della posa, in ritardo pesa nella valutazione
+    let when = '';
+    if (clockOn()) {
+      const at = clockMin(), early = CLOCK.collaudo - at;
+      const rest = early > 0 ? Math.min(CLOCK.restMax, Math.round(early * CLOCK.restPerMin)) : 0;
+      if (rest) setFatigue(fatigue() - rest);
+      const built = Object.values(gameState.placed).filter(c => c.type !== 'allaccio').length;
+      when = 'Collaudo alle ' + fmtClock(at) + (early > 0 ? ', ' + fmtMin(early) + ' d\'anticipo' : early < 0 ? ', ' + fmtMin(-early) + ' di ritardo' : ', in orario')
+        + ': ' + built + ' pezzi e ' + gameState.edges.length + ' cavi, tutto funziona.'
+        + (rest ? ' Prima di Gerry ti siedi sul case: stanchezza −' + rest + '.' : early < 0 ? ' Il cliente ha guardato l\'orologio.' : '') + ' ';
+      this.collaudoClock = at;
+    }
     this.repGain = gameActive ? addRecord() : 0;
     // il montaggio fino al primo collaudo riuscito, per la valutazione della serata
     if (gameActive && !Profile.data.collaudo) {
       const st = gameState.stats;
       Profile.data.collaudo = { ms: st.playMs, tests: st.tests, failedTests: st.failedTests, trips: gameState.trips || 0, rcdTrips: gameState.rcdTrips || 0, pops };
+      if (when) Profile.data.collaudo.clock = this.collaudoClock;
     }
     this.caviAfterShow = gameActive && !caviDone();
-    showToast('Impianto collaudato, si va in scena! ' + (tip ? 'Piccolo consiglio: ' + tip : 'Procedura perfetta.')
+    updateFoglio();
+    showToast('Impianto collaudato, si va in scena! ' + when + (tip ? 'Piccolo consiglio: ' + tip : 'Procedura perfetta.')
       + (this.repGain ? ' Reputazione +' + this.repGain + '.' : gameActive ? ' Fase già completata: la reputazione non cambia.' : '') + next, 'ok');
     saveLevel();
     this.playSuccessSequence();
@@ -10066,13 +10185,18 @@ class StageScene extends Phaser.Scene {
   showTrace (compId) {
     const tr = traceChain(compId);
     if (!tr) return;
+    const text = this.glowTrace(tr);
+    showToast(text, tr.steps.some(x => x.ok === false) ? 'bad' : 'ok');
+  }
+  // la catena sulla scena (verde fin dove passa, rosso dove si ferma, ambra
+  // il pezzo che aspetta il segnale) e a parole; si spegne da sola
+  glowTrace (tr) {
     this.clearTrace();
-    const broken = tr.steps.find(x => !x.ok);
     this.traceIds = tr.steps.flatMap(x => x.ids);
-    tr.steps.forEach(x => x.ids.forEach(id => { const v = this.compVisuals[id]; if (v) this.setGlow(v, true, x.ok ? 0x49b06a : 0xe0503f); }));
-    const text = tr.steps.map(x => x.label + (x.ok ? ' ✓' : ' ✗ ' + x.why)).join('  →  ');
-    showToast(tr.title + ': ' + text + (broken ? '' : '  —  tutto a posto.'), broken ? 'bad' : 'ok');
+    tr.steps.forEach(x => x.ids.forEach(id => { const v = this.compVisuals[id]; if (v) this.setGlow(v, true, x.ok ? 0x49b06a : x.ok === false ? 0xe0503f : 0xf2a541); }));
+    const text = traceLine(tr);
     this.traceTimer = this.time.delayedCall(Math.max(4000, text.length * 60), () => this.clearTrace());
+    return text;
   }
   clearTrace () {
     if (this.traceTimer) { this.traceTimer.remove(false); this.traceTimer = null; }
