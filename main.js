@@ -5063,6 +5063,9 @@ function traceChain (compId) {
 
 // seleziona un cavo come farebbe il suo pulsante nella scheda Cavi
 function selectCable (cableId) {
+  // un cavo diverso: il capo lasciato pronto dalla catena (vedi chainNext) cade
+  const pend = gameState.pendingPort;
+  if (pend && pend.auto && cableId !== gameState.selectedCable && window.__scene) window.__scene.cancelPending();
   gameState.selectedCable = cableId;
   updateCableHand();
 }
@@ -5077,14 +5080,86 @@ function noFreeSocketHint (signal) {
     'Prendi l\'adattatore ' + cableName(adapter) + ' dal baule (scheda Cavi) e collegalo al Quadro' +
     (signal === 'powercon' ? ', oppure usa il passante PowerCON di un PAR.' : '.');
 }
+/* la presa portId di compId può prendere l'altro capo del cavo in mano?
+   (segnale giusto, direzione opposta, libera o multipla del Quadro) */
+function portTakesPending (compId, portId) {
+  const pend = gameState.pendingPort, cable = CABLE_TYPES[gameState.selectedCable];
+  const pdef = pend && getPortDef(pend.componentId, pend.portId), p = getPortDef(compId, portId);
+  if (!pdef || !p || !cable || compId === pend.componentId || p.dir === pdef.dir) return false;
+  const want = cable.endpoints.length === 2 ? cable.endpoints.filter(x => x !== pdef.signal) : cable.endpoints;
+  return want.includes(p.signal) && (p.multi || !portHasConnection(compId, p.id));
+}
+
+/* COLLEGAMENTO AL VOLO — con un cavo in mano, toccare il dispositivo da
+   collegare lo collega subito se ha una sola presa adatta libera (il DMX IN
+   del faro dopo, l'INPUT della cassa). Con più prese da scegliere (Quadro,
+   mixer) si apre il pannello come sempre. Le ciabatte hanno prese tutte
+   uguali: si prende la prima libera. */
+function quickPortFor (compId) {
+  const pend = gameState.pendingPort, comp = gameState.placed[compId];
+  if (!pend || !comp || !gameState.selectedCable || isFaulty(compId)) return null;
+  const ports = COMPONENT_TYPES[comp.type].ports.filter(pt => !pt.lead && portTakesPending(compId, pt.id));
+  if (ports.length === 1) return ports[0].id;
+  if (ports.length > 1 && comp.type.startsWith('ciabatta') && ports.every(pt => pt.signal === ports[0].signal && !pt.multi && !pt.phase)) return ports[0].id;
+  return null;
+}
+// tocco su un dispositivo nella scena: collega al volo, se no apre il pannello
+function tapDevice (compId) {
+  const comp = gameState.placed[compId];
+  // stativo e asta: conta il faro o il microfono che reggono
+  const held = comp && (comp.type === 'stativo' || comp.type === 'asta') && !isFaulty(compId) && mountedOn(comp);
+  const id = held ? held.id : compId;
+  const port = quickPortFor(id);
+  if (port) {
+    const n = gameState.edges.length;
+    rearPanelId = id;
+    el('#rear-detail').innerHTML = '';
+    onRearPortClick(id, port, true);
+    if (gameState.edges.length > n) return;
+    rearPanelId = null;
+    // non collegato (un connettore scivolato, il capo che avvisa): il
+    // messaggio è già a schermo, il cavo resta in mano per riprovare
+    if (gameState.pendingPort) return;
+  }
+  openRearPanel(compId);
+}
+
+/* CATENA — collegato un faro (o una cassa) dal suo ingresso, se ha
+   l'uscita passante (THRU, LINK) libera il cavo resta in mano già infilato
+   lì: basta toccare il prossimo per continuare la cascata DMX o PowerCON. */
+function chainNext (edge) {
+  const scene = window.__scene, cable = CABLE_TYPES[edge.signal];
+  if (!scene || !cable || cable.endpoints.length === 2 || !cableItem(edge.signal)) return;
+  const comp = gameState.placed[edge.b];
+  const thru = comp && COMPONENT_TYPES[comp.type].ports.find(pt => /_thru$/.test(pt.id) && pt.dir === 'out' &&
+    cable.endpoints.includes(pt.signal) && !portHasConnection(edge.b, pt.id));
+  if (!thru) return;
+  gameState.pendingPort = { componentId: edge.b, portId: thru.id, auto: true };
+  if (!scene.compatibleTargets().length) { gameState.pendingPort = null; return; }
+  scene.highlightPending(edge.b, thru.id, true);
+  scene.redrawEdges();
+}
 const CIABATTE_FINITE = 'Ciabatte finite: non ne servono altre. Le prese del Quadro accettano più cavi, e con gli adattatori del baule (CEE / Schuko, CEE / PowerCON) ci colleghi qualunque spina.';
-function onRearPortClick (compId, portId) {
+function onRearPortClick (compId, portId, viaTap) {
   const scene = window.__scene;
   if (!scene) return;
   const p = getPortDef(compId, portId);
   const busy = edgesOnPort(compId, portId);
-  const pending = gameState.pendingPort;
-  const isPendingPort = pending && pending.componentId === compId && pending.portId === portId;
+  let pending = gameState.pendingPort;
+  let isPendingPort = pending && pending.componentId === compId && pending.portId === portId;
+  // il capo pronto della catena è già in mano: toccarlo non lo fa cadere
+  if (isPendingPort && pending.auto) {
+    pending.auto = false;
+    if (!rearIsTable()) closeRearPanel();
+    return;
+  }
+  // il capo pronto della catena si collega solo toccando il dispositivo
+  // dopo (tapDevice): una presa scelta nel pannello fa ripartire da qui,
+  // così ampli → SUB 1 e poi ampli → SUB 2 non lega il LINK del SUB 1
+  if (pending && pending.auto && !isPendingPort && (!viaTap || !portTakesPending(compId, portId))) {
+    scene.cancelPending();
+    pending = null; isPendingPort = false;
+  }
 
   // spine già attaccate (ciabatte, PC, scheda): il cavo è il loro. Con un
   // adattatore in mano (es. CEE / Schuko) la spina si infila nella sua presa
@@ -5154,7 +5229,11 @@ function onRearPortClick (compId, portId) {
     else if (picked) showToast('Cavo in mano: ora tocca il dispositivo da collegare (quelli in verde hanno una presa adatta libera).', 'ok');
     else if (!arced) showToast('Collegato: ' + compLabel(compId) + ' · ' + portLabel(compId, portId) + '.', 'ok');
     // il cavo appena collegato resta in mano: si stende per terra
-    if (connected) scene.startLay(gameState.edges[gameState.edges.length - 1].id);
+    if (connected) {
+      const edge = gameState.edges[gameState.edges.length - 1];
+      scene.startLay(edge.id);
+      chainNext(edge);
+    }
     return;
   }
   renderRearPanel();
@@ -7875,7 +7954,14 @@ class StageScene extends Phaser.Scene {
       if (event && event.stopPropagation) event.stopPropagation();
       if (pointer.rightButtonDown()) return;
       // cavo in mano: i dispositivi non rispondono, si prende solo il cavo
-      if (this.lay) { if (!this.layPointerDown(pointer)) this.layLocked(); return; }
+      if (this.lay) {
+        if (this.layPointerDown(pointer)) return;
+        // cavo della catena pronto: toccare il prossimo in verde lascia
+        // giù questo e collega quello
+        const tid = this.pickDeviceAt(pointer.worldX, pointer.worldY, 0) || id;
+        if (!gameState.pendingPort || !(this.targetIds || []).includes(tid)) { this.layLocked(); return; }
+        this.endLay(true);
+      }
       // un pezzo "armato" dalla barra si posa anche toccando sopra un dispositivo
       if (gameState.selectedPieceType) { this.placeArmedPieceAt(pointer.worldX, pointer.worldY); return; }
       this.onDevicePress(this.pickDeviceAt(pointer.worldX, pointer.worldY, 0) || id, pointer);
@@ -8608,10 +8694,13 @@ class StageScene extends Phaser.Scene {
   updateLayBar (e, len, max) {
     const name = (cableItem(e.signal) || {}).name || cableName(e.signal);
     const over = max && len > max + 1e-6;
+    // cavo della catena già pronto nel THRU (vedi chainNext)
+    const chain = gameState.pendingPort && gameState.pendingPort.auto ? gameState.pendingPort : null;
     el('#lay-text').innerHTML = `<b>${escapeHtml(name)}</b> · <span class="${over || this.lay.taut ? 'lay-over' : ''}">${fmtM(len)}${max ? ' / ' + max + ' m' : ''}</span>`
       + (this.layIssue && !this.lay.taut ? `<small class="lay-over">${escapeHtml(this.layIssue.text)}</small>`
         : `<small>${this.lay.taut ? 'Il cavo è teso: non arriva più in là.' : over ? 'Troppo corto: cerca una strada più breve.'
           : this.lay.drag && this.lay.drag.armed ? 'Lascia il dito: la piega si toglie (oppure trascinala).'
+          : chain ? `<span class="lay-next">Il ${escapeHtml(name)} continua dal ${escapeHtml(portLabel(chain.componentId, chain.portId))}: tocca il prossimo in verde.</span>`
           : this.lay.route.bends.length ? 'Trascina un pallino per piegare il cavo; tienilo premuto e lascia per toglierlo.' : 'Il cavo va dritto: con «+ Piega» lo pieghi dove vuoi.'}</small>`);
   }
 
@@ -8813,11 +8902,11 @@ class StageScene extends Phaser.Scene {
      compare un menu "Quale?" con i loro nomi. */
   openPanelAt (wx, wy, fallbackId) {
     const c = this.devicesNear(wx, wy, TOUCH_SLOP_PX + 8);
-    if (!c.length) { if (fallbackId) openRearPanel(fallbackId); return !!fallbackId; }
+    if (!c.length) { if (fallbackId) tapDevice(fallbackId); return !!fallbackId; }
     const first = c[0];
     const close = c.filter(x => x.id !== first.id && (
       first.edge > 0 ? x.edge - first.edge < 6 : (x.edge === 0 && x.center < first.center * 1.35 + 4)));
-    if (!close.length) { openRearPanel(first.id); return true; }
+    if (!close.length) { tapDevice(first.id); return true; }
     this.showPickMenu([first, ...close].slice(0, 4).map(x => x.id), wx, wy);
     this.zoomToCrowd(wx, wy);
     return true;
@@ -8840,7 +8929,7 @@ class StageScene extends Phaser.Scene {
       menu.classList.remove('show');
       ids.forEach(i => { const v = this.compVisuals[i]; if (v && i !== this.assemblyId) this.setGlow(v, false); });
       setTimeout(() => { if (!sceneCovered()) setSceneInput(true); }, 0);
-      if (id) openRearPanel(id);
+      if (id) tapDevice(id);
     };
     box.querySelectorAll('.pick-opt').forEach(b => b.addEventListener('click', ev => { ev.stopPropagation(); SFX.button(); done(b.dataset.id); }));
     menu.onclick = ev => { if (ev.target === menu) done(null); };
