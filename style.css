@@ -413,6 +413,24 @@
   }
   .rear-pick:hover{ border-color:var(--amber); }
   .rear-pick small{ color:var(--text-muted); font-size:11px; }
+  /* connettori disegnati (connectorIcon): si riconoscono prima di leggere */
+  .conn-ico{ flex:none; vertical-align:middle; background:#0e0f12; border-radius:6px; }
+  .conn-pair{ display:inline-flex; align-items:center; gap:3px; flex:none; vertical-align:middle; }
+  .conn-arrow{ color:var(--text-muted); font-weight:700; font-size:12px; }
+  .rear-pick{ flex-direction:row; align-items:center; gap:10px; }
+  .rear-pick .rp-txt{ display:flex; flex-direction:column; align-items:flex-start; gap:4px; }
+  .rear-pick.reco{ border:2px solid var(--amber); padding:8px 12px; width:100%; }
+  .rear-pick .rp-use{ margin-left:auto; background:var(--amber); color:#141519; border-radius:6px; padding:8px 12px; font-size:13px; white-space:nowrap; }
+  .rear-pick .rp-use:empty{ display:none; }
+  .rear-pick:not(.reco) .rp-use{ background:transparent; color:var(--text-muted); border:1px solid var(--hairline); padding:4px 8px; font-size:11px; }
+  .rear-others[hidden]{ display:none; }
+  .rear-pick.reco{ box-sizing:border-box; }
+  @media (max-width:520px){ .rear-pick .rp-use{ padding:8px 10px; font-size:12px; } }
+  .rear-need{ display:flex; align-items:center; gap:10px; margin-bottom:10px; }
+  .rear-need .rn-k{ font-size:10px; font-weight:800; letter-spacing:.08em; color:var(--text-muted); writing-mode:horizontal-tb; max-width:72px; line-height:1.2; }
+  .rear-need small{ color:var(--text-muted); }
+  .rear-more{ margin:8px 0; min-height:40px; padding:6px 12px; background:var(--bg-panel); color:var(--text-main); border:1px solid var(--hairline); border-radius:8px; font-weight:700; cursor:pointer; }
+  #cable-banner-text .conn-pair{ margin-right:4px; }
   .rear-detail-row{ display:flex; align-items:center; justify-content:space-between; gap:10px; padding:4px 0; }
   .rear-unplug{
     background:none; border:1px solid var(--red); color:var(--red); border-radius:5px;
