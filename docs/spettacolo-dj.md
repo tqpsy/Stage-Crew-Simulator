@@ -93,8 +93,8 @@ si spengono. Il pubblico fa «Ohhhh», poi rumoreggia contro il bidello (buuu,
 urla, fischi, pugni alzati) mentre Gerry litiga con Musa e il DJ e li butta
 fuori. Dopo il taglio non ci sono più note (`taglio` nella mappa). In fondo,
 sul palco e nella scheda finale (e nel gioco): «Il bidello ha cacciato via i
-musicisti: la festa è rimasta senza musica.» Nel gioco poco
-dopo parte il karaoke di Macio (`karaoke.html`).
+musicisti: la festa è rimasta senza musica.» Nel gioco poi la
+festa finisce: si smonta e si carica il furgone.
 
 - Reputazione: 5 + (gradimento − 60) / 10 + guasti: +1 per ogni nota speciale
   presa in tempo, +3 per il PAR sistemato entro 12 s, la scelta del Quadro

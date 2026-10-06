@@ -55,9 +55,9 @@ giro di Gerry alle 20:00). Il discorso del preside (21:00,
 conseguenze della posa, pagina da sola).
 Lo spettacolo del DJ (21:15, `dj.html`, dopo il cambio palco) ha
 `tests/spettacolo-dj.js` (la pagina da sola) e `tests/dj-gioco.js` (dentro
-il gioco). Il karaoke di Macio (fuori programma dopo il DJ, `karaoke.html`)
-ha `tests/karaoke.js` (la pagina da sola) e `tests/karaoke-gioco.js` (dentro
-il gioco). Il carico del furgone (23:00, `carico.html`, dopo il karaoke) ha
+il gioco). Dopo il DJ la festa finisce e si smonta (`tests/fine-festa.js`);
+il karaoke di Macio è uscito dal livello 1 (`karaoke.html` e `tests/karaoke.js`
+restano come pagina a sé). Il carico del furgone (23:00, `carico.html`, dopo il DJ) ha
 `tests/carico.js`. La valutazione della serata, che si apre dopo il carico, ha
 `tests/serata.js`. L'orologio del montaggio, Macio sui pezzi difettosi e il
 capo mandato al guasto del preside hanno `tests/orologio.js`. `tests/robustezza.js` prova frecce e WASD, la ripresa di una

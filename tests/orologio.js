@@ -92,7 +92,7 @@ const path = require('path');
   // nella valutazione: in orario niente, in ritardo pesa sul montaggio
   const val = await ev(() => {
     const d = Profile.data;
-    d.cavi = { stars: 3 }; d.carico = { damaged: [], taken: [] };
+    d.cavi = { stars: 3 }; d.carico = { damaged: [], taken: [] }; d.cambioDj = { done: true };   // cambio palco fatto: conta nel montaggio
     d.collaudo = { ms: 600000, failedTests: 0, trips: 0, rcdTrips: 0, pops: 0, clock: 19 * 60 + 5 };
     const on = serataReport();
     d.collaudo.clock = 19 * 60 + 30 + 30;

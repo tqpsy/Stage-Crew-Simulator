@@ -2,7 +2,9 @@
    finto-salvate nella partita, dopo il carico si apre la scheda con stelle,
    titolo, perché e le otto voci; la valutazione entra una volta sola nei
    record; «Rigioca la serata» riparte nello stesso slot e il record resta.
-   Una serata perfetta vale 5 stelle, una con tutto saltato 1.
+   Una serata perfetta vale 5 stelle, una con tutto saltato 1, e saltare
+   le fasi non conviene mai (una fase saltata vale zero, il cambio palco
+   non è un guasto).
 
    Uso:  node tests/serata.js
    Richiede Playwright. Senza rete, PHASER_PATH=/percorso/phaser.min.js. */
@@ -32,7 +34,7 @@ const path = require('path');
     d.preside = { grad: 95, larsens: 0, fault: true, faultFix: 'fast' };
     d.cambioDj = { done: true, ms: 120000, slow: false };
     d.dj = { grad: 92, stars: 5, larsens: 0, fase: 'tu', faseFast: true, par: 'fast' };
-    d.karaoke = { grad: 90, stars: 5, larsens: 0 };
+    d.carico = { stars: 5, damaged: [], taken: [] };
     return serataReport();
   });
   check(perfect.stars === 5 && perfect.title === 'CREW EXCELLENT', 'serata perfetta senza 5 stelle: ' + JSON.stringify(perfect));
@@ -66,12 +68,43 @@ const path = require('path');
   // serata tutta saltata: 1 stella, e la valutazione dice cosa migliorare
   const bad = await ev(() => {
     const d = Profile.data;
-    ['preside', 'dj', 'karaoke', 'cavi', 'carico'].forEach(k => { d[k] = { skipped: true }; });
+    ['preside', 'dj', 'cavi', 'carico'].forEach(k => { d[k] = { skipped: true }; });
     d.scarico = { skipped: false, parsBroken: 3, staBroken: true, ricOk: false, kidHits: 2, lost: {} };
     d.collaudo = { ms: 900000, failedTests: 6, trips: 3, rcdTrips: 1, pops: 2 };
     return serataReport();
   });
   check(bad.stars === 1 && bad.why.some(w => /Da migliorare/.test(w)), 'serata saltata senza 1 stella o senza consiglio: ' + JSON.stringify(bad));
+
+  // saltare non conviene mai (audit P0-1): montaggio pulito e il resto saltato
+  // non vale «buon lavoro», e la stessa serata giocata con qualche errore vale di più
+  const salti = await ev(() => {
+    const d = Profile.data;
+    d.collaudo = { ms: 300000, tests: 4, failedTests: 0, trips: 0, rcdTrips: 0, pops: 0 };
+    d.cavi = { stars: 3, inspections: 1 };
+    d.cambioDj = { done: true, ms: 120000, slow: false };
+    ['scarico', 'preside', 'dj', 'carico'].forEach(k => { d[k] = { skipped: true }; });
+    const saltata = serataReport();
+    d.scarico = { skipped: false, parsBroken: 1, ricOk: true, faultyIds: [], kidHits: 0, lost: {} };
+    d.preside = { grad: 55, larsens: 1, fault: true, faultFix: 'ok' };
+    d.dj = { grad: 50, stars: 3, larsens: 0, fase: 'capo', par: 'ok' };
+    d.carico = { stars: 3, damaged: ['PAR 2'], taken: [] };
+    const giocata = serataReport();
+    // solo lo scarico saltato contro uno scarico con un PAR rotto
+    d.scarico = { skipped: true };
+    const senzaScarico = serataReport();
+    return { saltata, giocata, senzaScarico };
+  });
+  const S = salti.saltata, G = salti.giocata;
+  if (process.env.VERBOSE) console.log(JSON.stringify({ saltata: [S.score, S.stars, S.quality], giocata: [G.score, G.stars, G.quality], senzaScarico: [salti.senzaScarico.score, salti.senzaScarico.quality] }));
+  check(S.stars <= 2 && S.score < 50, 'montaggio pulito e resto saltato vale ancora troppo: ' + S.score + ' punti, ' + S.stars + ' stelle');
+  check(G.score > S.score + 15, 'giocare con qualche errore non vale più che saltare: ' + G.score + ' contro ' + S.score);
+  check(salti.senzaScarico.score < G.score && salti.senzaScarico.quality.danni < G.quality.danni, 'saltare lo scarico conviene più che rompere un PAR: ' + JSON.stringify([salti.senzaScarico.quality, G.quality]));
+  check(S.quality.danni === 0 && S.quality.guasti === 0 && S.quality.show === 0, 'le fasi saltate non contano zero: ' + JSON.stringify(S.quality));
+  check(S.skipped.join() === 'scarico,preside,dj,carico' && S.why.some(w => /Non eseguito/.test(w)), 'la valutazione non dice cosa non è stato eseguito: ' + JSON.stringify(S.why));
+  // il cambio palco non è un guasto risolto
+  const guasti = S.rows.find(r => r[0] === 'Guasti risolti');
+  check(guasti[1] === '0 su 0' && !/cambio palco/.test(S.rows.find(r => r[0] === 'Qualità del troubleshooting')[2]), 'il cambio palco conta come guasto: ' + JSON.stringify(guasti));
+  check(/cambio palco in 2:00/.test(S.rows.find(r => r[0] === 'Qualità del montaggio')[2]), 'il cambio palco non sta nel montaggio');
 
   if (errs.length) problems.push('errori in pagina: ' + errs.join(' | '));
   await b.close();

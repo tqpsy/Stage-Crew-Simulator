@@ -173,14 +173,14 @@ const RACK_ISO  = isoFrame(96, 60, 30);   // flight case rack 2U del finale, fro
    sotto il piano il rack del finale. Ogni posto: centro (a, b) e quota z. */
 // con Z = 0 i piedi stanno sul punto di posa: il piano è alto, altrimenti
 // le gambe scenderebbero sotto il pavimento del palco
-const TAVOLO_ISO = isoFrame(300, 80, 0);
+const TAVOLO_ISO = isoFrame(390, 80, 0);   // 3,8 m: la regia con lo spazio fra un apparecchio e l'altro
 const TAVOLO_TOP = 40;
 const TAVOLO_SLOTS = {
-  controller: [34, 40, TAVOLO_TOP],
-  mixer:      [130, 40, TAVOLO_TOP],
-  pc:         [214, 44, TAVOLO_TOP],
-  scheda:     [264, 40, TAVOLO_TOP],  // accanto al PC, non dietro
-  ampli:      [150, 42, 0]            // sotto il piano, a terra
+  controller: [46, 40, TAVOLO_TOP],
+  mixer:      [175, 40, TAVOLO_TOP],
+  pc:         [285, 44, TAVOLO_TOP],
+  scheda:     [345, 40, TAVOLO_TOP],  // accanto al PC, non dietro
+  ampli:      [185, 42, 0]            // sotto il piano, a terra
 };
 // altezza del solido di ogni apparecchio del tavolo (il container sta al suo centro)
 const TAVOLO_ITEM_Z = { controller: 10, mixer: 24, pc: 22, scheda: 12, ampli: 30 };
@@ -291,7 +291,7 @@ const COMPONENT_TYPES = {
     ]
   },
   mixer: {
-    label: 'MIX', category: 'audio', powerW: 50, zone: 'offstage', shape: 'mixer',
+    label: 'MIXER', category: 'audio', powerW: 50, zone: 'offstage', shape: 'mixer',
     body: { w: 77, h: 77, fill: 0x2a2c32, accent: 0x8a8e98 },
     // LED di alimentazione sul ponte, come su un banco vero
     frame: MIXER_ISO, front: '+b',
@@ -329,7 +329,7 @@ const COMPONENT_TYPES = {
   tavolo: {
     label: 'TAVOLO', category: 'strutture', powerW: 0, zone: 'offstage', shape: 'tavolo',
     // oy: il disegno sta sopra il punto di posa (vedi TAVOLO_ISO)
-    body: { w: 190, h: 170, oy: -24, fill: 0x1c1d22, accent: 0x55585f },
+    body: { w: 235, h: 201, oy: -24, fill: 0x1c1d22, accent: 0x55585f },
     ports: []
   },
   // asta microfonica con giraffa: si posa sul palco, nessuna presa; ci si
@@ -358,17 +358,18 @@ const COMPONENT_TYPES = {
     label: 'PAR', category: 'luci', powerW: 40, zone: 'stativo', shape: 'par',
     body: { w: 60, h: 54, fill: 0x1c1d22, accent: 0xf2c53d },
     ledPos: PAR_ISO(22, 31, 3),
-    // connettori sul retro, a destra del fusto: la lente resta libera.
+    // connettori sulla piastrina attaccata alla forcella, a destra del
+    // fusto: la lente resta libera e le spine stanno sul faro, non in aria.
     // Colonna sinistra ingressi, destra uscite (thru); sopra DMX, sotto corrente
     ports: [
-      { id: 'power_in',   signal: 'powercon', dir: 'in',  dx: 8,  dy: 14 },
-      { id: 'power_thru', signal: 'powercon', dir: 'out', dx: 27, dy: 14 },
-      { id: 'dmx_in',     signal: 'dmx',      dir: 'in',  dx: 8,  dy: -7 },
-      { id: 'dmx_thru',   signal: 'dmx',      dir: 'out', dx: 27, dy: -7 }
+      { id: 'power_in',   signal: 'powercon', dir: 'in',  dx: 10, dy: 13 },
+      { id: 'power_thru', signal: 'powercon', dir: 'out', dx: 19, dy: 13 },
+      { id: 'dmx_in',     signal: 'dmx',      dir: 'in',  dx: 10, dy: 3 },
+      { id: 'dmx_thru',   signal: 'dmx',      dir: 'out', dx: 19, dy: 3 }
     ]
   },
   controller: {
-    label: 'CTRL', category: 'luci', powerW: 20, zone: 'offstage', shape: 'controller',
+    label: 'CONSOLLE LUCI', category: 'luci', powerW: 20, zone: 'offstage', shape: 'controller',
     body: { w: 62, h: 42, fill: 0x2a2c32, accent: 0xf2a541 },
     frame: CTRL_ISO, front: '+b',
     ledIso: [52, 30, 10],
@@ -524,7 +525,7 @@ const COMPONENT_TYPES = {
 // la usa il DJ al cambio palco. La consolle DJ non è del service, la porta
 // il DJ: si vede nella scheda DJ solo da quando parte il cambio palco.
 // Anche il suo stativo luci (4 PAR e la strobo sulla barra) è suo.
-const AVAILABLE_STOCK = { sub: 2, top: 2, mixer: 1, asta: 1, mic: 1, stativo: 4, par: 4, controller: 1, ampli: 1, quadro: 1, ciabatta: 1, ciabatta_cee: 1, pc: 1, scheda: 1, di: 1, tavolo: 1, dj: 1, djluci: 1 };
+const AVAILABLE_STOCK = { sub: 2, top: 2, mixer: 1, asta: 1, mic: 1, stativo: 4, par: 4, controller: 1, ampli: 1, quadro: 1, ciabatta: 2, ciabatta_cee: 2, pc: 1, scheda: 1, di: 1, tavolo: 1, dj: 1, djluci: 1 };
 
 const POWER_LIMIT_KW = 3.0;
 const TOP_ATTACH_RADIUS = 300; // px: quanto lontano può essere trascinata una Testa da un Sub libero
@@ -556,6 +557,7 @@ Object.keys(TAVOLO_SLOTS).forEach((type, i) => {
     done: baseId => COMPONENT_TYPES[type].label + ' ' + TAVOLO_WHERE[type] + ' di ' + compLabel(baseId) + '.'
   };
 });
+const TAVOLO_NO_SPOT = 'Il tavolo regia prende quasi tutto l\'Off Stage e non può coprire altri pezzi: sposta prima quelli che ci sono (uno stativo va davanti, verso il pubblico).';
 // base -> tipi che ci si montano sopra
 const MOUNT_ON = { sub: ['top'], stativo: ['par'], asta: ['mic'], tavolo: Object.keys(TAVOLO_SLOTS) };
 // figli montati su una base
@@ -2435,7 +2437,7 @@ function saveLevel () {
     trips: gameState.trips || 0, rcdTrips: gameState.rcdTrips || 0,
     procErrors: gameState.procErrors || [], stats: gameState.stats,
     giro: gameState.giro, giroFails: gameState.giroFails,
-    stockV: 2   // 2: la DI è nella dotazione (prima era a 0)
+    stockV: 3   // 2: la DI è nella dotazione (prima era a 0); 3: due ciabatte per tipo
   };
   Profile.save();
 }
@@ -2484,7 +2486,7 @@ const LEVELS = [
       { title: 'Discorso del preside', done: s => !!s.preside },
       { title: 'Cambio palco per il DJ', done: s => !!(s.cambioDj && s.cambioDj.done) },
       { title: 'DJ set', done: s => !!s.dj },
-      { title: 'Karaoke di Macio', done: s => !!s.karaoke },
+      { title: 'Fine festa e smontaggio', done: s => !!s.dj },
       { title: 'Carico del furgone', done: s => !!s.carico }
     ] },
   { id: 2, name: 'Sagra in piazza', venue: 'Piazza con i sampietrini', vehicle: 'camion', rep: 20 },
@@ -2851,13 +2853,10 @@ function startNewGame (player, offer, offers) {
   Profile.data.karaoke = null;
   Profile.data.collaudo = null;
   Profile.data.serata = null;
-  // uno show del DJ o un karaoke ancora aperto o in arrivo della partita vecchia
+  // uno show del DJ ancora aperto o in arrivo della partita vecchia
   clearTimeout(djTimer);
   if (el('#dj-frame')) el('#dj-frame').remove();
   djOpen = false;
-  clearTimeout(karaokeTimer);
-  if (el('#karaoke-frame')) el('#karaoke-frame').remove();
-  karaokeOpen = false;
   Profile.data.beers = 0;
   Profile.data.coffees = 0;
   Profile.data.assistant = defaultAssistant();   // il nuovo tecnico non ha ancora nessuno
@@ -3050,7 +3049,7 @@ const SCHEDULE = [
   { time: '21:00', title: 'Discorso del Preside Tramp', text: 'Microfono su asta sul palco, cablato a un ingresso MIC del mixer: ricordati quale. Vuole essere sentito fino al parcheggio.', phase: 'preside' },
   { time: '21:10', title: 'Cambio palco: arriva il DJ', text: 'DJ Inestimabile porta la sua consolle: corrente, uscite nella DI e dalla DI al mixer. Il microfono resta dov\'è, per Musa Esistenziale. Il pubblico aspetta: non metterci troppo.', phase: 'cambio-dj', rep: REP.changeDone },
   { time: '21:15', title: 'Notte fuori controllo', text: 'DJ Inestimabile in consolle e Musa Esistenziale al microfono: mixer DJ → DI → mixer di sala, il microfono del vocalist, luci colorate al drop. E tanti guasti da inseguire.', poster: 'img/locandina-dj.svg', phase: 'dj' },
-  { time: '22:00', title: 'Fuori programma: il karaoke di Macio', text: 'Gerry ha cacciato il DJ. Macio prende il microfono e salva la serata con una canzone scritta lì per lì: tu mandi avanti il testo e tieni la sua voce nel verde.', phase: 'karaoke', surprise: true },
+  { time: '22:30', title: 'Fine festa e smontaggio', text: 'Gerry stacca la musica e accende le luci: le famiglie escono. Si spegne l\'impianto, finali per primi, e tutto torna nei case.', phase: 'fine' },
   { time: '23:00', title: 'Smontaggio e carico', text: 'Tutto nei case e i case nel furgone: Macio li porta fuori, tu li incastri e li leghi con tre cinghie. Gerry chiude il cancello alle 23:30.', phase: 'carico' }
 ];
 const collaudoDone = () => ('L' + LEVEL_ID + ':collaudo') in Profile.data.reputation.earned;
@@ -3063,9 +3062,9 @@ function schedulePhaseState (phase) {
   if (phase === 'preside') return presideDone() ? 'done' : caviDone() ? 'now' : 'next';
   if (phase === 'cambio-dj') return cambioDjDone() ? 'done' : presideDone() ? 'now' : 'next';
   if (phase === 'dj') return djDone() ? 'done' : cambioDjDone() ? 'now' : 'next';
-  if (phase === 'karaoke') return karaokeDone() ? 'done' : djDone() ? 'now' : 'next';
-  // il carico chiude la serata: dopo il karaoke di Macio
-  if (phase === 'carico') return caricoDone() ? 'done' : karaokeDone() ? 'now' : 'next';
+  // il DJ set è il gran finale: poi si smonta e il carico chiude la serata
+  if (phase === 'fine') return djDone() ? 'done' : 'next';
+  if (phase === 'carico') return caricoDone() ? 'done' : djDone() ? 'now' : 'next';
   return collaudoDone() ? 'done' : 'next';
 }
 const SCHEDULE_STATE_LABEL = { done: 'Fatto', now: 'Adesso', next: 'Da fare', soon: 'In arrivo' };
@@ -3074,12 +3073,12 @@ function renderSchedule () {
   const info = Profile.data.serviceInfo;
   const rows = [
     ['Cliente', 'Scuola · festa di fine anno'],
-    ['Dove', 'Palestra: palco 4×4 m, allaccio CEE 400V trifase'],
+    ['Dove', 'Palestra: palco 4,5×4 m, allaccio CEE 400V trifase'],
     ['Service', serviceName() + (info && info.boss ? ' · capo: ' + info.boss : '')],
     ['Tecnico', playerName()]
   ];
   el('#schedule-info').innerHTML = rows.map(([k, v]) => '<dt>' + k + '</dt><dd>' + escapeHtml(v) + '</dd>').join('');
-  el('#schedule-list').innerHTML = SCHEDULE.filter(s => !s.surprise || djDone()).map(s => {
+  el('#schedule-list').innerHTML = SCHEDULE.map(s => {
     const st = schedulePhaseState(s.phase);
     return '<li class="sched-row ' + st + '">'
       + '<span class="sched-time">' + (s.phase === 'montaggio' && scaricoDone() ? montaggioTime() : s.time) + '</span>'
@@ -3090,7 +3089,6 @@ function renderSchedule () {
         : s.phase === 'preside' && presideDone() ? presideSummary()
         : s.phase === 'cambio-dj' && cambioDjDone() ? cambioSummary()
         : s.phase === 'dj' && djDone() ? djSummary()
-        : s.phase === 'karaoke' && karaokeDone() ? karaokeSummary()
         : s.phase === 'carico' && caricoDone() ? caricoSummary()
         : s.phase === 'montaggio' ? s.text.replace('i PAR', parsRequired() + ' PAR') : s.text) + '</small>'
       + (s.poster ? '<button class="sched-poster" type="button" data-poster="' + s.poster + '">🎟️ Guarda la locandina</button>' : '')
@@ -3109,8 +3107,8 @@ function openSchedule (first) {
   // del preside, poi al cambio palco per il DJ
   scheduleNext = first ? null : schedulePhaseState('cavi') === 'now' ? 'cavi' : schedulePhaseState('preside') === 'now' ? 'preside'
     : schedulePhaseState('cambio-dj') === 'now' && !cambioDj() ? 'cambio-dj' : schedulePhaseState('dj') === 'now' ? 'dj'
-    : schedulePhaseState('karaoke') === 'now' ? 'karaoke' : schedulePhaseState('carico') === 'now' ? 'carico' : caricoDone() ? 'serata' : null;
-  el('#schedule-go').textContent = first ? 'Al lavoro!' : { cavi: 'Chiama Gerry', preside: 'Il preside sale sul palco', 'cambio-dj': 'Inizia il cambio palco', dj: 'Via al DJ set', karaoke: 'Macio prende il microfono', carico: 'Carica il furgone', serata: 'Com\'è andata la serata' }[scheduleNext] || 'Torna al palco';
+    : schedulePhaseState('carico') === 'now' ? 'carico' : caricoDone() ? 'serata' : null;
+  el('#schedule-go').textContent = first ? 'Al lavoro!' : { cavi: 'Chiama Gerry', preside: 'Il preside sale sul palco', 'cambio-dj': 'Inizia il cambio palco', dj: 'Via al DJ set', carico: 'Carica il furgone', serata: 'Com\'è andata la serata' }[scheduleNext] || 'Torna al palco';
   el('#schedule-modal').classList.add('show');
   setSceneInput(false);
 }
@@ -3292,7 +3290,7 @@ const GERRY_PASSAGES = [
 const GERRY_EXITS = [{ id: 'fuga', label: 'via di fuga', r: [0, 22, 3, 3] }];
 const gInRect = (r, i, j) => i >= r[0] && i < r[0] + r[2] && j >= r[1] && j < r[1] + r[3];
 // in mezzo alla pedana (il bordo largo 50 cm resta per i cavi)
-const gInterior = (i, j) => i >= 5 && i <= 10 && j >= 9 && j <= 14;
+const gInterior = (i, j) => i >= 4 && i <= 10 && j >= 9 && j <= 14;
 // passaggi e via di fuga, senza quelli dove è già stato posato un pezzo
 function gerryZones () {
   const busy = new Set();
@@ -3373,18 +3371,32 @@ function gerryIssues () {
   });
   return issues;
 }
+// il cavo con la spina di una ciabatta (fa parte della ciabatta)
+function isCiabattaLead (e) {
+  const P = gameState.placed, c = [[e.a, e.aPort], [e.b, e.bPort]].find(([id]) => P[id] && /^ciabatta/.test(P[id].type));
+  return !!c && c[1] === 'in';
+}
+// passacavi che la crew mette dove i cavi attraversano un passaggio: uno
+// per riga del passaggio ('idPassaggio:j', come nel prototipo della posa)
+function gerryRamps (scene) {
+  const { passages } = gerryZones(), ramps = new Map();
+  if (scene) gameState.edges.forEach(e => {
+    const g = scene.edgeFloor(e) && gerryCells(e, scene);
+    (g ? g.cells : []).forEach(c => { const ps = passages.find(z => gInRect(z.r, c.i, c.j)); if (ps) ramps.set(ps.id + ':' + c.j, { ps, j: c.j }); });
+  });
+  return ramps;
+}
 // metri di cavo per terra, nastro (palco, Pit e platea, non lungo i muri) e passacavi
 function gerryStats () {
   const scene = window.__scene, { passages } = gerryZones();
   let cableM = 0;
-  const tape = new Set(), ramps = new Set();
+  const tape = new Set(), ramps = gerryRamps(scene);
   gameState.edges.forEach(e => {
     const f = scene && scene.edgeFloor(e);
     if (!f) return;
     cableM += layLength(f.smooth);
     gerryCells(e, scene).cells.forEach(c => {
-      const ps = passages.find(z => gInRect(z.r, c.i, c.j));
-      if (ps) { ramps.add(ps.id + ':' + c.j); return; }
+      if (passages.some(z => gInRect(z.r, c.i, c.j))) return;
       const gx = c.i * CELL, gy = c.j * CELL;
       if ((isStageCoreCell(gx, gy) || isPitCell(gx, gy) || isPlateaCell(gx, gy)) && c.i > 0 && c.i < VENUE_W / CELL - 1) tape.add(c.i + ',' + c.j);
     });
@@ -3488,9 +3500,8 @@ function caviRoute (e) {
   const P = gameState.placed;
   if (r.key !== posaBaseKey(posaBase(P[e.a])) + '|' + posaBaseKey(posaBase(P[e.b]))) return null;
   return r.pts.map(([gx, gy]) => {
-    const p = gridToScreen(gx, gy);
-    // sulla pedana (palco e Off Stage) il cavo sta sopra il rialzo
-    return isStageCell(gx - CELL / 2, gy - CELL / 2) ? { x: p.x, y: p.y - PLATFORM_HEIGHT } : p;
+    // la pedana si disegna alla quota dei pezzi: il cavo ci sta sopra così com'è
+    return gridToScreen(gx, gy);
   });
 }
 /* Cosa lo show troverà ancora per terra (la posa finita col tempo): il
@@ -3523,12 +3534,11 @@ function caviSummary () {
    una volta sola, birre, stanchezza a fine discorso. */
 let presideOpen = false, presideTimer = null;
 let djOpen = false;              // lo spettacolo del DJ (openDj, più sotto)
-let karaokeOpen = false;         // il karaoke di Macio (openKaraoke, più sotto)
 let caricoOpen = false;          // il carico del furgone (openCarico, più sotto)
 let serataOpen = false;          // la valutazione della serata (openSerata, più sotto)
 let replaySlot = null;           // slot della serata finita che si rigioca
 const presideDone = () => !!Profile.data.preside;
-const minigameOpen = () => scaricoOpen || gerryOpen || presideOpen || djOpen || karaokeOpen || caricoOpen;
+const minigameOpen = () => scaricoOpen || gerryOpen || presideOpen || djOpen || caricoOpen;
 // una finestra del gioco sopra la scena (menù, scaletta, pannello posteriore, baule)
 const panelOpen = () => scheduleOpen || menuOpen || serataOpen || pausaOpen || !!rearPanelId || !!openCaseName || (typeof diagOpen === 'function' && diagOpen());
 // qualcosa copre la scena: i tocchi non le arrivano finché non si chiude tutto
@@ -3830,13 +3840,14 @@ function finishDj (r) {
   if (!sceneCovered()) setSceneInput(true);
   applySettings();
   const p = Profile.data.dj;
-  showToast(skipped ? 'DJ set saltato: la musica c\'è stata lo stesso, ma la reputazione non cambia.'
+  // il DJ set è il gran finale: Gerry stacca la musica, la festa è finita e
+  // si smonta (il foglio porta al carico del furgone)
+  showToast(skipped ? 'DJ set saltato: non conta come fatto nella valutazione. ' + FINE_SHOW
     : 'Il bidello ha cacciato via i musicisti: la festa è rimasta senza musica. Pubblico al ' + p.grad + '%.' + (rep ? ' Reputazione ' + (rep > 0 ? '+' : '') + rep + '.' : '')
-      + (beers ? ' 🍺 +' + beers + '.' : '') + ' Macio prende il microfono: «Ci penso io!»', skipped || p.grad >= 40 ? 'ok' : undefined);
+      + (beers ? ' 🍺 +' + beers + '.' : '') + ' ' + FINE_SHOW, skipped || p.grad >= 40 ? 'ok' : undefined);
   updateFoglio();
-  // fuori programma: Macio sale sul palco appena letto il messaggio
-  karaokeSoon(Math.max(3200, el('#toast').textContent.length * 60) + 300);
 }
+const FINE_SHOW = 'Fine festa: le famiglie escono, si spegne l\'impianto (finali per primi) e si smonta.';
 function djSummary () {
   const p = Profile.data.dj;
   if (p.skipped) return 'Saltato: niente reputazione.';
@@ -3845,94 +3856,15 @@ function djSummary () {
     + (who ? ' · ' + who : '') + (p.beers ? ' · 🍺 +' + p.beers : '') + ' · reputazione ' + (p.rep >= 0 ? '+' : '') + p.rep + '.';
 }
 
-/* ---------------- il karaoke di Macio (fuori programma, dopo il DJ) ----------------
-   Gerry ha cacciato il DJ: Macio, il collega dello scarico, salva la serata
-   con un karaoke improvvisato (karaoke.html, in un iframe sopra il gioco).
-   Non è sul foglio né sulla locandina: arriva da solo dopo il DJ set, o dalla
-   scaletta e dal foglio. Serve il microfono ancora collegato al mixer
-   acceso. La pagina riceve birre, stanchezza, nome del capo e canale del
-   microfono; l'esito torna al gioco: reputazione una volta sola, birre,
-   stanchezza. Dopo viene il carico del furgone (openCarico). */
-let karaokeTimer = null;
-const karaokeDone = () => !!Profile.data.karaoke;
-// cosa manca perché Macio possa cantare (null se è tutto pronto)
-function karaokeReady () {
-  if (!micChannel()) return 'il microfono non è più collegato: un XLR dal microfono a un ingresso MIC (1-4) del mixer.';
-  const mx = placedOfType('mixer')[0];
-  if (!mx || !isRunning(mx.id)) return 'il mixer è spento: accendi l\'impianto.';
-  return null;
-}
-function openKaraoke () {
-  clearTimeout(karaokeTimer);
-  if (karaokeOpen || karaokeDone() || !djDone() || minigameOpen()) return;
-  const missing = karaokeReady();
-  if (missing) { showToast('Macio aspetta col microfono in mano: ' + missing); updateFoglio(); return; }
-  karaokeOpen = true;
-  setSceneInput(false);
-  sceneKeyboard(false);
-  if (window.__scene) window.__scene.stopFx();
-  const f = document.createElement('iframe');
-  f.id = 'karaoke-frame';
-  f.className = 'minigame-frame';
-  f.title = 'Il karaoke di Macio';
-  f.allow = 'autoplay';
-  f.src = 'karaoke.html?embed=1' + minigameQuery();
-  f.addEventListener('load', () => { try { f.contentWindow.focus(); } catch (e) { /* niente fuoco: si tocca */ } });
-  document.body.appendChild(f);
-}
-function karaokeSoon (ms) {
-  clearTimeout(karaokeTimer);
-  karaokeTimer = setTimeout(() => {
-    if (!panelOpen() && !cambioCardOpen) openKaraoke();
-  }, ms || 3000);
-}
-window.addEventListener('message', ev => {
-  const d = ev.data, f = el('#karaoke-frame');
-  if (!karaokeOpen || !d || !f || ev.source !== f.contentWindow) return;
-  if (d.type === 'karaoke-pronto') {
-    const info = Profile.data.serviceInfo;
-    f.contentWindow.postMessage({ type: 'karaoke-dati', beers: Profile.data.beers || 0, boss: info && info.boss ? info.boss : '', mic: micChannel() || 0, fatigue: fatigue() }, '*');
-  }
-  if (d.type === 'karaoke-fine') finishKaraoke(d.result || { skipped: true });
-});
-function finishKaraoke (r) {
-  const f = el('#karaoke-frame');
-  if (f) f.remove();
-  karaokeOpen = false;
-  const skipped = !!r.skipped;
-  const num = (v, d) => Number.isFinite(+v) ? Math.round(+v) : d;
-  const beers = skipped ? 0 : Math.max(0, num(r.beers, 0)), drunk = skipped ? 0 : Math.max(0, num(r.drunk, 0));
-  Profile.data.karaoke = { skipped, grad: skipped ? 0 : num(r.grad, 0), rep: skipped ? 0 : num(r.rep, 0), beers, drunk,
-    stars: skipped ? 0 : Math.max(0, Math.min(5, num(r.stars, 0))), larsens: skipped ? 0 : Math.max(0, num(r.larsens, 0)) };
-  Profile.data.beers = Math.max(0, (Profile.data.beers || 0) - drunk + beers);
-  if (!skipped && Number.isFinite(+r.fatigue)) setFatigue(+r.fatigue);
-  const rep = skipped ? 0 : addReputation(Profile.data.karaoke.rep, 'Il karaoke di Macio alla festa della scuola', 'L' + LEVEL_ID + ':karaoke');
-  Profile.save();
-  sceneKeyboard(true);
-  if (!sceneCovered()) setSceneInput(true);
-  applySettings();
-  const p = Profile.data.karaoke;
-  showToast(skipped ? 'Karaoke saltato: Macio ha cantato lo stesso, ma la reputazione non cambia.'
-    : (p.grad >= 45 ? 'Macio ha salvato la serata!' : 'Macio ci ha provato.') + ' Pubblico al ' + p.grad + '%.' + (rep ? ' Reputazione ' + (rep > 0 ? '+' : '') + rep + '.' : '')
-      + (beers ? ' 🍺 +' + beers + '.' : '') + ' Ora si smonta e si carica il furgone.', skipped || p.grad >= 40 ? 'ok' : undefined);
-  updateFoglio();
-}
-function karaokeSummary () {
-  const p = Profile.data.karaoke;
-  if (p.skipped) return 'Saltato: niente reputazione.';
-  return '★'.repeat(p.stars) + '☆'.repeat(5 - p.stars) + ' · pubblico al ' + p.grad + '%' + (p.larsens ? ' · larsen: ' + p.larsens : ' · niente larsen')
-    + (p.beers ? ' · 🍺 +' + p.beers : '') + ' · reputazione ' + (p.rep >= 0 ? '+' : '') + p.rep + '.';
-}
-
 /* ---------------- il carico del furgone (23:00) ----------------
    Minigioco a sé (carico.html, vedi docs/minigioco-carico.md), in un iframe
-   sopra il gioco dopo il karaoke di Macio, dalla scaletta o dal foglio. Macio porta
+   sopra il gioco a fine festa, dopo il DJ set, dalla scaletta o dal foglio. Macio porta
    fuori i case, il tecnico li incastra nel furgone, li lega con tre cinghie
    e si parte: quello che è slegato scivola e sbatte. L'esito torna al gioco:
    reputazione una volta sola (la calcola la pagina dalle stelle) e birre. */
 const caricoDone = () => !!Profile.data.carico;
 function openCarico () {
-  if (caricoOpen || caricoDone() || !karaokeDone() || minigameOpen()) return;
+  if (caricoOpen || caricoDone() || !djDone() || minigameOpen()) return;
   caricoOpen = true;
   setSceneInput(false);
   sceneKeyboard(false);
@@ -3991,8 +3923,11 @@ function caricoSummary () {
    show e la reputazione. Le quattro qualità (0-100) pesano nel punteggio
    (SERATA_PESI), il punteggio dà le stelle e il titolo, e il perché dice
    cosa è andato bene e cosa migliorare. Tutto viene da quello che la
-   partita ha già salvato (fasi, collaudo, montaggio): le fasi saltate
-   contano zero. La prima valutazione entra nei record della serata
+   partita ha già salvato (fasi, collaudo, montaggio). Una fase saltata è
+   NON ESEGUITA: vale zero nella sua qualità (lo scarico e il carico saltati
+   non sono «tutto integro», un discorso o un DJ set saltati sono guasti non
+   affrontati), così saltare non conviene mai. Il cambio palco è un
+   ricablaggio a tempo, non un guasto: pesa sul montaggio. La prima valutazione entra nei record della serata
    (comuni a tutte le partite): rigiocando si vede se si è fatto meglio. */
 const SERATA_PESI = { montaggio: 30, guasti: 25, show: 30, danni: 15 };
 const SERATA_KEEP = 10;              // valutazioni tenute nei record
@@ -4009,7 +3944,11 @@ function serataReport () {
   const failed = n(col ? col.failedTests : lv.stats && lv.stats.failedTests);
   const trips = n(col ? col.trips : lv.trips) + n(col ? col.rcdTrips : lv.rcdTrips);
   const pops = col ? n(col.pops) : (Array.isArray(lv.procErrors) ? lv.procErrors.filter(x => x === 'pop').length : 0);
-  const shows = [['preside', 'discorso del preside'], ['dj', 'DJ set'], ['karaoke', 'karaoke di Macio']];
+  const shows = [['preside', 'discorso del preside'], ['dj', 'DJ set']];
+  // le fasi della serata non eseguite (saltate o mai giocate)
+  const skip = k => !d[k] || !!d[k].skipped;
+  const PHASE_NAMES = { scarico: 'scarico', cavi: 'posa dei cavi', preside: 'discorso del preside', dj: 'DJ set', carico: 'carico' };
+  const skippedPhases = Object.keys(PHASE_NAMES).filter(skip);
   const larsens = shows.reduce((a, [k]) => a + n(d[k] && !d[k].skipped && d[k].larsens), 0);
 
   // qualità del montaggio: prove fallite, scatti, colpi nelle casse, posa dei cavi
@@ -4019,14 +3958,19 @@ function serataReport () {
   const at = col && Number.isFinite(+col.clock) ? +col.clock : null;
   const late = at == null ? 0 : Math.max(0, at - CLOCK.collaudo);
   const lateCut = Math.min(CLOCK.lateMax, Math.ceil(late / CLOCK.latePerPoint));
-  const montaggio = clamp(100 - 10 * failed - 15 * trips - 15 * pops - caviCut - lateCut);
+  // il cambio palco per il DJ è un ricablaggio a tempo: conta qui, non nei guasti
+  const cb = d.cambioDj || {};
+  const cambioCut = cb.done ? (cb.slow ? 10 : 0) : 15;
+  const montaggio = clamp(100 - 10 * failed - 15 * trips - 15 * pops - caviCut - lateCut - cambioCut);
   const mBits = [failed ? failed + (failed === 1 ? ' prova fallita' : ' prove fallite') : 'collaudo senza prove fallite'];
   if (at != null) mBits.push('collaudo alle ' + fmtClock(at) + (late ? ', ' + fmtMin(late) + ' di ritardo' : at < CLOCK.collaudo ? ', ' + fmtMin(CLOCK.collaudo - at) + ' d\'anticipo' : ', in orario'));
   if (trips) mBits.push(trips + (trips === 1 ? ' protezione scattata' : ' protezioni scattate'));
   if (pops) mBits.push(pops + (pops === 1 ? ' colpo nelle casse' : ' colpi nelle casse'));
   mBits.push(cavi.skipped ? 'posa dei cavi saltata' : cavi.late ? 'cavi ancora in giro alle 20:30' : 'posa dei cavi ' + '★'.repeat(n(cavi.stars)) + '☆'.repeat(3 - n(cavi.stars)));
+  mBits.push(!cb.done ? 'cambio palco non fatto' : cb.slow ? 'cambio palco a pazienza finita' : 'cambio palco in ' + mmss(n(cb.ms)));
 
-  // troubleshooting: ogni guasto vale 1 se sistemato bene e in fretta, meno se tardi o lasciato ad altri
+  // troubleshooting: ogni guasto vale 1 se sistemato bene e in fretta, meno se
+  // tardi o lasciato ad altri. Gli show saltati sono guasti non affrontati: zero
   const fixes = [];
   const sc = d.scarico || {};
   const nf = (Array.isArray(sc.faultyIds) ? sc.faultyIds : []).filter(id => FAULT_BY_CASE[id]).length;
@@ -4036,35 +3980,43 @@ function serataReport () {
   const dj = d.dj || {};
   if (!dj.skipped && dj.fase) fixes.push(dj.fase === 'tu' ? (dj.faseFast === false ? 0.6 : 1) : dj.fase === 'capo' ? 0.6 : 0);
   if (!dj.skipped && dj.par) fixes.push({ fast: 1, ok: 0.6, capo: 0.6, ripiego: 0.4, no: 0 }[dj.par] ?? 0.6);
-  const cb = d.cambioDj || {};
-  if (cb.done) fixes.push(cb.slow ? 0.2 : 1);
+  const faced = fixes.length;
+  const showsSkipped = shows.filter(([k]) => skip(k));
+  showsSkipped.forEach(() => fixes.push(0));
+  // nessun guasto capitato e nessuno show saltato: non misurato, neutro
   const guasti = fixes.length ? clamp(100 * fixes.reduce((a, x) => a + x, 0) / fixes.length) : 70;
-  const solved = fixes.filter(x => x > 0).length, fast = fixes.filter(x => x >= 1).length, slow = solved - fast, left = fixes.length - solved;
+  const solved = fixes.filter(x => x > 0).length, fast = fixes.filter(x => x >= 1).length, slow = solved - fast, left = faced - solved;
   const gBits = [];
   if (nf) gBits.push(nf + (nf === 1 ? ' pezzo difettoso sistemato' : ' pezzi difettosi sistemati'));
   if (pr.faultFix) gBits.push({ fast: 'microfono del preside riparato in fretta', ok: 'microfono del preside riparato, ma con calma', capo: 'microfono del preside mandato al capo', gerry: 'il microfono del preside l\'ha sistemato Gerry' }[pr.faultFix]);
   if (!dj.skipped && dj.fase) gBits.push({ tu: 'fase del DJ riarmata da te', capo: 'fase del DJ riarmata dal capo', gerry: 'fase del DJ lasciata a Gerry' }[dj.fase]);
   if (!dj.skipped && dj.par) gBits.push({ fast: 'PAR che non rispondeva sistemato in fretta', ok: 'PAR che non rispondeva sistemato tardi', capo: 'PAR che non rispondeva mandato al capo', ripiego: 'PAR aggirato col ripiego sui tre buoni', no: 'PAR che non rispondeva mai sistemato' }[dj.par]);
-  if (cb.done) gBits.push(cb.slow ? 'cambio palco a pazienza finita' : 'cambio palco in ' + mmss(n(cb.ms)));
+  if (showsSkipped.length) gBits.push('non affrontati: ' + showsSkipped.map(([, name]) => name + ' saltato').join(', '));
 
   // gli show: il gradimento del pubblico, le fasi saltate contano zero, ogni larsen pesa
   const grads = shows.map(([k, name]) => ({ name, skipped: !d[k] || d[k].skipped, grad: d[k] && !d[k].skipped ? n(d[k].grad) : 0 }));
   const show = clamp(grads.reduce((a, g) => a + g.grad, 0) / grads.length - 8 * larsens);
-  const sBits = grads.map(g => g.name + (g.skipped ? ' saltato' : ' ' + g.grad + '%'));
+  const sBits = grads.map(g => g.name + (g.skipped ? ' non eseguito' : ' ' + g.grad + '%'));
   if (larsens) sBits.push(larsens + ' larsen');
 
-  // danni: allo scarico e al carico
+  // danni: allo scarico e al carico, metà ciascuno. Una fase saltata non è
+  // «tutto integro»: il materiale l'ha mosso qualcun altro, vale zero
   const ca = d.carico || {};
   const damaged = Array.isArray(ca.damaged) ? ca.damaged.length : 0, taken = Array.isArray(ca.taken) ? ca.taken.length : 0;
   const broken = n(sc.parsBroken) + (sc.staBroken ? 1 : 0) + (sc.skipped || sc.ricOk !== false ? 0 : 1);
   const kids = n(sc.kidHits);
-  const danni = clamp(100 - 20 * (broken + damaged) - 10 * (kids + taken));
+  const danniSc = skip('scarico') ? 0 : clamp(100 - 20 * broken - 10 * kids);
+  const danniCa = skip('carico') ? 0 : clamp(100 - 20 * damaged - 10 * taken);
+  const danni = clamp((danniSc + danniCa) / 2);
   const dBits = [];
+  if (skip('scarico')) dBits.push('scarico non eseguito');
+  if (skip('carico')) dBits.push('carico non eseguito');
   if (broken) dBits.push(broken + (broken === 1 ? ' pezzo rotto allo scarico' : ' pezzi rotti allo scarico'));
   if (kids) dBits.push(kids + (kids === 1 ? ' bambino urtato' : ' bambini urtati'));
   if (damaged) dBits.push('rovinati al carico: ' + ca.damaged.join(', '));
   if (taken) dBits.push('portati via per sbaglio: ' + ca.taken.join(', '));
   if (!dBits.length) dBits.push('tutto integro');
+  else if (!broken && !kids && !damaged && !taken) dBits.push('niente rotto in quello che hai fatto');
 
   const quality = { montaggio, guasti, show, danni };
   const score = Math.round(Object.keys(SERATA_PESI).reduce((a, k) => a + SERATA_PESI[k] * quality[k], 0) / 100);
@@ -4073,7 +4025,7 @@ function serataReport () {
   // il perché: il punto forte e quello da migliorare, con un consiglio pratico
   const praise = {
     montaggio: 'Montaggio pulito' + (failed ? ' (' + mBits[0] + ')' : ': collaudo al primo colpo') + (trips || pops ? '.' : ', niente scatti né colpi nelle casse.') + (at != null && !late ? ' E in orario.' : ''),
-    guasti: guasti >= 90 ? 'Ottimo troubleshooting: i guasti li hai trovati tu, e in fretta.' : 'Buon troubleshooting: ' + solved + ' guasti su ' + fixes.length + ' risolti.',
+    guasti: guasti >= 90 ? 'Ottimo troubleshooting: i guasti li hai trovati tu, e in fretta.' : 'Buon troubleshooting: ' + solved + ' guasti su ' + faced + ' risolti.',
     show: 'Gli show sono andati forte: il pubblico era con te.',
     danni: 'Materiale trattato bene: niente rotto, niente dimenticato.'
   };
@@ -4083,9 +4035,9 @@ function serataReport () {
       : trips ? 'cabla con l\'impianto spento e accendi i pesanti uno alla volta.'
       : pops ? 'accendi finale e sub per ultimi, e spegnili per primi.'
       : 'alla posa dei cavi tieni libera la via di fuga e attraversa i passaggi dritto.',
-    guasti: 'quando qualcosa tace segui il segnale dalla sorgente all\'uscita: il primo anello che non va è il guasto. Non lasciarlo a Gerry.',
+    guasti: showsSkipped.length ? 'i guasti veri arrivano durante gli show: saltandoli non li risolvi.' : 'quando qualcosa tace segui il segnale dalla sorgente all\'uscita: il primo anello che non va è il guasto. Non lasciarlo a Gerry.',
     show: grads.some(g => g.skipped) ? 'non saltare gli show: valgono quanto il montaggio.' : larsens ? 'occhio al larsen: microfono lontano dalle casse e MUTE pronto.' : 'negli show tieni la voce nel verde e le luci a tempo.',
-    danni: 'allo scarico e al carico vai piano coi case e lega tutto con le cinghie.'
+    danni: skip('scarico') || skip('carico') ? 'scarico e carico fanno parte del lavoro: saltarli non salva il materiale, vale zero.' : 'allo scarico e al carico vai piano coi case e lega tutto con le cinghie.'
   };
   const NAMES = { montaggio: 'il montaggio', guasti: 'il troubleshooting', show: 'gli show', danni: 'il materiale' };
   const order = Object.keys(quality).sort((a, b) => quality[b] - quality[a]);
@@ -4094,15 +4046,17 @@ function serataReport () {
   const worst = order[order.length - 1];
   if (quality[worst] < 85) why.push('Da migliorare, ' + NAMES[worst] + ': ' + tip[worst]);
   if (!why.length) why.push('Serata perfetta da cima a fondo.');
+  if (skippedPhases.length) why.push('Non eseguito: ' + skippedPhases.map(k => PHASE_NAMES[k]).join(', ') + '. Conta zero.');
 
   const ms = col ? n(col.ms) : 0;
   return {
-    score, stars, title, why, quality, ms, at,
+    score, stars, title, why, quality, ms, at, skipped: skippedPhases,
     rows: [
       ['Tempo', at != null ? 'collaudo ' + fmtClock(at) : ms ? mmss(ms) : '—', (at != null ? (late ? fmtMin(late) + ' di ritardo · ' : at < CLOCK.collaudo ? fmtMin(CLOCK.collaudo - at) + ' d\'anticipo · ' : 'in orario · ') : '')
         + 'montaggio in ' + (ms ? mmss(ms) : '—') + ' · serata intera ' + mmss(n(d.serata ? d.serata.ms : lv.stats && lv.stats.playMs))],
       ['Errori', String(failed + trips + pops + larsens), [failed && 'prove fallite ' + failed, trips && 'protezioni ' + trips, pops && 'colpi ' + pops, larsens && 'larsen ' + larsens].filter(Boolean).join(' · ') || 'nessuno'],
-      ['Guasti risolti', solved + ' su ' + fixes.length, fixes.length ? [fast && fast + ' bene e in fretta', slow && slow + ' tardi o con un aiuto', left && left + ' lasciati ad altri'].filter(Boolean).join(' · ') : 'nessun guasto'],
+      ['Guasti risolti', solved + ' su ' + faced, [faced && fast && fast + ' bene e in fretta', faced && slow && slow + ' tardi o con un aiuto', left && left + ' lasciati ad altri',
+        showsSkipped.length && showsSkipped.map(([, name]) => name).join(' e ') + ' saltato: guasti non affrontati'].filter(Boolean).join(' · ') || 'nessun guasto'],
       ['Danni', String(broken + damaged + taken), dBits.join(' · ')],
       ['Qualità del montaggio', montaggio, mBits.join(' · ')],
       ['Qualità del troubleshooting', guasti, gBits.join(' · ') || 'nessun guasto da risolvere'],
@@ -4178,7 +4132,7 @@ el('#schedule-go').addEventListener('click', () => {
   SFX.button();
   const next = scheduleNext;
   closeSchedule();
-  if (next === 'cavi') openCavi(); else if (next === 'preside') openPreside(); else if (next === 'cambio-dj') startCambioDj(); else if (next === 'dj') openDj(); else if (next === 'karaoke') openKaraoke(); else if (next === 'carico') openCarico(); else if (next === 'serata') openSerata();
+  if (next === 'cavi') openCavi(); else if (next === 'preside') openPreside(); else if (next === 'cambio-dj') startCambioDj(); else if (next === 'dj') openDj(); else if (next === 'carico') openCarico(); else if (next === 'serata') openSerata();
 });
 el('#schedule-close').addEventListener('click', () => { SFX.button(); closeSchedule(); });
 el('#schedule-modal').addEventListener('click', ev => { if (ev.target.id === 'schedule-modal') closeSchedule(); });
@@ -4527,7 +4481,7 @@ const REAR_PANELS = {
     sections: [['INPUT', [['in_L', 'IN A (L)'], ['in_R', 'IN B (R)']]], ['OUTPUT', [['out_L', 'OUT CH1'], ['out_R', 'OUT CH2']]], ['POWER ~230V', [['power', 'MAINS IN']]]] },
   par: { style: 'round', serial: 'LED PAR 7 × 10 W RGBW',
     sections: [['POWER', [['power_in', 'POWER IN'], ['power_thru', 'POWER OUT']]], ['DMX 512', [['dmx_in', 'DMX IN'], ['dmx_thru', 'DMX THRU']]]] },
-  mic: { style: 'round', serial: 'MICROFONO DINAMICO DA VOCE  ·  CARDIOIDE',
+  mic: { style: 'mic', serial: 'MICROFONO DINAMICO DA VOCE  ·  CARDIOIDE',
     sections: [['USCITA', [['out', 'XLR OUT']]]] },
   controller: { style: 'desk', accent: true, power: true, serial: 'DMX CONTROLLER  ·  2 UNIVERSI  ·  1024 CH',
     sections: [['DMX OUT', [['dmx_1', 'UNIVERSO 1'], ['dmx_2', 'UNIVERSO 2']]], ['POWER', [['power', 'POWER IN']]]] },
@@ -4579,6 +4533,7 @@ const REAR_STYLES = {
   cabinet: { bg: '#1b1c20', edge: '#33363d', ink: '#cfd2d6', sub: '#8b8e98', plate: '#2a2c33' },
   desk:    { bg: '#26282e', edge: '#3a3d45', ink: '#cfd2d6', sub: '#8b8e98' },
   round:   { bg: '#1c1d22', edge: '#3a3d45', ink: '#cfd2d6', sub: '#8b8e98' },
+  mic:     { bg: '#1c1d22', edge: '#3a3d45', ink: '#cfd2d6', sub: '#8b8e98' },
   white:   { bg: '#e9eaed', edge: '#b9bcc1', ink: '#2a2c32', sub: '#5f646d' },
   green:   { bg: '#2c3a2c', edge: '#49b06a', ink: '#e6efe6', sub: '#9fb89f' },
   strip:   { bg: '#1c1d22', edge: '#3a3d45', ink: '#cfd2d6', sub: '#8b8e98' },
@@ -4944,6 +4899,26 @@ function renderRoundPanel (ctx, comp, panel) {
   return svg + `</svg>`;
 }
 
+/* microfono visto di lato: la capsula con la griglia, il corpo e in fondo
+   il connettore XLR maschio a 3 poli (l'unica presa: niente display né DMX) */
+function renderMicPanel (ctx, panel) {
+  const { st } = ctx;
+  // sul telefono il microfono si rimpicciolisce e il connettore resta grande
+  const W = ctx.compact ? 430 : 760, H = 300, cy = 140, xlrX = ctx.compact ? 330 : 590;
+  let svg = `<svg class="rear-svg" viewBox="0 0 ${W} ${H}" xmlns="http://www.w3.org/2000/svg" font-family="Inter,sans-serif">
+    <g${ctx.compact ? ' transform="translate(0 70) scale(.5)"' : ''}>
+    <circle cx="110" cy="${cy}" r="72" fill="#4a4d56" stroke="#2a2c32" stroke-width="4"/>
+    ${Array.from({ length: 9 }, (_, i) => `<line x1="${50 + i * 15}" y1="${cy - 66}" x2="${50 + i * 15}" y2="${cy + 66}" stroke="#2a2c32" stroke-width="2" opacity=".7"/>`).join('')}
+    <rect x="168" y="${cy - 46}" width="24" height="92" rx="6" fill="#8a8e98"/>
+    <path d="M 192 ${cy - 44} L 450 ${cy - 26} L 450 ${cy + 26} L 192 ${cy + 44} Z" fill="${st.bg}" stroke="${st.edge}" stroke-width="3"/>
+    <rect x="450" y="${cy - 30}" width="40" height="60" rx="5" fill="#8a8e98" stroke="#55585f" stroke-width="2"/>
+    <text x="320" y="${cy + 6}" font-size="15" font-weight="700" fill="${st.sub}" text-anchor="middle" letter-spacing="2">MIC</text>
+    </g>`;
+  svg += rearSlot(ctx, xlrX, 18, 'out', 'XLR OUT');
+  svg += `<text x="${W / 2}" y="${H - 8}" font-size="12" fill="${st.sub}" text-anchor="middle" letter-spacing="1">${escapeHtml(panel.serial)}</text>`;
+  return svg + `</svg>`;
+}
+
 /* ciabatta vista dall'alto: a sinistra la spina sul suo cavo (si prende da
    qui per collegare la ciabatta, il cavo fa già parte della ciabatta), a
    destra la barra nera con interruttore e prese Schuko inclinate a 45° */
@@ -5044,6 +5019,8 @@ function rearPanelSvg (id) {
   let svg;
   if (panel.style === 'round') {
     svg = renderRoundPanel({ ...ctx, plugOnly: true }, comp, panel);
+  } else if (panel.style === 'mic') {
+    svg = renderMicPanel({ ...ctx, plugOnly: true }, panel);
   } else if (panel.style === 'strip') {
     svg = renderStripPanel({ ...ctx, plugOnly: true }, comp, def, panel);
   } else {
@@ -5262,8 +5239,8 @@ const TAPE_MARKS = [
   { text: 'FRONT.', gx: 6.5, gy: 9.5, color: '#4dff73' },
   { text: 'TAGLIO', gx: 1.25, gy: 5.75, color: '#4dff73' },
   { text: 'TAGLIO', gx: 6.25, gy: 7.25, color: '#4dff73' },
-  { text: 'ASTA', gx: 4.25, gy: 6.75, color: '#ff4fb4' },
-  { text: 'REGIA', gx: 7, gy: 4.5, w: 1, h: 3, color: '#ff9b21' }
+  { text: 'ASTA', gx: 3.75, gy: 6.75, color: '#ff4fb4' },
+  { text: 'REGIA', gx: 7, gy: 4.1, w: 1, h: 3.8, color: '#ff9b21' }
 ];
 
 /* MUSICA DI PROVA — fin dove arriva il segnale del PC: dal PC acceso alla
@@ -5498,7 +5475,7 @@ function fanOutNext (from) {
   scene.highlightPending(from.componentId, from.portId, true);
   scene.redrawEdges();
 }
-const CIABATTE_FINITE = 'Ciabatte finite: non ne servono altre. Le prese del Quadro accettano più cavi, e con gli adattatori del baule (CEE / Schuko, CEE / PowerCON) ci colleghi qualunque spina.';
+const CIABATTE_FINITE = 'Ciabatte di questo tipo finite (ne avevi due). Le prese del Quadro accettano più cavi, e con gli adattatori del baule (CEE / Schuko, CEE / PowerCON) ci colleghi qualunque spina.';
 function onRearPortClick (compId, portId, viaTap) {
   const scene = window.__scene;
   if (!scene) return;
@@ -5980,6 +5957,35 @@ document.querySelectorAll('.tab-btn').forEach(btn => {
 });
 // sul telefono il cassetto copre la scena: un tocco sulla scena lo chiude
 el('#stage-wrap').addEventListener('pointerdown', ev => { if (ev.target && ev.target.tagName === 'CANVAS') closeDrawerIfNarrow(); });
+/* GERARCHIA DEGLI STRATI — 1) la scena; 2) i comandi dell'azione in corso
+   (la barra del cavo in mano, il cassetto dei pezzi); 3) le informazioni
+   (foglio, avvisi). Un'informazione non copre mai la scena né i comandi:
+   l'avviso si aggancia dentro il comando in corso (nella barra del cavo, o
+   nel cassetto aperto su telefono e tablet), altrimenti sta sopra il flight
+   case; sul telefono, mentre si lavora col cavo o col cassetto, il foglio si
+   riduce alla sua riga (un tocco la riapre). */
+const PHONE_PX = 700;
+function layoutOverlays () {
+  const t = el('#toast');
+  const bar = el('#lay-bar.show') || el('#cable-banner.show');
+  const drawer = !bar && toolbarEl.classList.contains('open') && window.innerWidth < NARROW_PX ? document.querySelector('.tab-panel.active') : null;
+  const host = bar || drawer;
+  if (host) {
+    const before = drawer ? drawer.querySelector('.dr-head').nextSibling : host.firstChild;
+    if (t.parentNode !== host) host.insertBefore(t, before);
+    if (!t.classList.contains('docked')) t.classList.add('docked');
+  } else {
+    if (t.parentNode !== toolbarEl) toolbarEl.insertBefore(t, el('#run-bar'));
+    if (t.classList.contains('docked')) t.classList.remove('docked');
+  }
+  const busy = window.innerWidth < PHONE_PX && !!(bar || toolbarEl.classList.contains('open'));
+  if (busy !== overlayBusy) { overlayBusy = busy; foglioPeek = false; if (typeof updateFoglio === 'function') updateFoglio(); }
+}
+{
+  const mo = new MutationObserver(layoutOverlays);
+  [el('#lay-bar'), el('#cable-banner'), toolbarEl, ...document.querySelectorAll('.tab-panel')].forEach(n => mo.observe(n, { attributes: true, attributeFilter: ['class'] }));
+  window.addEventListener('resize', layoutOverlays);
+}
 // strati: quali cavi si vedono, dal pulsante sopra lo zoom
 el('#layers-btn').addEventListener('click', () => {
   el('#layers-btn').classList.toggle('on', document.body.classList.toggle('show-layers'));
@@ -6277,6 +6283,8 @@ function updateGiroUI () {
 // aperto di partenza solo sugli schermi larghi: su tablet e telefoni
 // coprirebbe le celle dove vanno i pezzi (si apre toccandolo)
 let foglioOpen = window.innerWidth >= 1100;
+let overlayBusy = false;   // telefono con la barra del cavo o il cassetto aperti (layoutOverlays)
+let foglioPeek = false;    // il foglio riaperto a mano mentre è ridotto
 let foglioSeen = null;   // le voci già spuntate del giro in corso (per il ✓ delle nuove)
 function updateFoglio () {
   const box = el('#foglio');
@@ -6303,18 +6311,12 @@ function updateFoglio () {
     head = 'Prossimo: Notte fuori controllo';
     body = '<p class="fg-note">DJ Inestimabile e Musa Esistenziale sono pronti. Tu vai alla consolle luci: le memorie si suonano a tempo col brano.</p>'
       + '<button type="button" class="fg-go" id="foglio-dj">Via al DJ set</button>';
-  } else if (djDone() && !karaokeDone()) {
-    // fuori programma: il karaoke di Macio, col microfono che c'è già
-    const missing = karaokeReady();
-    icon = '🎤 ';
-    head = 'Fuori programma: il karaoke di Macio';
-    body = '<p class="fg-note">' + escapeHtml('Il bidello ha cacciato via i musicisti: la festa è rimasta senza musica. Macio: «Ci penso io!». '
-      + (missing ? 'Prima però: ' + missing : 'Il microfono è sul CH ' + micChannel() + '.')) + '</p>'
-      + (missing ? '' : '<button type="button" class="fg-go" id="foglio-karaoke">Macio prende il microfono</button>');
-  } else if (karaokeDone()) {
-    icon = '🎤 ';
-    head = caricoDone() ? 'Serata finita' : 'Karaoke finito';
-    body = '<p class="fg-note">' + escapeHtml('Karaoke di Macio: ' + karaokeSummary()) + '</p>'
+  } else if (djDone()) {
+    // fine show: il DJ set è stato il gran finale, ora si smonta e si carica
+    icon = '🚚 ';
+    head = caricoDone() ? 'Serata finita' : 'Fine festa · smontaggio';
+    body = '<p class="fg-note">' + escapeHtml('DJ set: ' + djSummary()) + '</p>'
+      + (caricoDone() ? '' : '<p class="fg-note">' + escapeHtml(FINE_SHOW + ' Macio porta fuori i case, tu li carichi nel furgone.') + '</p>')
       + (caricoDone() ? '<p class="fg-note">Carico: ' + escapeHtml(caricoSummary()) + '</p><button type="button" class="fg-go" id="foglio-serata">Com\'è andata la serata</button>'
         : '<button type="button" class="fg-go" id="foglio-carico">Smonta e carica il furgone</button>');
   } else if (caviDone() && !presideDone()) {
@@ -6345,22 +6347,25 @@ function updateFoglio () {
       checks.filter(x => x.ok && !foglioSeen.ok.has(x.what)).forEach(x => window.__scene.floatCheck(x.ids || []));
     foglioSeen = { key, ok: okNow };
   } else foglioSeen = null;
+  // sul telefono, col cavo in mano o il cassetto aperto, resta solo la riga
+  const showBody = foglioOpen && (!overlayBusy || foglioPeek);
   const job = giro < GIRO_COLLAUDO && crewJob();
-  if (job && foglioOpen) body += '<p class="fg-note">Macio sta sistemando ' + escapeHtml(FAULT_NAME[job.t] || 'un pezzo') + ': pronto verso le ' + fmtClock(job.at) + '.</p>';
-  box.innerHTML = '<button class="fg-head" id="foglio-toggle">' + icon + head + '<span class="fg-caret">' + (foglioOpen ? '▾' : '▸') + '</span>'
+  if (job && showBody) body += '<p class="fg-note">Macio sta sistemando ' + escapeHtml(FAULT_NAME[job.t] || 'un pezzo') + ': pronto verso le ' + fmtClock(job.at) + '.</p>';
+  box.innerHTML = '<button class="fg-head" id="foglio-toggle">' + icon + head + '<span class="fg-caret">' + (showBody ? '▾' : '▸') + '</span>'
     + (clockOn() ? '<small class="fg-clock" id="fg-clock"></small>' : '') + '</button>'
     + (patience ? '<div class="fg-patience">' + patienceHtml() + '</div>' : '')
-    + (foglioOpen ? '<div class="fg-body">' + (giro < GIRO_COLLAUDO || !caviDone() ? '<div class="fg-steps">' + steps + '</div>' : '') + body + '</div>' : '');
+    + (showBody ? '<div class="fg-body">' + (giro < GIRO_COLLAUDO || !caviDone() ? '<div class="fg-steps">' + steps + '</div>' : '') + body + '</div>' : '');
   paintClock();
-  el('#foglio-toggle').addEventListener('click', () => { foglioOpen = !foglioOpen; SFX.button(); updateFoglio(); });
+  el('#foglio-toggle').addEventListener('click', () => {
+    if (showBody) { foglioOpen = false; foglioPeek = false; } else { foglioOpen = true; foglioPeek = overlayBusy; }
+    SFX.button(); updateFoglio();
+  });
   const go = el('#foglio-cambio');
   if (go) go.addEventListener('click', () => { SFX.button(); startCambioDj(); });
   const pr = el('#foglio-preside');
   if (pr) pr.addEventListener('click', () => { SFX.button(); openPreside(); });
   const dg = el('#foglio-dj');
   if (dg) dg.addEventListener('click', () => { SFX.button(); openDj(); });
-  const kg = el('#foglio-karaoke');
-  if (kg) kg.addEventListener('click', () => { SFX.button(); openKaraoke(); });
   const cg = el('#foglio-carico');
   if (cg) cg.addEventListener('click', () => { SFX.button(); openCarico(); });
   const sg = el('#foglio-serata');
@@ -6424,12 +6429,12 @@ const PICK_CORE_PX = 6, PICK_CORE_PART = 0.6, PICK_CORE_MARGIN = 6;
 // ambigue; al massimo PICK_MAX voci; "Ingrandisci qui" moltiplica lo zoom
 const PICK_TIE_PX = 8, PICK_ON_CABLE_PX = 5, PICK_MAX = 8, PICK_ZOOM_STEP = 2, PICK_ZOOM_MIN = 2.2;
 const SHOW_ZOOM = 2;         // zoom dello show finale: palco e Pit a tutto schermo
-const PLATFORM_HEIGHT = 26; // px: altezza visiva della pedana rialzata
+const PLATFORM_HEIGHT = 30; // px: altezza visiva della pedana rialzata (il gonnellino fino a terra)
 
-const STAGE_W = 4, STAGE_H = 4;       // pedana 4x4 m (area spettacolo, sempre visibile)
+const STAGE_W = 4.5, STAGE_H = 4;     // pedana 4,5x4 m (area spettacolo, sempre visibile)
 const OFFSTAGE_W = 2;                 // fascia laterale del palco, STESSA quota ma "nascosta":
                                        // mixer di palco, finali, consolle luci
-const STAGE_ORIGIN_X = 2, STAGE_ORIGIN_Y = 4;
+const STAGE_ORIGIN_X = 1.5, STAGE_ORIGIN_Y = 4;
 
 // bande dal retro del locale verso il pubblico (righe di griglia, gy crescente)
 const CARICO_ROWS = 2;      // gy 0-1: carico e scarico (furgone, case — solo scenografia)
@@ -6476,7 +6481,7 @@ function screenToCell (px, py) {
    misura reale nel disegno; se il pezzo è girato di un quarto (in FOH) si
    scambia. I pezzi montati (testa, PAR) non occupano celle. */
 const FOOTPRINT = {
-  sub: [1, 1], mixer: [1, 2], ampli: [1, 2], tavolo: [2, 6], controller: [1, 1], quadro: [1, 1],
+  sub: [1, 1], mixer: [1, 2], ampli: [1, 2], tavolo: [2, 8], controller: [1, 1], quadro: [1, 1],
   ciabatta: [1, 2], ciabatta_cee: [1, 3], pc: [1, 1], scheda: [1, 1], di: [1, 1], stativo: [1, 1], asta: [1, 1], dj: [2, 1], djluci: [1, 1]
 };
 function footprint (type, rot) {
@@ -6605,11 +6610,10 @@ function screenToMeters (px, py) {
   const rx = (px - ORIGIN_X) / (TILE_W / 2), ry = (py - ORIGIN_Y) / (TILE_H / 2);
   return { gx: (rx + ry) / 2, gy: (ry - rx) / 2 };
 }
-// come sopra, ma se il punto cade sulla pedana tiene conto del rialzo
-function worldToFloor (px, py) {
-  const up = screenToMeters(px, py + PLATFORM_HEIGHT);
-  return isStageCell(up.gx, up.gy) ? up : screenToMeters(px, py);
-}
+// come sopra: il piano della pedana si disegna alla quota dei pezzi che ci
+// stanno sopra (il rialzo è il gonnellino che scende al pavimento), quindi
+// il punto toccato è già quello giusto
+function worldToFloor (px, py) { return screenToMeters(px, py); }
 const laySnap = v => Math.round((v - CELL / 2) / CELL) * CELL + CELL / 2;
 const LAY_RADIUS = 0.9;     // raggio delle curve, in metri
 const LAY_MAX_BENDS = 5;
@@ -6696,10 +6700,11 @@ function layFromRails (r, A, B) {
   for (let i = 0; i < n - 1; i++) bends.push(h(i) ? [rails[i + 1], rails[i]] : [rails[i], rails[i + 1]]);
   return { bends: layClean(bends, A, B) };
 }
-// metri sul pavimento -> schermo, con lo scalino della pedana
+// metri sul pavimento -> schermo (sulla pedana il cavo sta alla quota dei
+// pezzi: niente scalino, se no il cavo resta sospeso sopra il palco)
 function layToScreen (pts) {
   const out = [];
-  const up = (x, y) => { const p = gridToScreen(x, y); return isStageCell(x, y) ? { x: p.x, y: p.y - PLATFORM_HEIGHT } : p; };
+  const up = (x, y) => gridToScreen(x, y);
   for (let i = 0; i < pts.length - 1; i++) {
     const a = pts[i], b = pts[i + 1], L = Math.abs(b.gx - a.gx) + Math.abs(b.gy - a.gy);
     out.push(up(a.gx, a.gy));
@@ -7531,6 +7536,11 @@ class StageScene extends Phaser.Scene {
           bottomV = gridToScreen(gx0 + totalW, gy0 + H), leftV = gridToScreen(gx0, gy0 + H);
 
     const sides = this.add.graphics().setDepth(2);
+    // ombra di contatto sul pavimento, ai piedi del gonnellino: la pedana poggia a terra
+    const H2 = PLATFORM_HEIGHT;
+    sides.fillStyle(0x000000, 0.35);
+    sides.fillPoints([{ x: leftV.x - 10, y: leftV.y + H2 }, { x: bottomV.x, y: bottomV.y + H2 + 6 }, { x: rightV.x + 10, y: rightV.y + H2 },
+      { x: rightV.x, y: rightV.y + H2 - 2 }, { x: bottomV.x, y: bottomV.y + H2 - 2 }, { x: leftV.x, y: leftV.y + H2 - 2 }], true);
     sides.fillStyle(0x1a1a1d, 1);
     sides.beginPath();
     sides.moveTo(rightV.x, rightV.y); sides.lineTo(bottomV.x, bottomV.y);
@@ -7565,8 +7575,9 @@ class StageScene extends Phaser.Scene {
     for (let i = 0; i < STAGE_W; i++) {
       for (let j = 0; j < H; j++) {
         if ((i + j) % 2 === 0) continue;
-        const p0 = gridToScreen(gx0 + i, gy0 + j), p1 = gridToScreen(gx0 + i + 1, gy0 + j),
-              p2 = gridToScreen(gx0 + i + 1, gy0 + j + 1), p3 = gridToScreen(gx0 + i, gy0 + j + 1);
+        const i1 = Math.min(i + 1, STAGE_W);
+        const p0 = gridToScreen(gx0 + i, gy0 + j), p1 = gridToScreen(gx0 + i1, gy0 + j),
+              p2 = gridToScreen(gx0 + i1, gy0 + j + 1), p3 = gridToScreen(gx0 + i, gy0 + j + 1);
         top.fillStyle(0x36302a, 0.35);
         top.beginPath();
         top.moveTo(p0.x, p0.y); top.lineTo(p1.x, p1.y); top.lineTo(p2.x, p2.y); top.lineTo(p3.x, p3.y);
@@ -8325,6 +8336,13 @@ class StageScene extends Phaser.Scene {
       portPos[p.id] = { dx: Math.round(q.x), dy: Math.round(q.y) };
     });
     const ledPos = (frame && def.ledIso) ? frame(...def.ledIso) : def.ledPos;
+    // PAR: piastrina dei connettori avvitata alla forcella, così le spine
+    // stanno attaccate al faro
+    if (def.shape === 'par') {
+      body.fillStyle(0x55585f, 1); body.fillRect(4, 14, 3, 6);                  // staffa sulla forcella
+      body.fillStyle(0x23252b, 1); body.fillRoundedRect(5, -2, 19, 21, 2.5);
+      body.lineStyle(1, 0x5d6068, 1); body.strokeRoundedRect(5, -2, 19, 21, 2.5);
+    }
     // punti di aggancio dei cavi: piccole prese appena accennate sul corpo,
     // la presa vera si sceglie nel pannello posteriore
     def.ports.forEach(p => {
@@ -8358,7 +8376,7 @@ class StageScene extends Phaser.Scene {
     const idLabel = this.add.text(0, (def.body.oy || 0) + def.body.h / 2 + 12, '', {
       fontFamily: 'Inter, sans-serif', fontStyle: 'bold', fontSize: '10px', color: '#8b8e98',
       backgroundColor: 'rgba(12,13,16,0.82)', padding: { x: 5, y: 1 }
-    }).setOrigin(0.5);
+    }).setOrigin(0.5).setVisible(false);  // vuota sarebbe un quadratino nero (stativo, asta)
     c.add(idLabel);
 
     // Bersaglio per interagire col componente: l'INTERO corpo (con un margine
@@ -8493,10 +8511,27 @@ class StageScene extends Phaser.Scene {
         if (cells.some(([x, y]) => x >= VENUE_W || y >= VENUE_H || !pred(x, y) || !free(cellKey(x, y)))) continue;
         const cgx = gx + f[0] * CELL / 2, cgy = gy + f[1] * CELL / 2;
         const d = Math.hypot(cgx - target.gx, cgy - target.gy);
+        if (d < bestDist - 1e-9 && this.hiddenByTable(type, gridToScreen(cgx, cgy), ignoreId)) continue;
         if (d < bestDist - 1e-9) { bestDist = d; best = { gx, gy, foot: f, keys: cells.map(([x, y]) => cellKey(x, y)), pos: gridToScreen(cgx, cgy) }; }
       }
     }
     return best;
+  }
+
+  /* dietro (o dentro) il tavolo regia non si posa niente: il disegno del
+     tavolo e della regia lo coprirebbe e non si riuscirebbe più a prenderlo.
+     Vale nei due sensi: un pezzo a terra non va sotto il disegno del tavolo,
+     il tavolo non si mette sopra un pezzo già posato (pos: centro del pezzo
+     sullo schermo) */
+  hiddenByTable (type, pos, ignoreId) {
+    if (MOUNTS[type]) return false;
+    const def = COMPONENT_TYPES.tavolo.body, IN = 6;
+    const covers = (t, q) => Math.abs(q.x - t.x) < def.w / 2 - IN
+      && q.y > t.y + def.oy - def.h / 2 + IN && q.y < t.y + def.oy + def.h / 2 - IN;
+    const P = Object.values(gameState.placed).filter(c => c.id !== ignoreId && c.gx != null && !MOUNTS[c.type] && this.compVisuals[c.id]);
+    const at = c => this.compVisuals[c.id].container;
+    if (type === 'tavolo') return P.some(c => c.type !== 'tavolo' && covers(pos, at(c)));
+    return P.some(c => c.type === 'tavolo' && covers(at(c), pos));
   }
 
   /* ---------------- anteprima durante il trascinamento dalla toolbar ---------------- */
@@ -8562,7 +8597,7 @@ class StageScene extends Phaser.Scene {
     g.lineStyle(1, 0x7fe0a0, 0.55);
     for (let cx = 0; cx < VENUE_W; cx += CELL) {
       for (let cy = 0; cy < VENUE_H; cy += CELL) {
-        if (!pred(cx, cy) || this.occupied[cellKey(cx, cy)]) continue;
+        if (!pred(cx, cy) || this.occupied[cellKey(cx, cy)] || this.hiddenByTable(type, gridToScreen(cx + CELL / 2, cy + CELL / 2))) continue;
         const i = 0.04;
         const p0 = gridToScreen(cx + i, cy + i), p1 = gridToScreen(cx + CELL - i, cy + i),
               p2 = gridToScreen(cx + CELL - i, cy + CELL - i), p3 = gridToScreen(cx + i, cy + CELL - i);
@@ -8589,7 +8624,7 @@ class StageScene extends Phaser.Scene {
     if (MOUNTS[type]) { this.attachToNearestBase(type, { x: worldX, y: worldY }); return; }
 
     const spot = this.findSpot(type, worldX, worldY, null);
-    if (!spot) { showToast('Non c\'è più posto per ' + COMPONENT_TYPES[type].label + ' nella sua zona: libera un po\' di spazio.'); return; }
+    if (!spot) { showToast(type === 'tavolo' ? TAVOLO_NO_SPOT : 'Non c\'è più posto per ' + COMPONENT_TYPES[type].label + ' nella sua zona: libera un po\' di spazio.'); return; }
     const cx = spot.gx, cy = spot.gy;
 
     const idx = gameState.nextIndex[type] = gameState.nextIndex[type] || 1;
@@ -8789,15 +8824,23 @@ class StageScene extends Phaser.Scene {
       // sub e testa sullo stesso palo: il cavetto va dritto dall'uno all'altra
       const baseA = posaBase(gameState.placed[e.a]);
       const sameBase = baseA && baseA === posaBase(gameState.placed[e.b]);
-      const pts = route ? [from, ...route, to]
-        : floor ? [from, ...layToScreen(floor.smooth), to]
-        : (sameBase || (zoneA === 'stage' && zoneB === 'stage')) ? [from, to]
-        : computeRoutePoints(from, to, this.stageBox, 30);
+      const mid = route ? route
+        : floor ? layToScreen(floor.smooth)
+        : (sameBase || (zoneA === 'stage' && zoneB === 'stage')) ? []
+        : computeRoutePoints(from, to, this.stageBox, 30).slice(1, -1);
+      // dal PAR e dal microfono il cavo scende lungo l'asta fino a terra
+      const pts = sameBase ? [from, to] : [from, ...this.cableDrop(e.a), ...mid, ...this.cableDrop(e.b).reverse(), to];
       // cavo in neoprene nero (come quelli veri), con un bordo appena più
       // chiaro per staccarlo dal pavimento e un filetto centrale del colore
       // del tipo di cavo per riconoscerlo. Il cavo selezionato resta arancione.
       if (isSelected) {
         strokeRoutedPath(this.edgeGraphics, pts, color, width, 18, alpha);
+      } else if (isCiabattaLead(e)) {
+        // il cavo della ciabatta è suo, civile: guaina chiara, non il
+        // neoprene nero dei cavi del baule
+        strokeRoutedPath(this.edgeGraphics, pts, 0x55585f, 5, 18, alpha);
+        strokeRoutedPath(this.edgeGraphics, pts, 0xd9dbde, 3.6, 18, alpha);
+        strokeRoutedPath(this.edgeGraphics, pts, color, 1.2, 18, alpha);
       } else {
         strokeRoutedPath(this.edgeGraphics, pts, 0x55585f, 5.5, 18, alpha);
         strokeRoutedPath(this.edgeGraphics, pts, 0x17181b, 4, 18, alpha);
@@ -8826,6 +8869,17 @@ class StageScene extends Phaser.Scene {
     if (modal && modal.classList.contains('show')) renderQuadroModal();
   }
 
+  /* da un pezzo montato in alto (PAR sullo stativo, microfono sull'asta)
+     il cavo non va per aria: scende lungo l'asta fino ai piedi */
+  cableDrop (id) {
+    const c = gameState.placed[id], base = c && (c.type === 'par' || c.type === 'mic') && mountBase(c);
+    const v = base && this.compVisuals[base.id];
+    if (!v) return [];
+    const x = v.container.x, y = v.container.y;
+    if (c.type === 'par') return [{ x: x + 3, y: y + standBarY() + 6 }, { x: x + 3, y: y - 4 }];
+    return [{ x: x + 3, y: y + ASTA_ISO(20, 20, 0).y - ASTA_POLE + 4 }, { x: x + 3, y: y - 4 }];
+  }
+
   drawFlowArrow (pts, color, alpha) {
     const p0 = pointAlongPolyline(pts, 0.47);
     const p1 = pointAlongPolyline(pts, 0.53);
@@ -8850,7 +8904,7 @@ class StageScene extends Phaser.Scene {
       const ports = v.def.ports;
       if (!ports.length) return;                       // stativo: niente prese
       const used = ports.filter(p => edgesOnPort(c.id, p.id).length > 0).length;
-      v.idLabel.setText(used + '/' + ports.length);
+      v.idLabel.setText(used + '/' + ports.length).setVisible(true);
       v.idLabel.setColor(used === ports.length ? '#49b06a' : '#8b8e98');
     });
   }
@@ -8975,6 +9029,8 @@ class StageScene extends Phaser.Scene {
     this.selectedEdgeId = null;
     if (this.edgeDeleteBtn) { this.edgeDeleteBtn.destroy(); this.edgeDeleteBtn = null; }
     this.lay = { id: edgeId, route: { bends: f.route.bends.map(b => b.slice()) }, start: JSON.stringify(f.route.bends), drag: null, cam: null };
+    // col cavo in mano il cassetto dei pezzi non serve: su telefono e tablet si chiude
+    closeDrawerIfNarrow();
     // sul telefono la scena è piccola: ci si avvicina al cavo, poi si torna
     if (this.screenScale() < CROWD_SCALE) {
       const sp = layToScreen(f.smooth);
@@ -9150,6 +9206,7 @@ class StageScene extends Phaser.Scene {
     if (!this.gerryGraphics) {
       this.gerryGraphics = this.add.graphics().setDepth(1.6);
       this.gerryMarkGraphics = this.add.graphics().setDepth(5.8);
+      this.rampGraphics = this.add.graphics().setDepth(5.5);   // sopra i cavi
       this.gerryLabels = {};
     }
     const g = this.gerryGraphics, mg = this.gerryMarkGraphics;
@@ -9183,6 +9240,18 @@ class StageScene extends Phaser.Scene {
       g.lineStyle(1.5, 0xf2c53d, 0.6); g.strokePoints(q, true);
       label(z.id, 'PASSAGGIO', q, '#f2c53d');
     });
+    // passacavi (canaline) dove i cavi attraversano un passaggio: rampa gialla
+    // e nera di traverso, sopra i cavi, larga quanto il passaggio
+    const rg = this.rampGraphics;
+    rg.clear();
+    gerryRamps(this).forEach(({ ps, j }) => {
+      const x0 = ps.r[0] * CELL - 0.08, x1 = (ps.r[0] + ps.r[2]) * CELL + 0.08, y0 = j * CELL + 0.06, y1 = (j + 1) * CELL - 0.06;
+      const q = quad(x0, y0, x1, y1);
+      rg.fillStyle(0x000000, 0.35); rg.fillPoints(q.map(p => ({ x: p.x + 2, y: p.y + 3 })), true);
+      rg.fillStyle(0x2e3037, 1); rg.fillPoints(q, true);                      // rampe in gomma
+      rg.fillStyle(0xf2c53d, 1); rg.fillPoints(quad(x0, y0 + 0.12, x1, y1 - 0.12), true);   // coperchio giallo
+      rg.lineStyle(1.2, 0x0c0d10, 1); rg.strokePoints(q, true);
+    });
     // i punti da sistemare
     let issues = [];
     if (this.gerryMarks || this.lay) {
@@ -9191,8 +9260,7 @@ class StageScene extends Phaser.Scene {
     }
     issues.forEach(is => is.cells.forEach(c => {
       const q = [[0, 0], [1, 0], [1, 1], [0, 1]].map(([di, dj]) => {
-        const x = (c.i + di) * CELL, y = (c.j + dj) * CELL, p = gridToScreen(x, y);
-        return isStageCell(c.i * CELL, c.j * CELL) ? { x: p.x, y: p.y - PLATFORM_HEIGHT } : p;
+        return gridToScreen((c.i + di) * CELL, (c.j + dj) * CELL);
       });
       mg.fillStyle(0xe0503f, 0.35); mg.fillPoints(q, true);
       mg.lineStyle(1.5, 0xe0503f, 0.95); mg.strokePoints(q, true);
@@ -9675,7 +9743,7 @@ class StageScene extends Phaser.Scene {
     if (!comp || MOUNTS[comp.type]) { this.moveSelected = null; return; }
 
     const spot = this.findSpot(comp.type, worldX, worldY, id);
-    if (!spot) { showToast('Lì non c\'è posto: scegli uno spazio libero nella sua zona.'); return; }
+    if (!spot) { showToast(comp.type === 'tavolo' ? TAVOLO_NO_SPOT : 'Lì non c\'è posto: scegli uno spazio libero nella sua zona.'); return; }
     const cx = spot.gx, cy = spot.gy;
 
     (comp.cells || []).forEach(k => { delete this.occupied[k]; });
@@ -10689,6 +10757,9 @@ class StageScene extends Phaser.Scene {
     // partita salvata quando la DI non era nella dotazione: la sua scorta
     // si ricalcola da quelle posate
     if (!lv.stockV && lv.stock) lv = { ...lv, stock: { ...lv.stock, di: AVAILABLE_STOCK.di - Object.values(lv.placed || {}).filter(c => c.type === 'di').length } };
+    // salvata quando c'era una ciabatta per tipo: la scorta si ricalcola
+    const left = t => AVAILABLE_STOCK[t] - Object.values(lv.placed || {}).filter(c => c.type === t).length;
+    if ((lv.stockV || 0) < 3 && lv.stock) lv = { ...lv, stock: { ...lv.stock, ciabatta: left('ciabatta'), ciabatta_cee: left('ciabatta_cee') } };
     this.restoreSnapshot(lv);
     gameState.trips = lv.trips || 0;
     gameState.rcdTrips = lv.rcdTrips || 0;
