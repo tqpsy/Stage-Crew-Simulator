@@ -1429,11 +1429,44 @@ function surpriseStep () {
   }
 }
 
+/* Fine del lavoro: una pausa breve prima della bolla. La telecamera passa
+   sul piazzale vuoto e poi sulle zone con i case al loro posto, Macio
+   guarda il materiale. L'orologio è fermo (l'ora di fine è già decisa);
+   un tocco o un tasto la accorcia. */
+const WRAP = { van: 3.4, lines: [[0.6, 'Ok. È tutto giù.'], [5.2, 'Adesso possiamo cominciare.']], end: 8.6 };
+function startWrap () {
+  if (G.mode !== 'play') return;
+  for (const w of G.workers) release(w);
+  G.mode = 'wrap'; G.wrap = { t: 0, said: 0 };
+  hintQueue.length = 0; clearTimeout(queueTimer);
+  $('#pad').hidden = true; $('#qte').hidden = true;
+  goal('Materiale nelle zone: Palco, Pit, Backstage e Regia.');
+}
+function wrapStep (dt) {
+  const W2 = G.wrap; W2.t += dt;
+  while (W2.said < WRAP.lines.length && W2.t >= WRAP.lines[W2.said][0]) {
+    const txt = WRAP.lines[W2.said][1];
+    G.bubbles = [{ ent: G.macio, text: txt, until: G.t + 99 }];
+    toast('Macio: «' + txt + '»', 'ok', true);
+    W2.said++;
+  }
+  if (W2.t >= WRAP.end) { G.bubbles = []; endGame('ok'); }
+}
+function skipWrap () { if (G && G.mode === 'wrap' && G.wrap.t > 1) G.wrap.t = WRAP.end; }
+// dove guarda la telecamera durante la pausa finale
+function wrapView () {
+  if (G.wrap.t < WRAP.van) return { x: 260, y: 500, fit: 760 };
+  const z = Object.values(ZONES), x1 = Math.min(...z.map(a => a.x)), x2 = Math.max(...z.map(a => a.x + a.w));
+  const y1 = Math.min(...z.map(a => a.y)), y2 = Math.max(...z.map(a => a.y + a.h));
+  return { x: (x1 + x2) / 2, y: (y1 + y2) / 2, fit: Math.max(x2 - x1, y2 - y1) + 80 };
+}
+
 /* ---------------------------------------------------------------------
    PASSO DI SIMULAZIONE
    --------------------------------------------------------------------- */
 function stepSim () {
   const dt = 1 / 60;
+  if (G.mode === 'wrap') { wrapStep(dt); return; }
   if (G.mode === 'intro') {
     G.introT += dt; G.doorsOpen = clamp(G.introT / 1.2, 0, 1);
     if (G.introT > 1.15 && !G.events.slide) {
@@ -1488,7 +1521,7 @@ function stepSim () {
     if (!G.surprise && G.cases.every(c => c.def.surprise || placed(c))) startSurprise();
     surpriseStep();
     const done = G.surprise && G.surprise.revealed && G.cases.every(placed);
-    if (done) { G.endDelay += dt; if (G.endDelay > (G.surprise.late ? 2.2 : 0.8)) endGame('ok'); } else G.endDelay = 0;
+    if (done) { G.endDelay += dt; if (G.endDelay > (G.surprise.late ? 2.2 : 0.8)) startWrap(); } else G.endDelay = 0;
     if (G.t >= GAME_SECONDS) endGame('tempo');
   }
   G.bubbles = G.bubbles.filter(b => b.until > G.t);
@@ -2007,12 +2040,15 @@ function label (x, y, title, sub, color, tags) {
 
 function render () {
   // camera: segue il giocatore; su telefono si vede meno mondo ma più grande
-  const scale = clamp(Math.min(W / 680, (H - 60) / 520), 0.5, 1.4);
+  const wv = G.mode === 'wrap' || (G.mode === 'end' && G.wrap) ? wrapView() : null;
+  const want = wv ? clamp(Math.min(W / wv.fit, (H - 60) / wv.fit), 0.35, 1.4) : clamp(Math.min(W / 680, (H - 60) / 520), 0.5, 1.4);
   // la scena finisce sopra la barra d'aiuto (e sopra i pulsanti, sul telefono)
-  const pp = G.mode === 'intro' ? { x: 470, y: 500 } : G.player.body.position;
+  const pp = wv || (G.mode === 'intro' ? { x: 470, y: 500 } : G.player.body.position);
   const target = { x: pp.x, y: pp.y };
-  G.cam.scale = scale;
-  G.cam.x += (target.x - G.cam.x) * 0.12; G.cam.y += (target.y - G.cam.y) * 0.12;
+  const k = wv ? 0.05 : 0.12;
+  G.cam.scale += (want - G.cam.scale) * (wv ? 0.05 : 1);
+  const scale = G.cam.scale;
+  G.cam.x += (target.x - G.cam.x) * k; G.cam.y += (target.y - G.cam.y) * k;
   const hw = W / 2 / scale, hh = H / 2 / scale;
   G.cam.x = WORLD.x2 - WORLD.x1 > hw * 2 ? clamp(G.cam.x, WORLD.x1 + hw, WORLD.x2 - hw) : (WORLD.x1 + WORLD.x2) / 2;
   G.cam.y = WORLD.y2 - WORLD.y1 > hh * 2 ? clamp(G.cam.y, WORLD.y1 + hh - 50 / scale, WORLD.y2 - hh + 60 / scale) : (WORLD.y1 + WORLD.y2) / 2;
@@ -2202,7 +2238,13 @@ function endGame (reason) {
     faulty: G.cases.filter(c => stateOf(c.integrity) === 'difettoso').map(c => c.def.name),
     faultyIds: G.cases.filter(c => stateOf(c.integrity) === 'difettoso').map(c => c.def.id),
     wrong: G.cases.filter(c => !c.rushed && c.zone !== c.def.zone).map(c => c.def.name),
-    eff: E.score, rough: S.rough, trips: S.trips, cartTrips: S.cartTrips
+    eff: E.score, rough: S.rough, trips: S.trips, cartTrips: S.cartTrips,
+    // ogni case com'è arrivato: dove l'hai lasciato e in che stato. Il
+    // montaggio li ritrova con lo stesso nome (vedi scaricoCase in main.js)
+    cases: G.cases.map(ce => ({
+      id: ce.def.id, name: ce.def.name, short: ce.def.short, what: ce.def.what, zone: ce.def.zone,
+      at: ce.rushed ? ce.def.zone : ce.zone, state: stateOf(ce.integrity), dents: Math.min(6, Math.floor((100 - ce.integrity) / 7)), rushed: !!ce.rushed
+    }))
   };
   $('#btn-again').addEventListener('click', () => {
     if (EMBED) { sendResult(G.result); return; }
@@ -2219,6 +2261,7 @@ window.addEventListener('keydown', e => {
   if (e.repeat) return;
   inp.keys.add(e.code);
   if (!G) return;
+  if (G.mode === 'wrap') { skipWrap(); return; }
   if (e.code === 'Space') { inp.grabHeld = true; pressGrab(); }
   if (e.code === 'KeyE') pressHelp();
   if (e.code === 'KeyQ') pressLift();
@@ -2240,6 +2283,7 @@ function bindBtn (id, down, up) {
   const end = e => { if (up) up(); };
   el.addEventListener('pointerup', end); el.addEventListener('pointercancel', end);
 }
+cv.addEventListener('pointerdown', skipWrap);
 bindBtn('#b-grab', () => { inp.grabHeld = true; pressGrab(); }, () => { inp.grabHeld = false; });
 bindBtn('#b-help', pressHelp);
 bindBtn('#b-lift', pressLift);

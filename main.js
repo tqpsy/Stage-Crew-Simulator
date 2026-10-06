@@ -680,6 +680,60 @@ const FAULTS = {
   'baule:corrente': { what: 'i cavi sono aggrovigliati', fix: 'Cavi sbrogliati e riarrotolati: il baule CORRENTE è in ordine.' },
   'baule:segnale':  { what: 'i cavi sono aggrovigliati', fix: 'Cavi sbrogliati e riarrotolati: il baule SEGNALE è in ordine.' }
 };
+/* Continuità scarico → montaggio: ogni case scaricato resta lo stesso case.
+   Profile.data.scarico.cases = [{ id, name, short, what, zone, at, state,
+   dents, rushed }]: zone è dove andava, at dove l'hai lasciato, dents le
+   ammaccature che si vedevano sul case. scaricoCase(id) dà il case,
+   caseOfPiece(compId) il case da cui esce un pezzo posato (i difettosi
+   escono per primi, come in isFaulty). Niente case (scarico saltato o
+   salvataggio vecchio): null, e il montaggio va come prima. */
+const SCARICO_ZONES = { palco: 'Palco', back: 'Backstage', pit: 'Pit', foh: 'Regia FOH' };
+const PIECE_FROM_CASE = {
+  sub: ['sub1', 'sub2'], top: ['top1', 'top2'], ampli: ['rack'], mixer: ['rack'],
+  quadro: ['distro'], ciabatta: ['distro'], ciabatta_cee: ['distro'],
+  pc: ['valigetta'], scheda: ['valigetta'], controller: ['valigetta'],
+  par: ['par', 'par', 'par', 'par', 'ricambio'], stativo: ['stativi', 'stativi', 'stativi', 'stativi', 'ricambio'],
+  asta: ['stativi'], mic: ['ricambio']
+};
+function cleanScaricoCases (list) {
+  if (!Array.isArray(list)) return [];
+  const str = (v, n) => typeof v === 'string' ? v.slice(0, n) : '';
+  return list.slice(0, 20).filter(c => c && typeof c.id === 'string').map(c => ({
+    id: str(c.id, 20), name: str(c.name, 40), short: str(c.short, 20), what: str(c.what, 60),
+    zone: SCARICO_ZONES[c.zone] ? c.zone : null, at: SCARICO_ZONES[c.at] ? c.at : null,
+    state: ['integro', 'ammaccato', 'difettoso', 'rotto'].includes(c.state) ? c.state : 'integro',
+    dents: Math.max(0, Math.min(6, parseInt(c.dents, 10) || 0)), rushed: !!c.rushed
+  }));
+}
+function scaricoCase (id) {
+  const s = Profile.data.scarico;
+  return (s && Array.isArray(s.cases) && s.cases.find(c => c.id === id)) || null;
+}
+function caseOfPiece (compId) {
+  const c = gameState.placed[compId], list = c && PIECE_FROM_CASE[c.type];
+  if (!list) return null;
+  const bad = id => ((Profile.data.scarico || {}).faultyIds || []).includes(id) ? 1 : 0;
+  const ids = list.map((id, i) => [id, i]).sort((a, b) => bad(b[0]) - bad(a[0]) || a[1] - b[1]).map(x => x[0]);
+  const n = placedOfType(c.type).findIndex(x => x.id === compId);
+  return n < 0 ? null : scaricoCase(ids[Math.min(n, ids.length - 1)]);
+}
+// la riga col case da cui viene il pezzo: nome, zona dove l'hai lasciato e,
+// se l'ha presa, l'ammaccatura (la prima volta lo nota Macio)
+const caseRemarked = new Set();
+function caseOriginHtml (sc) {
+  if (!sc) return '';
+  let h = '<b>CASE ' + escapeHtml((sc.name || sc.id).toUpperCase()) + '</b>' + (sc.at ? ' · ' + SCARICO_ZONES[sc.at] : '');
+  if (sc.dents) {
+    h += ' · ha ancora ' + (sc.dents > 2 ? 'le ammaccature' : 'la piccola ammaccatura');
+    if (!caseRemarked.has(sc.id)) { caseRemarked.add(sc.id); h += '. Macio: «' + (sc.dents > 2 ? 'Questo ha preso una bella botta.' : 'Questo ha preso un colpetto.') + '»'; }
+  }
+  return h;
+}
+function showCaseOrigin (box, sc) {
+  const h = caseOriginHtml(sc);
+  box.hidden = !h; box.innerHTML = h;
+}
+
 function faultCounts () {
   const out = {}, s = Profile.data.scarico;
   ((s && s.faultyIds) || []).forEach(id => { const t = FAULT_BY_CASE[id]; if (t) out[t] = (out[t] || 0) + 1; });
@@ -713,7 +767,7 @@ const FAULT_NAME = { ampli: 'il finale', sub: 'il sub', top: 'la testa', quadro:
 function faultBox (box, t, onDone) {
   box.hidden = false;
   const baule = t.startsWith('baule:'), crew = !baule && clockOn(), job = crewJob();
-  const what = '<span><b>⚠ Arrivato difettoso dallo scarico:</b> ' + escapeHtml(FAULTS[t].what) + '.</span>';
+  const what = '<span><b>⚠ Qualcosa non va:</b> ' + escapeHtml(FAULTS[t].what) + '.</span>';
   if (crew && job && job.t === t && faultsLeft(t) === 1) {
     box.innerHTML = what + '<span class="fault-crew-on">Ci sta lavorando Macio: pronto verso le ' + fmtClock(job.at) + '. Intanto lavora sul resto.</span>';
     return;
@@ -3166,7 +3220,8 @@ function finishScarico (r) {
     delay: r.skipped ? 0 : (r.minutes || 0), beers: r.skipped ? 0 : (r.beers || 0),
     endClock: r.endClock || '16:30', faulty: r.faulty || [], faultyIds: r.faultyIds || [], fixed: {},
     wrong: r.wrong || [], kidHits: r.kidHits || 0,
-    eff: Number.isFinite(r.eff) ? r.eff : null, rough: r.rough || 0
+    eff: Number.isFinite(r.eff) ? r.eff : null, rough: r.rough || 0,
+    cases: cleanScaricoCases(r.cases)
   };
   Profile.data.beers = (Profile.data.beers || 0) + Profile.data.scarico.beers;
   if (!r.skipped) {
@@ -3178,10 +3233,22 @@ function finishScarico (r) {
   whenScene(scene => {
     scene.resetLevel(true);          // la dotazione senza i pezzi rotti
     sceneKeyboard(true);
-    if (!sceneCovered()) setSceneInput(true);
     applySettings();
-    showToast(montaggioMessage(), 'ok');
+    const go = () => { if (!sceneCovered()) setSceneInput(true); showToast(montaggioMessage(), 'ok'); };
+    if (r.skipped) { go(); return; }
+    phaseCard(montaggioTime() + ' — MONTAGGIO', go);
   });
+}
+// cartello breve fra una fase e l'altra (un tocco lo chiude prima)
+function phaseCard (text, done) {
+  const c = document.createElement('div');
+  c.id = 'phase-sign'; c.className = 'phase-sign';
+  c.innerHTML = '<b>' + escapeHtml(text) + '</b>';
+  document.body.appendChild(c);
+  let over = false;
+  const end = () => { if (over) return; over = true; c.classList.add('out'); setTimeout(() => c.remove(), 350); done(); };
+  c.addEventListener('pointerdown', end);
+  setTimeout(end, 2200);
 }
 // ora d'inizio del montaggio: 16:30 più il ritardo dello scarico
 function montaggioTime () {
@@ -3196,8 +3263,6 @@ function montaggioMessage () {
   if (s && s.lost && s.lost.stativo) miss.push(s.lost.stativo === 1 ? 'uno stativo' : s.lost.stativo + ' stativi');
   const many = miss.length > 1 || (s && s.lost && (s.lost.par > 1 || s.lost.stativo > 1));
   if (miss.length) msg += ' Allo scarico si è rotto qualcosa: ' + (many ? 'mancano ' : 'manca ') + miss.join(' e ') + '.';
-  const nf = ((s && s.faultyIds) || []).filter(id => FAULT_BY_CASE[id]).length;
-  if (nf) msg += nf === 1 ? ' Un pezzo è arrivato difettoso: ha il segno arancione, toccalo e sistemalo.' : ' ' + nf + ' pezzi sono arrivati difettosi: hanno il segno arancione, toccali e sistemali.';
   return msg;
 }
 function scaricoSummary () {
@@ -5668,6 +5733,7 @@ function openRearPanel (compId) {
   const fb = el('#rear-fault');
   fb.hidden = true; fb.innerHTML = '';
   if (isFaulty(compId)) faultBox(fb, t);
+  showCaseOrigin(el('#rear-origin'), caseOfPiece(compId));
   // prima visibile, poi disegnato: serve la larghezza vera del riquadro
   el('#rear-modal').classList.add('show');
   renderRearPanel();
@@ -5876,6 +5942,7 @@ function openCase (name) {
   fb.hidden = true; fb.innerHTML = '';
   el('#case-svg').classList.toggle('tangled', faultsLeft(key) > 0);
   if (faultsLeft(key)) faultBox(fb, key, () => el('#case-svg').classList.remove('tangled'));
+  showCaseOrigin(el('#case-origin'), scaricoCase(name));
   el('#case-modal').classList.add('show');
   setSceneInput(false);
   SFX.caseOpen();
@@ -7384,6 +7451,12 @@ class StageScene extends Phaser.Scene {
       const cg = this.add.graphics().setDepth(isoDepth(p.y) - 0.0005).setPosition(p.x, p.y);
       const tape = caseName === 'segnale' ? 0xeaff2b : caseName === 'corrente' ? 0xff4fb4 : null;
       this.drawFlightCase(cg, CASE_ISO, tape);
+      // le ammaccature prese allo scarico restano sul case
+      const sc = scaricoCase(caseName || 'ricambio');
+      if (sc && sc.dents) {
+        cg.lineStyle(1.2, 0xd2d6de, 0.55);
+        for (let k = 0; k < Math.min(4, sc.dents); k++) { const x = -14 + k * 9, y = -10 + (k % 2) * 7; cg.lineBetween(x, y, x + 6, y + 3); }
+      }
       if (!caseName) return;
       this.casePos = this.casePos || {};
       this.casePos[caseName] = p;
@@ -8702,11 +8775,12 @@ class StageScene extends Phaser.Scene {
     this.pushHistory();
     tireOut(FATIGUE.perAction);
     SFX.place();
+    const fromCase = this.caseOpened(id);
     // la prima volta si spiega come si usa un dispositivo posato
     if (!this.gestureHintShown) {
       this.gestureHintShown = true;
-      showToast('Tocca un dispositivo per aprire il suo pannello · tienilo premuto per spostarlo o toglierlo.', 'ok');
-    }
+      showToast(fromCase + 'Tocca un dispositivo per aprire il suo pannello · tienilo premuto per spostarlo o toglierlo.', 'ok');
+    } else if (fromCase) showToast(fromCase.trim(), 'ok');
   }
 
   /* piazza il pezzo attualmente "armato" dalla toolbar nel punto toccato sulla
@@ -8738,6 +8812,17 @@ class StageScene extends Phaser.Scene {
     return { x: bv.container.x + (m.offsetX ? m.offsetX() : 0), y: bv.container.y + m.offsetY(), depth: isoDepth(bv.container.y) + (m.depth != null ? m.depth : 0.001) };
   }
 
+  // il primo pezzo che esce da un case scaricato apre quel case: «CASE SUB 1 ·
+  // Pit». Una volta per case; '' se non c'è (scarico saltato, pezzo non da case)
+  caseOpened (id) {
+    const sc = caseOfPiece(id);
+    this.casesOpened = this.casesOpened || new Set();
+    if (!sc || this.casesOpened.has(sc.id)) return '';
+    this.casesOpened.add(sc.id);
+    const t = caseOriginHtml(sc).replace(/<[^>]+>/g, '');
+    return t + (t.endsWith('»') ? ' ' : '. ');
+  }
+
   attachToNearestBase (type, world) {
     const m = MOUNTS[type];
     const base = this.nearestFreeBase(type, world);
@@ -8762,7 +8847,7 @@ class StageScene extends Phaser.Scene {
     this.updateQuadroVisual();
     setCircuitStatus('untested');
     SFX.place();
-    showToast(m.done(base.id), 'ok');
+    showToast(this.caseOpened(id) + m.done(base.id), 'ok');
     this.pushHistory();
     tireOut(FATIGUE.perAction);
   }
@@ -10672,6 +10757,7 @@ class StageScene extends Phaser.Scene {
 
   /* ---------------- reset ---------------- */
   resetLevel (quiet) {
+    this.casesOpened = null;   // i case scaricati si riaprono da capo
     // giro e conti di prima: un Annulla subito dopo il reset li rimette
     const before = { giro: gameState.giro || 0, giroFails: (gameState.giroFails || [0, 0, 0]).slice(), stats: { ...freshStats(), ...gameState.stats }, trips: gameState.trips || 0, rcdTrips: gameState.rcdTrips || 0, procErrors: (gameState.procErrors || []).slice() };
     this.stopFx();

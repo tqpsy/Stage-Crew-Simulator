@@ -332,6 +332,37 @@ livelli futuri.
   chiede ogni due minuti "Tutto a posto?".
 - **Insegna**: tutto insieme, sotto pressione.
 
+## Continuità fra scarico e montaggio
+
+Il materiale che scarichi è lo stesso che monti: la continuità si vede, non
+si spiega. Il montaggio non cambia: legge solo i dati che lo scarico lascia.
+
+- **Pausa finale** (circa 9 s, un tocco la accorcia): dopo
+  «MATERIALE SCARICATO 100%» e il baule SEGNALE la telecamera passa sul
+  piazzale vuoto e poi sulle zone con i case al loro posto. Macio: «Ok. È
+  tutto giù.» … «Adesso possiamo cominciare.» Poi la bolla, e dopo «Al
+  montaggio» un cartello breve «16:30 — MONTAGGIO» (l'ora vera, col ritardo).
+- **Dati**: il risultato porta `cases`, uno per case: `id`, `name`, `short`,
+  `what`, `zone` (dove andava), `at` (dove l'hai lasciato), `state`
+  (integro, ammaccato, difettoso, rotto), `dents` (ammaccature visibili,
+  0-6), `rushed`. Finisce in `Profile.data.scarico.cases`.
+- **API in main.js**: `scaricoCase(id)` dà il case; `caseOfPiece(compId)`
+  il case da cui esce un pezzo posato (`PIECE_FROM_CASE`: sub → Sub 1 e
+  Sub 2, finale e mixer → Rack, Quadro e ciabatte → Distro, PC, scheda e
+  controller → Valigetta, PAR → Case PAR e ricambi, stativi…). I case
+  difettosi escono per primi, come in `isFaulty`. Scarico saltato o
+  salvataggio vecchio: `null`, e il montaggio va come prima.
+- **Al montaggio**: il primo pezzo che esce da un case lo «apre»
+  (avviso «CASE SUB 1 · Pit»); il pannello del pezzo e quello del baule
+  hanno la riga del case. Se il case ha preso colpi «ha ancora
+  l'ammaccatura» e la prima volta Macio: «Questo ha preso una bella botta.»
+  Le ammaccature si vedono anche sui bauli disegnati dietro la regia.
+- **Danni scoperti**: il messaggio d'inizio montaggio non elenca più i pezzi
+  difettosi; li trovi sul pezzo (segno arancione, «Qualcosa non va: …»),
+  con la stessa riparazione di prima.
+- **Da decidere**: al montaggio i bauli CORRENTE e SEGNALE sono disegnati
+  dietro la regia FOH, mentre allo scarico vanno in Backstage e sul Palco.
+
 ## Tipi di flight case e materiali
 
 Valori di partenza da provare nel prototipo. Scorrevolezza: 1 = si

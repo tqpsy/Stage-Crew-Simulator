@@ -163,7 +163,12 @@ const path = require('path');
   const s2 = await ev(() => ({ hidden: C('segnale').hidden, del: $('#h-del').textContent, hint: hintGoal, blocked: blockers(C('segnale')).length, mode: G.mode }));
   check(!s2.hidden && s2.del === '11/12' && /SEGNALE/.test(s2.hint) && !s2.blocked && s2.mode === 'play', 'il baule sotto il telo non salta fuori: ' + JSON.stringify(s2));
   await ev(() => { const c = C('segnale'); Matter.Body.setPosition(c.body, { x: 1740, y: 380 }); Matter.Body.setVelocity(c.body, { x: 0, y: 0 }); });
-  await p.waitForFunction(() => G.mode === 'end', null, { timeout: 6000 }).catch(() => {});
+  // pausa finale: la telecamera va sulle zone, Macio guarda il materiale; un tocco la accorcia
+  await p.waitForFunction(() => G.mode === 'wrap' && G.wrap.t > 4.5, null, { timeout: 12000 }).catch(() => {});
+  const w = await ev(() => ({ mode: G.mode, cx: G.cam.x, hint: $('#hint-txt').textContent }));
+  check(w.mode === 'wrap' && w.cx > 1200 && /tutto giù/.test(w.hint), 'nella pausa finale non si vedono le zone: ' + JSON.stringify(w));
+  await p.mouse.click(300, 300);
+  await p.waitForFunction(() => G.mode === 'end', null, { timeout: 3000 }).catch(() => {});
   const end = await ev(() => ({ mode: G.mode, r: G.result, html: $('#end').innerText }));
   check(end.mode === 'end' && Number.isFinite(end.r.eff) && end.r.rough === 1 && end.r.cartTrips === 1, 'il risultato non porta efficienza e movimentazioni: ' + JSON.stringify(end.r));
   check(/EFFICIENZA/.test(end.html) && /Baule SEGNALE recuperato/.test(end.html) && /movimentazione brusca/i.test(end.html) && /col carrello/.test(end.html),
