@@ -2465,6 +2465,7 @@ const REP = {
   scaricoClean: 3,     // scarico senza nessun danno
   scaricoBroken: -2,   // ogni pezzo rotto allo scarico (lì è colpa della crew)
   scaricoKid: -1,      // ogni bambino urtato con un case
+  scaricoRough: -1,    // ogni movimentazione brusca di un case fragile (al massimo due)
   cavi: { 3: 5, 2: 3, 1: 1 }   // posa dei cavi, per stelle (Gerry promuove al 1°, 2°, 3°+ giro)
 };
 const REP_LOG_KEEP = 50;
@@ -3164,12 +3165,13 @@ function finishScarico (r) {
     skipped: !!r.skipped, lost, parsBroken, staBroken: !!staBroken, ricOk,
     delay: r.skipped ? 0 : (r.minutes || 0), beers: r.skipped ? 0 : (r.beers || 0),
     endClock: r.endClock || '16:30', faulty: r.faulty || [], faultyIds: r.faultyIds || [], fixed: {},
-    wrong: r.wrong || [], kidHits: r.kidHits || 0
+    wrong: r.wrong || [], kidHits: r.kidHits || 0,
+    eff: Number.isFinite(r.eff) ? r.eff : null, rough: r.rough || 0
   };
   Profile.data.beers = (Profile.data.beers || 0) + Profile.data.scarico.beers;
   if (!r.skipped) {
     const rotti = parsBroken + staBroken + (ricOk ? 0 : 1);
-    const rep = (r.clean ? REP.scaricoClean : 0) + rotti * REP.scaricoBroken + (r.kidHits || 0) * REP.scaricoKid;
+    const rep = (r.clean ? REP.scaricoClean : 0) + rotti * REP.scaricoBroken + (r.kidHits || 0) * REP.scaricoKid + Math.min(2, r.rough || 0) * REP.scaricoRough;
     if (rep) addReputation(rep, 'Scarico della festa della scuola', 'L' + LEVEL_ID + ':scarico');
   }
   Profile.save();
@@ -3207,6 +3209,7 @@ function scaricoSummary () {
   if (!s.ricOk) bits.push('case ricambi perso');
   if (s.faulty.length) bits.push('da sistemare: ' + s.faulty.join(', '));
   if (s.delay) bits.push('montaggio alle ' + montaggioTime());
+  if (s.eff != null) bits.push('efficienza ' + s.eff + '%');
   bits.push(s.beers ? '🍺'.repeat(s.beers) : 'nessuna birra');
   return bits.join(' · ') + '.';
 }

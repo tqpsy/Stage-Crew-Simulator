@@ -17,6 +17,29 @@ case è troppo grosso per una persona sola.
 Quello che rompi **ti manca al montaggio**. Si gioca in circa 5 minuti e si
 può saltare.
 
+## Il primo scarico come tutorial giocato (livello 1)
+
+Lo scarico è la prima cosa che vede un giocatore nuovo, quindi è anche il
+tutorial: niente regole da leggere prima, si impara facendo il lavoro.
+Ogni idea arriva quando serve, con una riga nella barra d'aiuto in basso
+(fuori dalla scena, con la X) e un segnale nel mondo.
+
+| Momento | Cosa scopre il giocatore | Come |
+|---|---|---|
+| Arrivo | devo scaricare | cartello «FESTA DELLA SCUOLA — 16:00», la frase di Macio, *Apri il portellone*. Solo joystick e PRENDI. |
+| Primi case | si spostano | davanti ci sono i Top e i ricambi, leggeri, in mano. |
+| Case pesante | alcuni pesano | la scheda sopra il case: nome, kg, classe (LEGGERO, MEDIO, PESANTE, ⚠ 2 PERSONE). Compare FERMO!. |
+| Baule da due | non tutto si fa da soli | da solo non si muove (quasi), Macio lo dice, si accende **CHIAMA COLLEGA**. Da quella chiamata Macio è in squadra e porta da solo i case leggeri. |
+| Furgone stivato | c'è un ordine | il case dietro dice ACCESSO BLOCCATO e lampeggiano quelli davanti. Il rack (mixer) sta dietro distro e case PAR. Calcolato dalle posizioni vere (`blockers()`). |
+| Carrello | si ottimizza | arriva dopo due consegne a mano (o a 80 s): fino a 3 case leggeri sopra, un viaggio solo, si scarica stando in una zona. Passa il gradino. Se sbatte, il carico si fa male. |
+| Fragile | le azioni hanno conseguenze | nastro ⚠ FRAGILE (valigetta, PAR, rack). Un urto: «Movimentazione brusca, −1 reputazione», al massimo −2. |
+| Efficienza | conta come lavori | la barra compare a metà (dopo il carrello o 7 case): tempo, viaggi e carrello, urti, squadra, ordine. Nella bolla, cinque righe «come hai lavorato», senza formule. |
+| Sorpresa | quello che scarico serve dopo | a «MATERIALE SCARICATO: 100%» Macio chiede del baule dei cavi: il baule SEGNALE era sotto il telo in fondo al furgone. È quello che si riapre al montaggio. |
+
+Durata: 16:00 → 16:30 in 6 minuti reali. Il risultato porta in più
+`eff` (efficienza %) e `rough` (movimentazioni brusche), salvati in
+`Profile.data.scarico`.
+
 ## Core loop
 
 ### 1. Apertura dei portelloni (5 s)
