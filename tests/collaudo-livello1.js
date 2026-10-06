@@ -47,8 +47,10 @@ const N = parseInt(process.argv[2] || '40', 10), SEED0 = parseInt(process.argv[3
       shuffle(['mixer', 'ampli', 'controller', 'pc', 'scheda']).forEach(onTable);
       // stativi: un frontale per lato nel Pit, un taglio per lato del palco,
       // in posizioni a caso; poi un PAR montato su ciascuno (in ordine a caso)
-      const standAt = [pick([[0, 8], [0, 9], [2, 9], [3, 9]]), pick([[5, 9], [6, 9], [8, 9], [9, 9]]),
-        pick([[0, 4], [1, 5], [0, 6], [1, 7]]), pick([[6, 5], [6, 6], [6, 7]])];
+      // (palco 4,5 m: il centro è a 3,75; in Off Stage il taglio va davanti
+      // al tavolo regia, dietro non si può posare)
+      const standAt = [pick([[0, 8], [0, 9], [2, 9], [2.5, 9]]), pick([[5, 9], [6, 9], [8, 9], [9, 9]]),
+        pick([[0, 4], [1, 5], [0, 6], [1, 7]]), pick([[5.5, 6.5], [5.5, 7], [6, 7]])];
       shuffle(standAt).forEach(s => P('stativo', ...s));
       const mountPar = st => { const v = S.compVisuals[st.id].container; S.placeComponentAt('par', v.x, v.y); };
       shuffle(placedOfType('stativo')).forEach(mountPar);
@@ -66,7 +68,8 @@ const N = parseInt(process.argv[2] || '40', 10), SEED0 = parseInt(process.argv[3
         else { const w = ty === 'stativo' ? gridToScreen(c.gx, c.gy) : gridToScreen(c.gx + .5, c.gy + .5); S.deleteComponent(c.id); S.placeComponentAt(ty, w.x, w.y); if (ty === 'stativo') mountPar(placedOfType('stativo').find(x => !x.hasPar)); }
       }
       // DI e consolle del DJ servono al cambio palco, non al montaggio
-      const left = Object.entries(gameState.stock).filter(([k, v]) => v > 0 && k !== 'di' && k !== 'dj' && k !== 'djluci');
+      // le ciabatte sono due per tipo: quelle in più restano nel case
+      const left = Object.entries(gameState.stock).filter(([k, v]) => v > 0 && k !== 'di' && k !== 'dj' && k !== 'djluci' && !/^ciabatta/.test(k));
       if (left.length) { out.wireFail.push(seed + ' stock ' + JSON.stringify(left)); continue; }
       const one = ty => placedOfType(ty)[0].id;
       const Q = one('quadro'), CC = one('ciabatta_cee'), CV = one('ciabatta'), PC = one('pc'), SC = one('scheda'), MX = one('mixer'), AM = one('ampli'), CT = one('controller');

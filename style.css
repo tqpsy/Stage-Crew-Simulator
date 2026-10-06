@@ -1039,7 +1039,19 @@ body.show-layers .layers-panel{ display:flex; }
 #toast::before{ border-radius:8px; flex-basis:26px; height:26px; line-height:26px; }
 #toast.boss{ border-color:rgba(242,165,65,.6); }
 #toast.show{ transform:translate(-50%,0); }
-body.drawer-open #toast{ position:fixed; bottom:auto; top:calc(var(--hud-h) + 16px); }
+/* l'avviso mai sopra la scena: col cavo in mano sta dentro la sua barra,
+   col cassetto aperto (telefono, tablet) dentro il cassetto, sotto il titolo
+   (layoutOverlays in main.js) */
+#toast.docked{ position:static; transform:none; width:auto; max-width:none; margin:0; display:none;
+  box-shadow:none; background:#25272d; border-radius:8px; padding:7px 10px 7px 8px; font-size:12.5px; }
+#toast.docked.show{ display:flex; }
+#toast.docked.show.hold{ display:none; }
+#lay-bar > #toast.docked, #cable-banner > #toast.docked{ flex:1 1 100%; }
+/* con l'avviso nella barra il suggerimento sulle pieghe si toglie: una cosa per volta */
+#lay-bar:has(> #toast.docked.show) #lay-text small{ display:none; }
+@media (min-width:700px){ #lay-bar:has(> #toast.docked.show), #cable-banner:has(> #toast.docked.show){ width:min(560px, calc(100% - 24px)); } }
+#cable-banner{ flex-wrap:wrap; }
+.tab-panel > #toast.docked{ flex:none; margin:0 0 10px; }
 
 /* ---------- cavo in mano, posa del cavo: sopra il flight case ---------- */
 #cable-banner, #lay-bar{ bottom:calc(var(--bar-h) + 14px); z-index:25; border-radius:10px; background:linear-gradient(180deg,#22242a,#17181c); }
@@ -1256,4 +1268,10 @@ body.rfx #run-btn.ready{ animation:none; }
   .pt-route{ grid-area:route; padding-top:3px !important; color:var(--text-muted); }
   .pt-route .pt-bad{ color:var(--red); }
   .pt-row.bad{ padding-left:8px !important; }
+}
+/* computer: col cassetto aperto a sinistra, la barra del cavo e l'avviso
+   stanno nello spazio a destra del cassetto, non sopra i pezzi */
+@media (min-width:1000px){
+  body.drawer-open #lay-bar, body.drawer-open #cable-banner, body.drawer-open #toast:not(.docked){ left:calc(50% + 240px); max-width:calc(100% - 600px); }
+  body.drawer-open #lay-bar:has(> #toast.docked.show), body.drawer-open #cable-banner:has(> #toast.docked.show){ width:min(560px, calc(100% - 600px)); }
 }

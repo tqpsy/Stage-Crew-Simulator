@@ -12,8 +12,8 @@ Il livello è una serata divisa in fasi, sbloccate una dopo l'altra:
 | 0 | **Montaggio impianto** | subito | quello che il gioco chiede già oggi: corrente, PC → scheda → mixer → finale → sub/teste, 4 PAR in DMX, Test impianto superato |
 | 1 | **Discorso del preside** | Test impianto superato | microfono su asta sul palco, XLR fino al mixer, canale aperto e udibile |
 | 2 | **DJ set** | discorso finito | consolle DJ (mixer DJ + 2 piatti) alimentata; uscita del mixer DJ → DI → XLR → mixer di sala |
-| 3 | **Karaoke di Macio** (fatto, al posto del cantante) | DJ cacciato da Gerry | il microfono ancora collegato al mixer acceso: vedi *Dopo il DJ: il karaoke di Macio* |
-| 4 | **Carico del furgone** | fine serata (dopo il karaoke) | `carico.html`: incastrare i case nel furgone, tre cinghie, la prova su strada. Vedi `docs/minigioco-carico.md` |
+| 3 | **Fine festa e smontaggio** | DJ cacciato da Gerry | niente minigioco: le famiglie escono, si spegne l'impianto (finali per primi) e si smonta |
+| 4 | **Carico del furgone** | fine serata (dopo il DJ) | `carico.html`: incastrare i case nel furgone, tre cinghie, la prova su strada. Vedi `docs/minigioco-carico.md` |
 
 Ogni fase si chiude con un proprio test: se passa parte un'**animazione di 10 secondi**
 che mostra cosa succede (il preside parla e il pubblico applaude, la gente balla
@@ -188,8 +188,8 @@ Test: `tests/aiuti.js`.
 **Fatto: scaletta della serata.** A ogni nuova partita, prima del montaggio, si
 apre il foglio di lavoro (cliente, luogo, service, tecnico) con gli orari della
 serata: 16:00 scarico, 16:30 montaggio, 19:30 test impianto, 20:30 porte,
-21:00 preside, 21:10 cambio palco, 21:15 DJ, 23:00 smontaggio. Il karaoke di
-Macio delle 22:00 è fuori programma: compare solo dopo il DJ set. Ogni voce ha il suo
+21:00 preside, 21:10 cambio palco, 21:15 DJ, 22:30 fine festa e smontaggio,
+23:00 carico. Ogni voce ha il suo
 stato (fatto / adesso / da fare / in arrivo); si riapre dal tasto 📋 in testata.
 Le fasi di spettacolo, quando arriveranno nel gioco, si agganciano qui
 (`SCHEDULE` in `main.js`).
@@ -433,7 +433,13 @@ poco prima della fine del brano.
 numeri, è in `docs/spettacolo-dj.md`. Dell'audio restano da fare la catena
 simulata e il brano caricato dal giocatore.
 
-## Dopo il DJ: il karaoke di Macio (fatto)
+## Dopo il DJ: il karaoke di Macio (tolto dal livello 1)
+
+**Ottobre 2026**: il karaoke esce dal livello 1. Dopo il DJ la serata va
+fine festa → smontaggio → carico → valutazione. `karaoke.html`,
+`karaoke-voce.js` e `tests/karaoke.js` restano nel progetto (non sono più
+aperti dal gioco); il test dentro il gioco ora è `tests/fine-festa.js`. Il
+testo qui sotto resta come appunto.
 
 Gerry ha cacciato il DJ e la serata non può finire così. Niente gruppo di
 musicisti (Luca preferisce evitarlo): **Macio**, il collega dello scarico,

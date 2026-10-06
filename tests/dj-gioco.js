@@ -3,7 +3,7 @@
    in un iframe dopo il cambio, con le birre in tasca, il nome del capo e i
    PAR montati. L'esito torna al gioco: reputazione una volta sola, birre
    bevute, pagate al capo e guadagnate, scaletta e foglio aggiornati (poi
-   tocca al karaoke di Macio: tests/karaoke-gioco.js), niente secondo set. Saltarlo non dà reputazione.
+   fine festa e carico: tests/fine-festa.js), niente secondo set. Saltarlo non dà reputazione.
 
    Uso:  node tests/dj-gioco.js
    Richiede Playwright. Senza rete, PHASER_PATH=/percorso/phaser.min.js. */
@@ -152,7 +152,7 @@ const path = require('path');
   check(!g.open && /cacciato via i musicisti.*senza musica/.test(g.toast), 'dopo lo show: ' + JSON.stringify({ open: g.open, toast: g.toast }));
   const sched2 = await ev(() => { renderSchedule(); return el('#schedule-list').textContent; });
   check(/done/.test(await ev(() => document.querySelectorAll('#schedule-list .sched-row')[7].className)) && /★/.test(sched2), 'la scaletta non segna il DJ set fatto: ' + sched2);
-  check(await ev(() => /karaoke di Macio/.test(el('#foglio .fg-head').textContent)), 'dopo il DJ set il foglio non propone il karaoke di Macio');
+  check(await ev(() => /Fine festa/.test(el('#foglio .fg-head').textContent)), 'dopo il DJ set il foglio non dice fine festa');
   // niente secondo set, e la reputazione non raddoppia
   await ev(() => openDj());
   check(!(await p.$('#dj-frame')) && await ev(() => reputation()) === g.rep, 'il DJ set si rifà');

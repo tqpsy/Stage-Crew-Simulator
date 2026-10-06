@@ -359,6 +359,10 @@ function newGame () {
     engine, world, t: 0, introT: 0, mode: 'intro', cases: [], workers: [], kids: [], statics: [],
     cart: null, dolly: null, toasts: [], bubbles: [], history: [], qte: null, qteCool: 0, raiseWait: null, freeing: null,
     coffee: { used: false, until: 0, pauseUntil: 0 }, kidHits: 0, events: {}, endDelay: 0,
+    // un po' di varietà fra una partita e l'altra: gli stessi imprevisti, ma
+    // non sempre allo stesso secondo, e il cavo s'incastra in uno dei due bauli
+    at: { passante1: rand(20, 40), bidello: rand(80, 115), telefono: rand(135, 170), passante2: rand(195, 230) },
+    cavoCase: Math.random() < 0.5 ? 'segnale' : 'corrente',
     cam: { x: 420, y: 500, scale: 1 }, doorsOpen: 0, flashes: [], fx: []
   };
 
@@ -1031,8 +1035,8 @@ function updateKids (dt) {
 function scriptEvents () {
   const E = G.events, t = G.t;
   const once = (k, at, fn) => { if (!E[k] && t >= at) { E[k] = true; fn(); } };
-  once('passante1', 28, () => passante(G.kids[0]));
-  once('bidello', 95, () => {
+  once('passante1', G.at.passante1, () => passante(G.kids[0]));
+  once('bidello', G.at.bidello, () => {
     const b = Bodies.rectangle(1010, 110, 56, 80, { frictionAir: 0, collisionFilter: { category: CAT.NPC, mask: CAT.WALL | CAT.CASE | CAT.WORKER | CAT.NPC | CAT.DOLLY } });
     Body.setMass(b, 150); Body.setInertia(b, Infinity);
     G.cart = { kind: 'cart', body: b, pv: { x: 0, y: 1.1 } }; b.plugin.ent = G.cart;
@@ -1040,18 +1044,19 @@ function scriptEvents () {
     Composite.add(G.world, b);
     bubble(G.cart, 'Buonasera ragazzi! Sono Gerry, passo col carrello!', 3);
   });
-  once('telefono', 150, () => {
+  once('telefono', G.at.telefono, () => {
     const T = G.macio; macio('phone'); bubble(T, 'È mia moglie, un attimo…', 3);
     toast('Macio è al telefono per qualche secondo.', 'warn');
   });
-  once('passante2', 210, () => passante(G.kids[1]));
-  // cavo incastrato: la prima volta che il baule SEGNALE va in cortile a spinta
-  const seg = G.cases.find(c => c.def.id === 'segnale');
+  once('passante2', G.at.passante2, () => passante(G.kids[1]));
+  // cavo incastrato: la prima volta che il baule (SEGNALE o CORRENTE, a
+  // sorte) va in cortile a spinta
+  const seg = G.cases.find(c => c.def.id === G.cavoCase);
   if (!E.cavo && seg.grabbers.length && seg.body.position.x > 600 && seg.body.position.x < GYM_X - 80) {
     E.cavo = true; seg.stuck = true;
     for (const w of [...seg.grabbers]) release(w);
-    bubble(seg, 'Un XLR nella ruota!', 2.4); AU.bad();
-    toast('Cavo incastrato nella ruota del baule SEGNALE: tieni premuto PRENDI lì vicino per liberarlo.', 'bad');
+    bubble(seg, seg.def.id === 'segnale' ? 'Un XLR nella ruota!' : 'Una prolunga nella ruota!', 2.4); AU.bad();
+    toast('Cavo incastrato nella ruota del baule ' + seg.def.short + ': tieni premuto PRENDI lì vicino per liberarlo.', 'bad');
   }
 }
 function passante (k) {
