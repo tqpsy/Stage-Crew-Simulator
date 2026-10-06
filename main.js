@@ -1638,7 +1638,7 @@ function hideToast () {
   clearTimeout(toastTimer);
   el('#toast').classList.remove('show');
 }
-function showToast (msg, kind) {
+function showToast (msg, kind, ms) {
   const toast = el('#toast');
   toastHeld = false; toast.classList.remove('hold');
   el('#toast-msg').textContent = msg;
@@ -1648,7 +1648,7 @@ function showToast (msg, kind) {
   toast.classList.add('show');
   clearTimeout(toastTimer);
   // i messaggi lunghi restano più a lungo: il tempo di leggerli
-  toastTimer = setTimeout(() => toast.classList.remove('show'), Math.max(3200, msg.length * 60));
+  toastTimer = setTimeout(() => toast.classList.remove('show'), ms || Math.max(3200, msg.length * 60));
 }
 // il messaggio resta scritto ma nascosto finché finisce lo show, poi si legge con calma
 function holdToast () {
@@ -4596,6 +4596,23 @@ function rearDeco (kind, x, h, st) {
   }
 }
 
+/* CONNETTORI A COLPO D'OCCHIO — lo stesso disegno della presa dei pannelli
+   (connectorSVG), in piccolo: nella scelta del cavo, nel cavo in mano e nei
+   bauli. Un connettore nuovo (SDI, HDMI, fibra…) si aggiunge solo a
+   connectorSVG e compare ovunque. */
+function connectorIcon (signal, dir, px = 30) {
+  return `<svg class="conn-ico" width="${px}" height="${px}" viewBox="0 2 120 120" aria-hidden="true">${connectorSVG(signal, dir || 'in')}</svg>`;
+}
+// i due capi di un cavo del baule, come icone (A → B)
+function cableEndSignals (cableId) {
+  const e = CABLE_TYPES[cableId].endpoints;
+  return e.length === 2 ? e : [e[0], e[0]];
+}
+function cableEndsIcons (cableId, px) {
+  const [a, b] = cableEndSignals(cableId);
+  return '<span class="conn-pair">' + connectorIcon(a, 'out', px) + '<span class="conn-arrow">→</span>' + connectorIcon(b, 'in', px) + '</span>';
+}
+
 // spina volante (sul cavo della ciabatta), vista di fronte: corpo tondo con
 // l'impugnatura zigrinata e i contatti maschi
 function svgPlug (signal) {
@@ -5200,11 +5217,31 @@ function cablesFor (signal) {
   return Object.values(CABLE_CASES).flatMap(c => c.items.map(it => ({ ...it, caseTitle: c.title })))
     .filter(it => CABLE_TYPES[it.cable].endpoints.includes(signal));
 }
-function showCableChoice (compId, portId) {
+/* CAVO CONSIGLIATO — si parte dal connettore da collegare, non dal cavo
+   in mano: dall'uscita passante di un faro o di una cassa (POWER OUT, DMX
+   THRU, LINK) va il cavo con lo stesso connettore ai due capi (PowerCON →
+   PowerCON). Altrimenti, se un solo cavo del baule ha dove arrivare, è
+   quello. Le regole di cosa entra
+   dove restano quelle di sempre (CABLE_TYPES). */
+function recommendCable (compId, portId) {
+  const p = getPortDef(compId, portId);
+  if (!p || p.lead) return null;
+  const reach = it => {
+    const c = CABLE_TYPES[it.cable], want = c.endpoints.length === 2 ? c.endpoints.filter(x => x !== p.signal) : c.endpoints;
+    return Object.values(gameState.placed).some(o => o.id !== compId && COMPONENT_TYPES[o.type] && COMPONENT_TYPES[o.type].ports.some(q =>
+      want.includes(q.signal) && q.dir !== p.dir && (q.multi || !portHasConnection(o.id, q.id))));
+  };
+  const ok = cablesFor(p.signal).filter(reach);
+  const pure = ok.find(it => CABLE_TYPES[it.cable].endpoints.length === 1);
+  if (p.dir === 'out' && /_thru$/.test(p.id) && pure) return pure;
+  return ok.length === 1 ? ok[0] : null;
+}
+function showCableChoice (compId, portId, reco) {
   const p = getPortDef(compId, portId);
   const box = el('#rear-detail');
   const items = cablesFor(p.signal);
   const held = gameState.selectedCable;
+  const heldFits = held && CABLE_TYPES[held].endpoints.includes(p.signal);
   // un solo cavo che entra qui (Speakon, DMX, jack...): niente da scegliere,
   // si prende quello e il primo capo è già infilato (la barra in alto dice
   // quale cavo è in mano)
@@ -5212,19 +5249,29 @@ function showCableChoice (compId, portId) {
   if (items.length === 1 && !faultsLeft('baule:' + caseOf(items[0].cable))) {
     SFX.pick();
     selectCable(items[0].cable);
-    onRearPortClick(compId, portId);
+    onRearPortClick(compId, portId, false, true);
     return;
   }
-  box.innerHTML = '<div class="rear-detail-head">' + escapeHtml(portLabel(compId, portId)) + ' · ' + escapeHtml(SIGNAL_LABEL[p.signal])
-    + (held ? ' — il cavo ' + escapeHtml(cableName(held)) + ' non entra qui. Prendi' : ' — prendi') + ' un cavo dal baule:</div>'
-    + '<div class="rear-picks">' + items.map(it => '<button class="rear-pick" data-cable="' + it.cable + '"><span class="tape-fluo" style="background:' + tapeColorOf(it.cable) + '">'
-      + escapeHtml(it.tape) + '</span><small>' + escapeHtml(it.info) + ' · baule ' + escapeHtml(it.caseTitle) + '</small></button>').join('') + '</div>';
+  reco = reco || recommendCable(compId, portId);
+  const pick = (it, label) => '<button class="rear-pick' + (label === 'USA QUESTO' ? ' reco' : '') + '" data-cable="' + it.cable + '">' + cableEndsIcons(it.cable, label === 'USA QUESTO' ? 34 : 26)
+    + '<span class="rp-txt"><span class="tape-fluo" style="background:' + tapeColorOf(it.cable) + '">' + escapeHtml(it.tape) + '</span><small>'
+    + escapeHtml(it.info) + ' · baule ' + escapeHtml(it.caseTitle) + '</small></span>' + (label ? '<b class="rp-use">' + label + '</b>' : '') + '</button>';
+  const others = items.filter(it => !reco || it.cable !== reco.cable);
+  box.innerHTML = '<div class="rear-need"><span class="rn-k">CONNETTORE RICHIESTO</span>' + connectorIcon(p.signal, p.dir, 40)
+    + '<span><b>' + escapeHtml(SIGNAL_LABEL[p.signal]) + '</b> · ' + escapeHtml(portLabel(compId, portId))
+    + (held && !heldFits ? '<br><small>Il cavo ' + escapeHtml(cableName(held)) + ' in mano non entra qui.</small>'
+      : held && reco && held !== reco.cable ? '<br><small>Hai in mano ' + escapeHtml(cableName(held)) + ': qui conviene un altro cavo.</small>' : '') + '</span></div>'
+    + (reco ? '<div class="rear-detail-head">CAVO CONSIGLIATO</div><div class="rear-picks">' + pick(reco, 'USA QUESTO') + '</div>'
+      + '<button class="rear-more" type="button">CAMBIA CAVO ▾</button>' : '<div class="rear-detail-head">Prendi un cavo dal baule:</div>')
+    + '<div class="rear-picks rear-others"' + (reco ? ' hidden' : '') + '>' + others.map(it => pick(it, heldFits && it.cable === held && reco ? 'IN MANO' : '')).join('') + '</div>';
   box.scrollIntoView({ block: 'nearest', behavior: reducedFx() ? 'auto' : 'smooth' });
+  const more = box.querySelector('.rear-more');
+  if (more) more.addEventListener('click', () => { box.querySelector('.rear-others').hidden = false; more.remove(); });
   box.querySelectorAll('.rear-pick').forEach(b => b.addEventListener('click', () => {
     SFX.pick();
     selectCable(b.dataset.cable);
     box.innerHTML = '';
-    onRearPortClick(compId, portId);
+    onRearPortClick(compId, portId, false, true);
   }));
 }
 
@@ -5476,7 +5523,7 @@ function fanOutNext (from) {
   scene.redrawEdges();
 }
 const CIABATTE_FINITE = 'Ciabatte di questo tipo finite (ne avevi due). Le prese del Quadro accettano più cavi, e con gli adattatori del baule (CEE / Schuko, CEE / PowerCON) ci colleghi qualunque spina.';
-function onRearPortClick (compId, portId, viaTap) {
+function onRearPortClick (compId, portId, viaTap, chosen) {
   const scene = window.__scene;
   if (!scene) return;
   const p = getPortDef(compId, portId);
@@ -5542,6 +5589,12 @@ function onRearPortClick (compId, portId, viaTap) {
   // si propongono i cavi dei bauli che entrano in questa presa
   const heldFits = gameState.selectedCable && CABLE_TYPES[gameState.selectedCable].endpoints.includes(p.signal);
   if (!gameState.pendingPort && !heldFits) { showCableChoice(compId, portId); return; }
+  // il cavo in mano entra, ma per questa presa ce n'è uno più adatto (es.
+  // l'adattatore CEE / PowerCON in mano sul POWER OUT di un faro): si propone
+  if (!gameState.pendingPort && !chosen && !viaTap) {
+    const reco = recommendCable(compId, portId);
+    if (reco && reco.cable !== gameState.selectedCable) { showCableChoice(compId, portId, reco); return; }
+  }
   el('#rear-detail').innerHTML = '';
   const edgesBefore = gameState.edges.length;
   const rcdBefore = gameState.rcdTrips || 0;
@@ -5563,7 +5616,9 @@ function onRearPortClick (compId, portId, viaTap) {
     if (noSocket) showToast(noSocket);
     else if (picked && p.lead) showToast('Spina in mano: tocca il dispositivo con la presa ' + SIGNAL_LABEL[p.signal] + ' dove infilarla (quelli in verde hanno una presa adatta libera).', 'ok');
     else if (picked) showToast('Cavo in mano: ora tocca il dispositivo da collegare (quelli in verde hanno una presa adatta libera).', 'ok');
-    else if (!arced) showToast('Collegato: ' + compLabel(compId) + ' · ' + portLabel(compId, portId) + '.', 'ok');
+    // conferma breve: subito dopo arriva la barra per stendere il cavo, e
+    // i suoi pulsanti non devono restare dietro all'avviso
+    else if (!arced) showToast('Collegato: ' + compLabel(compId) + ' · ' + portLabel(compId, portId) + '.', 'ok', 1800);
     // il cavo appena collegato resta in mano: si stende per terra
     if (connected) {
       const edge = gameState.edges[gameState.edges.length - 1];
@@ -5639,7 +5694,7 @@ function updateCableBanner () {
   const pdef = getPortDef(pending.componentId, pending.portId);
   el('#cable-banner-text').innerHTML = pdef && pdef.lead
     ? `Spina <b>${escapeHtml(SIGNAL_LABEL[pdef.signal])}</b> di <b>${escapeHtml(compLabel(pending.componentId))}</b> in mano → tocca il dispositivo con la presa dove infilarla`
-    : `Cavo <b>${escapeHtml(cableName(gameState.selectedCable))}</b> in mano da <b>${escapeHtml(compLabel(pending.componentId))} · ${escapeHtml(portLabel(pending.componentId, pending.portId))}</b> → tocca il dispositivo da collegare`;
+    : `${CABLE_TYPES[gameState.selectedCable] ? cableEndsIcons(gameState.selectedCable, 22) : ''} Cavo <b>${escapeHtml(cableName(gameState.selectedCable))}</b> in mano da <b>${escapeHtml(compLabel(pending.componentId))} · ${escapeHtml(portLabel(pending.componentId, pending.portId))}</b> → tocca il dispositivo da collegare`;
   bar.classList.add('show');
 }
 // barra del cavo in mano da stendere (vedi StageScene.startLay)
@@ -5767,6 +5822,7 @@ function cableCoil (cx, cy, it, selected, tapeColor) {
     <path d="M ${cx + 14} ${cy + 12} C ${cx + 26} ${cy + 14}, ${cx + 26} ${cy + 20}, ${cx + 32} ${cy + 20}" fill="none" stroke="#17181b" stroke-width="7"/>
     ${cableHead(it.ends[0], cx + 30, cy - 24, cab)}${cableHead(it.ends[1], cx + 30, cy + 20, cab)}</g>
     ${fluoTape(cx - 4, cy - 62, 164, 36, tapeColor, it.tape, -3)}
+    ${cableEndSignals(it.cable).map((sg, k) => `<g transform="translate(${cx + (k ? 52 : -88)} ${cy + 48}) scale(.3)"><rect x="0" y="2" width="120" height="120" rx="14" fill="#0e0f12"/>${connectorSVG(sg, k ? 'in' : 'out')}</g>`).join('')}
     <text x="${cx}" y="${cy + 64}" font-size="15" font-weight="700" fill="#e6e8eb" text-anchor="middle">${escapeHtml(len)}</text>
     <text x="${cx}" y="${cy + 82}" font-size="13" fill="#b4b8c0" text-anchor="middle">${escapeHtml(ends || '')}</text>
     </g></g>`;
@@ -6432,7 +6488,7 @@ const SHOW_ZOOM = 2;         // zoom dello show finale: palco e Pit a tutto sche
 const PLATFORM_HEIGHT = 30; // px: altezza visiva della pedana rialzata (il gonnellino fino a terra)
 
 const STAGE_W = 4.5, STAGE_H = 4;     // pedana 4,5x4 m (area spettacolo, sempre visibile)
-const OFFSTAGE_W = 2;                 // fascia laterale del palco, STESSA quota ma "nascosta":
+const OFFSTAGE_W = 3;                 // zona tecnica a terra accanto al palco, "nascosta":
                                        // mixer di palco, finali, consolle luci
 const STAGE_ORIGIN_X = 1.5, STAGE_ORIGIN_Y = 4;
 
@@ -7529,91 +7585,82 @@ class StageScene extends Phaser.Scene {
 
   drawStagePlatform () {
     const gx0 = STAGE_ORIGIN_X, gy0 = STAGE_ORIGIN_Y, H = STAGE_H;
-    const totalW = STAGE_W + OFFSTAGE_W; // l'intero complesso palco, un'unica quota
-
-    // il rialzo (bordo 3D) copre TUTTO il complesso: pedana + Off Stage
+    const totalW = STAGE_W + OFFSTAGE_W; // palco + Off Stage (per i percorsi dei cavi)
     const topV = gridToScreen(gx0, gy0), rightV = gridToScreen(gx0 + totalW, gy0),
           bottomV = gridToScreen(gx0 + totalW, gy0 + H), leftV = gridToScreen(gx0, gy0 + H);
+    const coreRightV = gridToScreen(gx0 + STAGE_W, gy0), coreBottomV = gridToScreen(gx0 + STAGE_W, gy0 + H);
 
+    /* OFF STAGE: la zona tecnica a lato del palco, a terra. Tappeto di
+       gomma nero con il bordo di nastro giallo e nero: sopra ci stanno il
+       tavolo della regia e i pezzi dei tecnici, con lo spazio per lavorare */
+    const mat = this.add.graphics().setDepth(1.5);
+    const ox0 = gx0 + STAGE_W, ox1 = gx0 + totalW, oq = (x0, y0, x1, y1) => [gridToScreen(x0, y0), gridToScreen(x1, y0), gridToScreen(x1, y1), gridToScreen(x0, y1)];
+    mat.fillStyle(0x17181c, 1); mat.fillPoints(oq(ox0, gy0, ox1, gy0 + H), true);
+    // trama del tappeto, ogni 50 cm
+    mat.lineStyle(1, 0x26282e, 1);
+    for (let i = CELL; i < OFFSTAGE_W; i += CELL) { const a = gridToScreen(ox0 + i, gy0), b = gridToScreen(ox0 + i, gy0 + H); mat.lineBetween(a.x, a.y, b.x, b.y); }
+    for (let j = CELL; j < H; j += CELL) { const a = gridToScreen(ox0, gy0 + j), b = gridToScreen(ox1, gy0 + j); mat.lineBetween(a.x, a.y, b.x, b.y); }
+    // bordo di nastro a strisce gialle e nere sui lati liberi (fondo, lato, fronte)
+    const T = 0.08;
+    const stripe = (x0, y0, x1, y1) => {
+      const n = Math.max(1, Math.round(Math.hypot(x1 - x0, y1 - y0) / 0.25));
+      for (let k = 0; k < n; k++) {
+        const f0 = k / n, f1 = (k + 1) / n;
+        mat.fillStyle(k % 2 ? 0x141519 : 0xf2c53d, 0.9);
+        const ax = x0 + (x1 - x0) * f0, ay = y0 + (y1 - y0) * f0, bx = x0 + (x1 - x0) * f1, by = y0 + (y1 - y0) * f1;
+        mat.fillPoints(x0 === x1 ? oq(ax - T / 2, ay, ax + T / 2, by) : oq(ax, ay - T / 2, bx, by + T / 2), true);
+      }
+    };
+    stripe(ox0, gy0 + T / 2, ox1, gy0 + T / 2);
+    stripe(ox1 - T / 2, gy0, ox1 - T / 2, gy0 + H);
+    stripe(ox0, gy0 + H - T / 2, ox1, gy0 + H - T / 2);
+
+    // il palco vero e proprio: pedana rialzata col gonnellino fino a terra
     const sides = this.add.graphics().setDepth(2);
     // ombra di contatto sul pavimento, ai piedi del gonnellino: la pedana poggia a terra
     const H2 = PLATFORM_HEIGHT;
     sides.fillStyle(0x000000, 0.35);
-    sides.fillPoints([{ x: leftV.x - 10, y: leftV.y + H2 }, { x: bottomV.x, y: bottomV.y + H2 + 6 }, { x: rightV.x + 10, y: rightV.y + H2 },
-      { x: rightV.x, y: rightV.y + H2 - 2 }, { x: bottomV.x, y: bottomV.y + H2 - 2 }, { x: leftV.x, y: leftV.y + H2 - 2 }], true);
+    sides.fillPoints([{ x: leftV.x - 10, y: leftV.y + H2 }, { x: coreBottomV.x, y: coreBottomV.y + H2 + 6 }, { x: coreRightV.x + 10, y: coreRightV.y + H2 },
+      { x: coreRightV.x, y: coreRightV.y + H2 - 2 }, { x: coreBottomV.x, y: coreBottomV.y + H2 - 2 }, { x: leftV.x, y: leftV.y + H2 - 2 }], true);
     sides.fillStyle(0x1a1a1d, 1);
-    sides.beginPath();
-    sides.moveTo(rightV.x, rightV.y); sides.lineTo(bottomV.x, bottomV.y);
-    sides.lineTo(bottomV.x, bottomV.y + PLATFORM_HEIGHT); sides.lineTo(rightV.x, rightV.y + PLATFORM_HEIGHT);
-    sides.closePath(); sides.fillPath();
+    sides.fillPoints([coreRightV, coreBottomV, { x: coreBottomV.x, y: coreBottomV.y + H2 }, { x: coreRightV.x, y: coreRightV.y + H2 }], true);
     sides.fillStyle(0x131315, 1);
-    sides.beginPath();
-    sides.moveTo(bottomV.x, bottomV.y); sides.lineTo(leftV.x, leftV.y);
-    sides.lineTo(leftV.x, leftV.y + PLATFORM_HEIGHT); sides.lineTo(bottomV.x, bottomV.y + PLATFORM_HEIGHT);
-    sides.closePath(); sides.fillPath();
-
+    sides.fillPoints([coreBottomV, leftV, { x: leftV.x, y: leftV.y + H2 }, { x: coreBottomV.x, y: coreBottomV.y + H2 }], true);
     // gonnellino nero del palco, a pieghe
-    for (let i = 0.25; i < totalW; i += 0.25) { const a = gridToScreen(gx0 + i, gy0 + H); sides.lineStyle(1, 0x2a2a2e, 0.9); sides.lineBetween(a.x, a.y + 2, a.x, a.y + PLATFORM_HEIGHT); }
-    for (let j = 0.25; j < H; j += 0.25) { const a = gridToScreen(gx0 + totalW, gy0 + j); sides.lineStyle(1, 0x2a2a2e, 0.9); sides.lineBetween(a.x, a.y + 2, a.x, a.y + PLATFORM_HEIGHT); }
+    sides.lineStyle(1, 0x2a2a2e, 0.9);
+    for (let i = 0.25; i < STAGE_W; i += 0.25) { const a = gridToScreen(gx0 + i, gy0 + H); sides.lineBetween(a.x, a.y + 2, a.x, a.y + H2); }
+    for (let j = 0.25; j < H; j += 0.25) { const a = gridToScreen(gx0 + STAGE_W, gy0 + j); sides.lineBetween(a.x, a.y + 2, a.x, a.y + H2); }
+
     const top = this.add.graphics().setDepth(3);
     top.fillStyle(0x2c2721, 1);
-    top.beginPath();
-    top.moveTo(topV.x, topV.y); top.lineTo(rightV.x, rightV.y);
-    top.lineTo(bottomV.x, bottomV.y); top.lineTo(leftV.x, leftV.y);
-    top.closePath(); top.fillPath();
-
-    // griglia + scacchiera SOLO sulla pedana spettacolo (area core, tono ambra)
-    // linee ogni 50 cm (celle di posa), più marcate ogni metro
-    for (let i = 0; i <= totalW; i += CELL) {
+    top.fillPoints([topV, coreRightV, coreBottomV, leftV], true);
+    // griglia + scacchiera sulla pedana (linee ogni 50 cm, più marcate ogni metro)
+    for (let i = 0; i <= STAGE_W; i += CELL) {
       const a = gridToScreen(gx0 + i, gy0), b = gridToScreen(gx0 + i, gy0 + H);
       top.lineStyle(1, 0x4a3f30, i % 1 ? 0.5 : 0.9); top.lineBetween(a.x, a.y, b.x, b.y);
     }
     for (let j = 0; j <= H; j += CELL) {
-      const a = gridToScreen(gx0, gy0 + j), b = gridToScreen(gx0 + totalW, gy0 + j);
+      const a = gridToScreen(gx0, gy0 + j), b = gridToScreen(gx0 + STAGE_W, gy0 + j);
       top.lineStyle(1, 0x4a3f30, j % 1 ? 0.5 : 0.9); top.lineBetween(a.x, a.y, b.x, b.y);
     }
     for (let i = 0; i < STAGE_W; i++) {
       for (let j = 0; j < H; j++) {
         if ((i + j) % 2 === 0) continue;
         const i1 = Math.min(i + 1, STAGE_W);
-        const p0 = gridToScreen(gx0 + i, gy0 + j), p1 = gridToScreen(gx0 + i1, gy0 + j),
-              p2 = gridToScreen(gx0 + i1, gy0 + j + 1), p3 = gridToScreen(gx0 + i, gy0 + j + 1);
         top.fillStyle(0x36302a, 0.35);
-        top.beginPath();
-        top.moveTo(p0.x, p0.y); top.lineTo(p1.x, p1.y); top.lineTo(p2.x, p2.y); top.lineTo(p3.x, p3.y);
-        top.closePath(); top.fillPath();
+        top.fillPoints([gridToScreen(gx0 + i, gy0 + j), gridToScreen(gx0 + i1, gy0 + j), gridToScreen(gx0 + i1, gy0 + j + 1), gridToScreen(gx0 + i, gy0 + j + 1)], true);
       }
     }
-
     // nastro bianco di sicurezza sul bordo del palco
     top.fillStyle(0xe9e4d6, 0.7);
-    top.fillPoints([gridToScreen(gx0, gy0 + H - 0.06), gridToScreen(gx0 + totalW, gy0 + H - 0.06), gridToScreen(gx0 + totalW, gy0 + H), gridToScreen(gx0, gy0 + H)], true);
+    top.fillPoints([gridToScreen(gx0, gy0 + H - 0.06), gridToScreen(gx0 + STAGE_W, gy0 + H - 0.06), gridToScreen(gx0 + STAGE_W, gy0 + H), gridToScreen(gx0, gy0 + H)], true);
     top.fillPoints([gridToScreen(gx0, gy0), gridToScreen(gx0 + 0.06, gy0), gridToScreen(gx0 + 0.06, gy0 + H), gridToScreen(gx0, gy0 + H)], true);
-    // contorno della sola pedana spettacolo (ambra, ben visibile: "qui suona la band")
-    const coreRightV = gridToScreen(gx0 + STAGE_W, gy0), coreBottomV = gridToScreen(gx0 + STAGE_W, gy0 + H);
+    top.fillPoints([gridToScreen(gx0 + STAGE_W - 0.06, gy0), gridToScreen(gx0 + STAGE_W, gy0), gridToScreen(gx0 + STAGE_W, gy0 + H), gridToScreen(gx0 + STAGE_W - 0.06, gy0 + H)], true);
+    // contorno della pedana (ambra, ben visibile: "qui suona la band")
     top.lineStyle(2, 0xf2a541, 0.5);
-    top.beginPath();
-    top.moveTo(topV.x, topV.y); top.lineTo(coreRightV.x, coreRightV.y);
-    top.lineTo(coreBottomV.x, coreBottomV.y); top.lineTo(leftV.x, leftV.y);
-    top.closePath(); top.strokePath();
+    top.strokePoints([topV, coreRightV, coreBottomV, leftV], true);
 
-    // fascia OFF STAGE: stessa quota del palco ma tinta scura/neutra — zona
-    // tecnici, "nascosta" allo sguardo del pubblico (mixer di palco, finale,
-    // consolle luci)
-    top.fillStyle(0x1c1d22, 0.55);
-    top.beginPath();
-    top.moveTo(coreRightV.x, coreRightV.y); top.lineTo(rightV.x, rightV.y);
-    top.lineTo(bottomV.x, bottomV.y); top.lineTo(coreBottomV.x, coreBottomV.y);
-    top.closePath(); top.fillPath();
-    top.lineStyle(1.5, 0x4a4c56, 0.6);
-    top.beginPath();
-    top.moveTo(coreRightV.x, coreRightV.y); top.lineTo(rightV.x, rightV.y);
-    top.lineTo(bottomV.x, bottomV.y); top.lineTo(coreBottomV.x, coreBottomV.y);
-    top.closePath(); top.strokePath();
-
-    const offCx = (coreRightV.x + rightV.x + bottomV.x + coreBottomV.x) / 4;
-    const offCy = (coreRightV.y + rightV.y + bottomV.y + coreBottomV.y) / 4;
-    this.floorSticker(STAGE_ORIGIN_X + STAGE_W + OFFSTAGE_W / 2, STAGE_ORIGIN_Y + 0.6, 'OFF STAGE', '#8b8e98').setDepth(3.1);
+    this.floorSticker(STAGE_ORIGIN_X + STAGE_W + OFFSTAGE_W - 0.7, STAGE_ORIGIN_Y + STAGE_H - 0.45, 'OFF STAGE', '#8b8e98').setDepth(1.55);
     this.floorSticker(STAGE_ORIGIN_X + 0.9, STAGE_ORIGIN_Y + 0.5, 'PALCO', '#f2a541').setDepth(3.1);
 
     this.stageBox = {
