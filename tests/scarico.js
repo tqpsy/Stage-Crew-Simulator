@@ -47,24 +47,36 @@ const path = require('path');
     damage(c('segnale'), 110);    // difettoso: cavi aggrovigliati nel baule
     // Macio fermo (al telefono) e i due tecnici in cortile, poi ogni case al suo posto
     for (const w of G.workers) release(w);
+    // portellone aperto, rampa giù, cinghie e freni tolti
+    G.van.open = true; G.van.anim = { what: 'ramp', t: 0.8 }; vanStep(0.01);
+    G.straps.forEach((_, i) => releaseStrap(i)); G.cases.forEach(releaseBrake);
     macio('phone'); G.macio.ai.t = -999;
     Matter.Body.setPosition(G.player.body, { x: 700, y: 500 }); Matter.Body.setPosition(G.macio.body, { x: 700, y: 600 });
-    const spots = { corrente: [1675, 230, 1], distro: [1745, 230, 0], ricambio: [1810, 230, 0],
-      segnale: [1740, 380, 0], stativi: [1740, 470, 0], par: [1740, 560, 0],
-      sub1: [1545, 380, 0], sub2: [1545, 480, 0], top1: [1545, 570, 0], top2: [1545, 640, 0],
-      rack: [1260, 750, 0], valigetta: [1340, 750, 0] };
+    const spots = { corrente: [1225, 210, 0], distro: [1225, 330, 0], ricambio: [1380, 420, 0],
+      segnale: [1455, 720, 0], tavolo: [1320, 710, 0], rack: [1400, 620, 0], valigetta: [1400, 700, 0],
+      stativi: [1530, 230, 0], par: [1560, 310, 0],
+      sub1: [1550, 400, 0], sub2: [1550, 480, 0], top1: [1550, 560, 0], top2: [1550, 620, 0] };
     for (const ce of G.cases) {
       const [x, y, r] = spots[ce.def.id];
       Matter.Body.setPosition(ce.body, { x, y }); Matter.Body.setAngle(ce.body, r * Math.PI / 2); Matter.Body.setVelocity(ce.body, { x: 0, y: 0 });
     }
   });
-  await frame.waitForFunction(() => G.mode === 'end', null, { timeout: 8000 }).catch(() => {});
+  // finito il lavoro, una pausa breve: la telecamera passa sulle zone e Macio parla
+  await frame.waitForFunction(() => G.mode === 'wrap', null, { timeout: 8000 }).catch(() => {});
+  const wrap = await frame.evaluate(() => ({ mode: G.mode, pad: $('#pad').hidden }));
+  check(wrap.mode === 'wrap' && wrap.pad, 'dopo il 100% non c\'è la pausa prima della bolla: ' + JSON.stringify(wrap));
+  await frame.waitForFunction(() => G.wrap && G.wrap.said === 2, null, { timeout: 9000 }).catch(() => {});
+  check(/possiamo cominciare/.test(await frame.evaluate(() => $('#hint-txt').textContent)), 'Macio non chiude lo scarico');
+  await frame.waitForFunction(() => G.mode === 'end', null, { timeout: 6000 }).catch(() => {});
   const inGame = await frame.evaluate(() => ({ mode: G.mode, r: G.result, pars: G.cases.find(x => x.def.id === 'par').pars, zones: G.cases.filter(c => c.zone !== c.def.zone).map(c => c.def.id) }));
   check(inGame.mode === 'end', 'lo scarico non finisce con tutti i case a posto: fuori zona ' + inGame.zones);
   check(inGame.pars === 2, 'PAR rotti sbagliati nel minigioco: ' + inGame.pars + ' sani');
   check(await fr.locator('#btn-again').textContent() === 'Al montaggio', 'nella bolla manca "Al montaggio"');
   await fr.locator('#btn-again').click();
   await p.waitForFunction(() => !document.querySelector('#scarico-frame'));
+  // cartello del passaggio, poi il montaggio
+  check(/MONTAGGIO/.test(await ev(() => (el('#phase-sign') || {}).textContent || '')), 'manca il cartello del montaggio');
+  await p.waitForFunction(() => !document.querySelector('#phase-sign'), null, { timeout: 4000 });
 
   // al montaggio: 2 PAR rotti, uno lo rimpiazza il case ricambi; lo stativo
   // piegato lo rimpiazza lo stesso case
@@ -74,8 +86,12 @@ const path = require('path');
   check(JSON.stringify(st.s.lost) === JSON.stringify({ par: 1, stativo: 0 }), 'pezzi mancanti sbagliati: ' + JSON.stringify(st.s.lost));
   check(st.par === 3 && st.stativo === 4 && st.req === 3 && st.lights === 3, 'dotazione o Test impianto sbagliati: ' + JSON.stringify(st));
   check(st.earned && st.rep === 0, 'reputazione dello scarico sbagliata: ' + st.rep);
-  check(/manca un PAR/.test(st.toast) && /sono le 1[67]:\d\d/.test(st.toast) && /segno arancione/.test(st.toast), 'il messaggio del montaggio non dice cosa manca o che ore sono: ' + st.toast);
+  check(/manca un PAR/.test(st.toast) && /sono le 1[67]:\d\d/.test(st.toast) && !/difettos/.test(st.toast), 'il messaggio del montaggio non dice cosa manca o che ore sono: ' + st.toast);
   check(st.input, 'dopo lo scarico la scena resta bloccata');
+  // i case scaricati restano gli stessi: nome, zona dove li hai lasciati, stato
+  const rack = st.s.cases.find(c => c.id === 'rack'), seg = st.s.cases.find(c => c.id === 'segnale');
+  check(st.s.cases.length === 13 && rack.at === 'foh' && rack.state === 'difettoso' && rack.dents > 0 && seg.at === 'foh',
+    'i case dello scarico non arrivano al montaggio: ' + JSON.stringify(st.s.cases));
   const sched = await ev(() => { renderSchedule(); return { now: el('#schedule-list .sched-row.now').textContent, first: el('#schedule-list .sched-row').textContent }; });
   check(/Montaggio/.test(sched.now), 'la scaletta non passa al montaggio');
   check(/2 PAR rotti/.test(sched.first) && /🍺/.test(sched.first), 'la scaletta non racconta lo scarico: ' + sched.first);
@@ -107,8 +123,11 @@ const path = require('path');
     const amp = placedOfType('ampli')[0];
     const item = giroChecks(1).find(x => x.kind === 'fault');
     openRearPanel(amp.id);
-    return { counts: faultCounts(), faulty: amp && isFaulty(amp.id), item: item && item.ok, marks: (S.faultMarks || []).length, box: !el('#rear-fault').hidden, id: amp && amp.id };
+    return { counts: faultCounts(), faulty: amp && isFaulty(amp.id), item: item && item.ok, marks: (S.faultMarks || []).length, box: !el('#rear-fault').hidden, id: amp && amp.id,
+      origin: el('#rear-origin').hidden ? '' : el('#rear-origin').textContent, opened: el('#toast').textContent };
   });
+  check(/CASE RACK REGIA/.test(f1.origin) && /Off Stage/.test(f1.origin) && /ammaccatur/.test(f1.origin) && /CASE RACK REGIA.*botta/.test(f1.opened),
+    'il finale non si riconosce come quello del rack scaricato: ' + JSON.stringify([f1.origin, f1.opened]));
   check(f1.counts.ampli === 1 && f1.counts['baule:segnale'] === 1 && f1.faulty && f1.item === false && f1.marks >= 4 && f1.box,
     'finale difettoso non segnalato: ' + JSON.stringify(f1));
   await p.click('#rear-fault .fault-fix');
@@ -148,9 +167,18 @@ const path = require('path');
   check(await p.isVisible('#scarico-frame'), 'dopo la scaletta lo scarico non riparte');
 
   // impostazione "Salta lo scarico": niente iframe
-  await ev(() => { document.querySelector('#scarico-frame').remove(); scaricoOpen = false; settings().skipScarico = true; startNewGame('Saltatore', serviceOffers([])[0]); });
+  await ev(() => { document.querySelector('#scarico-frame').remove(); scaricoOpen = false; startNewGame('Saltatore', serviceOffers([])[0]); });
   await p.waitForFunction(() => !menuOpen);
+  // la prima volta l'impostazione non vale: lo scarico è il tutorial
+  await ev(() => { settings().skipScarico = true; });
   await p.click('#schedule-go');
+  const first = await ev(() => !!document.querySelector('#scarico-frame'));
+  check(first, 'il primo scarico si salta con l\'impostazione');
+  const fskip = await (await p.$('#scarico-frame')).contentFrame();
+  await fskip.waitForSelector('#btn-start');
+  check(await fskip.evaluate(() => document.getElementById('btn-skip').hidden), 'al primo scarico c\'è il tasto Salta');
+  // giocato una volta, dalla volta dopo l'impostazione vale
+  await ev(() => { document.querySelector('#scarico-frame').remove(); scaricoOpen = false; Profile.data.scaricoPlayed = true; openScarico(); });
   const skipped = await ev(() => ({ frame: !!document.querySelector('#scarico-frame'), sk: Profile.data.scarico && Profile.data.scarico.skipped, par: gameState.stock.par }));
   check(!skipped.frame && skipped.sk && skipped.par === 4, 'l\'impostazione "Salta lo scarico" non funziona: ' + JSON.stringify(skipped));
 

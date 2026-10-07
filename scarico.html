@@ -22,8 +22,11 @@
   body{margin:0;background:var(--bg-deck);color:var(--text);font-family:var(--ui);overflow:hidden;-webkit-tap-highlight-color:transparent;user-select:none;-webkit-user-select:none;touch-action:none}
   button{font:inherit;color:inherit;cursor:pointer}
   button:focus-visible{outline:2px solid var(--amber);outline-offset:2px}
-  #app{position:relative;height:100%;overflow:hidden}
-  #cv{position:absolute;inset:0;width:100%;height:100%;display:block}
+  /* --deck: la fascia in basso fuori dalla scena (barra d'aiuto, e sul
+     telefono anche joystick e pulsanti): la scena non ci finisce sotto */
+  #app{position:relative;height:100%;overflow:hidden;--pad-h:0px;--deck:46px}
+  #app.touch{--pad-h:calc(190px + env(safe-area-inset-bottom,0px));--deck:calc(46px + 190px + env(safe-area-inset-bottom,0px))}
+  #cv{position:absolute;left:0;right:0;top:0;bottom:var(--deck);width:100%;height:calc(100% - var(--deck));display:block}
 
   /* ---- testata ---- */
   .hud{position:absolute;left:0;right:0;top:0;padding:8px 16px;display:flex;gap:12px;align-items:center;justify-content:space-between;background:linear-gradient(rgba(20,21,25,.92),rgba(20,21,25,.72));border-bottom:1px solid var(--hairline);z-index:3}
@@ -39,24 +42,31 @@
   .stat span{font-size:10px;color:var(--muted);text-transform:uppercase;letter-spacing:.08em}
   .stat b{font-family:var(--display);font-size:20px;font-variant-numeric:tabular-nums}
   .chip{border:1px solid var(--amber);color:var(--amber);border-radius:999px;padding:3px 8px;font-size:12px;font-weight:700;white-space:nowrap;font-variant-numeric:tabular-nums}
+  .stat.eff{min-width:76px}
+  .effbar{height:6px;background:var(--bg-raised);border-radius:3px;overflow:hidden;margin:2px 0 1px}
+  .effbar i{display:block;height:100%;width:0;background:var(--green);transition:width .4s,background .4s}
+  .stat.done b{color:var(--green)}
+  .stat.cart b{color:#cfdbe8}
+  .stat.cart.done b{color:var(--green)}
+  .clock.late b{color:var(--red)}
+  .reveal{animation:fresh .8s ease-out}
   .icon-btn{width:34px;height:34px;border-radius:8px;border:1px solid var(--hairline);background:var(--bg-raised);font-size:13px;font-weight:700;flex:none}
   .end-btn{border:1px solid var(--green);background:#1d3324;color:#bff0cd;border-radius:8px;padding:6px 10px;font-weight:700;font-size:12px;white-space:nowrap}
 
-  #toast{position:absolute;left:50%;top:62px;transform:translateX(-50%);background:var(--bg-raised);border:2px solid var(--hairline);padding:8px 14px;border-radius:10px;font-size:14px;font-weight:600;line-height:1.35;box-shadow:0 6px 20px rgba(0,0,0,.5);z-index:3;opacity:0;transition:opacity .25s;pointer-events:none;width:max-content;max-width:calc(100% - 32px);text-align:center}
-  #toast.show{opacity:1}#toast.ok{border-color:var(--green)}#toast.bad{border-color:var(--red)}#toast.warn{border-color:var(--amber)}
+  /* barra d'aiuto: avvisi e obiettivo, in basso fuori dalla scena, con la X */
+  #hintbar{position:absolute;left:0;right:0;bottom:var(--pad-h);height:46px;z-index:3;display:flex;align-items:center;gap:10px;padding:0 8px 0 16px;background:var(--bg-panel);border-top:1px solid var(--hairline)}
+  #hint{flex:1;min-width:0;display:flex;align-items:center;gap:8px;font-size:14px;font-weight:600;line-height:1.25;color:var(--muted);border-left:4px solid transparent;padding-left:8px;transition:color .2s,border-color .2s}
+  #hint span{overflow:hidden;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical}
+  #hint.msg{color:var(--text);border-left-color:var(--hairline)}
+  #hint.ok{border-left-color:var(--green)}#hint.bad{border-left-color:var(--red)}#hint.warn{border-left-color:var(--amber)}
+  #hint-x{width:32px;height:32px;flex:none;border-radius:8px;border:1px solid var(--hairline);background:var(--bg-raised);color:var(--muted);font-size:14px;line-height:1}
+  #hint-x[hidden]{display:none}
+  @media (max-width:520px){ #hint{font-size:13px} }
 
-  /* ---- oh-issa ---- */
-  #qte{position:absolute;left:50%;bottom:210px;transform:translateX(-50%);z-index:3;display:grid;gap:8px;justify-items:center;pointer-events:none;width:max-content;max-width:calc(100% - 32px)}
-  .beats{display:flex;gap:8px}
-  .beats i{font-style:normal;font-family:var(--display);font-size:24px;letter-spacing:.04em;padding:6px 14px;border-radius:10px;background:rgba(36,37,43,.92);border:2px solid var(--hairline);color:var(--muted);transition:transform .08s}
-  .beats i.on{color:var(--text);border-color:var(--text);transform:scale(1.08)}
-  .beats i.go{border-color:var(--green)}
-  .beats i.go.on{background:var(--green);color:var(--ink);transform:scale(1.2)}
-  #qte small{font-size:13px;font-weight:600;color:var(--text);text-shadow:0 1px 3px #000;text-align:center}
   #btns #b-lift.on{background:var(--green);color:var(--ink)}
 
   /* ---- comandi touch ---- */
-  #pad{position:absolute;left:0;right:0;bottom:0;height:190px;z-index:2;pointer-events:none;padding-bottom:env(safe-area-inset-bottom,0px)}
+  #pad{position:absolute;left:0;right:0;bottom:0;height:var(--pad-h);z-index:2;pointer-events:none;padding-bottom:env(safe-area-inset-bottom,0px);background:var(--bg-deck)}
   #stick-zone{position:absolute;left:0;bottom:0;width:52%;height:100%;pointer-events:auto;touch-action:none}
   #stick-base{position:absolute;width:112px;height:112px;margin:-56px 0 0 -56px;border-radius:50%;border:2px solid rgba(238,233,223,.25);background:rgba(20,21,25,.35);left:84px;top:96px}
   #stick-knob{position:absolute;left:50%;top:50%;width:48px;height:48px;margin:-24px 0 0 -24px;border-radius:50%;background:rgba(238,233,223,.8);box-shadow:0 2px 8px #000}
@@ -64,10 +74,16 @@
   #btns button{width:72px;height:72px;border-radius:50%;border:2px solid var(--hairline);background:rgba(36,37,43,.9);font-family:var(--display);font-size:15px;letter-spacing:.04em;touch-action:none;box-shadow:0 3px 10px rgba(0,0,0,.5)}
   #btns button.big{width:84px;height:84px;border-color:var(--amber);color:var(--amber);font-size:17px}
   #btns button.on{background:var(--amber);color:var(--ink)}
+  #btns #b-help{font-size:13px;line-height:1.05}
+  #btns button.call{border-color:var(--amber);color:var(--amber);animation:call 1s ease-in-out infinite}
+  @keyframes call{50%{box-shadow:0 0 0 7px rgba(242,165,65,.28),0 3px 10px rgba(0,0,0,.5)}}
+  #btns button.fresh{animation:fresh .9s ease-out 2}
+  @keyframes fresh{0%{transform:scale(.6);opacity:.2}60%{transform:scale(1.1)}100%{transform:scale(1);opacity:1}}
   #btns #b-help{border-color:#8fa3b8}
   #btns #b-lift{border-color:var(--green)}
   #btns #b-stop{border-color:var(--red)}
-  #keys{position:absolute;left:16px;bottom:12px;z-index:2;font-size:12px;color:var(--muted);background:rgba(20,21,25,.8);border:1px solid var(--hairline);border-radius:8px;padding:6px 10px;display:flex;gap:12px;flex-wrap:wrap;max-width:calc(100% - 32px)}
+  #keys{flex:none;font-size:12px;color:var(--muted);display:flex;gap:12px;flex-wrap:nowrap}
+  @media (max-width:820px){ #keys{display:none} }
   kbd{font-family:var(--ui);font-size:11px;font-weight:700;color:var(--text);background:var(--bg-raised);border:1px solid var(--hairline);border-bottom-width:2px;border-radius:4px;padding:0 5px}
 
   /* ---- schermate ---- */
@@ -109,8 +125,28 @@
   .bolla .note{font-size:12px;color:#6b665d;margin:0}
   .bolla .row{display:flex;gap:8px;flex-wrap:wrap}
   .bolla .primary{flex:1}
+  .lavoro{display:grid;gap:4px;font-size:14px;line-height:1.4;margin:0;padding:0;list-style:none}
+  .lavoro li{display:flex;gap:8px}
+  .lavoro li b{flex:none;width:18px;text-align:center}
+  .lavoro .ok b{color:#1f7a3f}.lavoro .no b{color:#b3321f}
+  .riep{display:grid;grid-template-columns:1fr 1fr;gap:2px 14px;background:#ebe6db;border-radius:6px;padding:10px 12px;font-size:14px}
+  .riep h3{grid-column:1/-1;margin:0 0 4px;font-family:var(--display);font-size:20px;letter-spacing:.04em}
+  .riep div{display:flex;justify-content:space-between;gap:8px;border-bottom:1px dotted #cfc8b8}
+  .riep span{color:#6b665d}
+  .riep .stelle{grid-column:1/-1;border:0;font-size:16px}.riep .stelle b{color:#c79a12;font-size:20px;letter-spacing:2px}
+  @media (max-width:520px){.riep{grid-template-columns:1fr}}
+  .start-quote{font-family:var(--marker);font-size:22px;line-height:1.3;color:var(--paper)}
+  .start-quote small{display:block;font-family:var(--ui);font-size:13px;color:var(--muted);margin-top:4px}
   @media (max-width:520px){
     .tag{display:none}
+    .stat.eff{min-width:52px}
+    .hud{padding:8px 10px;gap:8px}
+    .hud-r{gap:9px}
+    .clock{flex:none}
+    .clock .tbar{display:none}
+    .stat span{font-size:9px;letter-spacing:.04em}
+    .stat b{font-size:18px}
+    .chip{font-size:11px;padding:2px 6px}
     .clock b{font-size:22px}
     .card h1{font-size:36px}
   }
@@ -127,59 +163,45 @@
     </div>
     <div class="hud-r">
       <span class="chip" id="h-coffee" hidden>CAFFÈ 45</span>
+      <div class="stat cart" id="h-cart" hidden><span>Carrello</span><b id="h-cart-n">0/3</b></div>
       <button class="end-btn" id="btn-close" hidden>Chiudi lo scarico</button>
-      <div class="stat"><span>Consegnati</span><b id="h-del">0/12</b></div>
-      <div class="stat"><span>Danni</span><b id="h-dmg">0</b></div>
+      <div class="stat" id="h-del-w"><span>Scaricato</span><b id="h-del">0/11</b></div>
+      <div class="stat" id="h-dmg-w" hidden><span>Danni</span><b id="h-dmg">0</b></div>
+      <div class="stat eff" id="h-eff-w" hidden><span>Lavoro</span><div class="effbar"><i id="h-eff-fill"></i></div><b id="h-eff">Ottimo</b></div>
       <button class="icon-btn" id="btn-pause" title="Pausa" aria-label="Pausa">❚❚</button>
     </div>
   </header>
 
-  <div id="toast"></div>
-
-  <div id="qte" hidden>
-    <div class="beats"><i id="q-b0">UNO</i><i id="q-b1">DUE</i><i id="q-b2" class="go">ISSA!</i></div>
-    <small id="q-hint"></small>
+  <div id="hintbar">
+    <div id="hint"><span id="hint-txt"></span></div>
+    <button id="hint-x" aria-label="Chiudi l'avviso" title="Chiudi">✕</button>
+    <div id="keys" hidden>
+      <span><kbd>WASD</kbd> muovi</span>
+      <span><kbd>Spazio</kbd> prendi / lascia</span>
+      <span data-k="help" hidden><kbd>E</kbd> aiuto</span>
+      <span data-k="lift" hidden><kbd>Q</kbd> oh-issa</span>
+      <span data-k="stop" hidden><kbd>F</kbd> fermo!</span>
+      <span><kbd>Shift</kbd> piano</span>
+    </div>
   </div>
 
   <div id="pad" hidden>
     <div id="stick-zone"><div id="stick-base"><div id="stick-knob"></div></div></div>
     <div id="btns">
-      <button id="b-help">AIUTO</button>
+      <button id="b-help" hidden>AIUTO</button>
       <button id="b-grab" class="big">PRENDI</button>
-      <button id="b-stop">FERMO!</button>
-      <button id="b-lift">OH-ISSA</button>
+      <button id="b-stop" hidden>FERMO!</button>
+      <button id="b-lift" hidden>OH-ISSA</button>
     </div>
   </div>
 
-  <div id="keys" hidden>
-    <span><kbd>WASD</kbd> muovi</span>
-    <span><kbd>Spazio</kbd> prendi / lascia</span>
-    <span><kbd>E</kbd> aiuto Macio</span>
-    <span><kbd>Q</kbd> oh-issa</span>
-    <span><kbd>Shift</kbd> passo attento</span>
-    <span><kbd>F</kbd> fermo!</span>
-  </div>
 
   <div class="overlay" id="start">
     <div class="card">
-      <h1><small>Festa della scuola · furgone · ore 16:00</small>Lo scarico</h1>
-      <p>Porta ogni case nella zona del suo nastro prima delle 16:30. Quello che rompi ti manca al montaggio.</p>
-      <div class="zones">
-        <span class="zchip"><i style="background:var(--t-palco)"></i>Palco</span>
-        <span class="zchip"><i style="background:var(--t-pit)"></i>Pit (casse)</span>
-        <span class="zchip"><i style="background:var(--t-back)"></i>Backstage</span>
-        <span class="zchip"><i style="background:var(--t-foh)"></i>Regia FOH</span>
-      </div>
-      <ul>
-        <li>Fino a 25 kg il case si porta in mano. Quelli più pesanti si spingono: partono piano e si fermano piano.</li>
-        <li>I bauli con le ruote sulla rampa scappano. Se li lasci andare, vanno da soli.</li>
-        <li>Sopra ogni case c'è la barra del suo stato. Se il case si accende di rosso stai andando troppo forte per quanto è fragile: un urto adesso lo danneggia. Rallenta (Shift, o joystick poco inclinato).</li>
-        <li>Macio, se non lo chiami, porta da solo i case leggeri, ma non la valigetta del PC e i PAR: quelli sono tuoi. Rack regia e baule CORRENTE si spingono in due: premi <b>AIUTO</b> e arriva. Ti segue con un attimo di ritardo, quindi curva largo. Da solo vai piano e il case sbanda.</li>
-        <li>Un case lasciato fermo nella sua zona resta frenato: urtandolo non si sposta. Per spostarlo di nuovo, riprendilo.</li>
-        <li>Quando spingi un case contro il gradino della palestra, Macio conta «uno, due, ISSA!»: premi <b>OH-ISSA</b> sull'ISSA e il case passa.</li>
-      </ul>
+      <h1><small>I.C. Galilei · cortile della palestra</small>FESTA DELLA SCUOLA — 16:00</h1>
+      <p class="start-quote">«Siamo arrivati. Portiamo giù il materiale.»<small>Macio, il collega</small></p>
       <div class="legend" id="start-legend"></div>
-      <button class="primary" id="btn-start">Apri i portelloni</button>
+      <button class="primary" id="btn-start">Apri il portellone</button>
       <button class="secondary" id="btn-skip" hidden>Salta lo scarico: tutto arriva sano, ma niente birre</button>
     </div>
   </div>
@@ -208,9 +230,10 @@ const LIVERY = { bg: hexOr(QS.get('bg'), '#1c1d22'), fg: hexOr(QS.get('fg'), '#f
 // volume (0-1) e «Effetti ridotti» delle impostazioni del gioco, dall'indirizzo dell'iframe
 const VOL = QS.has('vol') && Number.isFinite(+QS.get('vol')) ? Math.max(0, Math.min(1, +QS.get('vol'))) : 1;
 function sendResult (result) { try { parent.postMessage({ type: 'scarico-fine', result }, '*'); } catch (e) { /* niente genitore */ } }
+// il primo scarico (first=1) non si salta: è il tutorial. Senza fisica sì
 if (EMBED) {
   const skip = document.getElementById('btn-skip');
-  skip.hidden = false;
+  skip.hidden = QS.has('first');
   skip.addEventListener('click', () => sendResult({ skipped: true }));
 }
 </script>
@@ -225,8 +248,9 @@ const { Engine, Bodies, Body, Composite, Constraint, Events, Query } = window.Ma
    Unità: 1 px del mondo ≈ 1 cm; velocità in px per passo (60 al secondo).
    --------------------------------------------------------------------- */
 const STEP = 1000 / 60;
-const GAME_SECONDS = 300;              // 16:00 → 16:30 in 5 minuti reali
-const CAT = { WALL: 1, CASE: 2, WORKER: 4, STEP: 8, NPC: 16, DOLLY: 32 };
+const GAME_SECONDS = 360;              // 16:00 → 16:30 in 6 minuti reali
+const CAT = { WALL: 1, CASE: 2, WORKER: 4, STEP: 8, NPC: 16, DOLLY: 32, TROLLEY: 64 };
+const TROLLEY_MAX = 3;                 // posti sul carrello: un pesante ne prende due
 const DOOR_X = 400;                    // portellone del furgone
 const RAMP = { x: 400, y: 445, w: 120, h: 110 };
 const GYM_X = 1160;                    // muro della palestra (porta con gradino)
@@ -234,11 +258,17 @@ const SHOVE_VMAX = 0.45;               // a mani vuote contro un case: si sposta
 const STEP_BAND = { y1: 450, y2: 550 };
 const WORLD = { x1: -170, y1: 60, x2: 1900, y2: 940 };
 
+/* La palestra è la stessa del montaggio, vista dall'alto: dalla porta del
+   cortile si entra nel Backstage (allaccio e quadro), davanti c'è il palco
+   già montato (con la scaletta: l'asta e il microfono vanno lì), sotto il palco l'Off Stage con la
+   regia, poi il Pit davanti al palco, la platea e in fondo la FOH. I case si
+   lasciano dove serviranno al montaggio. */
+const STAGE = { x1: 1290, y1: 276, x2: 1490, y2: 564 };
 const ZONES = {
-  palco: { name: 'Palco',     color: '#eaff2b', x: 1640, y: 320, w: 200, h: 360 },
-  back:  { name: 'Backstage', color: '#ff4fb4', x: 1640, y: 160, w: 200, h: 140 },
-  pit:   { name: 'Pit',       color: '#4fb7ff', x: 1470, y: 320, w: 150, h: 360 },
-  foh:   { name: 'Regia FOH', color: '#49e07a', x: 1190, y: 660, w: 200, h: 180 }
+  palco: { name: 'Palco', color: '#eaff2b', x: STAGE.x1 + 6, y: STAGE.y1 + 6, w: STAGE.x2 - STAGE.x1 - 12, h: STAGE.y2 - STAGE.y1 - 12 },
+  back:  { name: 'Backstage', color: '#ff4fb4', x: 1170, y: 150, w: 115, h: 292 },
+  foh:   { name: 'Off Stage · regia', color: '#49e07a', x: 1292, y: 574, w: 198, h: 272 },
+  pit:   { name: 'Pit', color: '#4fb7ff', x: 1498, y: 160, w: 104, h: 686 }
 };
 // i flight case sono fatti per prendere colpi: si rovina qualcosa solo con
 // un urto vero (correre contro un muro, far cadere, lanciare un case)
@@ -256,32 +286,56 @@ const WHEEL = {
   hand:   { f: 7.0, s: 7.0, a: 7.0, ramp: 0.1, push: 1.0, label: 'a mano' }
 };
 
-// il carico del furgone: in fondo i pesanti, vicino al portellone i leggeri
+// il carico del furgone, come lo carica un service: vicino al portellone il
+// carrello a due ruote, stativi, PAR, accessori e i due generici dei cavi;
+// in mezzo tavolo regia, quadro e PC; in fondo il pesante (sub, teste, rack).
+// Esce prima quello caricato per ultimo: vedi blockers().
 const CASES = [
-  { id: 'corrente', name: 'Baule CORRENTE', short: 'CORRENTE', what: 'cavi pesanti, CEE', kg: 70, w: 100, h: 56, wheel: 'swivel', frag: 'bassa', zone: 'back', heavy2: true, unique: true, x: 80, y: 440,
+  // --- vicino al portellone
+  { id: 'corrente', name: 'Generico CORRENTE', short: 'CORRENTE', what: 'cavi e accessori di alimentazione', kg: 45, w: 56, h: 100, wheel: 'swivel', frag: 'bassa', zone: 'back', unique: true, x: 300, y: 450,
     dif: 'cavi aggrovigliati: +10 min per sbrogliarli' },
-  { id: 'rack', name: 'Rack regia', short: 'RACK', what: 'mixer + finale', kg: 55, w: 58, h: 58, wheel: 'fixed', frag: 'alta', zone: 'foh', heavy2: true, tall: true, unique: true, x: 80, y: 500,
-    dif: 'il finale va in protezione all\'accensione: +10 min' },
-  { id: 'segnale', name: 'Baule SEGNALE', short: 'SEGNALE', what: 'XLR, DMX, jack, Speakon', kg: 45, w: 100, h: 56, wheel: 'swivel', frag: 'bassa', zone: 'palco', unique: true, x: 80, y: 562,
+  { id: 'segnale', name: 'Generico SEGNALE', short: 'SEGNALE', what: 'cavi e accessori di segnale (XLR, DMX, Speakon)', kg: 40, w: 56, h: 100, wheel: 'swivel', frag: 'bassa', zone: 'foh', unique: true, x: 300, y: 555,
     dif: 'cavi aggrovigliati: +10 min per sbrogliarli' },
-  { id: 'sub1', name: 'Sub 1', short: 'SUB', what: 'cassa sub', kg: 40, w: 70, h: 70, wheel: 'fixed', frag: 'media', zone: 'pit', unique: true, x: 185, y: 430,
-    dif: 'la cassa vibra: +10 min per controllarla' },
-  { id: 'distro', name: 'Case distro', short: 'DISTRO', what: 'quadro + ciabatte', kg: 35, w: 60, h: 55, wheel: 'none', frag: 'bassa', zone: 'back', unique: true, x: 185, y: 500,
-    dif: 'il quadro scatta alla prima accensione: +10 min' },
-  { id: 'sub2', name: 'Sub 2', short: 'SUB', what: 'cassa sub', kg: 40, w: 70, h: 70, wheel: 'fixed', frag: 'media', zone: 'pit', unique: true, x: 185, y: 568,
-    dif: 'la cassa vibra: +10 min per controllarla' },
-  { id: 'stativi', name: 'Borsa stativi', short: 'STATIVI', what: '4 stativi + asta mic', kg: 22, w: 90, h: 34, wheel: 'hand', frag: 'bassa', zone: 'palco', x: 300, y: 407,
+  { id: 'stativi', name: 'Borsa stativi', short: 'STATIVI', what: '4 stativi', kg: 22, w: 34, h: 90, wheel: 'hand', frag: 'bassa', zone: 'pit', x: 352, y: 436,
     dif: 'uno stativo duro da aprire: +10 min' },
-  { id: 'top1', name: 'Top 1', short: 'TOP', what: 'cassa top', kg: 20, w: 44, h: 44, wheel: 'hand', frag: 'media', zone: 'pit', unique: true, x: 262, y: 452,
-    dif: 'il tweeter gracchia: +10 min' },
-  { id: 'top2', name: 'Top 2', short: 'TOP', what: 'cassa top', kg: 20, w: 44, h: 44, wheel: 'hand', frag: 'media', zone: 'pit', unique: true, x: 312, y: 452,
-    dif: 'il tweeter gracchia: +10 min' },
-  { id: 'valigetta', name: 'Valigetta regia', short: 'PC', what: 'PC, scheda, controller DMX', kg: 8, w: 40, h: 30, wheel: 'hand', frag: 'altissima', zone: 'foh', unique: true, x: 365, y: 452,
-    dif: 'il PC non parte al primo colpo: +10 min' },
-  { id: 'par', name: 'Case PAR', short: 'PAR ×4', what: '4 PAR LED', kg: 25, w: 55, h: 48, wheel: 'hand', frag: 'alta', zone: 'palco', x: 270, y: 510,
+  { id: 'ricambio', name: 'Case accessori', short: 'ACCESSORI', what: 'asta mic, microfono, ricambi', kg: 12, w: 40, h: 34, wheel: 'hand', frag: 'media', zone: 'palco', x: 374, y: 500,
+    dif: 'scorte in disordine: +10 min' },
+  { id: 'par', name: 'Case PAR', short: 'PAR ×4', what: '4 PAR LED', kg: 25, w: 55, h: 48, wheel: 'hand', frag: 'alta', zone: 'pit', x: 360, y: 558,
     dif: 'lenti da pulire: +10 min' },
-  { id: 'ricambio', name: 'Case ricambi', short: 'RICAMBI', what: '1 PAR, 1 stativo, 1 mic', kg: 18, w: 44, h: 40, wheel: 'hand', frag: 'media', zone: 'back', x: 372, y: 500,
-    dif: 'scorte in disordine: +10 min' }
+  // --- in mezzo
+  { id: 'tavolo', name: 'Tavolo regia', short: 'TAVOLO', what: 'tavolo pieghevole', kg: 38, w: 34, h: 130, wheel: 'none', frag: 'bassa', zone: 'foh', heavy2: true, unique: true, x: 168, y: 470,
+    dif: 'una gamba dura da aprire: +10 min' },
+  { id: 'distro', name: 'Quadro', short: 'QUADRO', what: 'quadro prese + ciabatte', kg: 18, w: 50, h: 46, wheel: 'hand', frag: 'media', zone: 'back', unique: true, x: 226, y: 424,
+    dif: 'il quadro scatta alla prima accensione: +10 min' },
+  { id: 'valigetta', name: 'Valigetta regia', short: 'PC', what: 'PC, scheda audio, DI, consolle luci', kg: 8, w: 40, h: 30, wheel: 'hand', frag: 'altissima', zone: 'foh', unique: true, x: 226, y: 500,
+    dif: 'il PC non parte al primo colpo: +10 min' },
+  // --- in fondo, il pesante
+  { id: 'rack', name: 'Rack regia', short: 'RACK', what: 'mixer + finale', kg: 55, w: 58, h: 58, wheel: 'fixed', frag: 'alta', zone: 'foh', heavy2: true, tall: true, unique: true, x: 46, y: 426,
+    dif: 'il finale va in protezione all\'accensione: +10 min' },
+  { id: 'sub1', name: 'Sub 1', short: 'SUB', what: 'cassa sub', kg: 40, w: 70, h: 70, wheel: 'fixed', frag: 'media', zone: 'pit', unique: true, x: 50, y: 500,
+    dif: 'la cassa vibra: +10 min per controllarla' },
+  { id: 'sub2', name: 'Sub 2', short: 'SUB', what: 'cassa sub', kg: 40, w: 70, h: 70, wheel: 'fixed', frag: 'media', zone: 'pit', unique: true, x: 50, y: 573,
+    dif: 'la cassa vibra: +10 min per controllarla' },
+  { id: 'top1', name: 'Testa 1', short: 'TESTA', what: 'cassa testa (va sul palo del sub)', kg: 20, w: 44, h: 44, wheel: 'hand', frag: 'media', zone: 'pit', unique: true, x: 112, y: 440,
+    dif: 'il tweeter gracchia: +10 min' },
+  { id: 'top2', name: 'Testa 2', short: 'TESTA', what: 'cassa testa (va sul palo del sub)', kg: 20, w: 44, h: 44, wheel: 'hand', frag: 'media', zone: 'pit', unique: true, x: 112, y: 560,
+    dif: 'il tweeter gracchia: +10 min' }
+];
+const FRAGILE = d => d.frag === 'alta' || d.frag === 'altissima';
+// classe di peso mostrata sulla scheda del case
+function weightClass (d) {
+  if (d.heavy2) return 'PESANTE · in due';
+  const c = d.kg >= 38 && d.wheel !== 'swivel' ? 'PESANTE' : d.kg <= 12 ? 'LEGGERO' : 'MEDIO';
+  return c + (d.wheel !== 'hand' ? ' · si spinge' : ' · in mano');
+}
+
+// le cinghie del furgone, una per strato (il case accessori davanti non è
+// legato: infatti scivola giù). Una cinghia tiene fermi i case del suo
+// strato finché non la sganci; i case con le ruote hanno anche il freno.
+const VAN_STRAPS = [
+  { x: 330, ids: ['corrente', 'segnale', 'stativi', 'par'] },
+  { x: 200, ids: ['tavolo', 'distro', 'valigetta'] },
+  { x: 84, ids: ['rack', 'sub1', 'sub2', 'top1', 'top2'] }
 ];
 
 const STATE_COLOR = { integro: '#49b06a', ammaccato: '#f2c53d', difettoso: '#f2843d', rotto: '#e0503f' };
@@ -341,7 +395,14 @@ const AU = {
   crack () { this.noise(0.12, 2500, 'highpass', 0.35); this.tone(2400, 900, 0.1, 0.08, 'square'); },
   ding () { this.tone(880, 1320, 0.25, 0.12); },
   hey () { this.tone(330, 520, 0.18, 0.1, 'sawtooth'); },
-  bad () { this.tone(300, 120, 0.3, 0.12, 'square'); }
+  bad () { this.tone(300, 120, 0.3, 0.12, 'square'); },
+  // prendere e posare: un fruscio di maniglia e un tonfo sordo, discreti
+  pick () { this.noise(0.06, 1200, 'bandpass', 0.12); this.tone(180, 260, 0.09, 0.05); },
+  drop () { this.noise(0.14, 160, 'lowpass', 0.22); },
+  clack () { this.noise(0.05, 2200, 'bandpass', 0.18); this.tone(520, 380, 0.07, 0.05, 'square'); },
+  locked () { this.noise(0.08, 400, 'lowpass', 0.25); this.tone(160, 140, 0.12, 0.06, 'square'); },
+  good () { const c = this.ctx; if (!c) return; this.tone(660, 660, 0.12, 0.08); setTimeout(() => this.tone(990, 990, 0.18, 0.08), 110); },
+  done () { [523, 659, 784, 1046].forEach((f, i) => setTimeout(() => this.tone(f, f, 0.22, 0.08), i * 110)); }
 };
 
 /* ---------------------------------------------------------------------
@@ -357,13 +418,18 @@ function newGame () {
   const world = engine.world;
   G = {
     engine, world, t: 0, introT: 0, mode: 'intro', cases: [], workers: [], kids: [], statics: [],
-    cart: null, dolly: null, toasts: [], bubbles: [], history: [], qte: null, qteCool: 0, raiseWait: null, freeing: null,
+    cart: null, dolly: null, toasts: [], bubbles: [], history: [], qte: null,
     coffee: { used: false, until: 0, pauseUntil: 0 }, kidHits: 0, events: {}, endDelay: 0,
     // un po' di varietà fra una partita e l'altra: gli stessi imprevisti, ma
     // non sempre allo stesso secondo, e il cavo s'incastra in uno dei due bauli
     at: { passante1: rand(20, 40), bidello: rand(80, 115), telefono: rand(135, 170), passante2: rand(195, 230) },
-    cavoCase: Math.random() < 0.5 ? 'segnale' : 'corrente',
-    cam: { x: 420, y: 500, scale: 1 }, doorsOpen: 0, flashes: [], fx: []
+    // il SEGNALE è la sorpresa finale: il cavo s'incastra nel CORRENTE
+    cam: { x: 420, y: 500, scale: 1 }, doorsOpen: 0, flashes: [], fx: [],
+    // tutorial che si gioca: comandi e strumenti compaiono quando servono
+    unlock: { help: false, lift: false, stop: false, cart: false, eff: false },
+    seen: {}, team: false, trolley: null, van: { open: false, ramp: false, anim: null }, straps: VAN_STRAPS.map(() => true), surprise: null, blockFlash: null, tarp: 0, prevPX: 0,
+    // come si lavora: viaggi, carrello, urti, collega, ordine (efficienza)
+    stats: { trips: 0, wasted: 0, cartTrips: 0, cartCases: 0, handDeliv: 0, hits: 0, rough: 0, solo: 0, blocked: 0, wrongDrop: 0 }
   };
 
   // --- muri e ostacoli fissi
@@ -383,10 +449,12 @@ function newGame () {
   wall(GYM_X - 10, 80, GYM_X + 10, STEP_BAND.y1); wall(GYM_X - 10, STEP_BAND.y2, GYM_X + 10, 920);
   wall(GYM_X, 130, 1870, 150); wall(GYM_X, 850, 1870, 870); wall(1850, 130, 1870, 870);
   // sedie impilate in palestra, un albero e una panchina in cortile
-  wall(1300, 170, 1400, 220, false);
+  wall(1640, 170, 1740, 220, false);                // sedie impilate in platea
   G.statics.push(Bodies.circle(820, 260, 18, { isStatic: true, collisionFilter: { category: CAT.WALL, mask: 0xffff } }));
   wall(840, 730, 970, 758, false);
   wall(632, 118, 692, 146, false);                  // tavolino della moka
+  // il portellone chiuso (e poi la rampa su): non si entra e non si esce
+  G.doorWall = wall(DOOR_X - 2, 380, DOOR_X + 8, 620, false);
   // il gradino della porta: ferma solo i case a terra
   const step = Bodies.rectangle(GYM_X, 500, 10, STEP_BAND.y2 - STEP_BAND.y1,
     { isStatic: true, collisionFilter: { category: CAT.STEP, mask: CAT.CASE } });
@@ -397,13 +465,18 @@ function newGame () {
   for (const d of CASES) {
     const b = Bodies.rectangle(d.x, d.y, d.w, d.h, {
       chamfer: { radius: 3 }, friction: 0.05, frictionAir: 0, restitution: 0.12,
-      collisionFilter: { category: CAT.CASE, mask: CAT.WALL | CAT.CASE | CAT.WORKER | CAT.STEP | CAT.NPC, group: 0 }
+      collisionFilter: { category: CAT.CASE, mask: CAT.WALL | CAT.CASE | CAT.WORKER | CAT.STEP | CAT.NPC | CAT.TROLLEY, group: 0 }
     });
     Body.setMass(b, d.kg);
     const ce = { kind: 'case', def: d, body: b, integrity: 100, pars: d.id === 'par' ? 4 : 0, wheel: d.wheel,
-      grabbers: [], carrier: null, tipped: false, stuck: false, liftUntil: 0, hopUntil: 0, slideUntil: 0, lastHit: -1,
+      grabbers: [], carrier: null, liftUntil: 0, hopUntil: 0, slideUntil: 0, lastHit: -1,
       zone: null, pv: { x: 0, y: 0 }, flash: 0, seed: Math.random() * 1000, rushed: false, onDolly: false, fell: false };
     b.plugin.ent = ce;
+    if (d.surprise) { ce.hidden = true; Body.setStatic(b, true); }   // sotto il telo, in fondo
+    // come al carico: cinghie tirate sugli strati e freni sulle ruote
+    ce.strap = VAN_STRAPS.findIndex(st => st.ids.includes(d.id));
+    ce.brake = d.wheel === 'swivel' || d.wheel === 'fixed';
+    if (locked(ce) && !ce.hidden) Body.setStatic(b, true);
     G.cases.push(ce);
   }
   Composite.add(world, G.cases.map(c => c.body));
@@ -416,8 +489,8 @@ function newGame () {
   Composite.add(world, db);
 
   // --- tu e Macio
-  G.player = makeWorker('Tu', 600, 470, 15, { tee: '#101114', trim: '#f2a541', skin: '#e0b48f', fmax: 0.05, vmax: 3.8 });
-  G.macio = makeWorker('Macio', 610, 560, 18, { tee: '#6d737d', trim: '#c9ccd1', skin: '#c99670', fmax: 0.06, vmax: 3.3 });
+  G.player = makeWorker('Tu', 500, 470, 15, { tee: '#101114', trim: '#f2a541', skin: '#e0b48f', fmax: 0.05, vmax: 3.8 });
+  G.macio = makeWorker('Macio', 520, 590, 18, { tee: '#6d737d', trim: '#c9ccd1', skin: '#c99670', fmax: 0.06, vmax: 3.3 });
   G.macio.ai = { state: 'idle', t: 0, stuckT: 0, side: 0, sideT: 0 };
 
   // --- bambini in cortile
@@ -426,12 +499,12 @@ function newGame () {
 
   Events.on(engine, 'collisionStart', onCollision);
 
-  bubble(G.macio, 'Dai che alle 16:30 si monta!', 2.6);
+  bubble(G.macio, 'Apri tu il portellone, ti tengo la rampa.', 2.8);
 }
 
 function makeWorker (name, x, y, r, o) {
   const b = Bodies.circle(x, y, r, { frictionAir: 0, friction: 0.1, restitution: 0,
-    collisionFilter: { category: CAT.WORKER, mask: CAT.WALL | CAT.CASE | CAT.NPC | CAT.DOLLY, group: -1 } });
+    collisionFilter: { category: CAT.WORKER, mask: CAT.WALL | CAT.CASE | CAT.NPC | CAT.DOLLY | CAT.TROLLEY, group: -1 } });
   Body.setMass(b, name === 'Tu' ? 80 : 95); Body.setInertia(b, Infinity);
   const w = { kind: 'worker', name, body: b, r, facing: 0, grab: null, mode: null, con: null, carry: null, pv: { x: 0, y: 0 }, ...o };
   b.plugin.ent = w;
@@ -441,7 +514,7 @@ function makeWorker (name, x, y, r, o) {
 }
 function makeKid (x, y, tee) {
   const b = Bodies.circle(x, y, 11, { frictionAir: 0, friction: 0.1, restitution: 0.3,
-    collisionFilter: { category: CAT.NPC, mask: CAT.WALL | CAT.CASE | CAT.WORKER | CAT.NPC | CAT.DOLLY } });
+    collisionFilter: { category: CAT.NPC, mask: CAT.WALL | CAT.CASE | CAT.WORKER | CAT.NPC | CAT.DOLLY | CAT.TROLLEY } });
   Body.setMass(b, 30); Body.setInertia(b, Infinity);
   const k = { kind: 'kid', body: b, tee, target: { x, y }, wait: 0, block: 0, hitT: -9, pv: { x: 0, y: 0 }, facing: 0 };
   b.plugin.ent = k;
@@ -452,11 +525,74 @@ function makeKid (x, y, tee) {
 /* ---------------------------------------------------------------------
    MESSAGGI
    --------------------------------------------------------------------- */
-let toastTimer = 0;
-function toast (msg, kind) {
-  const el = $('#toast'); el.textContent = msg; el.className = 'show ' + (kind || '');
-  clearTimeout(toastTimer); toastTimer = setTimeout(() => { el.className = ''; }, 3200);
+/* Gli avvisi stanno nella barra d'aiuto in basso, fuori dalla scena, con
+   la X per chiuderli. Quando non c'è un avviso la barra dice cosa fare. */
+let toastTimer = 0, hintGoal = '', hintMsg = false, hintClosed = false, hintAt = 0, hintQueue = [], queueTimer = 0;
+function toast (msg, kind, force) {
+  // un avviso appena comparso resta almeno un attimo: il nuovo si mette in fila
+  if (!force && hintMsg && performance.now() - hintAt < 2200 && $('#hint-txt').textContent !== msg) {
+    if (!hintQueue.some(q => q[0] === msg)) hintQueue.push([msg, kind]);
+    // in fila al massimo tre: se sono troppi si perde un consiglio, non un errore
+    if (hintQueue.length > 3) { const i = hintQueue.findIndex(q => q[1] !== 'bad'); hintQueue.splice(i < 0 ? 0 : i, 1); }
+    nextHint();
+    return;
+  }
+  hintAt = performance.now();
+  const el = $('#hint');
+  $('#hint-txt').textContent = msg; el.className = 'msg ' + (kind || '');
+  hintMsg = true; hintClosed = false; $('#hint-x').hidden = false;
+  clearTimeout(toastTimer); toastTimer = setTimeout(clearHint, msg.length > 70 ? 6500 : 4500);
+  if (hintQueue.length) nextHint();
 }
+function nextHint () {
+  clearTimeout(queueTimer);
+  queueTimer = setTimeout(() => { const q = hintQueue.shift(); if (q) toast(q[0], q[1], true); }, Math.max(0, 2200 - (performance.now() - hintAt)));
+}
+function clearHint () {
+  clearTimeout(toastTimer); hintMsg = false;
+  if (hintQueue.length) { const q = hintQueue.shift(); toast(q[0], q[1], true); return; }
+  $('#hint').className = ''; $('#hint-txt').textContent = hintClosed ? '' : hintGoal;
+  $('#hint-x').hidden = hintClosed || !hintGoal;
+}
+// l'obiettivo del momento (si vede quando non c'è un avviso)
+function goal (txt) {
+  if (txt === hintGoal) return;
+  hintGoal = txt; hintClosed = false;
+  if (!hintMsg) clearHint();
+}
+$('#hint-x').addEventListener('click', () => { if (!hintMsg) hintClosed = true; clearHint(); });
+// un consiglio una volta sola, la prima volta che serve
+function once (key, msg, kind) {
+  if (!G || G.seen[key]) return false;
+  G.seen[key] = true; if (msg) toast(msg, kind);
+  return true;
+}
+// il nome del comando: pulsante sul telefono, tasto sul computer
+function K (what) {
+  return touchUI ? { grab: 'PRENDI', help: 'AIUTO', lift: 'OH-ISSA', stop: 'FERMO!' }[what]
+    : { grab: 'PRENDI (Spazio)', help: 'AIUTO (E)', lift: 'OH-ISSA (Q)', stop: 'FERMO (F)' }[what];
+}
+// il tasto d'azione col nome che ha adesso (APRI, RAMPA, CINGHIA, FRENO)
+function KA (label) { return touchUI ? label : label + ' (Spazio)'; }
+// una cosa imparata (Macio in squadra, il carrello, la barra del lavoro)
+function unlock (what) {
+  if (!G || G.unlock[what]) return;
+  G.unlock[what] = true;
+}
+// i comandi in più si vedono solo quando si possono usare adesso: AIUTO
+// davanti al case da due, OH-ISSA al gradino, FERMO spingendo in discesa.
+// La prima volta che compaiono, un piccolo guizzo.
+function showCmd (what, on) {
+  const b = $({ help: '#b-help', lift: '#b-lift', stop: '#b-stop' }[what]);
+  const k = document.querySelector('#keys [data-k="' + what + '"]');
+  if (k) k.hidden = !on;
+  if (b.hidden === !on) return;
+  b.hidden = !on;
+  if (on && !G.seen['cmd-' + what]) { G.seen['cmd-' + what] = true; b.classList.add('fresh'); setTimeout(() => b.classList.remove('fresh'), 1900); }
+  if (!on && what === 'stop') { inp.stop = inp.keys.has('KeyF'); b.classList.remove('on'); }
+}
+// testo che sale e sparisce sopra un punto del mondo (feedback piccolo)
+function floatText (x, y, text, color) { if (G) G.fx.push({ kind: 'text', x, y, text, color: color || '#eee9df', born: performance.now(), life: 1400 }); }
 function bubble (ent, text, dur) {
   G.bubbles = G.bubbles.filter(b => b.ent !== ent);
   G.bubbles.push({ ent, text, until: G.t + (dur || 2.2) + (G.mode === 'intro' ? 2 : 0) });
@@ -481,9 +617,27 @@ function delicate (ce) { return ce.def.id === 'valigetta' || ce.def.id === 'par'
 function isCarried (ce) { return !!ce.carrier; }
 function speedOf (b) { return len(b.velocity); }
 
+/* Ordine di scarico: nel furgone esce prima quello caricato per ultimo.
+   Un case è bloccato se, ancora nel furgone, ha davanti (verso il
+   portellone) un altro case sulla sua stessa fascia. Si calcola dalle
+   posizioni vere: spostato quello davanti, il case dietro si libera. */
+function inVan (ce) { return !ce.onTrolley && !ce.carrier && ce.body.position.x < DOOR_X - 4; }
+function blockers (ce) {
+  if (!inVan(ce)) return [];
+  const a = ce.body.bounds, out = [];
+  for (const o of G.cases) {
+    if (o === ce || o.hidden || !inVan(o)) continue;
+    const b = o.body.bounds;
+    if (b.min.x < a.max.x - 6) continue;                          // non sta davanti
+    const ov = Math.min(a.max.y, b.max.y) - Math.max(a.min.y, b.min.y);
+    if (ov > 12) out.push(o);
+  }
+  return out;
+}
 function nearestCase (w, reach) {
   let best = null, bd = reach;
   for (const ce of G.cases) {
+    if (ce.hidden || ce.onTrolley) continue;
     if (ce.carrier && ce.carrier !== w) continue;
     const s = surface(ce, w.body.position), gap = s.dist - w.r;
     if (gap < bd) { bd = gap; best = ce; }
@@ -493,9 +647,10 @@ function nearestCase (w, reach) {
 
 function refreshFilter (ce) {
   const f = ce.body.collisionFilter;
+  if (ce.kind === 'trolley') { f.group = ce.grabbers.length ? -1 : 0; return; }
   const held = ce.grabbers.length > 0 || ce.carrier;
   f.group = held ? -1 : 0;
-  let mask = CAT.WALL | CAT.CASE | CAT.NPC;
+  let mask = CAT.WALL | CAT.CASE | CAT.NPC | CAT.TROLLEY;
   if (!held) mask |= CAT.WORKER;
   const lifted = ce.carrier || G.t < ce.liftUntil;
   if (!lifted) mask |= CAT.STEP;
@@ -503,11 +658,91 @@ function refreshFilter (ce) {
 }
 
 /* ---------------------------------------------------------------------
+   IL FURGONE: portellone, rampa, cinghie e freni. Si arriva col furgone
+   chiuso: APRI il portellone, giù la RAMPA, poi si sgancia la cinghia di
+   uno strato e si toglie il freno ai case con le ruote. Un case legato o
+   frenato non si muove (corpo fermo), e tiene bloccati quelli dietro.
+   --------------------------------------------------------------------- */
+function strapOn (ce) { return ce.strap >= 0 && G.straps[ce.strap]; }
+function locked (ce) { return ce.kind === 'case' && (strapOn(ce) || !!ce.brake); }
+function setFree (ce) {
+  if (ce.hidden || locked(ce) || !ce.body.isStatic) return;
+  Body.setStatic(ce.body, false); Body.setMass(ce.body, ce.def.kg);
+}
+function nearDoor (w) {
+  const p = w.body.position;
+  return p.x > DOOR_X - 30 && p.x < DOOR_X + 110 && p.y > 370 && p.y < 630;
+}
+function openDoors () {
+  if (G.van.open || G.van.anim) return;
+  G.van.anim = { what: 'doors', t: 0 }; AU.clack();
+  bubble(G.player, 'Apro!', 0.8);
+}
+function lowerRamp () {
+  if (!G.van.open || G.van.ramp || G.van.anim) return;
+  G.van.anim = { what: 'ramp', t: 0 }; AU.thud(3);
+  bubble(G.macio, 'Piano con la rampa…', 1.2);
+}
+// fine delle animazioni: portellone aperto, rampa giù
+function vanStep (dt) {
+  const A = G.van.anim; if (!A) return;
+  A.t += dt;
+  if (A.what === 'doors') {
+    G.doorsOpen = clamp(A.t / 1.0, 0, 1);
+    if (A.t >= 1) {
+      G.van.open = true; G.van.anim = null;
+      goal('Tira giù la rampa: ' + KA('RAMPA') + ' davanti al portellone.');
+      once('legati', 'Dentro i case sono legati con le cinghie e i case con le ruote hanno il freno tirato, come per il viaggio.', 'ok');
+    }
+  } else if (A.what === 'ramp') {
+    G.van.rampK = clamp(A.t / 0.8, 0, 1);
+    if (A.t >= 0.8) {
+      G.van.ramp = true; G.van.anim = null; AU.thud(5);
+      Composite.remove(G.world, G.doorWall); G.statics = G.statics.filter(b => b !== G.doorWall);
+      // il case ricambi non era legato: scivola giù
+      const r = G.cases.find(c => c.def.id === 'ricambio');
+      r.slideUntil = G.t + 1.2; Body.setVelocity(r.body, { x: 4.2, y: 0.2 }); Body.setAngularVelocity(r.body, 0.03);
+      toast('Occhio! Il case ricambi non era legato…', 'warn');
+      G.team = true; G.cartAt = G.t + 3.2;
+      bubble(G.macio, 'Ti tiro fuori il carrello.', 2.4);
+      goal('Scarica il furgone: prima i case davanti, poi sgancia le cinghie.');
+    }
+  }
+}
+function releaseStrap (i) {
+  if (!G.straps[i]) return;
+  G.straps[i] = false; AU.tone(520, 300, 0.12, 0.08);
+  for (const ce of G.cases) if (ce.strap === i) setFree(ce);
+  const st = VAN_STRAPS[i];
+  floatText(st.x, 400, 'CINGHIA SGANCIATA', '#f2a541');
+  const braked = G.cases.filter(c => c.strap === i && c.brake && !c.hidden);
+  once('freno', braked.length ? 'Cinghia sganciata. ' + braked.map(c => c.def.name).join(' e ') + (braked.length > 1 ? ' hanno' : ' ha') + ' ancora il freno: ' + KA('FRENO') + ' vicino al case per toglierlo.' : 'Cinghia sganciata: adesso quei case si possono prendere.', 'ok');
+}
+function releaseBrake (ce) {
+  if (!ce.brake) return;
+  ce.brake = false; AU.tone(380, 260, 0.1, 0.08);
+  floatText(ce.body.position.x, ce.body.position.y - 20, 'FRENO TOLTO', '#f2a541');
+  setFree(ce);
+}
+// cosa fa il tasto d'azione vicino al furgone, se c'è da fare qualcosa
+function vanAction (w) {
+  if (!G.van.open || !G.van.ramp) return nearDoor(w) && !G.van.anim ? (G.van.open ? 'ramp' : 'doors') : null;
+  const ce = nearestCase(w, 14);
+  if (!ce || ce.hidden) return null;
+  if (strapOn(ce)) return 'strap';
+  if (ce.brake) return 'brake';
+  return null;
+}
+
+/* ---------------------------------------------------------------------
    PRENDERE, SPINGERE, PORTARE
    --------------------------------------------------------------------- */
 function grab (w, ce) {
-  if (ce.tipped) { if (w === G.player) toast('È ribaltato: OH-ISSA per tirarlo su (in due se pesa più di 45 kg).', 'warn'); return false; }
-  if (ce.stuck) { if (w === G.player) toast('Il cavo è incastrato nella ruota: tieni premuto PRENDI per liberarlo.', 'warn'); return false; }
+  if (ce.kind === 'case' && locked(ce)) {
+    if (w === G.player) toast(ce.def.name + (strapOn(ce) ? ': è ancora legato con la cinghia.' : ': ha il freno tirato.'), 'warn');
+    return false;
+  }
+  if (ce.kind === 'case' && blockers(ce).length) { if (w === G.player) blockedTry(ce); return false; }
   if (ce.carrier) return false;
   if (carriable(ce) && ce.grabbers.length) return false;
   unpark(ce);
@@ -520,6 +755,7 @@ function grab (w, ce) {
     w.grab = ce; w.mode = 'carry';
     w.carry = { dist: w.r + proj + 3, rel: angDiff(ce.body.angle, w.facing) };
     ce.carrier = w;
+    if (w === G.player) { AU.pick(); puff(w.body.position.x, w.body.position.y, 4, 'rgba(190,190,196,', 0.8); }
   } else {
     const s = surface(ce, w.body.position);
     const con = Constraint.create({ bodyA: w.body, pointA: { x: 0, y: 0 }, bodyB: ce.body,
@@ -527,9 +763,105 @@ function grab (w, ce) {
     Composite.add(G.world, con);
     w.grab = ce; w.mode = 'push'; w.con = con;
     ce.grabbers.push(w);
+    if (w === G.player) AU.pick();
   }
   refreshFilter(ce);
+  if (w === G.player && ce.kind === 'case') learnFrom(ce);
   return true;
+}
+// ACCESSO BLOCCATO: i case davanti lampeggiano, e basta
+function blockedTry (ce) {
+  const bl = blockers(ce);
+  G.blockFlash = { ce, ids: bl, until: G.t + 1.8 };
+  G.stats.blocked++; AU.locked();
+  floatText(ce.body.position.x, ce.body.position.y - 20, 'ACCESSO BLOCCATO', '#e0503f');
+  // Macio lo dice ogni tanto, senza fare la predica
+  if (G.t - (G.macioBlockT || -99) > 14 && G.macio.ai.state !== 'phone') {
+    G.macioBlockT = G.t;
+    bubble(G.macio, G.stats.blocked > 1 ? 'Prima liberiamo il passaggio.' : 'Prima tiriamo fuori quello davanti, sennò per arrivare ai sub dobbiamo scavare.', 2.6);
+  }
+  const tied = bl.filter(locked);
+  toast('Accesso bloccato: davanti c\'è ' + bl.map(b => b.def.name).join(' e ') + (tied.length ? (tied.length > 1 || bl.length > 1 ? ', ancora legati e frenati' : ', ancora legato e frenato') + '. Prima libera e porta fuori quello.' : '. Prima porta fuori quello.'), 'warn');
+}
+// la prima volta che si prende un certo tipo di case, una riga sola
+function learnFrom (ce) {
+  const d = ce.def;
+  if (d.heavy2 && ce.grabbers.length < 2) {
+    unlock('help');
+    once('due', '⚠ 2 PERSONE: da solo non si muove. ' + K('help') + '!', 'warn');
+  } else if (d.wheel !== 'hand') {
+    once('pesante', d.name + ': pesa, si spinge. Parte piano e si ferma piano.');
+  } else if (FRAGILE(d)) {
+    once('fragile', '⚠ FRAGILE: ' + d.what + '. Piano, niente urti.', 'warn');
+  } else {
+    once('mano', 'Portalo in palestra: il nastro colorato dice in che zona.');
+  }
+}
+
+/* ---------------------------------------------------------------------
+   IL CARRELLO A DUE RUOTE: sta nel furgone vicino al portellone, lo tira
+   fuori Macio appena la rampa è giù. Tre posti sulla pala (un case pesante
+   ne prende due: un sub e una testa, per esempio), un viaggio solo. Si spinge come un case con le ruote; passa il
+   gradino sulle sue ruote grandi; se sbatte, il carico si fa male.
+   --------------------------------------------------------------------- */
+// posti che prende un case sul carrello; i case da due non ci stanno
+function cartSize (ce) { return ce.def.kg >= 35 ? 2 : 1; }
+function cartUsed (t) { return t.load.reduce((n, c) => n + cartSize(c), 0); }
+function cartFits (t, ce) { return !!ce && ce.kind === 'case' && !ce.def.heavy2 && cartUsed(t) + cartSize(ce) <= TROLLEY_MAX; }
+function spawnTrolley () {
+  const b = Bodies.rectangle(470, 650, 64, 46, { chamfer: { radius: 4 }, frictionAir: 0, friction: 0.05, restitution: 0.15,
+    collisionFilter: { category: CAT.TROLLEY, mask: CAT.WALL | CAT.WORKER | CAT.NPC | CAT.CASE, group: 0 } });
+  Body.setMass(b, 14);
+  const t = { kind: 'trolley', body: b, load: [], grabbers: [], pv: { x: 0, y: 0 }, lastHit: -1,
+    def: { id: 'carrello', name: 'Carrello', kg: 14, w: 64, h: 46, wheel: 'swivel', frag: 'bassa', zone: null } };
+  b.plugin.ent = t;
+  Composite.add(G.world, b);
+  G.trolley = t; unlock('cart');
+  $('#h-cart').hidden = false; $('#h-cart').classList.add('reveal');
+  ring(470, 650, '#8fa3b8'); AU.clack();
+  bubble(G.macio, 'Ecco il carrello. Due ruote, zero pensieri.', 2.6);
+  toast('CARRELLO: avvicinati con un case (in mano o spinto) e ' + KA('CARICA') + '. Tre posti: un pesante ne prende due. Poi spingilo nella zona e ' + KA('SCARICA') + '.', 'ok');
+}
+function nearTrolley (w, reach) {
+  const t = G.trolley; if (!t) return false;
+  return surface(t, w.body.position).dist - w.r < reach;
+}
+function loadTrolley (w) {
+  const t = G.trolley, ce = w.grab;
+  release(w);
+  for (const o of [...ce.grabbers]) release(o);   // Macio lo stava spingendo con te
+  if (ce.carrier) release(ce.carrier);
+  unpark(ce);
+  ce.onTrolley = t; ce.zone = null;
+  Composite.remove(G.world, ce.body);
+  t.load.push(ce);
+  placeLoad(t);
+  const n = cartUsed(t);
+  AU.clack(); floatText(t.body.position.x, t.body.position.y - 34, n + '/' + TROLLEY_MAX, '#cfdbe8');
+  if (n >= TROLLEY_MAX) once('pieno', 'Carrello pieno: spingilo in palestra (' + K('grab') + ' vicino al carrello).', 'ok');
+  else once('carica', 'Sul carrello. C\'è ancora posto per ' + (TROLLEY_MAX - n === 1 ? 'un case leggero.' : 'un pesante o due leggeri.'));
+}
+// i case sul carrello: una piccola pila che segue il pianale
+function placeLoad (t) {
+  t.load.forEach((ce, i) => {
+    const off = rot({ x: -10 + i * 10, y: -i * 4 }, t.body.angle);
+    Body.setPosition(ce.body, add(t.body.position, off));
+    Body.setAngle(ce.body, t.body.angle);
+    Body.setVelocity(ce.body, { x: 0, y: 0 });
+  });
+}
+// dal carrello in mano: prima il case che va nella zona dove sei
+function unloadTrolley (w) {
+  const t = G.trolley, z = zoneAt(w.body.position) || zoneAt(t.body.position);
+  let ce = t.load.find(c => c.def.zone === z) || t.load[t.load.length - 1];
+  t.load = t.load.filter(c => c !== ce);
+  ce.onTrolley = null;
+  const dir = norm(sub(w.body.position, t.body.position));
+  Body.setPosition(ce.body, add(w.body.position, mul(dir, 30)));
+  Composite.add(G.world, ce.body);
+  placeLoad(t);
+  grab(w, ce);
+  once('scarica', 'Dal carrello alla zona del suo nastro.');
 }
 /* Un case lasciato fermo nella SUA zona si «parcheggia»: freni tirati, non
    lo sposta più nessuno urtandolo (prima bastava sfiorarlo per far partire
@@ -551,9 +883,10 @@ function release (w, why) {
   const ce = w.grab; if (!ce) return;
   if (w.con) { Composite.remove(G.world, w.con); w.con = null; }
   ce.grabbers = ce.grabbers.filter(x => x !== w);
+  ce.lastCarrier = w;
   if (ce.carrier === w) {
     ce.carrier = null;
-    if (why === 'slip') { if (w === G.player) damage(ce, 10 * FRAG[ce.def.frag].mult, 'caduta'); AU.thud(3); }
+    if (why === 'slip') { if (w === G.player) { damage(ce, 10 * FRAG[ce.def.frag].mult, 'caduta'); handled(ce, 10); } AU.thud(3); }
     else Body.setVelocity(ce.body, mul(ce.body.velocity, 0.3));
   }
   w.grab = null; w.mode = null; w.carry = null;
@@ -590,7 +923,37 @@ function onCollision (ev) {
     const rel = Math.abs((va.x - vb.x) * n.x + (va.y - vb.y) * n.y);
     if (ea && ea.kind === 'case') hitCase(ea, eb, rel, B);
     if (eb && eb.kind === 'case') hitCase(eb, ea, rel, A);
+    if (ea && ea.kind === 'trolley') hitTrolley(ea, eb, rel);
+    if (eb && eb.kind === 'trolley') hitTrolley(eb, ea, rel);
   }
+}
+// il carrello che sbatte scuote quello che c'è sopra
+function hitTrolley (t, other, rel) {
+  if (other && other.kind === 'worker') return;
+  if (other && other.kind === 'kid') { if (rel > 1.3) kidHit(other); return; }
+  if (rel > 1.4) AU.thud(rel);
+  if (rel <= 2.3 || G.t - t.lastHit < 0.6 || !t.load.length) return;
+  t.lastHit = G.t;
+  puff(t.body.position.x, t.body.position.y, 6, 'rgba(190,190,196,', 1.2);
+  for (const ce of t.load) {
+    const dmg = (rel - 2.3) * 9 * FRAG[ce.def.frag].mult;
+    damage(ce, dmg, 'carrello sbattuto');
+    handled(ce, dmg);
+  }
+}
+// un colpo vero conta per l'efficienza; sul fragile è movimentazione brusca
+function handled (ce, dmg) {
+  if (dmg < 2 || G.mode !== 'play') return;
+  G.stats.hits++;
+  if (!FRAGILE(ce.def) || G.t - (ce.lastRough || -9) < 1.5) return;
+  ce.lastRough = G.t;
+  const S = G.stats; S.rough++;
+  const p = ce.body.position;
+  if (S.rough <= 2) {
+    floatText(p.x, p.y - 24, '−1 reputazione', '#e0503f');
+    toast('Movimentazione brusca: ' + ce.def.name + ' è fragile. −1 reputazione.', 'bad');
+  } else toast('Movimentazione brusca: ' + ce.def.name + '.', 'bad');
+  if (S.rough === 1) bubble(G.macio, 'Piano! Lì dentro c\'è ' + ({ par: 'i PAR', valigetta: 'il PC', rack: 'il mixer' }[ce.def.id] || 'roba delicata') + '!', 1.8);
 }
 function hitCase (ce, other, rel, otherBody) {
   if (other && (other.kind === 'worker' || other.kind === 'dolly')) return;
@@ -611,22 +974,13 @@ function hitCase (ce, other, rel, otherBody) {
   if (ce.carrier === G.macio || (other && other.carrier === G.macio)) dmg *= 0.15;
   const what = otherBody === G.stepBody ? 'contro il gradino' : other && other.kind === 'case' ? 'contro ' + other.def.name : other && other.kind === 'cart' ? 'contro il carrello' : 'urto';
   damage(ce, dmg, what);
-  if (ce.def.tall && rel > 3.2 && !ce.tipped) tip(ce);
+  handled(ce, dmg);
 }
 function kidHit (k) {
   if (G.t - k.hitT < 3) return;
   k.hitT = G.t; G.kidHits++;
   bubble(k, 'Ahia!', 1.4); AU.bad();
   toast('Hai preso un bambino con un case: −1 reputazione.', 'bad');
-}
-function tip (ce) {
-  unpark(ce);
-  ce.tipped = true;
-  for (const w of [...ce.grabbers]) release(w);
-  damage(ce, 18 * FRAG[ce.def.frag].mult, 'ribaltato');
-  AU.thud(5);
-  bubble(G.macio, 'Occhio! Si è ribaltato!', 1.8);
-  toast(ce.def.name + ' ribaltato! Chiama Macio e fai OH-ISSA per tirarlo su.', 'bad');
 }
 
 /* ---------------------------------------------------------------------
@@ -635,12 +989,38 @@ function tip (ce) {
 function pressGrab () {
   if (G.mode !== 'play') return;
   if (G.qte) { return; }
-  const p = G.player;
-  if (p.grab) { release(p); return; }
+  const p = G.player, t = G.trolley;
+  if (p.grab) {
+    // un case (in mano o spinto) vicino al carrello: va sopra. Nelle zone
+    // no: lì dal carrello si scarica, e LASCIA posa il case a terra
+    if (t && p.grab.kind === 'case' && nearTrolley(p, 26) && !zoneAt(p.body.position)) {
+      if (cartFits(t, p.grab)) { loadTrolley(p); return; }
+      if (p.grab.def.heavy2) bubble(G.macio, 'Quello lo facciamo in due.', 1.6);
+      else toast('Sul carrello non c\'è più posto (' + cartUsed(t) + '/' + TROLLEY_MAX + ').', 'warn');
+      return;
+    }
+    const ce = p.grab;
+    release(p);
+    if (ce.kind === 'case' && ce.def.wheel === 'hand') AU.drop();
+    return;
+  }
   if (G.coffee.pauseUntil > G.t) return;
+  const va = vanAction(p);
+  if (va === 'doors') { openDoors(); return; }
+  if (va === 'ramp') { lowerRamp(); return; }
+  if (va === 'strap') { releaseStrap(nearestCase(p, 14).strap); return; }
+  if (va === 'brake') { releaseBrake(nearestCase(p, 14)); return; }
   const ce = nearestCase(p, 14);
+  // il carrello: in una zona si scarica, altrove si spinge
+  if (t && nearTrolley(p, 14) && (!ce || surface(t, p.body.position).dist <= surface(ce, p.body.position).dist)) {
+    const inZone = zoneAt(p.body.position) || zoneAt(t.body.position);
+    if (t.load.length && inZone) { unloadTrolley(p); return; }
+    grab(p, t);
+    if (t.load.length) once('spingi', 'Spingi il carrello fino alle zone, poi lascialo lì e ' + KA('SCARICA') + '.');
+    else toast('Il carrello è vuoto: prima caricalo. Prendi un case leggero e avvicinati al carrello.', 'warn');
+    return;
+  }
   if (!ce) { toast('Avvicinati a un case per prenderlo.'); return; }
-  if (ce.stuck) { G.freeing = { ce, t: 0 }; return; }
   if (ce.carrier) { toast('Lo sta portando Macio.'); return; }
   grab(p, ce);
 }
@@ -651,12 +1031,21 @@ function pressHelp () {
   const blocker = G.kids.find(k => k.block > G.t && len(sub(k.body.position, p.body.position)) < 110);
   if (blocker) { bubble(p, 'Permesso!', 1.2); blocker.block = 0; blocker.wait = 0; blocker.target = { x: rand(700, 1000), y: rand(150, 300) }; bubble(blocker, 'Oh, scusi!', 1.2); return; }
   if (T.ai.state === 'phone') { toast('Macio è al telefono…'); return; }
+  // da adesso Macio è in squadra: fra una chiamata e l'altra lavora da solo
+  if (!G.team) { G.team = true; once('squadra', 'Macio è in squadra: quando è libero porta lui i case leggeri.', 'ok'); }
+  if (p.grab && p.grab.kind === 'trolley') { bubble(T, 'Il carrello va da solo, capo!', 1.4); return; }
+  // vicino a un case da due, a mani vuote: lo prendi tu e Macio arriva
+  if (!p.grab) {
+    const n2 = nearestCase(p, 14);
+    if (n2 && n2.def.heavy2 && !n2.carrier && !blockers(n2).length && grab(p, n2)) {
+      macio('help', { ce: n2 }); bubble(T, 'Arrivo!', 1.2); AU.hey(); return;
+    }
+  }
   if (p.grab && p.mode === 'push') {
     if (T.grab === p.grab) { bubble(T, 'Ci sono già!', 1); return; }
     macio('help', { ce: p.grab }); bubble(T, 'Arrivo!', 1.2); AU.hey(); return;
   }
   const near = nearestCase(p, 60);
-  if (near && near.tipped) { macio('goto', { to: () => near.body.position, stop: 55 }); bubble(T, 'Arrivo a tirarlo su!', 1.4); return; }
   if (near && carriable(near) && !near.carrier && delicate(near)) {
     bubble(T, near.def.id === 'par' ? 'I PAR? No no, quelli li porti tu, capo.' : 'La valigetta del PC? No no, quella la porti tu, capo.', 2); return;
   }
@@ -666,55 +1055,41 @@ function pressHelp () {
   if (p.grab && p.mode === 'carry') { toast('I case leggeri li porti da solo. AIUTO serve per spingere quelli pesanti.'); return; }
   macio('goto', { to: () => G.player.body.position, stop: 60 }); bubble(T, 'Eccomi, capo!', 1.2);
 }
-/* OH-ISSA: Macio conta «uno… due… ISSA!» e si preme una volta sola
-   sull'ISSA. Al gradino parte da solo quando il case lo tocca; per un case
-   ribaltato si preme OH-ISSA lì vicino. */
-const BEATS = [0.35, 0.95, 1.55], WIN = 0.25;
+/* OH-ISSA: un case a spinta contro il gradino della palestra si ferma e
+   compare OH-ISSA. Un tocco: Macio conta «uno… due… ISSA!» e il case
+   passa. Niente tempismo, niente errori. Oltre i 45 kg serve Macio al case. */
+const BEATS = [0.35, 0.95, 1.55];
 function nearStep (ce) {
   const b = ce.body.bounds, y = ce.body.position.y;
   return b.max.x > GYM_X - 14 && ce.body.position.x < GYM_X && y > STEP_BAND.y1 - 20 && y < STEP_BAND.y2 + 20;
 }
-function startQte (ce, kind) {
-  G.qte = { ce, kind, t: 0, beat: -1 };
-  $('#qte').hidden = false;
-  $('#q-hint').textContent = (kind === 'step' ? 'Contro il gradino! ' : 'Tiriamolo su! ') + (touchUI ? 'Tocca OH-ISSA su «ISSA!»' : 'Premi Q su «ISSA!»');
+// il case in mano è fermo al gradino e si può alzare adesso?
+function liftReady () {
+  const P = G.player, ce = P.grab;
+  if (G.qte || G.mode !== 'play' || !ce || ce.kind !== 'case' || P.mode !== 'push' || G.t < ce.liftUntil || !nearStep(ce)) return null;
+  return ce.def.kg > 45 && G.macio.grab !== ce ? null : ce;
 }
+// al gradino da solo con un case troppo pesante: Macio arriva da sé
 function autoLift () {
-  if (G.qte || G.mode !== 'play' || G.t < G.qteCool) return;
-  const P = G.player, T = G.macio;
-  if (G.raiseWait) { // ribaltato: si aspetta che arrivi Macio
-    const ce = G.raiseWait;
-    if (!ce.tipped || len(sub(P.body.position, ce.body.position)) > 130) { G.raiseWait = null; return; }
-    if (len(sub(T.body.position, ce.body.position)) < 110) { G.raiseWait = null; startQte(ce, 'raise'); }
-    return;
-  }
-  const ce = P.grab;
-  if (!ce || P.mode !== 'push' || G.t < ce.liftUntil || !nearStep(ce)) return;
+  const P = G.player, T = G.macio, ce = P.grab;
+  if (G.qte || G.mode !== 'play' || !ce || ce.kind !== 'case' || P.mode !== 'push' || !nearStep(ce)) return;
   if (ce.def.kg > 45 && T.grab !== ce) {
     if (T.ai.state === 'phone') { if (!G.phoneWarned) { G.phoneWarned = true; toast('Da solo non lo alzi: aspetta che Macio finisca di telefonare.', 'warn'); } }
     else if (T.ai.state !== 'help') { macio('help', { ce }); bubble(T, 'Aspetta, lo alziamo in due!', 1.6); AU.hey(); }
     return;
   }
-  startQte(ce, 'step');
+  if (liftReady()) once('gradino', 'Il gradino della palestra: ' + K('lift') + '!');
 }
 function pressLift () {
-  if (G.mode !== 'play') return;
-  if (G.qte) { resolveQte(); return; }
-  const P = G.player, T = G.macio;
-  const n = nearestCase(P, 30);
-  if (n && n.tipped) {
-    if (n.def.kg > 45 && len(sub(T.body.position, n.body.position)) > 110) {
-      if (T.ai.state === 'phone') { toast('Da solo non lo alzi: aspetta che Macio finisca di telefonare.', 'warn'); return; }
-      G.raiseWait = n; macio('goto', { to: () => n.body.position, stop: 55 }); bubble(T, 'Arrivo a tirarlo su!', 1.4); return;
-    }
-    startQte(n, 'raise'); return;
-  }
-  if (P.grab && P.mode === 'push' && nearStep(P.grab)) { G.qteCool = 0; autoLift(); return; }
-  toast('OH-ISSA serve al gradino della palestra (parte da solo quando ci spingi contro un case) o per tirare su un case ribaltato.');
+  if (G.mode !== 'play' || G.qte) return;
+  const ce = liftReady();
+  if (!ce) return;
+  unlock('lift');
+  G.qte = { ce, t: 0, beat: -1 };
 }
 function updateQte (dt) {
   const q = G.qte; if (!q) return;
-  if (q.kind === 'step' && G.player.grab !== q.ce) { G.qte = null; $('#qte').hidden = true; return; }
+  if (G.player.grab !== q.ce) { G.qte = null; return; }
   q.t += dt;
   let beat = -1; for (let i = 0; i < 3; i++) if (q.t >= BEATS[i]) beat = i;
   if (beat !== q.beat) {
@@ -722,33 +1097,12 @@ function updateQte (dt) {
     bubble(G.macio, ['Uno…', 'Due…', 'ISSA!'][beat], 0.55);
     AU.tone(beat === 2 ? 660 : 440, beat === 2 ? 990 : 440, 0.12, 0.12);
   }
-  if (q.t > BEATS[2] + WIN) failQte('Troppo tardi!');
-}
-function resolveQte () {
-  const q = G.qte; if (!q) return;
-  const d = q.t - BEATS[2];
-  if (Math.abs(d) > WIN) { failQte(d < 0 ? 'Troppo presto!' : 'Troppo tardi!'); return; }
-  G.qte = null; $('#qte').hidden = true; AU.hey();
-  if (q.kind === 'step') {
+  if (q.t >= BEATS[2] + 0.15) {
+    G.qte = null; AU.hey();
     q.ce.liftUntil = G.t + 1.2; q.ce.hopUntil = G.t + 0.9; refreshFilter(q.ce);
     puff(q.ce.body.position.x, q.ce.body.position.y, 10, 'rgba(190,190,196,', 1.4);
-    bubble(G.player, 'Su!', 0.8); toast('Perfetto: il case passa il gradino.', 'ok');
-  } else {
-    q.ce.tipped = false; Body.setAngularVelocity(q.ce.body, 0);
-    toast(q.ce.def.name + ' di nuovo in piedi.', 'ok');
+    bubble(G.player, 'Su!', 0.8);
   }
-}
-function failQte (why) {
-  const q = G.qte; G.qte = null; $('#qte').hidden = true;
-  damage(q.ce, 3 * FRAG[q.ce.def.frag].mult, 'OH-ISSA fuori tempo'); AU.thud(2);
-  bubble(G.macio, why + ' Riproviamo.', 1.3);
-  G.qteCool = G.t + 0.9;
-}
-function drawQteUI () {
-  const q = G && G.qte;
-  $('#b-lift').classList.toggle('on', !!q && q.beat === 2);
-  if (!q) return;
-  for (let i = 0; i < 3; i++) $('#q-b' + i).classList.toggle('on', q.beat === i);
 }
 
 /* ---------------------------------------------------------------------
@@ -761,7 +1115,9 @@ function macio (state, data) {
 }
 const CHAIN = [{ x: 330, y: 500 }, { x: 460, y: 500 }, { x: 590, y: 500 }, { x: GYM_X - 60, y: 500 }, { x: GYM_X + 60, y: 500 }];
 function region (p) { return p.x < DOOR_X ? 0 : p.x < 520 ? 1 : p.x < GYM_X ? 2 : 3; }
-function navPoint (from, to) {
+// il prossimo punto della strada: furgone, rampa, cortile, porta della palestra
+function navPoint (from, to) { return navChain(from, to); }
+function navChain (from, to) {
   if (region(from) === region(to)) return to;
   if (to.x > from.x) {
     for (const c of CHAIN) if (c.x > from.x - 5 && c.x < to.x && len(sub(c, from)) > 24) return c;
@@ -802,7 +1158,8 @@ function helpPoint (ce, pw) {
 function pickJob (T) {
   let best = null, bd = Infinity;
   for (const ce of G.cases) {
-    if (!carriable(ce) || delicate(ce) || ce.carrier || ce.grabbers.length || ce.zone === ce.def.zone || ce.stuck) continue;
+    if (!carriable(ce) || delicate(ce) || ce.carrier || ce.grabbers.length || ce.zone === ce.def.zone) continue;
+    if (ce.hidden || ce.onTrolley || locked(ce) || blockers(ce).length) continue;
     if (ce.skipUntil > G.t || G.player.grab === ce) continue;
     if (ce.body.position.x > GYM_X && ce.zone === null && speedOf(ce.body) > 0.3) continue;
     if (!helpPoint(ce, null)) continue;
@@ -821,7 +1178,7 @@ function updateMacio (dt) {
     if (ai.t > 12) { macio('idle'); bubble(T, 'Scusa capo, eccomi.', 1.6); }
   } else if (ai.state === 'help') {
     const ce = ai.ce;
-    if (!P.grab || P.grab !== ce || ce.tipped || ce.stuck) { macio('idle'); }
+    if (!P.grab || P.grab !== ce) { macio('idle'); }
     else if (T.grab === ce) {
       // spinge nella direzione che davi 0,4 s fa (0,2 s col caffè)
       const lag = G.coffee.until > G.t ? 12 : 24;
@@ -856,8 +1213,12 @@ function updateMacio (dt) {
     const to = ai.to();
     dir = steer(T, to, ai.stop || 50);
     if (len(sub(to, T.body.position)) < (ai.stop || 50) || ai.t > 8) macio('idle');
-  } else { // idle: se non lo chiami, porta da solo un case leggero
-    const job = ai.t > 1.2 && G.mode === 'play' && pickJob(T);
+  } else { // idle: ti dà una mano sui case pesanti, se no porta da solo un case leggero
+    const pc = P.grab && P.grab.kind === 'case' && P.mode === 'push' ? P.grab : null;
+    if (pc && G.team && ai.t > 0.6 && (pc.def.heavy2 || pc.def.kg >= 35) && !pc.grabbers.includes(T) && helpPoint(pc, P)) {
+      macio('help', { ce: pc }); bubble(T, pc.def.heavy2 ? 'Questo in due, arrivo!' : 'Ti do una mano!', 1.4); AU.hey(); drive(T, dir, vmax); return;
+    }
+    const job = ai.t > 1.2 && G.mode === 'play' && G.team && pickJob(T);
     if (job) { macio('carry', { ce: job, auto: true }); bubble(T, 'Porto io ' + job.def.name + '!', 1.4); drive(T, dir, vmax); return; }
     const d = len(sub(P.body.position, T.body.position));
     if (d > 190) dir = steer(T, P.body.position, 120);
@@ -882,8 +1243,10 @@ function drive (w, dir, vmax) {
 }
 function turnTo (w, a, rate) { const d = angDiff(a, w.facing); w.facing += clamp(d, -rate, rate); }
 function pushVmax (ce) {
+  if (ce.kind === 'trolley') return 3.0 - 0.15 * cartUsed(ce);
   const base = WHEEL[ce.wheel].push * clamp(1.15 - ce.def.kg / 200, 0.6, 1.1);
-  if (ce.def.heavy2 && ce.grabbers.length < 2) return 0.8;
+  // un case da due persone, da solo, non si muove (quasi)
+  if (ce.def.heavy2 && ce.grabbers.length < 2) return 0.14;
   return base * (ce.grabbers.length >= 2 ? 1.15 : 1);
 }
 function readInput () {
@@ -920,18 +1283,22 @@ function updatePlayer (dt) {
   }
   drive(P, dir, vmax);
   if (len(dir) > 0.1 && P.mode !== 'push') turnTo(P, Math.atan2(dir.y, dir.x), P.mode === 'carry' ? 0.075 : 0.35);
+  // da solo contro un case da due: non si muove, Macio te lo dice
+  const g = P.grab;
+  if (g && g.kind === 'case' && g.def.heavy2 && g.grabbers.length < 2 && len(dir) > 0.3 && G.mode === 'play') {
+    g.strainT = (g.strainT || 0) + dt;
+    if (g.strainT > 2.2 && !g.strained) {
+      g.strained = true; G.stats.solo++;
+      bubble(G.macio, G.macio.ai.state === 'phone' ? 'Un attimo, capo!' : 'Quello lo facciamo in due.', 2);
+      toast('⚠ 2 PERSONE: da solo non si muove. ' + K('help') + '.', 'warn');
+    }
+  } else if (g && g.strainT && g.grabbers.length >= 2) g.strainT = 0;
+  // i viaggi: ogni volta che entri in palestra con qualcosa
+  const px = P.body.position.x;
+  if (G.prevPX < GYM_X && px >= GYM_X && g && G.mode === 'play') countTrip(g);
+  G.prevPX = px;
   if (P.mode === 'push' && P.con) { const a = add(P.grab.body.position, P.con.pointB); P.facing = Math.atan2(a.y - P.body.position.y, a.x - P.body.position.x); }
 
-  // liberare il cavo incastrato: tenere premuto
-  if (G.freeing) {
-    const ce = G.freeing.ce;
-    const near = surface(ce, P.body.position).dist - P.r < 18;
-    if (!inp.grabHeld || !near || !ce.stuck) G.freeing = null;
-    else {
-      G.freeing.t += dt;
-      if (G.freeing.t > 1.3) { ce.stuck = false; G.freeing = null; toast('Cavo liberato. Si riparte!', 'ok'); AU.ding(); }
-    }
-  }
   // pausa caffè
   const c = G.coffee;
   if (!c.used && !P.grab && len(sub(P.body.position, { x: 662, y: 175 })) < 45) {
@@ -941,8 +1308,21 @@ function updatePlayer (dt) {
   }
 }
 
+function countTrip (g) {
+  const S = G.stats;
+  S.trips++;
+  if (g.kind === 'trolley') {
+    const n = g.load.length; if (!n) return;
+    S.cartTrips++; S.cartCases += n;
+    if (n >= 2) { AU.good(); floatText(g.body.position.x, g.body.position.y - 40, 'Un viaggio, ' + n + ' case', '#49e07a'); }
+  } else if (G.trolley && g.kind === 'case' && !g.def.heavy2) {
+    S.wasted++;   // a mano un case alla volta, col carrello lì fuori
+    if (S.wasted === 2) { bubble(G.macio, 'Prendi il carrello. Non siamo qui per fare palestra.', 2.6); once('viaggi', 'Un case alla volta sono tanti viaggi: sul carrello ne porti di più.'); }
+  }
+}
 function updateCase (ce, dt) {
   const b = ce.body;
+  if (ce.hidden) return;
   if (ce.flash > 0) ce.flash -= dt;
   // in mano: il case segue chi lo porta
   if (ce.carrier) {
@@ -960,6 +1340,7 @@ function updateCase (ce, dt) {
   }
   if (ce.parked) return;
   // un case da due spinto da solo non va dritto: ogni tanto sbanda di lato
+  if (ce.onTrolley) return;          // sul carrello: lo muove il carrello
   if (ce.def.heavy2 && ce.grabbers.length === 1 && speedOf(b) > 0.3 && G.mode === 'play') {
     ce.soloT = (ce.soloT || 0) + dt;
     if (ce.soloT > 2.2) {
@@ -976,8 +1357,6 @@ function updateCase (ce, dt) {
   let kf = W.f, ks = W.s, ka = W.a;
   if (ce.def.heavy2 && ce.grabbers.length === 1) { kf += 5; ks += 5; ka += 4; }
   if (ce.slideUntil > G.t) { kf = ks = 1.2; }
-  if (ce.tipped) { kf = ks = 25; ka = 25; }
-  if (ce.stuck) { kf = ks = 45; ka = 30; }
   if (b.position.x > GYM_X) { kf *= 0.9; ks *= 0.9; }
   const lv = rot(b.velocity, -b.angle);
   lv.x *= Math.max(0, 1 - kf * dt); lv.y *= Math.max(0, 1 - ks * dt);
@@ -1001,7 +1380,6 @@ function updateCase (ce, dt) {
     ce.wheel = 'swivel'; ce.onDolly = true; toast(ce.def.name + ' sul dolly: adesso scorre!', 'ok'); AU.ding();
   }
   // ribaltamento dei case alti se curvi forte
-  if (ce.def.tall && !ce.tipped && Math.abs(b.angularVelocity) > 0.045 && speedOf(b) > 0.9) tip(ce);
 }
 
 function updateKids (dt) {
@@ -1035,7 +1413,8 @@ function updateKids (dt) {
 function scriptEvents () {
   const E = G.events, t = G.t;
   const once = (k, at, fn) => { if (!E[k] && t >= at) { E[k] = true; fn(); } };
-  once('passante1', G.at.passante1, () => passante(G.kids[0]));
+  // il primo passante aspetta che tu sappia chiamare (serve a chiedere permesso)
+  if (G.team) once('passante1', G.at.passante1, () => passante(G.kids[0]));
   once('bidello', G.at.bidello, () => {
     const b = Bodies.rectangle(1010, 110, 56, 80, { frictionAir: 0, collisionFilter: { category: CAT.NPC, mask: CAT.WALL | CAT.CASE | CAT.WORKER | CAT.NPC | CAT.DOLLY } });
     Body.setMass(b, 150); Body.setInertia(b, Infinity);
@@ -1048,16 +1427,7 @@ function scriptEvents () {
     const T = G.macio; macio('phone'); bubble(T, 'È mia moglie, un attimo…', 3);
     toast('Macio è al telefono per qualche secondo.', 'warn');
   });
-  once('passante2', G.at.passante2, () => passante(G.kids[1]));
-  // cavo incastrato: la prima volta che il baule (SEGNALE o CORRENTE, a
-  // sorte) va in cortile a spinta
-  const seg = G.cases.find(c => c.def.id === G.cavoCase);
-  if (!E.cavo && seg.grabbers.length && seg.body.position.x > 600 && seg.body.position.x < GYM_X - 80) {
-    E.cavo = true; seg.stuck = true;
-    for (const w of [...seg.grabbers]) release(w);
-    bubble(seg, seg.def.id === 'segnale' ? 'Un XLR nella ruota!' : 'Una prolunga nella ruota!', 2.4); AU.bad();
-    toast('Cavo incastrato nella ruota del baule ' + seg.def.short + ': tieni premuto PRENDI lì vicino per liberarlo.', 'bad');
-  }
+  if (G.team) once('passante2', G.at.passante2, () => passante(G.kids[1]));
 }
 function passante (k) {
   k.block = G.t + 9; k.target = { x: 505, y: rand(478, 522) };
@@ -1065,22 +1435,113 @@ function passante (k) {
 }
 
 /* ---------------------------------------------------------------------
+   PROGRESSIONE: il carrello, l'efficienza, la sorpresa finale
+   --------------------------------------------------------------------- */
+function progress () {
+  const S = G.stats, n = G.cases.filter(c => !c.def.surprise && c.zone === c.def.zone).length;
+  if (!G.trolley && G.cartAt && G.t >= G.cartAt) spawnTrolley();
+  if (!G.unlock.eff && (S.cartTrips >= 1 && n >= 4 || n >= 7 || G.t > 170)) {
+    unlock('eff'); $('#h-eff-w').hidden = false; $('#h-eff-w').classList.add('reveal');
+    bubble(G.macio, 'Occhio, che il capo conta i viaggi!', 2.2);
+    toast('Non basta finire: conta come lavori. Guarda la barra LAVORO in alto.', 'ok');
+  }
+  if (n >= 1 && !G.seen.goal1) { G.seen.goal1 = true; goal('Svuota il furgone: ogni case nella zona del suo nastro.'); }
+}
+function delivered (ce) {
+  if (ce.hidden) return;
+  const p = ce.body.position, z = ZONES[ce.def.zone];
+  AU.ding(); bubble(ce, '✓ ' + z.name, 1.2); ring(p.x, p.y, z.color);
+  if (ce.lastCarrier === G.player && carriable(ce)) G.stats.handDeliv++;
+  if (ce.def.surprise) {
+    if (G.surprise) G.surprise.late = true;
+    bubble(G.macio, 'Senza questo stasera non suonava niente!', 2.4);
+    toast('Baule SEGNALE: dentro ci sono XLR, DMX e Speakon. Lo riapri al montaggio.', 'ok');
+    return;
+  }
+  once('prima', 'Consegnato! Avanti il prossimo.', 'ok');
+}
+function wrongZone (ce, z) {
+  if (G.t - (ce.lastWrong || -9) < 4) return;
+  ce.lastWrong = G.t; G.stats.wrongDrop++;
+  toast(ce.def.name + ' va in ' + ZONES[ce.def.zone].name + ', non in ' + ZONES[z].name + ': guarda il colore del nastro.', 'warn');
+}
+function startSurprise () {
+  G.surprise = { t: G.t, asked: false, revealed: false, late: false };
+  AU.done(); $('#h-del-w').classList.add('done');
+  toast('MATERIALE SCARICATO: 100%', 'ok');
+  goal('MATERIALE SCARICATO: 100%');
+  for (const w of [G.player, G.macio]) bubble(w, w === G.player ? 'Fatto!' : 'Bella, capo!', 1.2);
+}
+function surpriseStep () {
+  const S = G.surprise; if (!S) return;
+  // nel livello 1 i generici dei cavi stanno davanti: niente telo, si chiude subito
+  if (!G.cases.some(c => c.def.surprise)) { S.revealed = true; return; }
+  const dt = G.t - S.t;
+  if (!S.asked && dt > 1.8) {
+    S.asked = true;
+    if (G.macio.ai.state !== 'phone') macio('idle');
+    bubble(G.macio, 'Aspetta… e il baule dei cavi?', 2.6); AU.hey();
+  }
+  if (!S.revealed && dt > 3.6) {
+    S.revealed = true;
+    const ce = G.cases.find(c => c.def.surprise);
+    if (ce.hidden) { ce.hidden = false; setFree(ce); }   // legato o frenato resta fermo
+    G.tarp = G.t;
+    ring(ce.body.position.x, ce.body.position.y, '#eaff2b'); AU.clack();
+    $('#h-del-w').classList.remove('done');
+    if (ce.zone !== ce.def.zone) {
+      toast('Sotto il telo, in fondo al furgone: il baule SEGNALE con i cavi di stasera.', 'warn');
+      goal('Recupera il baule SEGNALE in fondo al furgone e portalo in ' + ZONES[ce.def.zone].name + '.');
+    }
+  }
+}
+
+/* Fine del lavoro: una pausa breve prima della bolla. La telecamera passa
+   sul piazzale vuoto e poi sulle zone con i case al loro posto, Macio
+   guarda il materiale. L'orologio è fermo (l'ora di fine è già decisa);
+   un tocco o un tasto la accorcia. */
+const WRAP = { van: 3.4, lines: [[0.6, 'Ok. È tutto giù.'], [5.2, 'Adesso possiamo cominciare.']], end: 8.6 };
+function startWrap () {
+  if (G.mode !== 'play') return;
+  for (const w of G.workers) release(w);
+  G.mode = 'wrap'; G.wrap = { t: 0, said: 0 };
+  hintQueue.length = 0; clearTimeout(queueTimer);
+  $('#pad').hidden = true;
+  goal('Materiale nelle zone: Backstage, Off Stage, Palco e Pit.');
+}
+function wrapStep (dt) {
+  const W2 = G.wrap; W2.t += dt;
+  while (W2.said < WRAP.lines.length && W2.t >= WRAP.lines[W2.said][0]) {
+    const txt = WRAP.lines[W2.said][1];
+    G.bubbles = [{ ent: G.macio, text: txt, until: G.t + 99 }];
+    toast('Macio: «' + txt + '»', 'ok', true);
+    W2.said++;
+  }
+  if (W2.t >= WRAP.end) { G.bubbles = []; endGame('ok'); }
+}
+function skipWrap () { if (G && G.mode === 'wrap' && G.wrap.t > 1) G.wrap.t = WRAP.end; }
+// dove guarda la telecamera durante la pausa finale
+function wrapView () {
+  if (G.wrap.t < WRAP.van) return { x: 260, y: 500, fit: 760 };
+  const z = Object.values(ZONES), x1 = Math.min(...z.map(a => a.x)), x2 = Math.max(...z.map(a => a.x + a.w));
+  const y1 = Math.min(...z.map(a => a.y)), y2 = Math.max(...z.map(a => a.y + a.h));
+  return { x: (x1 + x2) / 2, y: (y1 + y2) / 2, fit: Math.max(x2 - x1, y2 - y1) + 80 };
+}
+
+/* ---------------------------------------------------------------------
    PASSO DI SIMULAZIONE
    --------------------------------------------------------------------- */
 function stepSim () {
   const dt = 1 / 60;
+  if (G.mode === 'wrap') { wrapStep(dt); return; }
   if (G.mode === 'intro') {
-    G.introT += dt; G.doorsOpen = clamp(G.introT / 1.2, 0, 1);
-    if (G.introT > 1.15 && !G.events.slide) {
-      G.events.slide = true;
-      const r = G.cases.find(c => c.def.id === 'ricambio');
-      r.slideUntil = G.introT + 1.2; Body.setVelocity(r.body, { x: 4.2, y: 0.2 }); Body.setAngularVelocity(r.body, 0.03);
-      toast('Occhio! Il case ricambi non era legato…', 'warn');
-    }
-    if (G.introT > 2) { G.mode = 'play'; }
+    G.introT += dt;
+    if (G.introT > 0.8) { G.mode = 'play'; goal('Apri il portellone del furgone: vai davanti alle ante e ' + KA('APRI') + '.'); }
   } else if (G.mode === 'play') {
     G.t += dt;
+    vanStep(dt);
     scriptEvents();
+    progress();
     updateQte(dt); autoLift();
   }
   updatePlayer(dt);
@@ -1088,16 +1549,20 @@ function stepSim () {
   updateKids(dt);
   for (const ce of G.cases) updateCase(ce, dt);
   if (G.dolly) { const b = G.dolly.body; Body.setVelocity(b, mul(b.velocity, 1 - 1.5 * dt)); Body.setAngularVelocity(b, b.angularVelocity * (1 - 3 * dt)); }
+  if (G.trolley) { const b = G.trolley.body; Body.setVelocity(b, mul(b.velocity, 1 - 1.1 * dt)); Body.setAngularVelocity(b, b.angularVelocity * (1 - 3 * dt)); }
 
   const prevX = G.cases.map(c => c.body.position.x);
   Engine.update(G.engine, STEP);
+  if (G.trolley) placeLoad(G.trolley);
 
   // dopo il passo: velocità di riferimento per gli urti, cadute, consegne
   for (const e of [...G.cases, ...G.workers, ...G.kids]) e.pv = { x: e.body.velocity.x, y: e.body.velocity.y };
+  if (G.trolley) G.trolley.pv = { ...G.trolley.body.velocity };
   for (const e of [...G.workers, ...G.kids]) e.stride = (e.stride || 0) + speedOf(e.body);
   if (G.dolly) G.dolly.pv = { ...G.dolly.body.velocity };
   G.cases.forEach((ce, i) => {
     const p = ce.body.position;
+    if (ce.onTrolley) { ce.zone = null; return; }
     // giù dal pianale fuori dalla rampa
     if (!ce.carrier && prevX[i] <= DOOR_X && p.x > DOOR_X && (p.y < RAMP.y || p.y > RAMP.y + RAMP.h)) {
       damage(ce, 30 * FRAG[ce.def.frag].mult, 'caduto dal furgone'); AU.thud(6);
@@ -1107,14 +1572,18 @@ function stepSim () {
     const held = ce.carrier || ce.grabbers.length;
     if (!held && speedOf(ce.body) < 1.2) {
       const z = zoneAt(p);
-      if (z !== ce.zone) { ce.zone = z; if (z === ce.def.zone && G.mode === 'play') { AU.ding(); bubble(ce, '✓ ' + ZONES[z].name, 1.2); ring(p.x, p.y, ZONES[z].color); } }
-      if (z === ce.def.zone && !ce.tipped && !ce.stuck && speedOf(ce.body) < 0.3 && G.mode === 'play') park(ce);
+      if (z !== ce.zone) { ce.zone = z; if (z === ce.def.zone && G.mode === 'play') delivered(ce); else if (z && G.mode === 'play' && !ce.hidden) wrongZone(ce, z); }
+      if (z === ce.def.zone && speedOf(ce.body) < 0.3 && G.mode === 'play') park(ce);
     } else if (held) ce.zone = null;
   });
 
   if (G.mode === 'play') {
-    const done = G.cases.every(c => c.zone === c.def.zone && !c.carrier && !c.grabbers.length);
-    if (done) { G.endDelay += dt; if (G.endDelay > 0.8) endGame('ok'); } else G.endDelay = 0;
+    const placed = c => c.zone === c.def.zone && !c.carrier && !c.grabbers.length && !c.onTrolley;
+    // tutto il materiale visto scaricato… ma in fondo al furgone c'è ancora il telo
+    if (!G.surprise && G.cases.every(c => c.def.surprise || placed(c))) startSurprise();
+    surpriseStep();
+    const done = G.surprise && G.surprise.revealed && G.cases.every(placed);
+    if (done) { G.endDelay += dt; if (G.endDelay > (G.surprise.late ? 2.2 : 0.8)) startWrap(); } else G.endDelay = 0;
     if (G.t >= GAME_SECONDS) endGame('tempo');
   }
   G.bubbles = G.bubbles.filter(b => b.until > G.t);
@@ -1182,17 +1651,24 @@ function drawGround () {
   ctx.fillStyle = '#7b5634';
   for (let x = 1420; x < 1600; x += 22) ctx.fillRect(x, 826, 16, 22);
   ctx.fillStyle = 'rgba(0,0,0,.25)'; ctx.fillRect(1418, 846, 182, 4);
-  // palco rialzato: bordo con la striscia di luce, scaletta e sipario
-  ctx.fillStyle = 'rgba(0,0,0,.35)'; ctx.fillRect(1636, 316, 214, 372);
-  ctx.fillStyle = '#2f2a26'; ctx.fillRect(1630, 310, 214, 372);
-  ctx.strokeStyle = 'rgba(0,0,0,.25)'; ctx.lineWidth = 1;
-  for (let x = 1640; x < 1844; x += 22) { ctx.beginPath(); ctx.moveTo(x, 312); ctx.lineTo(x, 680); ctx.stroke(); }
-  ctx.fillStyle = '#f2a541'; ctx.globalAlpha = 0.35; ctx.fillRect(1630, 310, 3, 372); ctx.globalAlpha = 1;
-  ctx.fillStyle = '#4a3d33'; for (let i = 0; i < 3; i++) ctx.fillRect(1604 + i * 9, 690, 8, 26);
-  ctx.fillStyle = '#6e1f24'; ctx.fillRect(1836, 310, 10, 372);
-  ctx.fillStyle = 'rgba(0,0,0,.25)'; for (let y = 316; y < 680; y += 14) ctx.fillRect(1836, y, 10, 4);
-  ctx.save(); ctx.fillStyle = 'rgba(238,233,223,.08)'; ctx.font = '700 44px "Barlow Condensed", sans-serif'; ctx.textAlign = 'center';
-  ctx.fillText('PALESTRA', 1400, 560); ctx.restore();
+  // il palco già montato (come al montaggio): pedana con la striscia di luce
+  const S = STAGE, sw = S.x2 - S.x1, sh = S.y2 - S.y1;
+  ctx.fillStyle = 'rgba(0,0,0,.4)'; ctx.fillRect(S.x1 + 6, S.y1 + 6, sw, sh);
+  ctx.fillStyle = '#2f2a26'; ctx.fillRect(S.x1, S.y1, sw, sh);
+  ctx.strokeStyle = 'rgba(0,0,0,.3)'; ctx.lineWidth = 1;
+  for (let y = S.y1 + 20; y < S.y2; y += 22) { ctx.beginPath(); ctx.moveTo(S.x1 + 2, y); ctx.lineTo(S.x2 - 2, y); ctx.stroke(); }
+  ctx.fillStyle = '#f2a541'; ctx.globalAlpha = 0.45; ctx.fillRect(S.x2 - 3, S.y1, 3, sh); ctx.globalAlpha = 1;
+  ctx.fillStyle = '#6e1f24'; ctx.fillRect(S.x1, S.y1, 8, sh);                       // fondale verso il backstage
+  ctx.fillStyle = 'rgba(0,0,0,.25)'; for (let y = S.y1 + 4; y < S.y2; y += 14) ctx.fillRect(S.x1, y, 8, 4);
+  ctx.fillStyle = '#4a3d33'; for (let i = 0; i < 3; i++) ctx.fillRect(S.x2 - 30 + i * 9, S.y2, 8, 22);   // scaletta
+  ctx.save(); ctx.fillStyle = 'rgba(238,233,223,.35)'; ctx.font = '700 30px "Barlow Condensed", sans-serif'; ctx.textAlign = 'center';
+  ctx.fillText('PALCO', (S.x1 + S.x2) / 2, (S.y1 + S.y2) / 2 + 10);
+  ctx.fillStyle = 'rgba(238,233,223,.12)'; ctx.font = '700 34px "Barlow Condensed", sans-serif';
+  ctx.fillText('PLATEA', 1690, 520);
+  ctx.font = '700 22px "Barlow Condensed", sans-serif'; ctx.fillText('FOH', 1808, 520);
+  ctx.restore();
+  ctx.strokeStyle = 'rgba(238,233,223,.12)'; ctx.lineWidth = 2; ctx.setLineDash([8, 8]);
+  ctx.beginPath(); ctx.moveTo(1610, 150); ctx.lineTo(1610, 850); ctx.moveTo(1770, 150); ctx.lineTo(1770, 850); ctx.stroke(); ctx.setLineDash([]);
 }
 function drawZones () {
   for (const k in ZONES) {
@@ -1236,13 +1712,23 @@ function drawStatics () {
   ctx.fillStyle = '#dfe1e5'; ctx.strokeStyle = '#9aa0a8'; ctx.lineWidth = 2;
   ctx.save(); ctx.translate(DOOR_X, 380); ctx.rotate(a); ctx.fillRect(0, -8, 112, 9); ctx.strokeRect(0, -8, 112, 9); ctx.restore();
   ctx.save(); ctx.translate(DOOR_X, 620); ctx.rotate(-a); ctx.fillRect(0, -1, 112, 9); ctx.strokeRect(0, -1, 112, 9); ctx.restore();
-  // rampa in alluminio
-  ctx.fillStyle = '#8f959e'; ctx.fillRect(RAMP.x, RAMP.y, RAMP.w, RAMP.h);
-  ctx.strokeStyle = '#6b7078'; ctx.lineWidth = 2;
-  for (let x = RAMP.x + 6; x < RAMP.x + RAMP.w; x += 9) { ctx.beginPath(); ctx.moveTo(x, RAMP.y + 3); ctx.lineTo(x, RAMP.y + RAMP.h - 3); ctx.stroke(); }
-  ctx.strokeStyle = '#555a62'; ctx.lineWidth = 4; ctx.strokeRect(RAMP.x, RAMP.y, RAMP.w, RAMP.h);
-  ctx.fillStyle = 'rgba(20,21,25,.55)';
-  for (let i = 0; i < 3; i++) { const x = RAMP.x + 30 + i * 30; ctx.beginPath(); ctx.moveTo(x, 485); ctx.lineTo(x + 14, 500); ctx.lineTo(x, 515); ctx.lineTo(x + 5, 500); ctx.fill(); }
+  // rampa in alluminio: su (agganciata al pianale) finché non la tiri giù
+  const rk = G.van && G.van.ramp ? 1 : (G.van && G.van.rampK) || 0;
+  if (rk > 0) {
+    const rw = RAMP.w * rk;
+    ctx.fillStyle = '#8f959e'; ctx.fillRect(RAMP.x, RAMP.y, rw, RAMP.h);
+    ctx.strokeStyle = '#6b7078'; ctx.lineWidth = 2;
+    for (let x = RAMP.x + 6; x < RAMP.x + rw; x += 9) { ctx.beginPath(); ctx.moveTo(x, RAMP.y + 3); ctx.lineTo(x, RAMP.y + RAMP.h - 3); ctx.stroke(); }
+    ctx.strokeStyle = '#555a62'; ctx.lineWidth = 4; ctx.strokeRect(RAMP.x, RAMP.y, rw, RAMP.h);
+    if (rk === 1) {
+      ctx.fillStyle = 'rgba(20,21,25,.55)';
+      for (let i = 0; i < 3; i++) { const x = RAMP.x + 30 + i * 30; ctx.beginPath(); ctx.moveTo(x, 485); ctx.lineTo(x + 14, 500); ctx.lineTo(x, 515); ctx.lineTo(x + 5, 500); ctx.fill(); }
+    }
+  } else if (G.van && G.van.open) {
+    // la rampa ripiegata dentro il portellone
+    ctx.fillStyle = '#8f959e'; ctx.fillRect(DOOR_X - 14, RAMP.y, 10, RAMP.h);
+    ctx.strokeStyle = '#555a62'; ctx.lineWidth = 2; ctx.strokeRect(DOOR_X - 14, RAMP.y, 10, RAMP.h);
+  }
   // bordo del pianale: si cade se si esce fuori dalla rampa
   ctx.fillStyle = '#f2c53d'; ctx.fillRect(DOOR_X - 4, 390, 4, RAMP.y - 390); ctx.fillRect(DOOR_X - 4, RAMP.y + RAMP.h, 4, 610 - RAMP.y - RAMP.h);
   // muri: recinzione metallica del cortile, muri in cemento della palestra
@@ -1276,8 +1762,8 @@ function drawStatics () {
   ctx.fillStyle = '#141519'; for (let y = STEP_BAND.y1 - 20; y < STEP_BAND.y2; y += 14) { ctx.beginPath(); ctx.moveTo(GYM_X - 8, y); ctx.lineTo(GYM_X + 8, y + 10); ctx.lineTo(GYM_X + 8, y + 17); ctx.lineTo(GYM_X - 8, y + 7); ctx.fill(); }
   ctx.restore();
   // sedie impilate
-  ctx.fillStyle = '#26303d'; rr(1300, 170, 100, 50, 4); ctx.fill();
-  ctx.strokeStyle = '#3d4b5e'; ctx.lineWidth = 2; for (let x = 1308; x < 1400; x += 12) { ctx.beginPath(); ctx.moveTo(x, 174); ctx.lineTo(x, 216); ctx.stroke(); }
+  ctx.fillStyle = '#26303d'; rr(1640, 170, 100, 50, 4); ctx.fill();
+  ctx.strokeStyle = '#3d4b5e'; ctx.lineWidth = 2; for (let x = 1648; x < 1740; x += 12) { ctx.beginPath(); ctx.moveTo(x, 174); ctx.lineTo(x, 216); ctx.stroke(); }
   // panchina
   ctx.fillStyle = '#6a4a2c'; rr(840, 730, 130, 28, 4); ctx.fill();
   ctx.strokeStyle = '#4b331d'; for (let y = 736; y < 756; y += 7) { ctx.beginPath(); ctx.moveTo(844, y); ctx.lineTo(966, y); ctx.stroke(); }
@@ -1314,8 +1800,83 @@ function drawDolly () {
   ctx.fillStyle = '#141519'; ctx.font = '700 12px "Barlow Condensed", sans-serif'; ctx.textAlign = 'center'; ctx.fillText('DOLLY', 0, 4);
   ctx.restore();
 }
+// il telo grigio sopra il baule in fondo al furgone (vola via alla sorpresa)
+function drawTarp (ce, k) {
+  const b = ce.body, w = ce.def.w + 14, h = ce.def.h + 12;
+  ctx.save(); ctx.translate(b.position.x + k * 60, b.position.y - k * 30); ctx.rotate(k * 0.6); ctx.globalAlpha = 1 - k;
+  ctx.fillStyle = 'rgba(0,0,0,.35)'; rr(-w / 2 + 3, -h / 2 + 4, w, h, 8); ctx.fill();
+  ctx.fillStyle = '#4b5059'; rr(-w / 2, -h / 2, w, h, 8); ctx.fill();
+  ctx.strokeStyle = 'rgba(0,0,0,.28)'; ctx.lineWidth = 2;
+  [[-0.3, -0.5, 0.1, 0.5], [0.1, -0.5, 0.35, 0.45], [-0.45, 0, 0.45, 0.1]].forEach(([x1, y1, x2, y2]) => {
+    ctx.beginPath(); ctx.moveTo(x1 * w, y1 * h); ctx.quadraticCurveTo(0, 0, x2 * w, y2 * h); ctx.stroke(); });
+  ctx.fillStyle = 'rgba(255,255,255,.08)'; rr(-w / 2 + 4, -h / 2 + 3, w - 8, 6, 3); ctx.fill();
+  ctx.restore();
+}
+// il carrello a due ruote da facchino, visto dall'alto: pala davanti, due
+// ruote grandi ai lati, telaio e maniglie dietro. I posti pieni in verde.
+function drawDolly (w, h, used, glow) {
+  ctx.fillStyle = 'rgba(0,0,0,.35)'; rr(-w / 2 + 4, -h / 2 + 5, w, h, 5); ctx.fill();
+  ctx.fillStyle = '#0c0d10';
+  [-1, 1].forEach(sy => { rr(-w / 2 + 4, sy * (h / 2 - 2) - 7, 22, 14, 6); ctx.fill(); });       // ruote
+  ctx.fillStyle = '#5c636c'; ctx.fillRect(-w / 2 + 12, -h / 2 + 7, 6, h - 14);                       // asse
+  ctx.strokeStyle = '#c2353a'; ctx.lineWidth = 5; ctx.lineCap = 'round';
+  [-1, 1].forEach(sy => { ctx.beginPath(); ctx.moveTo(-w / 2 - 6, sy * (h / 2 - 10)); ctx.lineTo(w / 2 - 12, sy * (h / 2 - 10)); ctx.stroke(); });   // telaio
+  ctx.lineWidth = 3;
+  [-0.15, 0.2].forEach(k => { ctx.beginPath(); ctx.moveTo(k * w, -h / 2 + 10); ctx.lineTo(k * w, h / 2 - 10); ctx.stroke(); });
+  ctx.strokeStyle = '#2b2d33'; ctx.lineWidth = 4;                                                      // maniglie
+  [-1, 1].forEach(sy => { ctx.beginPath(); ctx.moveTo(-w / 2 - 6, sy * (h / 2 - 10)); ctx.lineTo(-w / 2 - 12, sy * (h / 2 - 6)); ctx.stroke(); });
+  ctx.fillStyle = '#9aa1ab'; rr(w / 2 - 14, -h / 2 + 2, 14, h - 4, 2); ctx.fill();                     // pala
+  ctx.fillStyle = 'rgba(0,0,0,.2)'; for (let y = -h / 2 + 6; y < h / 2 - 4; y += 6) ctx.fillRect(w / 2 - 12, y, 10, 2);
+  if (used == null) return;
+  for (let i = 0; i < TROLLEY_MAX; i++) {
+    const full = i < used;
+    ctx.fillStyle = full ? '#2f8f4e' : 'rgba(0,0,0,.35)'; ctx.strokeStyle = full ? '#49e07a' : 'rgba(207,219,232,.6)'; ctx.lineWidth = 1.5;
+    ctx.setLineDash(full ? [] : [3, 2]); rr(-6 + (i - 1) * 13, -5, 10, 10, 2); ctx.fill(); ctx.stroke();
+  }
+  ctx.setLineDash([]);
+  if (glow) {
+    ctx.strokeStyle = 'rgba(73,224,122,' + (0.55 + 0.45 * Math.sin(performance.now() / 160)) + ')'; ctx.lineWidth = 4;
+    rr(-w / 2 - 14, -h / 2 - 6, w + 20, h + 12, 7); ctx.stroke();
+  }
+}
+function drawTrolley () {
+  const t = G.trolley;
+  if (!t) {   // ancora nel furgone, in piedi accanto al portellone
+    if (G.van.ramp) return;
+    ctx.save(); ctx.translate(376, 594); ctx.rotate(-Math.PI / 2); ctx.scale(0.5, 0.5); drawDolly(64, 46, null); ctx.restore();
+    return;
+  }
+  const b = t.body, w = t.def.w, h = t.def.h;
+  const P = G.player, held = P.grab && P.grab.kind === 'case' && cartFits(t, P.grab) && !zoneAt(P.body.position) && len(sub(P.body.position, b.position)) < 160;
+  ctx.save(); ctx.translate(b.position.x, b.position.y); ctx.rotate(b.angle);
+  drawDolly(w, h, cartUsed(t), held);
+  ctx.restore();
+  if (held) {
+    ctx.fillStyle = '#49e07a'; ctx.font = '700 14px "Barlow Condensed", sans-serif'; ctx.textAlign = 'center';
+    ctx.fillText(nearTrolley(P, 26) ? KA('CARICA') : 'AVVICINATI: CARICA QUI', b.position.x, b.position.y - 38); ctx.textAlign = 'start';
+  }
+}
+// cinghie tirate attraverso il furgone e freni sulle ruote (P rossa)
+function drawLocks () {
+  VAN_STRAPS.forEach((st, i) => {
+    if (!G.straps[i]) return;
+    ctx.fillStyle = '#f2a541'; ctx.fillRect(st.x - 4, 392, 8, 216);
+    ctx.fillStyle = 'rgba(0,0,0,.25)'; for (let y = 396; y < 606; y += 10) ctx.fillRect(st.x - 4, y, 8, 2);
+    ctx.fillStyle = '#c9ccd1'; rr(st.x - 7, 488, 14, 24, 3); ctx.fill();          // cricchetto
+    ctx.fillStyle = '#55585f'; ctx.fillRect(st.x - 4, 494, 8, 3); ctx.fillRect(st.x - 4, 502, 8, 3);
+  });
+  for (const ce of G.cases) {
+    if (!ce.brake || ce.hidden || ce.onTrolley) continue;
+    const b = ce.body, c = add(b.position, rot({ x: ce.def.w / 2 - 6, y: ce.def.h / 2 - 6 }, b.angle));
+    ctx.fillStyle = '#e0503f'; ctx.beginPath(); ctx.arc(c.x, c.y, 8, 0, Math.PI * 2); ctx.fill();
+    ctx.strokeStyle = '#ffd2cb'; ctx.lineWidth = 1.5; ctx.stroke();
+    ctx.fillStyle = '#fff'; ctx.font = '700 10px Inter, sans-serif'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle'; ctx.fillText('P', c.x, c.y + 0.5);
+    ctx.textAlign = 'start'; ctx.textBaseline = 'alphabetic';
+  }
+}
 function drawCase (ce) {
   const b = ce.body, d = ce.def, w = d.w, h = d.h;
+  if (ce.hidden) { drawTarp(ce, 0); return; }
   const lifted = !!ce.carrier || G.t < ce.liftUntil;
   ctx.save(); ctx.translate(b.position.x, b.position.y);
   ctx.save(); ctx.rotate(b.angle);
@@ -1325,7 +1886,7 @@ function drawCase (ce) {
   ctx.rotate(b.angle);
   if (ce.onDolly) { ctx.fillStyle = '#a07b4f'; rr(-w / 2 - 3, -h / 2 - 3, w + 6, h + 6, 4); ctx.fill(); }
   // ruote che sporgono dagli angoli: le piroettanti girano col moto
-  if (!lifted && !ce.tipped && (ce.wheel === 'swivel' || ce.wheel === 'fixed')) {
+  if (!lifted && (ce.wheel === 'swivel' || ce.wheel === 'fixed')) {
     const lv = rot(b.velocity, -b.angle), sw = len(lv) > 0.3 ? Math.atan2(lv.y, lv.x) : 0;
     ctx.fillStyle = '#0c0d10';
     [[-1, -1], [1, -1], [-1, 1], [1, 1]].forEach(([sx, sy]) => {
@@ -1335,9 +1896,9 @@ function drawCase (ce) {
     });
   }
   // guscio
-  ctx.fillStyle = ce.tipped ? '#0e0f12' : '#1b1c20'; rr(-w / 2, -h / 2, w, h, 4); ctx.fill();
-  ctx.fillStyle = ce.tipped ? '#1c1d21' : '#2b2d33'; rr(-w / 2 + 3, -h / 2 + 3, w - 6, h - 6, 3); ctx.fill();
-  if (d.tall && !ce.tipped) { ctx.strokeStyle = '#3d4048'; ctx.lineWidth = 2; ctx.strokeRect(-w / 2 + 8, -h / 2 + 8, w - 16, h - 16); }
+  ctx.fillStyle = '#1b1c20'; rr(-w / 2, -h / 2, w, h, 4); ctx.fill();
+  ctx.fillStyle = '#2b2d33'; rr(-w / 2 + 3, -h / 2 + 3, w - 6, h - 6, 3); ctx.fill();
+  if (d.tall) { ctx.strokeStyle = '#3d4048'; ctx.lineWidth = 2; ctx.strokeRect(-w / 2 + 8, -h / 2 + 8, w - 16, h - 16); }
   // riflesso sul bordo in alto a sinistra e maniglie incassate sui lati corti
   ctx.strokeStyle = 'rgba(255,255,255,.12)'; ctx.lineWidth = 1.5;
   ctx.beginPath(); ctx.moveTo(-w / 2 + 4, h / 2 - 5); ctx.lineTo(-w / 2 + 4, -h / 2 + 4); ctx.lineTo(w / 2 - 5, -h / 2 + 4); ctx.stroke();
@@ -1365,12 +1926,21 @@ function drawCase (ce) {
     const r = seeded(ce.seed); ctx.strokeStyle = 'rgba(210,214,222,.45)'; ctx.lineWidth = 1.2;
     for (let i = 0; i < n; i++) { const x = (r() - 0.5) * (w - 8), y = (r() - 0.5) * (h - 8), l = 6 + r() * 12, a = r() * Math.PI; ctx.beginPath(); ctx.moveTo(x, y); ctx.lineTo(x + Math.cos(a) * l, y + Math.sin(a) * l); ctx.stroke(); }
   }
-  if (!ce.tipped && ce.carrier !== G.macio && (ce.carrier ? speedOf(ce.carrier.body) + 0.3 : speedOf(b)) > FRAG[d.frag].thr * 0.92 && speedOf(b) > 0.8) {
-    ctx.strokeStyle = 'rgba(224,80,63,' + (0.65 + 0.35 * Math.sin(performance.now() / 70)) + ')'; ctx.lineWidth = 4;
+
+  // FRAGILE: nastro rosso e bianco sul bordo in basso
+  if (FRAGILE(d)) {
+    ctx.fillStyle = '#e0503f'; rr(-w / 2 + 4, h / 2 - 11, w - 8, 8, 2); ctx.fill();
+    ctx.fillStyle = '#f4f1ea'; ctx.font = '700 7.5px Inter, system-ui, sans-serif'; ctx.textAlign = 'center';
+    ctx.fillText(w >= 50 ? '⚠ FRAGILE' : 'FRAGILE', 0, h / 2 - 4.5, w - 10);
+  }
+  // davanti al case che volevi: lampeggiano quelli da spostare prima
+  const bf = G.blockFlash;
+  if (bf && bf.until > G.t && bf.ids.includes(ce)) {
+    ctx.strokeStyle = 'rgba(242,165,65,' + (0.55 + 0.45 * Math.sin(performance.now() / 90)) + ')'; ctx.lineWidth = 4;
     rr(-w / 2 - 4, -h / 2 - 4, w + 8, h + 8, 6); ctx.stroke();
   }
+  if (bf && bf.until > G.t && bf.ce === ce) { ctx.strokeStyle = 'rgba(224,80,63,.8)'; ctx.lineWidth = 3; ctx.setLineDash([5, 4]); rr(-w / 2 - 3, -h / 2 - 3, w + 6, h + 6, 5); ctx.stroke(); ctx.setLineDash([]); }
   if (ce.flash > 0) { ctx.fillStyle = 'rgba(224,80,63,' + (ce.flash * 0.9) + ')'; rr(-w / 2, -h / 2, w, h, 4); ctx.fill(); }
-  if (ce.tipped) { ctx.strokeStyle = '#e0503f'; ctx.lineWidth = 3; ctx.setLineDash([6, 5]); rr(-w / 2 - 3, -h / 2 - 3, w + 6, h + 6, 5); ctx.stroke(); ctx.setLineDash([]); }
   ctx.restore();
 }
 function drawWorker (w) {
@@ -1465,6 +2035,12 @@ function drawFx () {
       const x = f.x + f.vx * k * 30, y = f.y + f.vy * k * 30;
       ctx.fillStyle = f.color + (0.55 * (1 - k)).toFixed(3) + ')';
       ctx.beginPath(); ctx.arc(x, y, f.r * (0.6 + k), 0, Math.PI * 2); ctx.fill();
+    } else if (f.kind === 'text') {
+      ctx.save(); ctx.globalAlpha = k < 0.7 ? 1 : (1 - k) / 0.3;
+      ctx.font = '700 17px "Barlow Condensed", sans-serif'; ctx.textAlign = 'center';
+      ctx.lineWidth = 4; ctx.strokeStyle = 'rgba(12,13,16,.85)'; ctx.strokeText(f.text, f.x, f.y - k * 34);
+      ctx.fillStyle = f.color; ctx.fillText(f.text, f.x, f.y - k * 34);
+      ctx.restore();
     } else {
       ctx.strokeStyle = f.color; ctx.globalAlpha = 1 - k; ctx.lineWidth = 4 * (1 - k) + 1;
       ctx.beginPath(); ctx.arc(f.x, f.y, 20 + k * 50, 0, Math.PI * 2); ctx.stroke(); ctx.globalAlpha = 1;
@@ -1477,50 +2053,46 @@ function entPos (e) { return e.body ? e.body.position : e; }
 
 function drawScreenUI () {
   ctx.setTransform(DPR, 0, 0, DPR, 0, 0);
-  // case a portata di mano: etichetta con peso e zona
-  if (G.mode === 'play' && !G.player.grab) {
-    const ce = nearestCase(G.player, 14);
-    if (ce) {
-      const s = worldToScreen(ce.body.position);
-      const hint = ce.stuck ? 'tieni premuto PRENDI: libera il cavo' : ce.tipped ? 'ribaltato: OH-ISSA' : ce.carrier ? 'lo porta Macio' :
-        carriable(ce) ? 'in mano' : ce.def.heavy2 ? 'si spinge in due' : 'si spinge · ' + WHEEL[ce.wheel].label;
-      label(s.x, s.y - ce.def.h * G.cam.scale / 2 - 16, ce.def.name + ' · ' + ce.def.kg + ' kg', hint, ZONES[ce.def.zone].color);
+  // case a portata di mano: la sua scheda (nome, peso, cosa serve)
+  const P = G.player;
+  if (G.mode === 'play' && !P.grab) {
+    const ce = nearestCase(P, 14), t = G.trolley;
+    if (t && nearTrolley(P, 14) && (!ce || surface(t, P.body.position).dist <= surface(ce, P.body.position).dist)) {
+      const s = worldToScreen(t.body.position), inZone = zoneAt(P.body.position) || zoneAt(t.body.position);
+      label(s.x, s.y - 40 * G.cam.scale, 'CARRELLO · ' + cartUsed(t) + '/' + TROLLEY_MAX,
+        t.load.length && inZone ? 'scarica qui: ' + K('grab') : 'si spinge · ' + K('grab'), '#8fa3b8', []);
+    } else if (ce) {
+      const s = worldToScreen(ce.body.position), bl = blockers(ce).length;
+      const tags = [];
+      if (bl) tags.push(['ACCESSO BLOCCATO', '#e0503f']);
+      if (ce.def.heavy2) tags.push(['⚠ 2 PERSONE', '#f2a541']);
+      if (FRAGILE(ce.def)) tags.push(['⚠ FRAGILE', '#e0503f']);
+      if (strapOn(ce)) tags.unshift(['CINGHIA', '#f2a541']); else if (ce.brake) tags.unshift(['FRENO TIRATO', '#e0503f']);
+      const hint = ce.carrier ? 'lo porta Macio' : strapOn(ce) ? 'legato: sgancia la cinghia con ' + KA('CINGHIA') : ce.brake ? 'ruote frenate: togli il freno con ' + KA('FRENO')
+        : weightClass(ce.def) + ' → ' + ZONES[ce.def.zone].name.toUpperCase();
+      label(s.x, s.y - ce.def.h * G.cam.scale / 2 - 16, ce.def.name.toUpperCase() + ' — ' + ce.def.what, hint, ZONES[ce.def.zone].color, tags);
     }
   }
-  // freccia verso la zona del case che hai in mano
-  if (G.player.grab) {
-    const z = ZONES[G.player.grab.def.zone];
-    const c = worldToScreen({ x: z.x + z.w / 2, y: z.y + z.h / 2 });
-    const m = 40;
-    if (c.x < m || c.x > W - m || c.y < 70 || c.y > H - m) {
-      const cx = W / 2, cy = H / 2, dx = c.x - cx, dy = c.y - cy;
-      const k = Math.min((W / 2 - m) / Math.abs(dx || 1), (H / 2 - m - 30) / Math.abs(dy || 1));
-      const ax = cx + dx * k, ay = cy + dy * k + 10, a = Math.atan2(dy, dx);
-      ctx.save(); ctx.translate(ax, ay); ctx.rotate(a);
-      ctx.fillStyle = z.color; ctx.beginPath(); ctx.moveTo(16, 0); ctx.lineTo(-10, -12); ctx.lineTo(-5, 0); ctx.lineTo(-10, 12); ctx.fill();
-      ctx.restore();
-      ctx.fillStyle = z.color; ctx.font = '700 13px "Barlow Condensed", sans-serif'; ctx.textAlign = 'center';
-      ctx.fillText(z.name.toUpperCase(), ax - Math.cos(a) * 28, ay - Math.sin(a) * 28 + 4); ctx.textAlign = 'left';
-    }
+  // da solo contro un case da due: la scheda resta lì e chiede il collega
+  if (P.grab && P.grab.kind === 'case' && P.grab.def.heavy2 && P.grab.grabbers.length < 2) {
+    const ce = P.grab, s = worldToScreen(ce.body.position);
+    label(s.x, s.y - ce.def.h * G.cam.scale / 2 - 16, ce.def.name.toUpperCase(),
+      G.macio.ai.state === 'help' ? 'Macio sta arrivando…' : 'da solo non si muove: ' + K('help'), '#f2a541', [['⚠ 2 PERSONE', '#f2a541']]);
   }
-  // progresso: cavo da liberare
-  if (G.freeing) {
-    const s = worldToScreen(G.freeing.ce.body.position);
-    ctx.strokeStyle = '#f2a541'; ctx.lineWidth = 5; ctx.beginPath(); ctx.arc(s.x, s.y, 26, -Math.PI / 2, -Math.PI / 2 + Math.PI * 2 * G.freeing.t / 1.3); ctx.stroke();
+  // freccia verso la zona di quello che hai in mano (sul carrello: la zona del primo case)
+  const held = P.grab && (P.grab.kind === 'trolley' ? P.grab.load[0] : P.grab);
+  if (held && held.def.zone) {
+    const z = ZONES[held.def.zone];
+    edgeArrow({ x: z.x + z.w / 2, y: z.y + z.h / 2 }, z.color, z.name.toUpperCase());
+  } else if (G.surprise && G.surprise.revealed) {
+    const ce = G.cases.find(c => c.def.surprise);
+    if (ce && ce.zone !== ce.def.zone && !ce.grabbers.length) edgeArrow(ce.body.position, '#eaff2b', 'BAULE SEGNALE');
   }
-  // barra di stato sopra ogni case (e i PAR rimasti)
+  // i PAR rimasti nel loro case: quattro lucine (il danno si vede sul case)
   for (const ce of G.cases) {
-    const bb = ce.body.bounds;
-    const s = worldToScreen({ x: ce.body.position.x, y: bb.min.y });
-    if (s.x < -40 || s.x > W + 40 || s.y < 50 || s.y > H + 40) continue;
-    const st = stateOf(ce.integrity), col = STATE_COLOR[st];
-    const bw = 38, bh = 6, x = Math.round(s.x - bw / 2), y = Math.round(s.y - 11 - (ce.carrier ? 5 : 0));
-    ctx.fillStyle = 'rgba(12,13,16,.85)'; rr(x - 2, y - 2, bw + 4, bh + 4, 3); ctx.fill();
-    ctx.fillStyle = col; ctx.fillRect(x, y, bw * ce.integrity / 100, bh);
-    ctx.fillStyle = 'rgba(12,13,16,.9)'; [70, 40, 15].forEach(v => ctx.fillRect(x + bw * v / 100, y, 1, bh));
-    if (ce.def.id === 'par') for (let i = 0; i < 4; i++) {
-      ctx.fillStyle = i < ce.pars ? '#eaff2b' : '#5a2a24'; ctx.fillRect(x + bw + 5 + i * 7, y - 1, 5, bh + 2);
-    }
+    if (ce.def.id !== 'par' || ce.hidden || ce.onTrolley || ce.pars === 4) continue;
+    const s = worldToScreen({ x: ce.body.position.x, y: ce.body.bounds.min.y });
+    for (let i = 0; i < 4; i++) { ctx.fillStyle = i < ce.pars ? '#eaff2b' : '#5a2a24'; ctx.fillRect(Math.round(s.x - 14 + i * 7), Math.round(s.y - 12), 5, 6); }
   }
   // nuvolette
   ctx.font = '600 13px Inter, system-ui, sans-serif';
@@ -1535,25 +2107,55 @@ function drawScreenUI () {
     ctx.fillStyle = '#141519'; ctx.fillText(b.text, x + 9, y + 17, 220);
   }
 }
-function label (x, y, title, sub, color) {
+// freccia sul bordo dello schermo verso un punto fuori vista
+function edgeArrow (p, color, text) {
+  const c = worldToScreen(p), m = 40;
+  if (c.x >= m && c.x <= W - m && c.y >= 70 && c.y <= H - m) return;
+  const cx = W / 2, cy = H / 2, dx = c.x - cx, dy = c.y - cy;
+  const k = Math.min((W / 2 - m) / Math.abs(dx || 1), (H / 2 - m - 30) / Math.abs(dy || 1));
+  const ax = cx + dx * k, ay = cy + dy * k + 10, a = Math.atan2(dy, dx);
+  ctx.save(); ctx.translate(ax, ay); ctx.rotate(a);
+  ctx.fillStyle = color; ctx.beginPath(); ctx.moveTo(16, 0); ctx.lineTo(-10, -12); ctx.lineTo(-5, 0); ctx.lineTo(-10, 12); ctx.fill();
+  ctx.restore();
+  ctx.fillStyle = color; ctx.font = '700 13px "Barlow Condensed", sans-serif'; ctx.textAlign = 'center';
+  ctx.fillText(text, ax - Math.cos(a) * 28, ay - Math.sin(a) * 28 + 4); ctx.textAlign = 'left';
+}
+// la scheda del case: titolo, peso e classe, e i bollini (2 PERSONE, FRAGILE, BLOCCATO)
+function label (x, y, title, sub, color, tags) {
+  tags = tags || [];
+  const maxW = Math.min(300, W - 16);
   ctx.font = '700 14px "Barlow Condensed", sans-serif';
-  const w1 = ctx.measureText(title).width; ctx.font = '500 11px Inter, system-ui, sans-serif';
-  const w2 = ctx.measureText(sub).width, bw = Math.max(w1, w2) + 22, bh = 36;
+  const w1 = Math.min(ctx.measureText(title).width, maxW - 22); ctx.font = '500 11px Inter, system-ui, sans-serif';
+  const w2 = Math.min(ctx.measureText(sub).width, maxW - 22);
+  ctx.font = '700 11px "Barlow Condensed", sans-serif';
+  const tw = tags.map(t => ctx.measureText(t[0]).width + 10);
+  const w3 = tw.reduce((a, b) => a + b + 4, 0);
+  const bw = Math.max(w1, w2, w3) + 22, bh = tags.length ? 54 : 36;
   const bx = clamp(x - bw / 2, 8, W - bw - 8), by = Math.max(64, y - bh);
-  ctx.fillStyle = 'rgba(28,29,34,.94)'; ctx.strokeStyle = '#34363e'; ctx.lineWidth = 1; rr(bx, by, bw, bh, 8); ctx.fill(); ctx.stroke();
+  ctx.fillStyle = 'rgba(28,29,34,.94)'; ctx.strokeStyle = tags.length ? tags[0][1] : '#34363e'; ctx.lineWidth = 1; rr(bx, by, bw, bh, 8); ctx.fill(); ctx.stroke();
   ctx.fillStyle = color; ctx.fillRect(bx + 7, by + 7, 4, bh - 14);
-  ctx.fillStyle = '#eee9df'; ctx.font = '700 14px "Barlow Condensed", sans-serif'; ctx.fillText(title, bx + 16, by + 16);
-  ctx.fillStyle = '#8b8e98'; ctx.font = '500 11px Inter, system-ui, sans-serif'; ctx.fillText(sub, bx + 16, by + 29);
+  ctx.fillStyle = '#eee9df'; ctx.font = '700 14px "Barlow Condensed", sans-serif'; ctx.fillText(title, bx + 16, by + 16, bw - 22);
+  ctx.fillStyle = '#a6a9b2'; ctx.font = '500 11px Inter, system-ui, sans-serif'; ctx.fillText(sub, bx + 16, by + 29, bw - 22);
+  let tx = bx + 16;
+  ctx.font = '700 11px "Barlow Condensed", sans-serif';
+  tags.forEach(([t, c], i) => {
+    const pulse = t === 'ACCESSO BLOCCATO' || t === '⚠ 2 PERSONE' ? 0.75 + 0.25 * Math.sin(performance.now() / 160) : 1;
+    ctx.globalAlpha = pulse; ctx.fillStyle = c; rr(tx, by + 35, tw[i], 14, 3); ctx.fill(); ctx.globalAlpha = 1;
+    ctx.fillStyle = '#141519'; ctx.fillText(t, tx + 5, by + 46); tx += tw[i] + 4;
+  });
 }
 
 function render () {
   // camera: segue il giocatore; su telefono si vede meno mondo ma più grande
-  const scale = clamp(Math.min(W / 680, (H - 60) / 520), 0.5, 1.4);
-  // su telefono il personaggio sta più in alto, sopra i pulsanti
-  const pp = G.mode === 'intro' ? { x: 470, y: 500 } : G.player.body.position;
-  const target = { x: pp.x, y: pp.y + (touchUI ? 70 / scale : 0) };
-  G.cam.scale = scale;
-  G.cam.x += (target.x - G.cam.x) * 0.12; G.cam.y += (target.y - G.cam.y) * 0.12;
+  const wv = G.mode === 'wrap' || (G.mode === 'end' && G.wrap) ? wrapView() : null;
+  const want = wv ? clamp(Math.min(W / wv.fit, (H - 60) / wv.fit), 0.35, 1.4) : clamp(Math.min(W / 680, (H - 60) / 520), 0.5, 1.4);
+  // la scena finisce sopra la barra d'aiuto (e sopra i pulsanti, sul telefono)
+  const pp = wv || (G.mode === 'intro' ? { x: 470, y: 500 } : G.player.body.position);
+  const target = { x: pp.x, y: pp.y };
+  const k = wv ? 0.05 : 0.12;
+  G.cam.scale += (want - G.cam.scale) * (wv ? 0.05 : 1);
+  const scale = G.cam.scale;
+  G.cam.x += (target.x - G.cam.x) * k; G.cam.y += (target.y - G.cam.y) * k;
   const hw = W / 2 / scale, hh = H / 2 / scale;
   G.cam.x = WORLD.x2 - WORLD.x1 > hw * 2 ? clamp(G.cam.x, WORLD.x1 + hw, WORLD.x2 - hw) : (WORLD.x1 + WORLD.x2) / 2;
   G.cam.y = WORLD.y2 - WORLD.y1 > hh * 2 ? clamp(G.cam.y, WORLD.y1 + hh - 50 / scale, WORLD.y2 - hh + 60 / scale) : (WORLD.y1 + WORLD.y2) / 2;
@@ -1562,8 +2164,12 @@ function render () {
   ctx.fillStyle = '#141519'; ctx.fillRect(0, 0, cv.width, cv.height);
   ctx.setTransform(DPR * scale, 0, 0, DPR * scale, DPR * (W / 2 - G.cam.x * scale), DPR * (H / 2 - G.cam.y * scale));
   drawGround(); drawZones(); drawStatics(); drawDolly();
-  const ground = G.cases.filter(c => !c.carrier && !(G.t < c.liftUntil)).sort((a, b) => a.body.position.y - b.body.position.y);
+  const ground = G.cases.filter(c => !c.carrier && !c.onTrolley && !(G.t < c.liftUntil)).sort((a, b) => a.body.position.y - b.body.position.y);
   ground.forEach(drawCase);
+  drawLocks();
+  drawTrolley();
+  if (G.trolley) G.trolley.load.forEach(drawCase);
+  if (G.tarp && G.t - G.tarp < 1.2) drawTarp(G.cases.find(c => c.def.surprise), (G.t - G.tarp) / 1.2);
   G.kids.forEach(drawKid);
   drawCart();
   G.workers.forEach(drawWorker);
@@ -1586,17 +2192,73 @@ function updateHud () {
   $('#clock').textContent = fmtClock(G.t);
   $('#tfill').style.width = (G.t / GAME_SECONDS * 100).toFixed(1) + '%';
   $('#tbar').classList.toggle('late', G.t > GAME_SECONDS * 0.8);
-  const ok = G.cases.filter(c => c.zone === c.def.zone).length;
-  $('#h-del').textContent = ok + '/' + G.cases.length;
-  $('#h-dmg').textContent = G.cases.filter(c => stateOf(c.integrity) !== 'integro').length + (G.cases.find(c => c.def.id === 'par').pars < 4 ? '+' : '');
+  $('.clock').classList.toggle('late', G.t > GAME_SECONDS * 0.8);
+  // il baule sotto il telo non si conta finché non salta fuori
+  const shown = G.cases.filter(c => !c.def.surprise || (G.surprise && G.surprise.revealed));
+  const ok = shown.filter(c => c.zone === c.def.zone).length;
+  $('#h-del').textContent = G.surprise && !G.surprise.revealed ? '100%' : ok + '/' + shown.length;
+  const nd = G.cases.filter(c => stateOf(c.integrity) !== 'integro').length, parLost = G.cases.find(c => c.def.id === 'par').pars < 4;
+  $('#h-dmg').textContent = nd + (parLost ? '+' : '');
+  if ((nd || parLost) && $('#h-dmg-w').hidden) { $('#h-dmg-w').hidden = false; $('#h-dmg-w').classList.add('reveal'); }
+  if (G.unlock.eff) {
+    const e = efficiency(false);
+    $('#h-eff').textContent = workWord(e.score);
+    $('#h-eff-fill').style.width = e.score + '%';
+    $('#h-eff-fill').style.background = e.score >= 75 ? 'var(--green)' : e.score >= 50 ? 'var(--yellow)' : 'var(--red)';
+  }
+  if (G.trolley) {
+    const n = cartUsed(G.trolley);
+    $('#h-cart-n').textContent = n + '/' + TROLLEY_MAX;
+    $('#h-cart').classList.toggle('done', n >= TROLLEY_MAX);
+  }
+  // comandi contestuali: ci sono solo quando servono adesso
+  const P = G.player, play = G.mode === 'play', near = !P.grab && play && nearestCase(P, 14);
+  const need = (P.grab && P.grab.kind === 'case' && P.grab.def.heavy2 && P.grab.grabbers.length < 2 && G.macio.ai.state !== 'help') ||
+    (near && near.def.heavy2 && !blockers(near).length && !near.grabbers.length);
+  const kid = G.kids.some(k => k.block > G.t && len(sub(k.body.position, P.body.position)) < 110);
+  if (need) unlock('help');
+  showCmd('help', play && G.macio.ai.state !== 'phone' && !!(need || kid));
+  showCmd('lift', play && !!(G.qte || liftReady()));
+  const pushed = P.grab && P.grab.kind === 'case' && P.mode === 'push' ? P.grab.body : null;
+  const onRamp = pushed && pushed.position.x > RAMP.x - 30 && pushed.position.x < RAMP.x + RAMP.w + 40 && pushed.position.y > RAMP.y - 20 && pushed.position.y < RAMP.y + RAMP.h + 20;
+  showCmd('stop', play && !!pushed && (onRamp || speedOf(pushed) > 1.3));
+  $('#b-help').classList.toggle('call', !!need);
   const cf = G.coffee.until - G.t;
   $('#h-coffee').hidden = !(cf > 0);
   if (cf > 0) $('#h-coffee').textContent = 'CAFFÈ ' + Math.ceil(Math.min(cf, 45));
-  const allIn = G.cases.every(c => c.body.position.x > GYM_X + 10 && !c.carrier && !c.grabbers.length);
+  const allIn = G.cases.every(c => c.body.position.x > GYM_X + 10 && !c.carrier && !c.grabbers.length && !c.onTrolley);
   $('#btn-close').hidden = !(allIn && G.mode === 'play');
-  $('#b-grab').textContent = G.player.grab ? 'LASCIA' : 'PRENDI';
-  $('#b-grab').classList.toggle('on', !!G.player.grab);
+  const t = G.trolley;
+  const va = !P.grab && play ? vanAction(P) : null;
+  let gl = P.grab ? 'LASCIA' : va ? { doors: 'APRI', ramp: 'RAMPA', strap: 'CINGHIA', brake: 'FRENO' }[va] : 'PRENDI';
+  if (t && P.grab && nearTrolley(P, 26) && cartFits(t, P.grab) && !zoneAt(P.body.position)) gl = 'CARICA';
+  else if (t && !P.grab && t.load.length && nearTrolley(P, 14) && (zoneAt(P.body.position) || zoneAt(t.body.position))) gl = 'SCARICA';
+  $('#b-grab').textContent = gl;
+  $('#b-grab').classList.toggle('on', !!P.grab);
 }
+
+/* EFFICIENZA: non solo finire, ma lavorare bene. Cinque voci, senza formule
+   a vista: tempo, viaggi (e carrello), materiale, squadra, ordine. */
+function efficiency (final, reason) {
+  const S = G.stats, t = G.t;
+  const n = G.cases.filter(c => c.zone === c.def.zone).length;
+  // tempo: alla fine conta l'ora; durante, il passo (un case ogni ~25 s)
+  const tempo = final ? (reason === 'tempo' ? 30 : t <= 230 ? 100 : clamp(100 - (t - 230) / 130 * 55, 40, 100))
+    : clamp(100 - Math.max(0, t - 30 - n * 26) * 0.8, 40, 100);
+  // col carrello lì e mai usato, i viaggi non possono andare bene
+  const viaggi = Math.min(final && G.trolley && !S.cartTrips ? 60 : 100, clamp(100 - 15 * S.wasted, 0, 100));
+  const materiale = clamp(100 - 10 * S.hits - 8 * S.rough, 0, 100);
+  const squadra = Math.min(final && !G.team ? 50 : 100, clamp(100 - 30 * S.solo, 0, 100));
+  const ordine = clamp(100 - 15 * Math.max(0, S.blocked - 1) - 15 * S.wrongDrop, 0, 100);
+  const score = Math.round(0.25 * tempo + 0.2 * viaggi + 0.25 * materiale + 0.15 * squadra + 0.15 * ordine);
+  return { score, tempo, viaggi, materiale, squadra, ordine };
+}
+
+// il giudizio sul lavoro, a parole: i numeri restano dentro il gioco
+function workWord (score) { return score >= 85 ? 'Ottimo' : score >= 65 ? 'Buono' : 'Sufficiente'; }
+// cinque stelle solo se hai usato bene anche il carrello
+function stars (score, cartOk) { const n = Math.min(cartOk ? 5 : 4, score >= 90 ? 5 : score >= 75 ? 4 : score >= 60 ? 3 : score >= 40 ? 2 : 1); return '★'.repeat(n) + '☆'.repeat(5 - n); }
+function workVerdict (score) { return score >= 85 ? 'Lavoro da professionista.' : score >= 65 ? 'Buon ritmo.' : 'Si può fare meglio.'; }
 
 // ora a m minuti dalle 16:00
 function clockAt (m) { return (16 + Math.floor(m / 60)) + ':' + String(m % 60).padStart(2, '0'); }
@@ -1609,9 +2271,12 @@ function endGame (reason) {
   if (G.mode === 'end') return;
   for (const w of G.workers) release(w);
   const rushed = [];
+  // quello ancora sul carrello lo sistemano di corsa Macio e il bidello
+  if (G.trolley) for (const ce of [...G.trolley.load]) { ce.onTrolley = null; Composite.add(G.world, ce.body); ce.rushed = true; ce.zone = ce.def.zone; rushed.push(ce); }
+  if (G.trolley) G.trolley.load = [];
   if (reason === 'tempo') {
     for (const ce of G.cases) {
-      if (ce.body.position.x < GYM_X) { damage(ce, rand(5, 35) * FRAG[ce.def.frag].mult); ce.rushed = true; ce.zone = ce.def.zone; rushed.push(ce); }
+      if (ce.body.position.x < GYM_X && !ce.rushed) { damage(ce, rand(5, 35) * FRAG[ce.def.frag].mult); ce.rushed = true; ce.zone = ce.def.zone; rushed.push(ce); }
     }
   }
   G.mode = 'end';
@@ -1643,8 +2308,28 @@ function endGame (reason) {
   if (ricOk && staBroken) { staAvail++; spareNote.push('uno stativo dal case ricambi'); }
   const birre = (rotti === 0 ? 1 : 0) + (reason === 'ok' ? 1 : 0);
   const allIntegro = G.cases.every(c => stateOf(c.integrity) === 'integro') && parsBroken === 0;
-  const rep = (allIntegro ? 3 : 0) - 2 * rotti - G.kidHits;
+  // movimentazione brusca sul fragile: −1 a volta, al massimo −2
+  const S = G.stats, roughRep = Math.min(2, S.rough);
+  const rep = (allIntegro ? 3 : 0) - 2 * rotti - G.kidHits - roughRep;
   const late = reason !== 'ok';
+  const E = efficiency(true, reason);
+  const zn = ce => ce.zone ? ZONES[ce.zone].name : 'fuori zona';
+  const cor = G.cases.find(c => c.def.id === 'corrente'), seg = G.cases.find(c => c.def.id === 'segnale');
+  const cavi = 'Generico CORRENTE in ' + zn(cor) + ', Generico SEGNALE in ' + zn(seg) + ': li apri al montaggio.';
+  const L = (ok, txt) => `<li class="${ok ? 'ok' : 'no'}"><b>${ok ? '✓' : '✗'}</b><span>${txt}</span></li>`;
+  // come hai lavorato: tre righe a parole, prima quello che è andato meno bene
+  const voci = [
+    [E.tempo >= 80, E.tempo, reason === 'tempo' ? 'Alle 16:30 c\'era ancora roba fuori.' : E.tempo >= 80 ? 'Finito alle ' + endClock + ', in orario.' : 'Finito alle ' + endClock + ', al limite.'],
+    [!!S.cartTrips || !G.trolley, E.viaggi, S.cartTrips ? 'Hai usato il carrello: ' + S.cartCases + ' case in ' + S.cartTrips + (S.cartTrips === 1 ? ' viaggio.' : ' viaggi.') : G.trolley ? 'Il carrello è rimasto fermo: tutto a mano.' : 'Tutto a mano, un case alla volta.'],
+    [!S.hits, E.materiale, !S.hits ? 'Il materiale è arrivato sano.' : S.rough ? 'Il materiale fragile ha preso dei colpi.' : 'Qualche case ha preso dei colpi.'],
+    [!S.solo && G.team, E.squadra, S.solo ? 'Hai provato da solo i case da due.' : G.team ? 'Macio ha lavorato con te.' : 'Macio non l\'hai mai chiamato.'],
+    [S.blocked <= 1 && !S.wrongDrop, E.ordine, S.blocked <= 1 && !S.wrongDrop ? 'Furgone svuotato dal davanti, ogni case nella sua zona.' : S.wrongDrop ? 'Qualche case è finito nella zona sbagliata.' : 'Hai provato a tirare fuori case ancora bloccati.']
+  ];
+  const lavoro = voci.map((v, i) => [...v, i]).sort((a, b) => a[0] - b[0] || a[1] - b[1] || a[3] - b[3]).slice(0, 3).map(([ok, , txt]) => L(ok, txt)).join('');
+  const verdict = workVerdict(E.score);
+  const nOk = G.cases.filter(c => c.zone === c.def.zone && !c.rushed).length;
+  const nDmg = G.cases.filter(c => stateOf(c.integrity) !== 'integro').length + parsBroken;
+  const cartOk = S.cartTrips > 0 && S.cartCases >= 2 * S.cartTrips - 1;
   $('#end').innerHTML = `
     <div class="bolla">
       <header>
@@ -1657,26 +2342,45 @@ function endGame (reason) {
         <div><span>Birre</span><b>${birre ? '🍺'.repeat(birre) : '0'}</b></div>
         <div><span>Reputazione</span><b>${rep > 0 ? '+' : ''}${rep}</b></div>
       </div>
+      <div class="riep"><h3>${reason === 'tempo' ? 'SCARICO CHIUSO DI CORSA' : 'SCARICO COMPLETATO'}</h3>
+        <div><span>Materiale scaricato</span><b>${nOk}/${G.cases.length}</b></div>
+        <div><span>Materiale danneggiato</span><b>${nDmg}</b></div>
+        <div><span>Viaggi effettuati</span><b>${S.trips}</b></div>
+        <div><span>Uso del carrello</span><b>${cartOk ? 'corretto' : 'non ottimale'}</b></div>
+        <div><span>Organizzazione</span><b>${workWord(E.ordine)}</b></div>
+        <div><span>Efficienza</span><b>${workWord(E.score)}</b></div>
+        <div class="stelle"><span>Valutazione scarico</span><b>${stars(E.score, cartOk)}</b></div>
+      </div>
+      <ul class="lavoro">${lavoro}</ul>
+      <p class="note">${verdict}</p>
       <div class="montaggio"><b>AL MONTAGGIO</b><br>
         PAR: ${Math.min(parAvail, 4)} su 4 · Stativi: ${Math.min(staAvail, 4)} su 4 · Pezzi da sistemare: ${G.cases.filter(c => stateOf(c.integrity) === 'difettoso').length}
         ${spareNote.length ? '<br>Dal case ricambi: ' + spareNote.join(', ') + '.' : ''}
         ${rushed.length ? '<br>Scaricati di corsa da Macio e dal bidello: ' + rushed.map(c => c.def.name).join(', ') + '.' : ''}
+        <br>${cavi}
       </div>
       <div class="tw"><table>
         <thead><tr><th>Case</th><th>Zona</th><th>Stato</th><th>Al montaggio</th></tr></thead>
         <tbody>${rows}</tbody>
       </table></div>
-      <p class="note">🍺 senza rotture: ${rotti === 0 ? 'sì' : 'no'} · 🍺 tutto al suo posto entro le 16:30: ${reason === 'ok' ? 'sì' : 'no'} · Reputazione: +3 se nessun danno, −2 per ogni pezzo rotto${G.kidHits ? ', −1 per ogni bambino urtato (' + G.kidHits + ')' : ''}.</p>
+      <p class="note">🍺 senza rotture: ${rotti === 0 ? 'sì' : 'no'} · 🍺 tutto al suo posto entro le 16:30: ${reason === 'ok' ? 'sì' : 'no'} · Reputazione: +3 se nessun danno, −2 per ogni pezzo rotto${G.kidHits ? ', −1 per ogni bambino urtato (' + G.kidHits + ')' : ''}${roughRep ? ', −' + roughRep + ' per la movimentazione brusca' : ''}.</p>
       ${EMBED ? '<p class="note">Il montaggio parte alle ' + montaggioStart(minutes) + '.</p>' : '<p class="note">Aperto da solo: il risultato non passa al gioco.</p>'}
       <div class="row"><button class="primary" id="btn-again">${EMBED ? 'Al montaggio' : 'Rigioca lo scarico'}</button></div>
     </div>`;
-  $('#end').hidden = false; $('#pad').hidden = true; $('#qte').hidden = true;
+  $('#end').hidden = false; $('#pad').hidden = true;
   G.result = {
     reason, endClock, minutes, beers: birre, clean: allIntegro, kidHits: G.kidHits,
     parsBroken, staBroken, ricOk,
     faulty: G.cases.filter(c => stateOf(c.integrity) === 'difettoso').map(c => c.def.name),
     faultyIds: G.cases.filter(c => stateOf(c.integrity) === 'difettoso').map(c => c.def.id),
-    wrong: G.cases.filter(c => !c.rushed && c.zone !== c.def.zone).map(c => c.def.name)
+    wrong: G.cases.filter(c => !c.rushed && c.zone !== c.def.zone).map(c => c.def.name),
+    eff: E.score, rough: S.rough, trips: S.trips, cartTrips: S.cartTrips,
+    // ogni case com'è arrivato: dove l'hai lasciato e in che stato. Il
+    // montaggio li ritrova con lo stesso nome (vedi scaricoCase in main.js)
+    cases: G.cases.map(ce => ({
+      id: ce.def.id, name: ce.def.name, short: ce.def.short, what: ce.def.what, zone: ce.def.zone,
+      at: ce.rushed ? ce.def.zone : ce.zone, state: stateOf(ce.integrity), dents: Math.min(6, Math.floor((100 - ce.integrity) / 7)), rushed: !!ce.rushed
+    }))
   };
   $('#btn-again').addEventListener('click', () => {
     if (EMBED) { sendResult(G.result); return; }
@@ -1693,6 +2397,7 @@ window.addEventListener('keydown', e => {
   if (e.repeat) return;
   inp.keys.add(e.code);
   if (!G) return;
+  if (G.mode === 'wrap') { skipWrap(); return; }
   if (e.code === 'Space') { inp.grabHeld = true; pressGrab(); }
   if (e.code === 'KeyE') pressHelp();
   if (e.code === 'KeyQ') pressLift();
@@ -1714,6 +2419,7 @@ function bindBtn (id, down, up) {
   const end = e => { if (up) up(); };
   el.addEventListener('pointerup', end); el.addEventListener('pointercancel', end);
 }
+cv.addEventListener('pointerdown', skipWrap);
 bindBtn('#b-grab', () => { inp.grabHeld = true; pressGrab(); }, () => { inp.grabHeld = false; });
 bindBtn('#b-help', pressHelp);
 bindBtn('#b-lift', pressLift);
@@ -1759,9 +2465,16 @@ document.addEventListener('visibilitychange', () => { if (document.hidden && G &
 function startGame () {
   AU.init();
   newGame();
-  $('#start').hidden = true; $('#end').hidden = true; $('#pause').hidden = true; $('#qte').hidden = true;
+  $('#start').hidden = true; $('#end').hidden = true; $('#pause').hidden = true;
   $('#pad').hidden = !touchUI; $('#keys').hidden = touchUI;
+  // i comandi in più compaiono solo quando servono
+  for (const id of ['#b-help', '#b-lift', '#b-stop']) $(id).hidden = true;
+  document.querySelectorAll('#keys [data-k]').forEach(k => { k.hidden = true; });
+  for (const id of ['#h-cart', '#h-eff-w', '#h-dmg-w']) $(id).hidden = true;
+  $('#h-del-w').classList.remove('done');
+  hintGoal = ''; toast('Siamo arrivati. Il furgone è chiuso.');
   paused = false; acc = 0;
+  resize();
   if (!running) { running = true; lastT = performance.now(); requestAnimationFrame(loop); }
 }
 function loop (now) {
@@ -1772,14 +2485,16 @@ function loop (now) {
     while (acc >= STEP && n < 5) { stepSim(); acc -= STEP; n++; }
     if (n === 5) acc = 0;
   }
-  render(); drawQteUI();
+  render();
   hudT += dt; if (hudT > 100) { hudT = 0; updateHud(); }
   requestAnimationFrame(loop);
 }
 
+// i comandi si presentano da soli quando servono: qui solo i due di base
 $('#start-legend').innerHTML = touchUI
-  ? '<span>Joystick a sinistra per muoverti (poco inclinato = passo attento). A destra: PRENDI, AIUTO (Macio), OH-ISSA, FERMO!</span>'
-  : '<span><kbd>WASD</kbd> muovi</span><span><kbd>Spazio</kbd> prendi / lascia</span><span><kbd>E</kbd> aiuto Macio</span><span><kbd>Q</kbd> oh-issa</span><span><kbd>Shift</kbd> passo attento</span><span><kbd>F</kbd> fermo!</span>';
+  ? '<span>Joystick a sinistra per muoverti, PRENDI a destra.</span>'
+  : '<span><kbd>WASD</kbd> muovi</span><span><kbd>Spazio</kbd> prendi / lascia</span>';
+if (touchUI) $('#app').classList.add('touch');
 resize();
 if (window.Matter) {
   $('#btn-start').addEventListener('click', startGame);
@@ -1788,6 +2503,7 @@ if (window.Matter) {
   (function idle () { if (running) return; render(); requestAnimationFrame(idle); })();
 } else {
   $('#btn-start').hidden = true;
+  if (EMBED) $('#btn-skip').hidden = false;
   const note = document.createElement('p');
   note.textContent = 'La fisica dello scarico non si è caricata (serve la connessione). ' + (EMBED ? 'Salta lo scarico per andare al montaggio.' : 'Riprova più tardi.');
   $('#btn-start').before(note);

@@ -283,7 +283,7 @@ const COMPONENT_TYPES = {
     ]
   },
   top: {
-    label: 'TOP', category: 'audio', powerW: 0, zone: 'pit', shape: 'top',
+    label: 'TESTA', category: 'audio', powerW: 0, zone: 'pit', shape: 'top',
     body: { w: 34, h: 72, fill: 0x232830, accent: 0x4a90e2 },
     ledPos: TOP_ISO(3, 36, 45),
     ports: [
@@ -680,6 +680,87 @@ const FAULTS = {
   'baule:corrente': { what: 'i cavi sono aggrovigliati', fix: 'Cavi sbrogliati e riarrotolati: il baule CORRENTE è in ordine.' },
   'baule:segnale':  { what: 'i cavi sono aggrovigliati', fix: 'Cavi sbrogliati e riarrotolati: il baule SEGNALE è in ordine.' }
 };
+/* Continuità scarico → montaggio: ogni case scaricato resta lo stesso case.
+   Profile.data.scarico.cases = [{ id, name, short, what, zone, at, state,
+   dents, rushed }]: zone è dove andava, at dove l'hai lasciato, dents le
+   ammaccature che si vedevano sul case. scaricoCase(id) dà il case,
+   caseOfPiece(compId) il case da cui esce un pezzo posato (i difettosi
+   escono per primi, come in isFaulty). Niente case (scarico saltato o
+   salvataggio vecchio): null, e il montaggio va come prima. */
+const SCARICO_ZONES = { palco: 'Palco', back: 'Backstage', pit: 'Pit', foh: 'Off Stage' };
+const PIECE_FROM_CASE = {
+  sub: ['sub1', 'sub2'], top: ['top1', 'top2'], ampli: ['rack'], mixer: ['rack'],
+  quadro: ['distro'], ciabatta: ['distro'], ciabatta_cee: ['distro'],
+  pc: ['valigetta'], scheda: ['valigetta'], controller: ['valigetta'],
+  par: ['par', 'par', 'par', 'par', 'ricambio'], stativo: ['stativi', 'stativi', 'stativi', 'stativi', 'ricambio'],
+  asta: ['ricambio'], mic: ['ricambio'], tavolo: ['tavolo']
+};
+function cleanScaricoCases (list) {
+  if (!Array.isArray(list)) return [];
+  const str = (v, n) => typeof v === 'string' ? v.slice(0, n) : '';
+  return list.slice(0, 20).filter(c => c && typeof c.id === 'string').map(c => ({
+    id: str(c.id, 20), name: str(c.name, 40), short: str(c.short, 20), what: str(c.what, 60),
+    zone: SCARICO_ZONES[c.zone] ? c.zone : null, at: SCARICO_ZONES[c.at] ? c.at : null,
+    state: ['integro', 'ammaccato', 'difettoso', 'rotto'].includes(c.state) ? c.state : 'integro',
+    dents: Math.max(0, Math.min(6, parseInt(c.dents, 10) || 0)), rushed: !!c.rushed
+  }));
+}
+// dove sta ogni case in palestra al montaggio: nella zona dove l'hai
+// lasciato allo scarico (se l'hai saltato, nella sua zona). Posti fissi,
+// fuori dalle celle dove si posano i pezzi: Backstage verso la parete, la
+// fascia oltre l'Off Stage, la prima fila davanti al Pit
+const CASE_HOME = { corrente: 'back', distro: 'back', ricambio: 'palco', segnale: 'foh', rack: 'foh', valigetta: 'foh',
+  sub1: 'pit', sub2: 'pit', top1: 'pit', top2: 'pit', stativi: 'pit', par: 'pit' };
+const DOCK_SPOTS = {
+  back: [[9.45, 2.45], [9.45, 3.45], [8.45, 2.45], [8.45, 3.45]],
+  foh: [[9.5, 4.5], [9.5, 5.45], [9.5, 6.4], [9.5, 7.35]],
+  palco: [[5.5, 4.35], [4.7, 4.35]],
+  pit: [[0.8, 10.5], [1.8, 10.5], [2.8, 10.5], [6.8, 10.5], [7.8, 10.5], [8.8, 10.5], [3.8, 10.5], [5.8, 10.5]]
+};
+const DOCK_TAPE = { back: 0xff4fb4, foh: 0x49e07a, pit: 0x4fb7ff, palco: 0xeaff2b };
+const DOCK_LABEL = { sub1: 'SUB 1', sub2: 'SUB 2', top1: 'TESTA 1', top2: 'TESTA 2', rack: 'RACK', valigetta: 'PC', par: 'PAR', stativi: 'STATIVI', distro: 'QUADRO', ricambio: 'ACCESSORI' };
+function dockCaseSpots () {
+  const used = { back: 0, foh: 0, pit: 0, palco: 0 }, out = [];
+  // prima i bauli dei cavi, così stanno sempre nel primo posto della zona
+  const ids = ['corrente', 'segnale', ...Object.keys(CASE_HOME).filter(id => !CABLE_CASES[id])];
+  ids.forEach(id => {
+    const sc = scaricoCase(id);
+    let zone = sc && DOCK_SPOTS[sc.at] ? sc.at : sc && DOCK_SPOTS[sc.zone] ? sc.zone : CASE_HOME[id];
+    if (used[zone] >= DOCK_SPOTS[zone].length) zone = CASE_HOME[id];
+    const spot = DOCK_SPOTS[zone][used[zone]++];
+    if (spot) out.push({ id, gx: spot[0], gy: spot[1], zone, sc });
+  });
+  return out;
+}
+function scaricoCase (id) {
+  const s = Profile.data.scarico;
+  return (s && Array.isArray(s.cases) && s.cases.find(c => c.id === id)) || null;
+}
+function caseOfPiece (compId) {
+  const c = gameState.placed[compId], list = c && PIECE_FROM_CASE[c.type];
+  if (!list) return null;
+  const bad = id => ((Profile.data.scarico || {}).faultyIds || []).includes(id) ? 1 : 0;
+  const ids = list.map((id, i) => [id, i]).sort((a, b) => bad(b[0]) - bad(a[0]) || a[1] - b[1]).map(x => x[0]);
+  const n = placedOfType(c.type).findIndex(x => x.id === compId);
+  return n < 0 ? null : scaricoCase(ids[Math.min(n, ids.length - 1)]);
+}
+// la riga col case da cui viene il pezzo: nome, zona dove l'hai lasciato e,
+// se l'ha presa, l'ammaccatura (la prima volta lo nota Macio)
+const caseRemarked = new Set();
+function caseOriginHtml (sc) {
+  if (!sc) return '';
+  let h = '<b>CASE ' + escapeHtml((sc.name || sc.id).toUpperCase()) + '</b>' + (sc.at ? ' · ' + SCARICO_ZONES[sc.at] : '');
+  if (sc.dents) {
+    h += ' · ha ancora ' + (sc.dents > 2 ? 'le ammaccature' : 'la piccola ammaccatura');
+    if (!caseRemarked.has(sc.id)) { caseRemarked.add(sc.id); h += '. Macio: «' + (sc.dents > 2 ? 'Questo ha preso una bella botta.' : 'Questo ha preso un colpetto.') + '»'; }
+  }
+  return h;
+}
+function showCaseOrigin (box, sc) {
+  const h = caseOriginHtml(sc);
+  box.hidden = !h; box.innerHTML = h;
+}
+
 function faultCounts () {
   const out = {}, s = Profile.data.scarico;
   ((s && s.faultyIds) || []).forEach(id => { const t = FAULT_BY_CASE[id]; if (t) out[t] = (out[t] || 0) + 1; });
@@ -713,7 +794,7 @@ const FAULT_NAME = { ampli: 'il finale', sub: 'il sub', top: 'la testa', quadro:
 function faultBox (box, t, onDone) {
   box.hidden = false;
   const baule = t.startsWith('baule:'), crew = !baule && clockOn(), job = crewJob();
-  const what = '<span><b>⚠ Arrivato difettoso dallo scarico:</b> ' + escapeHtml(FAULTS[t].what) + '.</span>';
+  const what = '<span><b>⚠ Qualcosa non va:</b> ' + escapeHtml(FAULTS[t].what) + '.</span>';
   if (crew && job && job.t === t && faultsLeft(t) === 1) {
     box.innerHTML = what + '<span class="fault-crew-on">Ci sta lavorando Macio: pronto verso le ' + fmtClock(job.at) + '. Intanto lavora sul resto.</span>';
     return;
@@ -1737,7 +1818,7 @@ const SAVE_FILE_KIND = 'stage-crew-simulator';   // firma del file esportato
 const SHARED_KEYS = ['settings', 'records', 'usedServices'];
 
 function defaultProfile () {
-  return { v: SAVE_VERSION, player: '', service: '', serviceInfo: null, usedServices: [], settings: { volume: 0.8, reducedFx: false, skipShow: false, skipScarico: false, testMusic: true, bossTips: true, tapeMarks: true, traceSignal: true }, tutorSeen: {}, logo: null, level: null, scarico: null, cavi: null, preside: null, cambioDj: null, dj: null, karaoke: null, carico: null, collaudo: null, serata: null, beers: 0, coffees: 0, assistant: defaultAssistant(), fatigue: 0, records: {}, reputation: { total: 0, earned: {}, log: [] }, levelsSeen: 1, savedAt: 0 };
+  return { v: SAVE_VERSION, player: '', service: '', serviceInfo: null, usedServices: [], settings: { volume: 0.8, reducedFx: false, skipShow: false, skipScarico: false, testMusic: true, bossTips: true, tapeMarks: true, traceSignal: true }, tutorSeen: {}, logo: null, level: null, scarico: null, scaricoPlayed: false, cavi: null, preside: null, cambioDj: null, dj: null, karaoke: null, carico: null, collaudo: null, serata: null, beers: 0, coffees: 0, assistant: defaultAssistant(), fatigue: 0, records: {}, reputation: { total: 0, earned: {}, log: [] }, levelsSeen: 1, savedAt: 0 };
 }
 // l'assistente della serata (dal livello 2, vedi ASSISTANTS): chi è e
 // quanti favori ha già fatto nel set in corso. Le partite salvate prima
@@ -2465,6 +2546,7 @@ const REP = {
   scaricoClean: 3,     // scarico senza nessun danno
   scaricoBroken: -2,   // ogni pezzo rotto allo scarico (lì è colpa della crew)
   scaricoKid: -1,      // ogni bambino urtato con un case
+  scaricoRough: -1,    // ogni movimentazione brusca di un case fragile (al massimo due)
   cavi: { 3: 5, 2: 3, 1: 1 }   // posa dei cavi, per stelle (Gerry promuove al 1°, 2°, 3°+ giro)
 };
 const REP_LOG_KEEP = 50;
@@ -2783,6 +2865,8 @@ function showMenuPage (page, keep) {
     el('#set-reduced').checked = !!settings().reducedFx;
     el('#set-skipshow').checked = !!settings().skipShow;
     el('#set-skipscarico').checked = !!settings().skipScarico;
+    el('#set-skipscarico').disabled = !scaricoPlayed();
+    el('#set-skipscarico-note').hidden = scaricoPlayed();
     el('#set-testmusic').checked = settings().testMusic !== false;
     el('#set-bosstips').checked = settings().bossTips !== false;
     el('#set-proinfo').checked = proInfo();
@@ -3135,9 +3219,12 @@ function minigameQuery () { return '&vol=' + settings().volume + (reducedFx() ? 
 // un messaggio vale solo se arriva davvero dall'iframe di quel minigioco
 const fromFrame = (ev, id) => { const f = el('#' + id); return !!f && ev.source === f.contentWindow; };
 const scaricoDone = () => !!Profile.data.scarico;
+// il primo scarico non si salta: è il tutorial. Dopo averlo giocato una
+// volta (in questo salvataggio) si può saltare dalle impostazioni o dal via
+const scaricoPlayed = () => !!Profile.data.scaricoPlayed || !!(Profile.data.scarico && !Profile.data.scarico.skipped);
 function openScarico () {
   if (scaricoOpen) return;
-  if (settings().skipScarico) { finishScarico({ skipped: true }); return; }
+  if (settings().skipScarico && scaricoPlayed()) { finishScarico({ skipped: true }); return; }
   scaricoOpen = true;
   setSceneInput(false);
   sceneKeyboard(false);
@@ -3145,7 +3232,7 @@ function openScarico () {
   f.id = 'scarico-frame';
   f.title = 'Lo scarico';
   const logo = serviceLogo();
-  f.src = 'scarico.html?embed=1&service=' + encodeURIComponent(serviceName()) + '&bg=' + encodeURIComponent(logo.bg) + '&fg=' + encodeURIComponent(logo.fg) + minigameQuery();
+  f.src = 'scarico.html?embed=1&service=' + encodeURIComponent(serviceName()) + '&bg=' + encodeURIComponent(logo.bg) + '&fg=' + encodeURIComponent(logo.fg) + minigameQuery() + (scaricoPlayed() ? '' : '&first=1');
   f.addEventListener('load', () => { try { f.contentWindow.focus(); } catch (e) { /* niente fuoco: si clicca */ } });
   document.body.appendChild(f);
 }
@@ -3164,22 +3251,37 @@ function finishScarico (r) {
     skipped: !!r.skipped, lost, parsBroken, staBroken: !!staBroken, ricOk,
     delay: r.skipped ? 0 : (r.minutes || 0), beers: r.skipped ? 0 : (r.beers || 0),
     endClock: r.endClock || '16:30', faulty: r.faulty || [], faultyIds: r.faultyIds || [], fixed: {},
-    wrong: r.wrong || [], kidHits: r.kidHits || 0
+    wrong: r.wrong || [], kidHits: r.kidHits || 0,
+    eff: Number.isFinite(r.eff) ? r.eff : null, rough: r.rough || 0,
+    cases: cleanScaricoCases(r.cases)
   };
+  if (!r.skipped) Profile.data.scaricoPlayed = true;
   Profile.data.beers = (Profile.data.beers || 0) + Profile.data.scarico.beers;
   if (!r.skipped) {
     const rotti = parsBroken + staBroken + (ricOk ? 0 : 1);
-    const rep = (r.clean ? REP.scaricoClean : 0) + rotti * REP.scaricoBroken + (r.kidHits || 0) * REP.scaricoKid;
+    const rep = (r.clean ? REP.scaricoClean : 0) + rotti * REP.scaricoBroken + (r.kidHits || 0) * REP.scaricoKid + Math.min(2, r.rough || 0) * REP.scaricoRough;
     if (rep) addReputation(rep, 'Scarico della festa della scuola', 'L' + LEVEL_ID + ':scarico');
   }
   Profile.save();
   whenScene(scene => {
     scene.resetLevel(true);          // la dotazione senza i pezzi rotti
     sceneKeyboard(true);
-    if (!sceneCovered()) setSceneInput(true);
     applySettings();
-    showToast(montaggioMessage(), 'ok');
+    const go = () => { if (!sceneCovered()) setSceneInput(true); showToast(montaggioMessage(), 'ok'); };
+    if (r.skipped) { go(); return; }
+    phaseCard(montaggioTime() + ' — MONTAGGIO', go);
   });
+}
+// cartello breve fra una fase e l'altra (un tocco lo chiude prima)
+function phaseCard (text, done) {
+  const c = document.createElement('div');
+  c.id = 'phase-sign'; c.className = 'phase-sign';
+  c.innerHTML = '<b>' + escapeHtml(text) + '</b>';
+  document.body.appendChild(c);
+  let over = false;
+  const end = () => { if (over) return; over = true; c.classList.add('out'); setTimeout(() => c.remove(), 350); done(); };
+  c.addEventListener('pointerdown', end);
+  setTimeout(end, 2200);
 }
 // ora d'inizio del montaggio: 16:30 più il ritardo dello scarico
 function montaggioTime () {
@@ -3194,8 +3296,6 @@ function montaggioMessage () {
   if (s && s.lost && s.lost.stativo) miss.push(s.lost.stativo === 1 ? 'uno stativo' : s.lost.stativo + ' stativi');
   const many = miss.length > 1 || (s && s.lost && (s.lost.par > 1 || s.lost.stativo > 1));
   if (miss.length) msg += ' Allo scarico si è rotto qualcosa: ' + (many ? 'mancano ' : 'manca ') + miss.join(' e ') + '.';
-  const nf = ((s && s.faultyIds) || []).filter(id => FAULT_BY_CASE[id]).length;
-  if (nf) msg += nf === 1 ? ' Un pezzo è arrivato difettoso: ha il segno arancione, toccalo e sistemalo.' : ' ' + nf + ' pezzi sono arrivati difettosi: hanno il segno arancione, toccali e sistemali.';
   return msg;
 }
 function scaricoSummary () {
@@ -3207,6 +3307,7 @@ function scaricoSummary () {
   if (!s.ricOk) bits.push('case ricambi perso');
   if (s.faulty.length) bits.push('da sistemare: ' + s.faulty.join(', '));
   if (s.delay) bits.push('montaggio alle ' + montaggioTime());
+  if (s.eff != null) bits.push('lavoro ' + (s.eff >= 85 ? 'ottimo' : s.eff >= 65 ? 'buono' : 'sufficiente'));
   bits.push(s.beers ? '🍺'.repeat(s.beers) : 'nessuna birra');
   return bits.join(' · ') + '.';
 }
@@ -5665,6 +5766,7 @@ function openRearPanel (compId) {
   const fb = el('#rear-fault');
   fb.hidden = true; fb.innerHTML = '';
   if (isFaulty(compId)) faultBox(fb, t);
+  showCaseOrigin(el('#rear-origin'), caseOfPiece(compId));
   // prima visibile, poi disegnato: serve la larghezza vera del riquadro
   el('#rear-modal').classList.add('show');
   renderRearPanel();
@@ -5873,6 +5975,7 @@ function openCase (name) {
   fb.hidden = true; fb.innerHTML = '';
   el('#case-svg').classList.toggle('tangled', faultsLeft(key) > 0);
   if (faultsLeft(key)) faultBox(fb, key, () => el('#case-svg').classList.remove('tangled'));
+  showCaseOrigin(el('#case-origin'), scaricoCase(name));
   el('#case-modal').classList.add('show');
   setSceneInput(false);
   SFX.caseOpen();
@@ -7373,20 +7476,32 @@ class StageScene extends Phaser.Scene {
     const vg = this.add.graphics().setDepth(1).setPosition(vp.x, vp.y);
     this.van = { vp, v, ...this.drawVehicle(vg, v) };
 
-    // i due bauli dei cavi e un case di ricambio, dentro la palestra:
-    // nell'angolo dietro la regia FOH, contro la parete (celle occupate)
-    const caseSpots = [[0.55, 15.45, 'segnale'], [1.55, 15.45, 'corrente'], [0.55, 14.5, null]];
-    caseSpots.forEach(([gx, gy, caseName], i) => {
-      const p = gridToScreen(gx, gy);
-      const cg = this.add.graphics().setDepth(isoDepth(p.y) - 0.0005).setPosition(p.x, p.y);
-      const tape = caseName === 'segnale' ? 0xeaff2b : caseName === 'corrente' ? 0xff4fb4 : null;
-      this.drawFlightCase(cg, CASE_ISO, tape);
-      if (!caseName) return;
-      this.casePos = this.casePos || {};
-      this.casePos[caseName] = p;
-      this.add.text(p.x, p.y - 34, CABLE_CASES[caseName].title, {
-        fontFamily: 'Barlow Condensed, sans-serif', fontSize: '11px', fontStyle: 'bold', color: '#e6e8eb'
+    this.refreshDockCases();
+  }
+
+  /* i case dello scarico, in palestra dove li hai lasciati: Backstage, Off
+     Stage (regia) e davanti al Pit. Sono scenografia, tranne i bauli dei
+     cavi che si aprono; un case da cui è già uscito un pezzo resta aperto
+     (più chiaro). Le ammaccature prese allo scarico restano sul case. */
+  refreshDockCases () {
+    (this.dockCases || []).forEach(o => o.destroy());
+    this.dockCases = [];
+    this.casePos = {};
+    dockCaseSpots().forEach(({ id, gx, gy, zone, sc }) => {
+      const p = gridToScreen(gx, gy), cable = CABLE_CASES[id] ? id : null;
+      const open = !cable && this.casesOpened && this.casesOpened.has(id);
+      const cg = this.add.graphics().setDepth(isoDepth(p.y) - 0.0005).setPosition(p.x, p.y).setAlpha(open ? 0.4 : 1);
+      this.drawFlightCase(cg, CASE_ISO, DOCK_TAPE[zone]);
+      if (sc && sc.dents) {
+        cg.lineStyle(1.2, 0xd2d6de, 0.55);
+        for (let k = 0; k < Math.min(4, sc.dents); k++) { const x = -14 + k * 9, y = -10 + (k % 2) * 7; cg.lineBetween(x, y, x + 6, y + 3); }
+      }
+      const label = this.add.text(p.x, p.y - 34, cable ? CABLE_CASES[id].title : (DOCK_LABEL[id] || id.toUpperCase()) + (open ? ' · aperto' : ''), {
+        fontFamily: 'Barlow Condensed, sans-serif', fontSize: '11px', fontStyle: 'bold', color: open ? '#9a9da4' : '#e6e8eb'
       }).setOrigin(0.5).setDepth(isoDepth(p.y));
+      this.dockCases.push(cg, label);
+      if (!cable) return;
+      this.casePos[id] = p;
       const hit = this.add.rectangle(p.x, p.y - 6, 58, 58, 0xffffff, 0.001).setDepth(isoDepth(p.y) + 0.0001)
         .setInteractive({ useHandCursor: true });
       hit.on('pointerdown', (pointer, lx, ly, event) => {
@@ -7394,9 +7509,11 @@ class StageScene extends Phaser.Scene {
         // aprire un baule porta anche nella scheda Cavi
         const tab = document.querySelector('.tab-btn[data-tab="cavi"]');
         if (tab && !isWiringTabActive()) tab.click();
-        openCase(caseName);
+        openCase(id);
       });
+      this.dockCases.push(hit);
     });
+    if (this.refreshFaultMarks && this.faultMarks) this.refreshFaultMarks();
   }
 
   /* mezzo del service visto di tre quarti: fiancata (faccia a=0) verso il
@@ -8699,11 +8816,12 @@ class StageScene extends Phaser.Scene {
     this.pushHistory();
     tireOut(FATIGUE.perAction);
     SFX.place();
+    const fromCase = this.caseOpened(id);
     // la prima volta si spiega come si usa un dispositivo posato
     if (!this.gestureHintShown) {
       this.gestureHintShown = true;
-      showToast('Tocca un dispositivo per aprire il suo pannello · tienilo premuto per spostarlo o toglierlo.', 'ok');
-    }
+      showToast(fromCase + 'Tocca un dispositivo per aprire il suo pannello · tienilo premuto per spostarlo o toglierlo.', 'ok');
+    } else if (fromCase) showToast(fromCase.trim(), 'ok');
   }
 
   /* piazza il pezzo attualmente "armato" dalla toolbar nel punto toccato sulla
@@ -8735,6 +8853,18 @@ class StageScene extends Phaser.Scene {
     return { x: bv.container.x + (m.offsetX ? m.offsetX() : 0), y: bv.container.y + m.offsetY(), depth: isoDepth(bv.container.y) + (m.depth != null ? m.depth : 0.001) };
   }
 
+  // il primo pezzo che esce da un case scaricato apre quel case: «CASE SUB 1 ·
+  // Pit». Una volta per case; '' se non c'è (scarico saltato, pezzo non da case)
+  caseOpened (id) {
+    const sc = caseOfPiece(id);
+    this.casesOpened = this.casesOpened || new Set();
+    if (!sc || this.casesOpened.has(sc.id)) return '';
+    this.casesOpened.add(sc.id);
+    this.refreshDockCases();
+    const t = caseOriginHtml(sc).replace(/<[^>]+>/g, '');
+    return t + (t.endsWith('»') ? ' ' : '. ');
+  }
+
   attachToNearestBase (type, world) {
     const m = MOUNTS[type];
     const base = this.nearestFreeBase(type, world);
@@ -8759,7 +8889,7 @@ class StageScene extends Phaser.Scene {
     this.updateQuadroVisual();
     setCircuitStatus('untested');
     SFX.place();
-    showToast(m.done(base.id), 'ok');
+    showToast(this.caseOpened(id) + m.done(base.id), 'ok');
     this.pushHistory();
     tireOut(FATIGUE.perAction);
   }
@@ -10669,6 +10799,8 @@ class StageScene extends Phaser.Scene {
 
   /* ---------------- reset ---------------- */
   resetLevel (quiet) {
+    this.casesOpened = null;   // i case scaricati si riaprono da capo
+    if (this.dockCases) this.refreshDockCases();
     // giro e conti di prima: un Annulla subito dopo il reset li rimette
     const before = { giro: gameState.giro || 0, giroFails: (gameState.giroFails || [0, 0, 0]).slice(), stats: { ...freshStats(), ...gameState.stats }, trips: gameState.trips || 0, rcdTrips: gameState.rcdTrips || 0, procErrors: (gameState.procErrors || []).slice() };
     this.stopFx();

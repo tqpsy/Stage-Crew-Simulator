@@ -14,8 +14,46 @@ rampa, gli oggetti fragili si rompono se sbattono. Al tuo fianco c'è
 **Macio**, il collega CPU: forte, un po' lento, da chiamare quando un
 case è troppo grosso per una persona sola.
 
-Quello che rompi **ti manca al montaggio**. Si gioca in circa 5 minuti e si
-può saltare.
+Quello che rompi **ti manca al montaggio**. Si gioca in circa 5 minuti; il
+primo scarico non si salta (è il tutorial), dal secondo sì.
+
+## Il primo scarico come tutorial giocato (livello 1)
+
+Lo scarico è la prima cosa che vede un giocatore nuovo, quindi è anche il
+tutorial: niente regole da leggere prima, si impara facendo il lavoro.
+Ogni idea arriva quando serve, con una riga nella barra d'aiuto in basso
+(fuori dalla scena, con la X) e un segnale nel mondo.
+
+| Momento | Cosa scopre il giocatore | Come |
+|---|---|---|
+| Arrivo | devo scaricare | cartello «FESTA DELLA SCUOLA — 16:00», la frase di Macio, *Apri il portellone*. Solo joystick e PRENDI. |
+| Primi case | si spostano | davanti ci sono i Top e i ricambi, leggeri, in mano. |
+| Case pesante | alcuni pesano | la scheda sopra il case: nome e peso a parole (LEGGERO, MEDIO, PESANTE, ⚠ 2 PERSONE), niente kg. Spingendolo in discesa o di corsa compare FERMO!. |
+| Baule da due | non tutto si fa da soli | da solo non si muove (quasi), Macio lo dice, compare **AIUTO**. Da quella chiamata Macio è in squadra e porta da solo i case leggeri. |
+| Furgone stivato | c'è un ordine | il case dietro dice ACCESSO BLOCCATO e lampeggiano quelli davanti. Il rack (mixer) sta dietro distro e case PAR. Calcolato dalle posizioni vere (`blockers()`). |
+| Carrello | si ottimizza | arriva dopo due consegne a mano (o a 80 s): fino a 3 case leggeri sopra, un viaggio solo, si scarica stando in una zona. Passa il gradino. Se sbatte, il carico si fa male. |
+| Fragile | le azioni hanno conseguenze | nastro ⚠ FRAGILE (valigetta, PAR, rack). Un urto: «Movimentazione brusca, −1 reputazione», al massimo −2. |
+| Gradino | in due si alza | un case a spinta contro il gradino della palestra si ferma e compare **OH-ISSA**: un tocco, Macio conta «uno… due… ISSA!» e il case passa. Niente tempismo, niente errori. |
+| Lavoro | conta come lavori | la barra LAVORO compare a metà (dopo il carrello o 7 case) con un giudizio a parole (Ottimo, Buono, Così così). Nella bolla: la barra, un giudizio e tre righe «come hai lavorato», prima quello che è andato meno bene. Niente percentuali. |
+| Sorpresa | quello che scarico serve dopo | a «MATERIALE SCARICATO: 100%» Macio chiede del baule dei cavi: il baule SEGNALE era sotto il telo in fondo al furgone. È quello che si riapre al montaggio. |
+
+**Comandi contestuali**: sul telefono restano sempre joystick e PRENDI
+(che diventa LASCIA, CARICA, SCARICA). AIUTO, OH-ISSA e FERMO! compaiono solo
+quando si possono usare in quel momento, e spariscono dopo (`showCmd()`).
+
+**Tolti dal livello 1**: il ribaltamento del rack, il cavo incastrato da
+tenere premuto, le barrette dello stato sopra i case e il bagliore rosso
+«troppo veloce». Il danno si vede sul case (sobbalzo, graffi, ammaccature)
+e nelle frasi di Macio.
+
+**Primo scarico**: non si salta. Il tasto *Salta* e l'impostazione valgono
+solo dopo averlo giocato una volta in quel salvataggio
+(`Profile.data.scaricoPlayed`; il gioco passa `first=1` all'iframe). Senza
+fisica (niente rete) si può sempre saltare.
+
+Durata: 16:00 → 16:30 in 6 minuti reali. Il risultato porta in più
+`eff` (efficienza %) e `rough` (movimentazioni brusche), salvati in
+`Profile.data.scarico`.
 
 ## Core loop
 
@@ -42,10 +80,13 @@ può saltare.
 
    | Nastro | Zona | Esempi |
    |--------|------|--------|
-   | giallo | Palco | stativi, PAR, asta e microfono |
-   | rosa | Backstage / allaccio | quadro, baule CORRENTE |
-   | blu | Pit / impianto | sub, top |
-   | verde | Regia (FOH) | rack regia, valigetta PC |
+   | rosa | Backstage / allaccio | Generico CORRENTE, quadro |
+   | giallo | Palco | case accessori (asta, microfono, ricambi) |
+   | blu | Pit | sub, teste, stativi, PAR |
+   | verde | Off Stage · regia | tavolo regia, rack regia, valigetta PC, Generico SEGNALE |
+
+   La palestra dello scarico è quella del montaggio: il palco c'è già
+   (si gira intorno) e le zone sono dove serviranno i pezzi.
 
    Zona giusta: il case "si aggancia" con una spunta. Zona sbagliata: il
    case resta lì e al montaggio c'è da riportarlo al suo posto (costa
@@ -309,6 +350,71 @@ livelli futuri.
   chiede ogni due minuti "Tutto a posto?".
 - **Insegna**: tutto insieme, sotto pressione.
 
+## Continuità fra scarico e montaggio
+
+Il materiale che scarichi è lo stesso che monti: la continuità si vede, non
+si spiega. Il montaggio non cambia: legge solo i dati che lo scarico lascia.
+
+- **Pausa finale** (circa 9 s, un tocco la accorcia): dopo
+  «MATERIALE SCARICATO 100%» e il baule SEGNALE la telecamera passa sul
+  piazzale vuoto e poi sulle zone con i case al loro posto. Macio: «Ok. È
+  tutto giù.» … «Adesso possiamo cominciare.» Poi la bolla, e dopo «Al
+  montaggio» un cartello breve «16:30 — MONTAGGIO» (l'ora vera, col ritardo).
+- **Dati**: il risultato porta `cases`, uno per case: `id`, `name`, `short`,
+  `what`, `zone` (dove andava), `at` (dove l'hai lasciato), `state`
+  (integro, ammaccato, difettoso, rotto), `dents` (ammaccature visibili,
+  0-6), `rushed`. Finisce in `Profile.data.scarico.cases`.
+- **API in main.js**: `scaricoCase(id)` dà il case; `caseOfPiece(compId)`
+  il case da cui esce un pezzo posato (`PIECE_FROM_CASE`: sub → Sub 1 e
+  Sub 2, finale e mixer → Rack, Quadro e ciabatte → Distro, PC, scheda e
+  controller → Valigetta, PAR → Case PAR e ricambi, stativi…). I case
+  difettosi escono per primi, come in `isFaulty`. Scarico saltato o
+  salvataggio vecchio: `null`, e il montaggio va come prima.
+- **Al montaggio**: il primo pezzo che esce da un case lo «apre»
+  (avviso «CASE SUB 1 · Pit»); il pannello del pezzo e quello del baule
+  hanno la riga del case. Se il case ha preso colpi «ha ancora
+  l'ammaccatura» e la prima volta Macio: «Questo ha preso una bella botta.»
+  Le ammaccature si vedono anche sui bauli disegnati dietro la regia.
+- **Danni scoperti**: il messaggio d'inizio montaggio non elenca più i pezzi
+  difettosi; li trovi sul pezzo (segno arancione, «Qualcosa non va: …»),
+  con la stessa riparazione di prima.
+- **Case dove li hai lasciati**: al montaggio ogni case è disegnato a terra
+  nella zona dove l'hai consegnato (Backstage, Off Stage, Pit); quando ne
+  esce il primo pezzo diventa trasparente («aperto»). Il baule CORRENTE sta
+  in Backstage vicino all'allaccio, il SEGNALE in Off Stage vicino alla regia.
+
+### Specifiche di Luca del 2026-10-07 sera
+
+- **TESTA**, mai TOP, in tutto il gioco (scarico, montaggio, carico).
+- **Carico come da specifica**: vicino al portellone il carrello a due
+  ruote, stativi, PAR, case accessori e i due generici dei cavi
+  (CORRENTE → Backstage, SEGNALE → Off Stage, non più sotto il telo); in
+  mezzo tavolo regia, quadro e PC; in fondo sub, teste e rack.
+- **Carrello a due ruote da facchino**: lo tira fuori Macio appena la rampa
+  è giù. Tre posti; un case pesante (≥ 35 kg) ne prende due; i case da due
+  (tavolo, rack) non ci stanno. Si carica anche un case spinto. Nelle zone
+  LASCIA posa a terra, non ricarica.
+- **Peso a categorie**: LEGGERO, MEDIO, PESANTE (in due).
+- **Macio**: battute rare e corte («Quello lo facciamo in due.», «Prima
+  liberiamo il passaggio.», «Prendi il carrello. Non siamo qui per fare
+  palestra.»). Nessun ERRORE per l'ordine.
+- **Riepilogo SCARICO COMPLETATO**: materiale scaricato, danneggiato,
+  viaggi, uso del carrello, organizzazione, efficienza, stelle. Pesa sulla
+  serata come prima (ritardo, danni, reputazione, birre).
+- Il palco nella palestra dello scarico si attraversa (ha la scaletta).
+
+### Il furgone (note di Luca del 2026-10-07)
+
+- Si arriva col **furgone chiuso**: APRI il portellone, poi RAMPA.
+- Dentro i case sono **legati con tre cinghie** (una per fila) e quelli con
+  le ruote hanno il **freno tirato**, come al carico: CINGHIA e FRENO vicino
+  al case. Un case legato o frenato non si muove e blocca quelli dietro.
+  Il case ricambi non era legato e scivola giù dalla rampa.
+- **Macio aiuta davvero**: quando spingi un case pesante arriva da solo a
+  spingere con te; se è libero porta lui i case leggeri.
+- **Carrello**: tre posti disegnati; con un case in mano vicino al carrello
+  il posto libero lampeggia con «CARICA QUI».
+
 ## Tipi di flight case e materiali
 
 Valori di partenza da provare nel prototipo. Scorrevolezza: 1 = si
@@ -413,9 +519,9 @@ non toccano la scena di Phaser.
   delle 16:00 diventa "Fatto" con il riassunto (ora di fine, pezzi rotti,
   da sistemare, birre) e il montaggio mostra l'ora vera d'inizio
   (16:30 più il ritardo).
-- **Saltare**: dalla schermata iniziale dello scarico ("Salta lo
-  scarico") o dalle impostazioni ("Salta lo scarico a inizio partita"):
-  tutto arriva sano, niente birre. Senza rete Matter.js non si carica e lo
+- **Saltare**: dopo il primo scarico giocato, dalla schermata iniziale
+  dello scarico ("Salta lo scarico") o dalle impostazioni ("Salta lo
+  scarico a inizio partita"): tutto arriva sano, niente birre. Senza rete Matter.js non si carica e lo
   scarico si può solo saltare.
 - **Montaggio**: i pezzi rotti mancano dalla dotazione (`levelStock()` in
   `main.js`); il case ricambi, se arriva sano, rimpiazza un PAR e uno
