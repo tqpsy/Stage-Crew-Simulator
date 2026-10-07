@@ -80,10 +80,12 @@ Durata: 16:00 → 16:30 in 6 minuti reali. Il risultato porta in più
 
    | Nastro | Zona | Esempi |
    |--------|------|--------|
-   | giallo | Palco | stativi, PAR, asta e microfono |
-   | rosa | Backstage / allaccio | quadro (livello 1: il baule CORRENTE va in Regia FOH) |
-   | blu | Pit / impianto | sub, top |
-   | verde | Regia (FOH) | rack regia, valigetta PC |
+   | rosa | Backstage / allaccio | baule CORRENTE, distro, ricambi |
+   | blu | Pit | sub, top, stativi, PAR |
+   | verde | Off Stage · regia | rack regia, valigetta PC, baule SEGNALE |
+
+   La palestra dello scarico è quella del montaggio: il palco c'è già
+   (si gira intorno) e le zone sono dove serviranno i pezzi.
 
    Zona giusta: il case "si aggancia" con una spunta. Zona sbagliata: il
    case resta lì e al montaggio c'è da riportarlo al suo posto (costa
@@ -375,8 +377,22 @@ si spiega. Il montaggio non cambia: legge solo i dati che lo scarico lascia.
 - **Danni scoperti**: il messaggio d'inizio montaggio non elenca più i pezzi
   difettosi; li trovi sul pezzo (segno arancione, «Qualcosa non va: …»),
   con la stessa riparazione di prima.
-- **Bauli dei cavi**: CORRENTE e SEGNALE si consegnano in Regia FOH, dove
-  il montaggio li disegna (zona FOH dello scarico allargata).
+- **Case dove li hai lasciati**: al montaggio ogni case è disegnato a terra
+  nella zona dove l'hai consegnato (Backstage, Off Stage, Pit); quando ne
+  esce il primo pezzo diventa trasparente («aperto»). Il baule CORRENTE sta
+  in Backstage vicino all'allaccio, il SEGNALE in Off Stage vicino alla regia.
+
+### Il furgone (note di Luca del 2026-10-07)
+
+- Si arriva col **furgone chiuso**: APRI il portellone, poi RAMPA.
+- Dentro i case sono **legati con tre cinghie** (una per fila) e quelli con
+  le ruote hanno il **freno tirato**, come al carico: CINGHIA e FRENO vicino
+  al case. Un case legato o frenato non si muove e blocca quelli dietro.
+  Il case ricambi non era legato e scivola giù dalla rampa.
+- **Macio aiuta davvero**: quando spingi un case pesante arriva da solo a
+  spingere con te; se è libero porta lui i case leggeri.
+- **Carrello**: tre posti disegnati; con un case in mano vicino al carrello
+  il posto libero lampeggia con «CARICA QUI».
 
 ## Tipi di flight case e materiali
 

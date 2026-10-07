@@ -254,11 +254,16 @@ const SHOVE_VMAX = 0.45;               // a mani vuote contro un case: si sposta
 const STEP_BAND = { y1: 450, y2: 550 };
 const WORLD = { x1: -170, y1: 60, x2: 1900, y2: 940 };
 
+/* La palestra è la stessa del montaggio, vista dall'alto: dalla porta del
+   cortile si entra nel Backstage (allaccio e quadro), davanti c'è il palco
+   già montato (non ci si sale coi case), sotto il palco l'Off Stage con la
+   regia, poi il Pit davanti al palco, la platea e in fondo la FOH. I case si
+   lasciano dove serviranno al montaggio. */
+const STAGE = { x1: 1290, y1: 276, x2: 1490, y2: 564 };
 const ZONES = {
-  palco: { name: 'Palco',     color: '#eaff2b', x: 1640, y: 320, w: 200, h: 360 },
-  back:  { name: 'Backstage', color: '#ff4fb4', x: 1640, y: 160, w: 200, h: 140 },
-  pit:   { name: 'Pit',       color: '#4fb7ff', x: 1470, y: 320, w: 150, h: 360 },
-  foh:   { name: 'Regia FOH', color: '#49e07a', x: 1190, y: 620, w: 270, h: 225 }
+  back:  { name: 'Backstage', color: '#ff4fb4', x: 1170, y: 150, w: 115, h: 292 },
+  foh:   { name: 'Off Stage · regia', color: '#49e07a', x: 1292, y: 574, w: 198, h: 272 },
+  pit:   { name: 'Pit', color: '#4fb7ff', x: 1498, y: 160, w: 104, h: 686 }
 };
 // i flight case sono fatti per prendere colpi: si rovina qualcosa solo con
 // un urto vero (correre contro un muro, far cadere, lanciare un case)
@@ -281,7 +286,7 @@ const WHEEL = {
 // Esce prima quello caricato per ultimo: vedi blockers(). Il baule SEGNALE
 // (i cavi di stasera) sta in fondo sotto un telo: è la sorpresa finale.
 const CASES = [
-  { id: 'corrente', name: 'Baule CORRENTE', short: 'CORRENTE', what: 'cavi pesanti, CEE', kg: 70, w: 100, h: 56, wheel: 'swivel', frag: 'bassa', zone: 'foh', heavy2: true, unique: true, x: 195, y: 430,
+  { id: 'corrente', name: 'Baule CORRENTE', short: 'CORRENTE', what: 'cavi pesanti, CEE', kg: 70, w: 100, h: 56, wheel: 'swivel', frag: 'bassa', zone: 'back', heavy2: true, unique: true, x: 195, y: 430,
     dif: 'cavi aggrovigliati: +10 min per sbrogliarli' },
   { id: 'rack', name: 'Rack regia', short: 'RACK', what: 'mixer + finale', kg: 55, w: 58, h: 58, wheel: 'fixed', frag: 'alta', zone: 'foh', heavy2: true, tall: true, unique: true, x: 75, y: 515,
     dif: 'il finale va in protezione all\'accensione: +10 min' },
@@ -293,7 +298,7 @@ const CASES = [
     dif: 'il quadro scatta alla prima accensione: +10 min' },
   { id: 'sub2', name: 'Sub 2', short: 'SUB', what: 'cassa sub', kg: 40, w: 70, h: 70, wheel: 'fixed', frag: 'media', zone: 'pit', unique: true, x: 300, y: 572,
     dif: 'la cassa vibra: +10 min per controllarla' },
-  { id: 'stativi', name: 'Borsa stativi', short: 'STATIVI', what: '4 stativi + asta mic', kg: 22, w: 90, h: 34, wheel: 'hand', frag: 'bassa', zone: 'palco', x: 300, y: 408,
+  { id: 'stativi', name: 'Borsa stativi', short: 'STATIVI', what: '4 stativi + asta mic', kg: 22, w: 90, h: 34, wheel: 'hand', frag: 'bassa', zone: 'pit', x: 300, y: 408,
     dif: 'uno stativo duro da aprire: +10 min' },
   { id: 'top1', name: 'Top 1', short: 'TOP', what: 'cassa top', kg: 20, w: 44, h: 44, wheel: 'hand', frag: 'media', zone: 'pit', unique: true, x: 372, y: 418,
     dif: 'il tweeter gracchia: +10 min' },
@@ -301,7 +306,7 @@ const CASES = [
     dif: 'il tweeter gracchia: +10 min' },
   { id: 'valigetta', name: 'Valigetta regia', short: 'PC', what: 'PC, scheda, controller DMX', kg: 8, w: 40, h: 30, wheel: 'hand', frag: 'altissima', zone: 'foh', unique: true, x: 40, y: 430,
     dif: 'il PC non parte al primo colpo: +10 min' },
-  { id: 'par', name: 'Case PAR', short: 'PAR ×4', what: '4 PAR LED', kg: 25, w: 55, h: 48, wheel: 'hand', frag: 'alta', zone: 'palco', x: 215, y: 545,
+  { id: 'par', name: 'Case PAR', short: 'PAR ×4', what: '4 PAR LED', kg: 25, w: 55, h: 48, wheel: 'hand', frag: 'alta', zone: 'pit', x: 215, y: 545,
     dif: 'lenti da pulire: +10 min' },
   { id: 'ricambio', name: 'Case ricambi', short: 'RICAMBI', what: '1 PAR, 1 stativo, 1 mic', kg: 18, w: 44, h: 40, wheel: 'hand', frag: 'media', zone: 'back', x: 372, y: 500,
     dif: 'scorte in disordine: +10 min' }
@@ -313,6 +318,15 @@ function weightClass (d) {
   if (d.wheel !== 'hand') return 'PESANTE · si spinge';
   return d.kg <= 10 ? 'LEGGERO' : 'MEDIO · in mano';
 }
+
+// le cinghie del furgone, una per strato (il primo, coi case leggeri, è
+// sciolto: il case ricambi infatti scivola). Una cinghia tiene fermi i case
+// del suo strato finché non la sganci; i case con le ruote hanno anche il freno.
+const VAN_STRAPS = [
+  { x: 300, ids: ['stativi', 'sub1', 'sub2'] },
+  { x: 210, ids: ['corrente', 'distro', 'par'] },
+  { x: 60, ids: ['rack', 'valigetta', 'segnale'] }
+];
 
 const STATE_COLOR = { integro: '#49b06a', ammaccato: '#f2c53d', difettoso: '#f2843d', rotto: '#e0503f' };
 const STATE_LABEL = { integro: 'integro', ammaccato: 'ammaccato', difettoso: 'difettoso', rotto: 'rotto' };
@@ -403,7 +417,7 @@ function newGame () {
     cam: { x: 420, y: 500, scale: 1 }, doorsOpen: 0, flashes: [], fx: [],
     // tutorial che si gioca: comandi e strumenti compaiono quando servono
     unlock: { help: false, lift: false, stop: false, cart: false, eff: false },
-    seen: {}, team: false, trolley: null, surprise: null, blockFlash: null, tarp: 0, prevPX: 0,
+    seen: {}, team: false, trolley: null, van: { open: false, ramp: false, anim: null }, straps: VAN_STRAPS.map(() => true), surprise: null, blockFlash: null, tarp: 0, prevPX: 0,
     // come si lavora: viaggi, carrello, urti, collega, ordine (efficienza)
     stats: { trips: 0, wasted: 0, cartTrips: 0, cartCases: 0, handDeliv: 0, hits: 0, rough: 0, solo: 0, blocked: 0, wrongDrop: 0 }
   };
@@ -425,10 +439,13 @@ function newGame () {
   wall(GYM_X - 10, 80, GYM_X + 10, STEP_BAND.y1); wall(GYM_X - 10, STEP_BAND.y2, GYM_X + 10, 920);
   wall(GYM_X, 130, 1870, 150); wall(GYM_X, 850, 1870, 870); wall(1850, 130, 1870, 870);
   // sedie impilate in palestra, un albero e una panchina in cortile
-  wall(1300, 170, 1400, 220, false);
+  wall(1640, 170, 1740, 220, false);                // sedie impilate in platea
+  wall(STAGE.x1, STAGE.y1, STAGE.x2, STAGE.y2, false);   // il palco: rialzato, i case non ci salgono
   G.statics.push(Bodies.circle(820, 260, 18, { isStatic: true, collisionFilter: { category: CAT.WALL, mask: 0xffff } }));
   wall(840, 730, 970, 758, false);
   wall(632, 118, 692, 146, false);                  // tavolino della moka
+  // il portellone chiuso (e poi la rampa su): non si entra e non si esce
+  G.doorWall = wall(DOOR_X - 2, 380, DOOR_X + 8, 620, false);
   // il gradino della porta: ferma solo i case a terra
   const step = Bodies.rectangle(GYM_X, 500, 10, STEP_BAND.y2 - STEP_BAND.y1,
     { isStatic: true, collisionFilter: { category: CAT.STEP, mask: CAT.CASE } });
@@ -447,6 +464,10 @@ function newGame () {
       zone: null, pv: { x: 0, y: 0 }, flash: 0, seed: Math.random() * 1000, rushed: false, onDolly: false, fell: false };
     b.plugin.ent = ce;
     if (d.surprise) { ce.hidden = true; Body.setStatic(b, true); }   // sotto il telo, in fondo
+    // come al carico: cinghie tirate sugli strati e freni sulle ruote
+    ce.strap = VAN_STRAPS.findIndex(st => st.ids.includes(d.id));
+    ce.brake = d.wheel === 'swivel' || d.wheel === 'fixed';
+    if (locked(ce) && !ce.hidden) Body.setStatic(b, true);
     G.cases.push(ce);
   }
   Composite.add(world, G.cases.map(c => c.body));
@@ -469,7 +490,7 @@ function newGame () {
 
   Events.on(engine, 'collisionStart', onCollision);
 
-  bubble(G.macio, 'Comincia dal davanti, io sistemo la rampa.', 2.8);
+  bubble(G.macio, 'Apri tu il portellone, ti tengo la rampa.', 2.8);
 }
 
 function makeWorker (name, x, y, r, o) {
@@ -542,6 +563,8 @@ function K (what) {
   return touchUI ? { grab: 'PRENDI', help: 'AIUTO', lift: 'OH-ISSA', stop: 'FERMO!' }[what]
     : { grab: 'PRENDI (Spazio)', help: 'AIUTO (E)', lift: 'OH-ISSA (Q)', stop: 'FERMO (F)' }[what];
 }
+// il tasto d'azione col nome che ha adesso (APRI, RAMPA, CINGHIA, FRENO)
+function KA (label) { return touchUI ? label : label + ' (Spazio)'; }
 // una cosa imparata (Macio in squadra, il carrello, la barra del lavoro)
 function unlock (what) {
   if (!G || G.unlock[what]) return;
@@ -626,9 +649,90 @@ function refreshFilter (ce) {
 }
 
 /* ---------------------------------------------------------------------
+   IL FURGONE: portellone, rampa, cinghie e freni. Si arriva col furgone
+   chiuso: APRI il portellone, giù la RAMPA, poi si sgancia la cinghia di
+   uno strato e si toglie il freno ai case con le ruote. Un case legato o
+   frenato non si muove (corpo fermo), e tiene bloccati quelli dietro.
+   --------------------------------------------------------------------- */
+function strapOn (ce) { return ce.strap >= 0 && G.straps[ce.strap]; }
+function locked (ce) { return ce.kind === 'case' && (strapOn(ce) || !!ce.brake); }
+function setFree (ce) {
+  if (ce.hidden || locked(ce) || !ce.body.isStatic) return;
+  Body.setStatic(ce.body, false); Body.setMass(ce.body, ce.def.kg);
+}
+function nearDoor (w) {
+  const p = w.body.position;
+  return p.x > DOOR_X - 30 && p.x < DOOR_X + 110 && p.y > 370 && p.y < 630;
+}
+function openDoors () {
+  if (G.van.open || G.van.anim) return;
+  G.van.anim = { what: 'doors', t: 0 }; AU.clack();
+  bubble(G.player, 'Apro!', 0.8);
+}
+function lowerRamp () {
+  if (!G.van.open || G.van.ramp || G.van.anim) return;
+  G.van.anim = { what: 'ramp', t: 0 }; AU.thud(3);
+  bubble(G.macio, 'Piano con la rampa…', 1.2);
+}
+// fine delle animazioni: portellone aperto, rampa giù
+function vanStep (dt) {
+  const A = G.van.anim; if (!A) return;
+  A.t += dt;
+  if (A.what === 'doors') {
+    G.doorsOpen = clamp(A.t / 1.0, 0, 1);
+    if (A.t >= 1) {
+      G.van.open = true; G.van.anim = null;
+      goal('Tira giù la rampa: ' + KA('RAMPA') + ' davanti al portellone.');
+      once('legati', 'Dentro i case sono legati con le cinghie e i case con le ruote hanno il freno tirato, come per il viaggio.', 'ok');
+    }
+  } else if (A.what === 'ramp') {
+    G.van.rampK = clamp(A.t / 0.8, 0, 1);
+    if (A.t >= 0.8) {
+      G.van.ramp = true; G.van.anim = null; AU.thud(5);
+      Composite.remove(G.world, G.doorWall); G.statics = G.statics.filter(b => b !== G.doorWall);
+      // il case ricambi non era legato: scivola giù
+      const r = G.cases.find(c => c.def.id === 'ricambio');
+      r.slideUntil = G.t + 1.2; Body.setVelocity(r.body, { x: 4.2, y: 0.2 }); Body.setAngularVelocity(r.body, 0.03);
+      toast('Occhio! Il case ricambi non era legato…', 'warn');
+      G.team = true;
+      bubble(G.macio, 'Io porto i leggeri, tu chiamami per quelli grossi!', 2.4);
+      goal('Scarica il furgone: prima i case davanti, poi sgancia le cinghie.');
+    }
+  }
+}
+function releaseStrap (i) {
+  if (!G.straps[i]) return;
+  G.straps[i] = false; AU.tone(520, 300, 0.12, 0.08);
+  for (const ce of G.cases) if (ce.strap === i) setFree(ce);
+  const st = VAN_STRAPS[i];
+  floatText(st.x, 400, 'CINGHIA SGANCIATA', '#f2a541');
+  const braked = G.cases.filter(c => c.strap === i && c.brake && !c.hidden);
+  once('freno', braked.length ? 'Cinghia sganciata. ' + braked.map(c => c.def.name).join(' e ') + (braked.length > 1 ? ' hanno' : ' ha') + ' ancora il freno: ' + KA('FRENO') + ' vicino al case per toglierlo.' : 'Cinghia sganciata: adesso quei case si possono prendere.', 'ok');
+}
+function releaseBrake (ce) {
+  if (!ce.brake) return;
+  ce.brake = false; AU.tone(380, 260, 0.1, 0.08);
+  floatText(ce.body.position.x, ce.body.position.y - 20, 'FRENO TOLTO', '#f2a541');
+  setFree(ce);
+}
+// cosa fa il tasto d'azione vicino al furgone, se c'è da fare qualcosa
+function vanAction (w) {
+  if (!G.van.open || !G.van.ramp) return nearDoor(w) && !G.van.anim ? (G.van.open ? 'ramp' : 'doors') : null;
+  const ce = nearestCase(w, 14);
+  if (!ce || ce.hidden) return null;
+  if (strapOn(ce)) return 'strap';
+  if (ce.brake) return 'brake';
+  return null;
+}
+
+/* ---------------------------------------------------------------------
    PRENDERE, SPINGERE, PORTARE
    --------------------------------------------------------------------- */
 function grab (w, ce) {
+  if (ce.kind === 'case' && locked(ce)) {
+    if (w === G.player) toast(ce.def.name + (strapOn(ce) ? ': è ancora legato con la cinghia.' : ': ha il freno tirato.'), 'warn');
+    return false;
+  }
   if (ce.kind === 'case' && blockers(ce).length) { if (w === G.player) blockedTry(ce); return false; }
   if (ce.carrier) return false;
   if (carriable(ce) && ce.grabbers.length) return false;
@@ -662,7 +766,8 @@ function blockedTry (ce) {
   G.blockFlash = { ce, ids: bl, until: G.t + 1.8 };
   G.stats.blocked++; AU.locked();
   floatText(ce.body.position.x, ce.body.position.y - 20, 'ACCESSO BLOCCATO', '#e0503f');
-  once('blocked', 'Accesso bloccato: davanti c\'è ' + (bl.length > 1 ? 'altro (' + bl.map(b => b.def.name).join(', ') + ')' : bl[0].def.name) + '.', 'warn');
+  const tied = bl.filter(locked);
+  toast('Accesso bloccato: davanti c\'è ' + bl.map(b => b.def.name).join(' e ') + (tied.length ? (tied.length > 1 || bl.length > 1 ? ', ancora legati e frenati' : ', ancora legato e frenato') + '. Prima libera e porta fuori quello.' : '. Prima porta fuori quello.'), 'warn');
 }
 // la prima volta che si prende un certo tipo di case, una riga sola
 function learnFrom (ce) {
@@ -695,8 +800,8 @@ function spawnTrolley () {
   G.trolley = t; unlock('cart');
   $('#h-cart').hidden = false; $('#h-cart').classList.add('reveal');
   ring(470, 650, '#8fa3b8'); AU.clack();
-  bubble(G.macio, 'Prendi il carrello! Tre case alla volta.', 2.6);
-  toast('CARRELLO: lascia accanto fino a 3 case leggeri, poi spingilo in palestra.', 'ok');
+  bubble(G.macio, 'Ti ho tirato fuori il carrello: tre case alla volta!', 2.6);
+  toast('CARRELLO: prendi un case leggero, avvicinati al carrello e ' + KA('CARICA') + '. Poi spingilo fino alla zona e ' + KA('SCARICA') + '.', 'ok');
 }
 function nearTrolley (w, reach) {
   const t = G.trolley; if (!t) return false;
@@ -874,13 +979,19 @@ function pressGrab () {
     return;
   }
   if (G.coffee.pauseUntil > G.t) return;
+  const va = vanAction(p);
+  if (va === 'doors') { openDoors(); return; }
+  if (va === 'ramp') { lowerRamp(); return; }
+  if (va === 'strap') { releaseStrap(nearestCase(p, 14).strap); return; }
+  if (va === 'brake') { releaseBrake(nearestCase(p, 14)); return; }
   const ce = nearestCase(p, 14);
   // il carrello: in una zona si scarica, altrove si spinge
   if (t && nearTrolley(p, 14) && (!ce || surface(t, p.body.position).dist <= surface(ce, p.body.position).dist)) {
     const inZone = zoneAt(p.body.position) || zoneAt(t.body.position);
     if (t.load.length && inZone) { unloadTrolley(p); return; }
     grab(p, t);
-    if (t.load.length) once('spingi', 'Spingi il carrello fino alle zone, poi scaricalo lì con ' + K('grab') + '.');
+    if (t.load.length) once('spingi', 'Spingi il carrello fino alle zone, poi lascialo lì e ' + KA('SCARICA') + '.');
+    else toast('Il carrello è vuoto: prima caricalo. Prendi un case leggero e avvicinati al carrello.', 'warn');
     return;
   }
   if (!ce) { toast('Avvicinati a un case per prenderlo.'); return; }
@@ -978,7 +1089,23 @@ function macio (state, data) {
 }
 const CHAIN = [{ x: 330, y: 500 }, { x: 460, y: 500 }, { x: 590, y: 500 }, { x: GYM_X - 60, y: 500 }, { x: GYM_X + 60, y: 500 }];
 function region (p) { return p.x < DOOR_X ? 0 : p.x < 520 ? 1 : p.x < GYM_X ? 2 : 3; }
+// in palestra il palco si gira da sotto, passando per l'Off Stage
+function aroundStage (from, to) {
+  const A = { x: STAGE.x1 - 40, y: STAGE.y2 + 40 }, B = { x: STAGE.x2 + 40, y: STAGE.y2 + 40 };
+  const side = p => p.x < STAGE.x1 ? -1 : p.x > STAGE.x2 ? 1 : 0, below = p => p.y > STAGE.y2 + 25;
+  const sf = side(from), st = side(to);
+  if (sf === st || below(from) && below(to)) return to;
+  let c;
+  if (below(from)) c = st > 0 ? B : A;
+  else if (below(to)) c = sf > 0 ? B : sf < 0 ? A : (len(sub(A, from)) < len(sub(B, from)) ? A : B);
+  else c = sf > 0 ? B : sf < 0 ? A : (st > 0 ? B : A);
+  return len(sub(c, from)) > 24 ? c : to;
+}
 function navPoint (from, to) {
+  const t = navChain(from, to);
+  return from.x > GYM_X && t.x > GYM_X ? aroundStage(from, t) : t;
+}
+function navChain (from, to) {
   if (region(from) === region(to)) return to;
   if (to.x > from.x) {
     for (const c of CHAIN) if (c.x > from.x - 5 && c.x < to.x && len(sub(c, from)) > 24) return c;
@@ -1020,7 +1147,7 @@ function pickJob (T) {
   let best = null, bd = Infinity;
   for (const ce of G.cases) {
     if (!carriable(ce) || delicate(ce) || ce.carrier || ce.grabbers.length || ce.zone === ce.def.zone) continue;
-    if (ce.hidden || ce.onTrolley || blockers(ce).length) continue;
+    if (ce.hidden || ce.onTrolley || locked(ce) || blockers(ce).length) continue;
     if (ce.skipUntil > G.t || G.player.grab === ce) continue;
     if (ce.body.position.x > GYM_X && ce.zone === null && speedOf(ce.body) > 0.3) continue;
     if (!helpPoint(ce, null)) continue;
@@ -1074,7 +1201,11 @@ function updateMacio (dt) {
     const to = ai.to();
     dir = steer(T, to, ai.stop || 50);
     if (len(sub(to, T.body.position)) < (ai.stop || 50) || ai.t > 8) macio('idle');
-  } else { // idle: se non lo chiami, porta da solo un case leggero
+  } else { // idle: ti dà una mano sui case pesanti, se no porta da solo un case leggero
+    const pc = P.grab && P.grab.kind === 'case' && P.mode === 'push' ? P.grab : null;
+    if (pc && G.team && ai.t > 0.6 && (pc.def.heavy2 || pc.def.kg >= 35) && !pc.grabbers.includes(T) && helpPoint(pc, P)) {
+      macio('help', { ce: pc }); bubble(T, pc.def.heavy2 ? 'Questo in due, arrivo!' : 'Ti do una mano!', 1.4); AU.hey(); drive(T, dir, vmax); return;
+    }
     const job = ai.t > 1.2 && G.mode === 'play' && G.team && pickJob(T);
     if (job) { macio('carry', { ce: job, auto: true }); bubble(T, 'Porto io ' + job.def.name + '!', 1.4); drive(T, dir, vmax); return; }
     const d = len(sub(P.body.position, T.body.position));
@@ -1271,7 +1402,7 @@ function scriptEvents () {
   const E = G.events, t = G.t;
   const once = (k, at, fn) => { if (!E[k] && t >= at) { E[k] = true; fn(); } };
   // il primo passante aspetta che tu sappia chiamare (serve a chiedere permesso)
-  if (G.unlock.help) once('passante1', G.at.passante1, () => passante(G.kids[0]));
+  if (G.team) once('passante1', G.at.passante1, () => passante(G.kids[0]));
   once('bidello', G.at.bidello, () => {
     const b = Bodies.rectangle(1010, 110, 56, 80, { frictionAir: 0, collisionFilter: { category: CAT.NPC, mask: CAT.WALL | CAT.CASE | CAT.WORKER | CAT.NPC | CAT.DOLLY } });
     Body.setMass(b, 150); Body.setInertia(b, Infinity);
@@ -1284,7 +1415,7 @@ function scriptEvents () {
     const T = G.macio; macio('phone'); bubble(T, 'È mia moglie, un attimo…', 3);
     toast('Macio è al telefono per qualche secondo.', 'warn');
   });
-  if (G.unlock.help) once('passante2', G.at.passante2, () => passante(G.kids[1]));
+  if (G.team) once('passante2', G.at.passante2, () => passante(G.kids[1]));
 }
 function passante (k) {
   k.block = G.t + 9; k.target = { x: 505, y: rand(478, 522) };
@@ -1340,7 +1471,7 @@ function surpriseStep () {
   if (!S.revealed && dt > 3.6) {
     S.revealed = true;
     const ce = G.cases.find(c => c.def.surprise);
-    if (ce.hidden) { ce.hidden = false; Body.setStatic(ce.body, false); Body.setMass(ce.body, ce.def.kg); }
+    if (ce.hidden) { ce.hidden = false; setFree(ce); }   // legato o frenato resta fermo
     G.tarp = G.t;
     ring(ce.body.position.x, ce.body.position.y, '#eaff2b'); AU.clack();
     $('#h-del-w').classList.remove('done');
@@ -1390,16 +1521,11 @@ function stepSim () {
   const dt = 1 / 60;
   if (G.mode === 'wrap') { wrapStep(dt); return; }
   if (G.mode === 'intro') {
-    G.introT += dt; G.doorsOpen = clamp(G.introT / 1.2, 0, 1);
-    if (G.introT > 1.15 && !G.events.slide) {
-      G.events.slide = true;
-      const r = G.cases.find(c => c.def.id === 'ricambio');
-      r.slideUntil = G.introT + 1.2; Body.setVelocity(r.body, { x: 4.2, y: 0.2 }); Body.setAngularVelocity(r.body, 0.03);
-      toast('Occhio! Il case ricambi non era legato…', 'warn');
-    }
-    if (G.introT > 2) { G.mode = 'play'; goal('Scarica il furgone: prendi un case vicino al portellone (' + K('grab') + ').'); }
+    G.introT += dt;
+    if (G.introT > 0.8) { G.mode = 'play'; goal('Apri il portellone del furgone: vai davanti alle ante e ' + KA('APRI') + '.'); }
   } else if (G.mode === 'play') {
     G.t += dt;
+    vanStep(dt);
     scriptEvents();
     progress();
     updateQte(dt); autoLift();
@@ -1511,17 +1637,24 @@ function drawGround () {
   ctx.fillStyle = '#7b5634';
   for (let x = 1420; x < 1600; x += 22) ctx.fillRect(x, 826, 16, 22);
   ctx.fillStyle = 'rgba(0,0,0,.25)'; ctx.fillRect(1418, 846, 182, 4);
-  // palco rialzato: bordo con la striscia di luce, scaletta e sipario
-  ctx.fillStyle = 'rgba(0,0,0,.35)'; ctx.fillRect(1636, 316, 214, 372);
-  ctx.fillStyle = '#2f2a26'; ctx.fillRect(1630, 310, 214, 372);
-  ctx.strokeStyle = 'rgba(0,0,0,.25)'; ctx.lineWidth = 1;
-  for (let x = 1640; x < 1844; x += 22) { ctx.beginPath(); ctx.moveTo(x, 312); ctx.lineTo(x, 680); ctx.stroke(); }
-  ctx.fillStyle = '#f2a541'; ctx.globalAlpha = 0.35; ctx.fillRect(1630, 310, 3, 372); ctx.globalAlpha = 1;
-  ctx.fillStyle = '#4a3d33'; for (let i = 0; i < 3; i++) ctx.fillRect(1604 + i * 9, 690, 8, 26);
-  ctx.fillStyle = '#6e1f24'; ctx.fillRect(1836, 310, 10, 372);
-  ctx.fillStyle = 'rgba(0,0,0,.25)'; for (let y = 316; y < 680; y += 14) ctx.fillRect(1836, y, 10, 4);
-  ctx.save(); ctx.fillStyle = 'rgba(238,233,223,.08)'; ctx.font = '700 44px "Barlow Condensed", sans-serif'; ctx.textAlign = 'center';
-  ctx.fillText('PALESTRA', 1400, 560); ctx.restore();
+  // il palco già montato (come al montaggio): pedana con la striscia di luce
+  const S = STAGE, sw = S.x2 - S.x1, sh = S.y2 - S.y1;
+  ctx.fillStyle = 'rgba(0,0,0,.4)'; ctx.fillRect(S.x1 + 6, S.y1 + 6, sw, sh);
+  ctx.fillStyle = '#2f2a26'; ctx.fillRect(S.x1, S.y1, sw, sh);
+  ctx.strokeStyle = 'rgba(0,0,0,.3)'; ctx.lineWidth = 1;
+  for (let y = S.y1 + 20; y < S.y2; y += 22) { ctx.beginPath(); ctx.moveTo(S.x1 + 2, y); ctx.lineTo(S.x2 - 2, y); ctx.stroke(); }
+  ctx.fillStyle = '#f2a541'; ctx.globalAlpha = 0.45; ctx.fillRect(S.x2 - 3, S.y1, 3, sh); ctx.globalAlpha = 1;
+  ctx.fillStyle = '#6e1f24'; ctx.fillRect(S.x1, S.y1, 8, sh);                       // fondale verso il backstage
+  ctx.fillStyle = 'rgba(0,0,0,.25)'; for (let y = S.y1 + 4; y < S.y2; y += 14) ctx.fillRect(S.x1, y, 8, 4);
+  ctx.fillStyle = '#4a3d33'; for (let i = 0; i < 3; i++) ctx.fillRect(S.x2 - 30 + i * 9, S.y2, 8, 22);   // scaletta
+  ctx.save(); ctx.fillStyle = 'rgba(238,233,223,.35)'; ctx.font = '700 30px "Barlow Condensed", sans-serif'; ctx.textAlign = 'center';
+  ctx.fillText('PALCO', (S.x1 + S.x2) / 2, (S.y1 + S.y2) / 2 + 10);
+  ctx.fillStyle = 'rgba(238,233,223,.12)'; ctx.font = '700 34px "Barlow Condensed", sans-serif';
+  ctx.fillText('PLATEA', 1690, 520);
+  ctx.font = '700 22px "Barlow Condensed", sans-serif'; ctx.fillText('FOH', 1808, 520);
+  ctx.restore();
+  ctx.strokeStyle = 'rgba(238,233,223,.12)'; ctx.lineWidth = 2; ctx.setLineDash([8, 8]);
+  ctx.beginPath(); ctx.moveTo(1610, 150); ctx.lineTo(1610, 850); ctx.moveTo(1770, 150); ctx.lineTo(1770, 850); ctx.stroke(); ctx.setLineDash([]);
 }
 function drawZones () {
   for (const k in ZONES) {
@@ -1565,13 +1698,23 @@ function drawStatics () {
   ctx.fillStyle = '#dfe1e5'; ctx.strokeStyle = '#9aa0a8'; ctx.lineWidth = 2;
   ctx.save(); ctx.translate(DOOR_X, 380); ctx.rotate(a); ctx.fillRect(0, -8, 112, 9); ctx.strokeRect(0, -8, 112, 9); ctx.restore();
   ctx.save(); ctx.translate(DOOR_X, 620); ctx.rotate(-a); ctx.fillRect(0, -1, 112, 9); ctx.strokeRect(0, -1, 112, 9); ctx.restore();
-  // rampa in alluminio
-  ctx.fillStyle = '#8f959e'; ctx.fillRect(RAMP.x, RAMP.y, RAMP.w, RAMP.h);
-  ctx.strokeStyle = '#6b7078'; ctx.lineWidth = 2;
-  for (let x = RAMP.x + 6; x < RAMP.x + RAMP.w; x += 9) { ctx.beginPath(); ctx.moveTo(x, RAMP.y + 3); ctx.lineTo(x, RAMP.y + RAMP.h - 3); ctx.stroke(); }
-  ctx.strokeStyle = '#555a62'; ctx.lineWidth = 4; ctx.strokeRect(RAMP.x, RAMP.y, RAMP.w, RAMP.h);
-  ctx.fillStyle = 'rgba(20,21,25,.55)';
-  for (let i = 0; i < 3; i++) { const x = RAMP.x + 30 + i * 30; ctx.beginPath(); ctx.moveTo(x, 485); ctx.lineTo(x + 14, 500); ctx.lineTo(x, 515); ctx.lineTo(x + 5, 500); ctx.fill(); }
+  // rampa in alluminio: su (agganciata al pianale) finché non la tiri giù
+  const rk = G.van && G.van.ramp ? 1 : (G.van && G.van.rampK) || 0;
+  if (rk > 0) {
+    const rw = RAMP.w * rk;
+    ctx.fillStyle = '#8f959e'; ctx.fillRect(RAMP.x, RAMP.y, rw, RAMP.h);
+    ctx.strokeStyle = '#6b7078'; ctx.lineWidth = 2;
+    for (let x = RAMP.x + 6; x < RAMP.x + rw; x += 9) { ctx.beginPath(); ctx.moveTo(x, RAMP.y + 3); ctx.lineTo(x, RAMP.y + RAMP.h - 3); ctx.stroke(); }
+    ctx.strokeStyle = '#555a62'; ctx.lineWidth = 4; ctx.strokeRect(RAMP.x, RAMP.y, rw, RAMP.h);
+    if (rk === 1) {
+      ctx.fillStyle = 'rgba(20,21,25,.55)';
+      for (let i = 0; i < 3; i++) { const x = RAMP.x + 30 + i * 30; ctx.beginPath(); ctx.moveTo(x, 485); ctx.lineTo(x + 14, 500); ctx.lineTo(x, 515); ctx.lineTo(x + 5, 500); ctx.fill(); }
+    }
+  } else if (G.van && G.van.open) {
+    // la rampa ripiegata dentro il portellone
+    ctx.fillStyle = '#8f959e'; ctx.fillRect(DOOR_X - 14, RAMP.y, 10, RAMP.h);
+    ctx.strokeStyle = '#555a62'; ctx.lineWidth = 2; ctx.strokeRect(DOOR_X - 14, RAMP.y, 10, RAMP.h);
+  }
   // bordo del pianale: si cade se si esce fuori dalla rampa
   ctx.fillStyle = '#f2c53d'; ctx.fillRect(DOOR_X - 4, 390, 4, RAMP.y - 390); ctx.fillRect(DOOR_X - 4, RAMP.y + RAMP.h, 4, 610 - RAMP.y - RAMP.h);
   // muri: recinzione metallica del cortile, muri in cemento della palestra
@@ -1605,8 +1748,8 @@ function drawStatics () {
   ctx.fillStyle = '#141519'; for (let y = STEP_BAND.y1 - 20; y < STEP_BAND.y2; y += 14) { ctx.beginPath(); ctx.moveTo(GYM_X - 8, y); ctx.lineTo(GYM_X + 8, y + 10); ctx.lineTo(GYM_X + 8, y + 17); ctx.lineTo(GYM_X - 8, y + 7); ctx.fill(); }
   ctx.restore();
   // sedie impilate
-  ctx.fillStyle = '#26303d'; rr(1300, 170, 100, 50, 4); ctx.fill();
-  ctx.strokeStyle = '#3d4b5e'; ctx.lineWidth = 2; for (let x = 1308; x < 1400; x += 12) { ctx.beginPath(); ctx.moveTo(x, 174); ctx.lineTo(x, 216); ctx.stroke(); }
+  ctx.fillStyle = '#26303d'; rr(1640, 170, 100, 50, 4); ctx.fill();
+  ctx.strokeStyle = '#3d4b5e'; ctx.lineWidth = 2; for (let x = 1648; x < 1740; x += 12) { ctx.beginPath(); ctx.moveTo(x, 174); ctx.lineTo(x, 216); ctx.stroke(); }
   // panchina
   ctx.fillStyle = '#6a4a2c'; rr(840, 730, 130, 28, 4); ctx.fill();
   ctx.strokeStyle = '#4b331d'; for (let y = 736; y < 756; y += 7) { ctx.beginPath(); ctx.moveTo(844, y); ctx.lineTo(966, y); ctx.stroke(); }
@@ -1669,8 +1812,41 @@ function drawTrolley () {
   for (let x = -w / 2 + 8; x < w / 2 - 4; x += 8) { ctx.beginPath(); ctx.moveTo(x, -h / 2 + 5); ctx.lineTo(x + 4, h / 2 - 5); ctx.stroke(); }
   ctx.strokeStyle = '#2b2d33'; ctx.lineWidth = 4; ctx.lineCap = 'round';
   ctx.beginPath(); ctx.moveTo(-w / 2 - 2, -h / 2 + 6); ctx.lineTo(-w / 2 - 9, -h / 2 + 6); ctx.lineTo(-w / 2 - 9, h / 2 - 6); ctx.lineTo(-w / 2 - 2, h / 2 - 6); ctx.stroke();
-  if (!t.load.length) { ctx.fillStyle = '#2b2d33'; ctx.font = '700 12px "Barlow Condensed", sans-serif'; ctx.textAlign = 'center'; ctx.fillText('CARRELLO', 0, 4); }
+  // tre posti sul pianale: pieni o vuoti
+  for (let i = 0; i < TROLLEY_MAX; i++) {
+    ctx.strokeStyle = i < t.load.length ? '#2f8f4e' : 'rgba(43,45,51,.8)'; ctx.lineWidth = 2; ctx.setLineDash(i < t.load.length ? [] : [4, 3]);
+    rr(-w / 2 + 6 + i * (w - 12) / 3, -h / 2 + 8, (w - 12) / 3 - 4, h - 16, 3); ctx.stroke();
+  }
+  ctx.setLineDash([]);
+  // col case in mano vicino: il carrello si illumina, si carica qui
+  const P = G.player, held = P.grab && P.mode === 'carry' && P.grab.kind === 'case';
+  if (held && t.load.length < TROLLEY_MAX && len(sub(P.body.position, b.position)) < 160) {
+    ctx.strokeStyle = 'rgba(73,224,122,' + (0.55 + 0.45 * Math.sin(performance.now() / 160)) + ')'; ctx.lineWidth = 4;
+    rr(-w / 2 - 6, -h / 2 - 6, w + 12, h + 12, 7); ctx.stroke();
+  }
   ctx.restore();
+  if (held && t.load.length < TROLLEY_MAX && len(sub(P.body.position, b.position)) < 160) {
+    ctx.fillStyle = '#49e07a'; ctx.font = '700 14px "Barlow Condensed", sans-serif'; ctx.textAlign = 'center';
+    ctx.fillText(nearTrolley(P, 26) ? KA('CARICA') : 'AVVICINATI: CARICA QUI', b.position.x, b.position.y - 38); ctx.textAlign = 'start';
+  }
+}
+// cinghie tirate attraverso il furgone e freni sulle ruote (P rossa)
+function drawLocks () {
+  VAN_STRAPS.forEach((st, i) => {
+    if (!G.straps[i]) return;
+    ctx.fillStyle = '#f2a541'; ctx.fillRect(st.x - 4, 392, 8, 216);
+    ctx.fillStyle = 'rgba(0,0,0,.25)'; for (let y = 396; y < 606; y += 10) ctx.fillRect(st.x - 4, y, 8, 2);
+    ctx.fillStyle = '#c9ccd1'; rr(st.x - 7, 488, 14, 24, 3); ctx.fill();          // cricchetto
+    ctx.fillStyle = '#55585f'; ctx.fillRect(st.x - 4, 494, 8, 3); ctx.fillRect(st.x - 4, 502, 8, 3);
+  });
+  for (const ce of G.cases) {
+    if (!ce.brake || ce.hidden || ce.onTrolley) continue;
+    const b = ce.body, c = add(b.position, rot({ x: ce.def.w / 2 - 6, y: ce.def.h / 2 - 6 }, b.angle));
+    ctx.fillStyle = '#e0503f'; ctx.beginPath(); ctx.arc(c.x, c.y, 8, 0, Math.PI * 2); ctx.fill();
+    ctx.strokeStyle = '#ffd2cb'; ctx.lineWidth = 1.5; ctx.stroke();
+    ctx.fillStyle = '#fff'; ctx.font = '700 10px Inter, sans-serif'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle'; ctx.fillText('P', c.x, c.y + 0.5);
+    ctx.textAlign = 'start'; ctx.textBaseline = 'alphabetic';
+  }
 }
 function drawCase (ce) {
   const b = ce.body, d = ce.def, w = d.w, h = d.h;
@@ -1865,7 +2041,9 @@ function drawScreenUI () {
       if (bl) tags.push(['ACCESSO BLOCCATO', '#e0503f']);
       if (ce.def.heavy2) tags.push(['⚠ 2 PERSONE', '#f2a541']);
       if (FRAGILE(ce.def)) tags.push(['⚠ FRAGILE', '#e0503f']);
-      const hint = ce.carrier ? 'lo porta Macio' : weightClass(ce.def) + ' → ' + ZONES[ce.def.zone].name.toUpperCase();
+      if (strapOn(ce)) tags.unshift(['CINGHIA', '#f2a541']); else if (ce.brake) tags.unshift(['FRENO TIRATO', '#e0503f']);
+      const hint = ce.carrier ? 'lo porta Macio' : strapOn(ce) ? 'legato: sgancia la cinghia con ' + KA('CINGHIA') : ce.brake ? 'ruote frenate: togli il freno con ' + KA('FRENO')
+        : weightClass(ce.def) + ' → ' + ZONES[ce.def.zone].name.toUpperCase();
       label(s.x, s.y - ce.def.h * G.cam.scale / 2 - 16, ce.def.name.toUpperCase() + ' — ' + ce.def.what, hint, ZONES[ce.def.zone].color, tags);
     }
   }
@@ -1962,6 +2140,7 @@ function render () {
   drawGround(); drawZones(); drawStatics(); drawDolly();
   const ground = G.cases.filter(c => !c.carrier && !c.onTrolley && !(G.t < c.liftUntil)).sort((a, b) => a.body.position.y - b.body.position.y);
   ground.forEach(drawCase);
+  drawLocks();
   drawTrolley();
   if (G.trolley) G.trolley.load.forEach(drawCase);
   if (G.tarp && G.t - G.tarp < 1.2) drawTarp(G.cases.find(c => c.def.surprise), (G.t - G.tarp) / 1.2);
@@ -2024,7 +2203,8 @@ function updateHud () {
   const allIn = G.cases.every(c => c.body.position.x > GYM_X + 10 && !c.carrier && !c.grabbers.length && !c.onTrolley);
   $('#btn-close').hidden = !(allIn && G.mode === 'play');
   const t = G.trolley;
-  let gl = P.grab ? 'LASCIA' : 'PRENDI';
+  const va = !P.grab && play ? vanAction(P) : null;
+  let gl = P.grab ? 'LASCIA' : va ? { doors: 'APRI', ramp: 'RAMPA', strap: 'CINGHIA', brake: 'FRENO' }[va] : 'PRENDI';
   if (t && P.grab && P.mode === 'carry' && nearTrolley(P, 26) && t.load.length < TROLLEY_MAX) gl = 'CARICA';
   else if (t && !P.grab && t.load.length && nearTrolley(P, 14) && (zoneAt(P.body.position) || zoneAt(t.body.position))) gl = 'SCARICA';
   $('#b-grab').textContent = gl;
@@ -2251,7 +2431,7 @@ function startGame () {
   document.querySelectorAll('#keys [data-k]').forEach(k => { k.hidden = true; });
   for (const id of ['#h-cart', '#h-eff-w', '#h-dmg-w']) $(id).hidden = true;
   $('#h-del-w').classList.remove('done');
-  hintGoal = ''; toast('Si aprono i portelloni…');
+  hintGoal = ''; toast('Siamo arrivati. Il furgone è chiuso.');
   paused = false; acc = 0;
   resize();
   if (!running) { running = true; lastT = performance.now(); requestAnimationFrame(loop); }

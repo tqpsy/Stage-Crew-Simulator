@@ -687,7 +687,7 @@ const FAULTS = {
    caseOfPiece(compId) il case da cui esce un pezzo posato (i difettosi
    escono per primi, come in isFaulty). Niente case (scarico saltato o
    salvataggio vecchio): null, e il montaggio va come prima. */
-const SCARICO_ZONES = { palco: 'Palco', back: 'Backstage', pit: 'Pit', foh: 'Regia FOH' };
+const SCARICO_ZONES = { palco: 'Palco', back: 'Backstage', pit: 'Pit', foh: 'Off Stage' };
 const PIECE_FROM_CASE = {
   sub: ['sub1', 'sub2'], top: ['top1', 'top2'], ampli: ['rack'], mixer: ['rack'],
   quadro: ['distro'], ciabatta: ['distro'], ciabatta_cee: ['distro'],
@@ -704,6 +704,32 @@ function cleanScaricoCases (list) {
     state: ['integro', 'ammaccato', 'difettoso', 'rotto'].includes(c.state) ? c.state : 'integro',
     dents: Math.max(0, Math.min(6, parseInt(c.dents, 10) || 0)), rushed: !!c.rushed
   }));
+}
+// dove sta ogni case in palestra al montaggio: nella zona dove l'hai
+// lasciato allo scarico (se l'hai saltato, nella sua zona). Posti fissi,
+// fuori dalle celle dove si posano i pezzi: Backstage verso la parete, la
+// fascia oltre l'Off Stage, la prima fila davanti al Pit
+const CASE_HOME = { corrente: 'back', distro: 'back', ricambio: 'back', segnale: 'foh', rack: 'foh', valigetta: 'foh',
+  sub1: 'pit', sub2: 'pit', top1: 'pit', top2: 'pit', stativi: 'pit', par: 'pit' };
+const DOCK_SPOTS = {
+  back: [[9.45, 2.45], [9.45, 3.45], [8.45, 2.45], [8.45, 3.45]],
+  foh: [[9.5, 4.5], [9.5, 5.45], [9.5, 6.4], [9.5, 7.35]],
+  pit: [[0.8, 10.5], [1.8, 10.5], [2.8, 10.5], [6.8, 10.5], [7.8, 10.5], [8.8, 10.5], [3.8, 10.5], [5.8, 10.5]]
+};
+const DOCK_TAPE = { back: 0xff4fb4, foh: 0x49e07a, pit: 0x4fb7ff };
+const DOCK_LABEL = { sub1: 'SUB 1', sub2: 'SUB 2', top1: 'TOP 1', top2: 'TOP 2', rack: 'RACK', valigetta: 'PC', par: 'PAR', stativi: 'STATIVI', distro: 'DISTRO', ricambio: 'RICAMBI' };
+function dockCaseSpots () {
+  const used = { back: 0, foh: 0, pit: 0 }, out = [];
+  // prima i bauli dei cavi, così stanno sempre nel primo posto della zona
+  const ids = ['corrente', 'segnale', ...Object.keys(CASE_HOME).filter(id => !CABLE_CASES[id])];
+  ids.forEach(id => {
+    const sc = scaricoCase(id);
+    let zone = sc && DOCK_SPOTS[sc.at] ? sc.at : sc && DOCK_SPOTS[sc.zone] ? sc.zone : CASE_HOME[id];
+    if (used[zone] >= DOCK_SPOTS[zone].length) zone = CASE_HOME[id];
+    const spot = DOCK_SPOTS[zone][used[zone]++];
+    if (spot) out.push({ id, gx: spot[0], gy: spot[1], zone, sc });
+  });
+  return out;
 }
 function scaricoCase (id) {
   const s = Profile.data.scarico;
@@ -7449,26 +7475,32 @@ class StageScene extends Phaser.Scene {
     const vg = this.add.graphics().setDepth(1).setPosition(vp.x, vp.y);
     this.van = { vp, v, ...this.drawVehicle(vg, v) };
 
-    // i due bauli dei cavi e un case di ricambio, dentro la palestra:
-    // nell'angolo dietro la regia FOH, contro la parete (celle occupate)
-    const caseSpots = [[0.55, 15.45, 'segnale'], [1.55, 15.45, 'corrente'], [0.55, 14.5, null]];
-    caseSpots.forEach(([gx, gy, caseName], i) => {
-      const p = gridToScreen(gx, gy);
-      const cg = this.add.graphics().setDepth(isoDepth(p.y) - 0.0005).setPosition(p.x, p.y);
-      const tape = caseName === 'segnale' ? 0xeaff2b : caseName === 'corrente' ? 0xff4fb4 : null;
-      this.drawFlightCase(cg, CASE_ISO, tape);
-      // le ammaccature prese allo scarico restano sul case
-      const sc = scaricoCase(caseName || 'ricambio');
+    this.refreshDockCases();
+  }
+
+  /* i case dello scarico, in palestra dove li hai lasciati: Backstage, Off
+     Stage (regia) e davanti al Pit. Sono scenografia, tranne i bauli dei
+     cavi che si aprono; un case da cui è già uscito un pezzo resta aperto
+     (più chiaro). Le ammaccature prese allo scarico restano sul case. */
+  refreshDockCases () {
+    (this.dockCases || []).forEach(o => o.destroy());
+    this.dockCases = [];
+    this.casePos = {};
+    dockCaseSpots().forEach(({ id, gx, gy, zone, sc }) => {
+      const p = gridToScreen(gx, gy), cable = CABLE_CASES[id] ? id : null;
+      const open = !cable && this.casesOpened && this.casesOpened.has(id);
+      const cg = this.add.graphics().setDepth(isoDepth(p.y) - 0.0005).setPosition(p.x, p.y).setAlpha(open ? 0.4 : 1);
+      this.drawFlightCase(cg, CASE_ISO, DOCK_TAPE[zone]);
       if (sc && sc.dents) {
         cg.lineStyle(1.2, 0xd2d6de, 0.55);
         for (let k = 0; k < Math.min(4, sc.dents); k++) { const x = -14 + k * 9, y = -10 + (k % 2) * 7; cg.lineBetween(x, y, x + 6, y + 3); }
       }
-      if (!caseName) return;
-      this.casePos = this.casePos || {};
-      this.casePos[caseName] = p;
-      this.add.text(p.x, p.y - 34, CABLE_CASES[caseName].title, {
-        fontFamily: 'Barlow Condensed, sans-serif', fontSize: '11px', fontStyle: 'bold', color: '#e6e8eb'
+      const label = this.add.text(p.x, p.y - 34, cable ? CABLE_CASES[id].title : (DOCK_LABEL[id] || id.toUpperCase()) + (open ? ' · aperto' : ''), {
+        fontFamily: 'Barlow Condensed, sans-serif', fontSize: '11px', fontStyle: 'bold', color: open ? '#9a9da4' : '#e6e8eb'
       }).setOrigin(0.5).setDepth(isoDepth(p.y));
+      this.dockCases.push(cg, label);
+      if (!cable) return;
+      this.casePos[id] = p;
       const hit = this.add.rectangle(p.x, p.y - 6, 58, 58, 0xffffff, 0.001).setDepth(isoDepth(p.y) + 0.0001)
         .setInteractive({ useHandCursor: true });
       hit.on('pointerdown', (pointer, lx, ly, event) => {
@@ -7476,9 +7508,11 @@ class StageScene extends Phaser.Scene {
         // aprire un baule porta anche nella scheda Cavi
         const tab = document.querySelector('.tab-btn[data-tab="cavi"]');
         if (tab && !isWiringTabActive()) tab.click();
-        openCase(caseName);
+        openCase(id);
       });
+      this.dockCases.push(hit);
     });
+    if (this.refreshFaultMarks && this.faultMarks) this.refreshFaultMarks();
   }
 
   /* mezzo del service visto di tre quarti: fiancata (faccia a=0) verso il
@@ -8825,6 +8859,7 @@ class StageScene extends Phaser.Scene {
     this.casesOpened = this.casesOpened || new Set();
     if (!sc || this.casesOpened.has(sc.id)) return '';
     this.casesOpened.add(sc.id);
+    this.refreshDockCases();
     const t = caseOriginHtml(sc).replace(/<[^>]+>/g, '');
     return t + (t.endsWith('»') ? ' ' : '. ');
   }
@@ -10764,6 +10799,7 @@ class StageScene extends Phaser.Scene {
   /* ---------------- reset ---------------- */
   resetLevel (quiet) {
     this.casesOpened = null;   // i case scaricati si riaprono da capo
+    if (this.dockCases) this.refreshDockCases();
     // giro e conti di prima: un Annulla subito dopo il reset li rimette
     const before = { giro: gameState.giro || 0, giroFails: (gameState.giroFails || [0, 0, 0]).slice(), stats: { ...freshStats(), ...gameState.stats }, trips: gameState.trips || 0, rcdTrips: gameState.rcdTrips || 0, procErrors: (gameState.procErrors || []).slice() };
     this.stopFx();

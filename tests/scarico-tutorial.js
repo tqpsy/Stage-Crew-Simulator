@@ -50,6 +50,28 @@ const path = require('path');
   check(start.del === '0/11' && start.hidden, 'all\'inizio il baule sotto il telo si conta: ' + start.del);
   check(/portellone/.test(start.hint), 'la barra d\'aiuto non dice da dove cominciare: ' + start.hint);
 
+  // furgone chiuso: APRI il portellone, giù la RAMPA, poi cinghie e freni
+  const van0 = await ev(() => { moveTo(DOOR_X + 40, 500); const a = vanAction(G.player); pressGrab(); return { a, grab: !!G.player.grab, statics: G.cases.filter(c => c.body.isStatic).length }; });
+  await p.waitForFunction(() => G.van.open, null, { timeout: 4000 }).catch(() => {});
+  const van1 = await ev(() => ({ a: vanAction(G.player), lab: $('#b-grab').textContent + ' ' + (document.querySelector('#keys [data-k="grab"]') || {}).textContent }));
+  await ev(() => pressGrab());
+  await p.waitForFunction(() => G.van.ramp, null, { timeout: 4000 }).catch(() => {});
+  await p.waitForTimeout(1600);   // il case ricambi scivola giù dalla rampa
+  const van2 = await ev(() => {
+    const c = C('sub1'), at = besideOf(c, 'right'); moveTo(at.x, at.y);
+    const a = vanAction(G.player); pressGrab();
+    return { ramp: G.van.ramp, a, grab: !!G.player.grab, strap: strapOn(c), still: c.body.isStatic, next: vanAction(G.player) };
+  });
+  check(van0.a === 'doors' && !van0.grab && van0.statics >= 9 && van1.a === 'ramp' && /RAMPA/.test(van1.lab) && van2.ramp && van2.a === 'strap' && !van2.grab && !van2.strap && van2.still && van2.next === 'brake',
+    'il furgone non si apre con portellone, rampa e cinghie: ' + JSON.stringify([van0, van1, van2]));
+  const van3 = await ev(() => {
+    const out = { braked: G.cases.filter(c => c.brake).map(c => c.def.id) };
+    G.straps.forEach((_, i) => releaseStrap(i)); for (const c of G.cases) releaseBrake(c);
+    out.statics = G.cases.filter(c => c.body.isStatic && !c.hidden).map(c => c.def.id);
+    return out;
+  });
+  check(van3.braked.length >= 2 && !van3.statics.length, 'freni o cinghie non si tolgono: ' + JSON.stringify(van3));
+
   // ordine: il rack (il mixer) sta dietro al distro e al case PAR
   const bl = await ev(() => {
     const r = C('rack'), at = besideOf(r, 'right'); moveTo(at.x, at.y);
@@ -90,26 +112,26 @@ const path = require('path');
   await p.waitForTimeout(300);   // un attimo di gioco col carrello in mano, fuori dalla palestra
   cart.chip = await ev(() => $('#h-cart').innerText.replace(/\s+/g, ' ').toUpperCase());
   check(cart.load.length === 2 && cart.chip === 'CARRELLO 2/3' && cart.push, 'il carrello non si carica o non si spinge: ' + JSON.stringify(cart));
-  await ev(() => { const t = G.trolley; Matter.Body.setPosition(t.body, { x: 1710, y: 470 }); moveTo(1660, 470); });
+  await ev(() => { const t = G.trolley; Matter.Body.setPosition(t.body, { x: 1550, y: 700 }); moveTo(1500, 700); });
   await p.waitForTimeout(300);
   const un = await ev(() => {
     const t = G.trolley; pressGrab();       // lascia il carrello
-    pressGrab();                            // sei nel Palco: scarica gli stativi
+    pressGrab();                            // sei nel Pit: scarica gli stativi
     const first = G.player.grab && G.player.grab.def.id;
-    G.player.facing = 0; moveTo(1700, 600); pressGrab();
-    moveTo(1665, 420); pressGrab();          // ora i ricambi
+    G.player.facing = Math.PI / 2; moveTo(1550, 320); pressGrab();
+    moveTo(1500, 700); G.player.facing = 0; pressGrab();          // ora i ricambi
     const second = G.player.grab && G.player.grab.def.id;
-    G.player.facing = 0; moveTo(1700, 220); pressGrab();
+    G.player.facing = Math.PI; moveTo(1260, 300); pressGrab();
     return { first, second, load: t.load.length, trips: G.stats.trips, cartTrips: G.stats.cartTrips, cartCases: G.stats.cartCases };
   });
   await p.waitForTimeout(600);
   const un2 = await ev(() => ({ sta: C('stativi').zone, ric: C('ricambio').zone }));
-  check(un.first === 'stativi' && un.second === 'ricambio' && un.load === 0 && un.cartTrips === 1 && un.cartCases === 2 && un2.sta === 'palco' && un2.ric === 'back',
+  check(un.first === 'stativi' && un.second === 'ricambio' && un.load === 0 && un.cartTrips === 1 && un.cartCases === 2 && un2.sta === 'pit' && un2.ric === 'back',
     'dal carrello non si scarica nelle zone: ' + JSON.stringify(un) + JSON.stringify(un2));
 
   // case da due: da solo non si muove, poi arriva Macio
   const solo = await ev(() => {
-    macio('idle');
+    macio('idle'); G.macio.ai.t = -999;   // non viene da solo: lo chiamiamo con AIUTO
     const c = C('corrente'), at = besideOf(c, 'right'); moveTo(at.x, at.y);
     window.x0 = c.body.position.x;
     pressGrab();
@@ -126,6 +148,13 @@ const path = require('path');
   await p.waitForFunction(() => G.macio.grab === C('corrente'), null, { timeout: 8000 }).catch(() => {});
   const team = await ev(() => ({ team: G.team, macio: G.macio.grab && G.macio.grab.def.id, pushers: C('corrente').grabbers.length }));
   check(team.team && team.macio === 'corrente' && team.pushers === 2, 'Macio non arriva a spingere il baule: ' + JSON.stringify(team));
+  await ev(() => { for (const w of G.workers) release(w); });
+
+  // Macio libero dà una mano da solo quando spingi un case pesante
+  await ev(() => { macio('idle'); const c = C('sub1'), at = besideOf(c, 'right'); moveTo(at.x, at.y); pressGrab(); });
+  await p.waitForFunction(() => G.macio.ai.state === 'help' || G.macio.grab === C('sub1'), null, { timeout: 4000 }).catch(() => {});
+  const auto = await ev(() => ({ st: G.macio.ai.state, g: G.macio.grab && G.macio.grab.def.id, mine: G.player.grab && G.player.grab.def.id }));
+  check(auto.mine === 'sub1' && (auto.st === 'help' || auto.g === 'sub1'), 'Macio non aiuta da solo col sub: ' + JSON.stringify(auto));
   await ev(() => { for (const w of G.workers) release(w); macio('phone'); G.macio.ai.t = -999; });
 
   // gradino della palestra: il case si ferma, compare OH-ISSA; un tocco e Macio conta, il case passa
@@ -166,7 +195,7 @@ const path = require('path');
   await ev(() => {
     for (const w of G.workers) release(w);
     moveTo(700, 500);
-    const spots = { corrente: [1250, 680, 0], distro: [1808, 250, 0], sub1: [1545, 640, 0], sub2: [1545, 480, 0], par: [1740, 560, 0], rack: [1260, 750, 0], valigetta: [1340, 750, 0] };
+    const spots = { corrente: [1225, 220, 0], distro: [1225, 380, 0], sub1: [1550, 640, 0], sub2: [1550, 480, 0], par: [1550, 230, 0], rack: [1340, 640, 0], valigetta: [1440, 640, 0] };
     for (const id in spots) {
       const [x, y, r] = spots[id], c = C(id);
       Matter.Body.setPosition(c.body, { x, y }); Matter.Body.setAngle(c.body, r * Math.PI / 2); Matter.Body.setVelocity(c.body, { x: 0, y: 0 });
@@ -180,7 +209,7 @@ const path = require('path');
   await p.waitForTimeout(200);
   const s2 = await ev(() => ({ hidden: C('segnale').hidden, del: $('#h-del').textContent, hint: hintGoal, blocked: blockers(C('segnale')).length, mode: G.mode }));
   check(!s2.hidden && s2.del === '11/12' && /SEGNALE/.test(s2.hint) && !s2.blocked && s2.mode === 'play', 'il baule sotto il telo non salta fuori: ' + JSON.stringify(s2));
-  await ev(() => { const c = C('segnale'); Matter.Body.setPosition(c.body, { x: 1390, y: 680 }); Matter.Body.setVelocity(c.body, { x: 0, y: 0 }); });
+  await ev(() => { const c = C('segnale'); Matter.Body.setPosition(c.body, { x: 1390, y: 770 }); Matter.Body.setVelocity(c.body, { x: 0, y: 0 }); });
   // pausa finale: la telecamera va sulle zone, Macio guarda il materiale; un tocco la accorcia
   await p.waitForFunction(() => G.mode === 'wrap' && G.wrap.t > 4.5, null, { timeout: 12000 }).catch(() => {});
   const w = await ev(() => ({ mode: G.mode, cx: G.cam.x, hint: $('#hint-txt').textContent }));

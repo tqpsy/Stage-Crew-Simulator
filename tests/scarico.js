@@ -47,12 +47,15 @@ const path = require('path');
     damage(c('segnale'), 110);    // difettoso: cavi aggrovigliati nel baule
     // Macio fermo (al telefono) e i due tecnici in cortile, poi ogni case al suo posto
     for (const w of G.workers) release(w);
+    // portellone aperto, rampa giù, cinghie e freni tolti
+    G.van.open = true; G.van.anim = { what: 'ramp', t: 0.8 }; vanStep(0.01);
+    G.straps.forEach((_, i) => releaseStrap(i)); G.cases.forEach(releaseBrake);
     macio('phone'); G.macio.ai.t = -999;
     Matter.Body.setPosition(G.player.body, { x: 700, y: 500 }); Matter.Body.setPosition(G.macio.body, { x: 700, y: 600 });
-    const spots = { corrente: [1250, 680, 0], distro: [1745, 230, 0], ricambio: [1810, 230, 0],
-      segnale: [1390, 680, 0], stativi: [1740, 470, 0], par: [1740, 560, 0],
-      sub1: [1545, 380, 0], sub2: [1545, 480, 0], top1: [1545, 570, 0], top2: [1545, 640, 0],
-      rack: [1260, 750, 0], valigetta: [1340, 750, 0] };
+    const spots = { corrente: [1225, 215, 0], distro: [1225, 320, 0], ricambio: [1225, 405, 0],
+      segnale: [1390, 780, 0], stativi: [1550, 195, 0], par: [1550, 260, 0],
+      sub1: [1550, 370, 0], sub2: [1550, 460, 0], top1: [1550, 550, 0], top2: [1550, 620, 0],
+      rack: [1340, 650, 0], valigetta: [1440, 650, 0] };
     for (const ce of G.cases) {
       const [x, y, r] = spots[ce.def.id];
       Matter.Body.setPosition(ce.body, { x, y }); Matter.Body.setAngle(ce.body, r * Math.PI / 2); Matter.Body.setVelocity(ce.body, { x: 0, y: 0 });
@@ -123,7 +126,7 @@ const path = require('path');
     return { counts: faultCounts(), faulty: amp && isFaulty(amp.id), item: item && item.ok, marks: (S.faultMarks || []).length, box: !el('#rear-fault').hidden, id: amp && amp.id,
       origin: el('#rear-origin').hidden ? '' : el('#rear-origin').textContent, opened: el('#toast').textContent };
   });
-  check(/CASE RACK REGIA/.test(f1.origin) && /Regia FOH/.test(f1.origin) && /ammaccatur/.test(f1.origin) && /CASE RACK REGIA.*botta/.test(f1.opened),
+  check(/CASE RACK REGIA/.test(f1.origin) && /Off Stage/.test(f1.origin) && /ammaccatur/.test(f1.origin) && /CASE RACK REGIA.*botta/.test(f1.opened),
     'il finale non si riconosce come quello del rack scaricato: ' + JSON.stringify([f1.origin, f1.opened]));
   check(f1.counts.ampli === 1 && f1.counts['baule:segnale'] === 1 && f1.faulty && f1.item === false && f1.marks >= 4 && f1.box,
     'finale difettoso non segnalato: ' + JSON.stringify(f1));
