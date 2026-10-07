@@ -110,6 +110,42 @@ si passa al montaggio con quello che è arrivato davvero.
 
 ## Meccaniche di fisica e controllo
 
+### Revisione fisica del livello 1 (2026-10-07): un sistema solo, la PRESA
+
+Richiesta di Luca: movimento e presa credibili prima di aggiungere altro.
+Arcade ma controllabile; niente peso realistico, niente simulazione
+avanzata. In `scarico.html` (sezione *MOVIMENTO E PRESA*):
+
+- **Persone**: velocità impostata direttamente, con accelerazione e
+  frenata brevi (`MOVE`: pieno in ~7 passi, fermo in ~4). Niente forze,
+  niente scivolate, niente rimbalzi (restituzione 0).
+- **Case a terra**: corpi fermi (`isStatic`). Non si spostano a spallate;
+  si muovono solo se qualcuno li prende.
+- **Presa** (`grab` → `w.hold`): quello che prendi resta rigido rispetto a
+  te, alla distanza e con l'angolo di quando l'hai preso, e gira con te.
+  Ogni passo (`holdStep`) prova la posizione nuova di persona + oggetto
+  (+ carico del carrello) contro muri, case, carrello, bambini; se tocca
+  prova senza girare, poi solo in x o in y (si scivola lungo il muro),
+  poi più piano; se niente va, ci si ferma. Lasciato, resta lì.
+- **In mano** (case leggeri): si gira abbastanza svelto, il case passa
+  sopra il bordo del pianale ai lati della rampa e sopra il gradino.
+- **Spinto** (pesanti, carrello): avanti spingi e giri piano; indietro
+  tiri, senza girare; di lato (solo i case) ti sposti di fianco, come in
+  due con un tavolo. Un case da due, da solo, non si muove.
+- **Macio che aiuta** (`joinHelp`, `placeHelpers`): si mette sull'altro
+  lato e da lì segue il case; niente più ritardo di 0,4 s né FERMO.
+- **Carrello**: stesso sistema dei case spinti. I case caricati restano
+  oggetti del mondo, messi a posto sopra il carrello a ogni passo e
+  controllati contro i muri col carrello; scaricati tornano case normali.
+- **Furgone**: vano 3,3 × 2 m, parcheggiato col portellone a 3,8 m dalla
+  porta della palestra (prima 7 m); porta della palestra a due ante,
+  1,6 m. Persone larghe 38 cm (Macio 42).
+- Test: `tests/scarico-fisica.js` (personaggio, case in mano, carrello,
+  carico, furgone, tavolo in due fino all'Off Stage).
+
+Le sezioni qui sotto su inerzia, ruote, pendenze, ribaltamento e ritardo
+di Macio sono il design di partenza: per il livello 1 vale la PRESA.
+
 Motore: **Matter.js** (è già dentro Phaser 3), in una scena a parte
 `ScaricoScene`. La fisica lavora sul piano (vista dall'alto, gravità 0),
 il disegno usa la stessa prospettiva isometrica del gioco (`isoFrame`,

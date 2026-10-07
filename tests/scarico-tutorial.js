@@ -35,12 +35,10 @@ const path = require('path');
     window.C = id => G.cases.find(x => x.def.id === id);
     window.moveTo = (x, y) => {
       const P = G.player; Matter.Body.setPosition(P.body, { x, y }); Matter.Body.setVelocity(P.body, { x: 0, y: 0 });
-      if (P.grab && P.mode === 'carry') {
-        const f = { x: Math.cos(P.facing), y: Math.sin(P.facing) };
-        Matter.Body.setPosition(P.grab.body, { x: x + f.x * P.carry.dist, y: y + f.y * P.carry.dist }); Matter.Body.setVelocity(P.grab.body, { x: 0, y: 0 });
-      }
+      P.vel = { x: 0, y: 0 };
+      if (P.grab && P.hold && !P.hold.helper) setHoldPose(P, { x, y }, P.facing);   // quello che tieni viene con te
     };
-    window.besideOf = (ce, side) => { const b = ce.body.bounds; return side === 'right' ? { x: b.max.x + 17, y: ce.body.position.y } : { x: ce.body.position.x, y: b.max.y + 17 }; };
+    window.besideOf = (ce, side) => { const b = ce.body.bounds; return side === 'right' ? { x: b.max.x + 23, y: ce.body.position.y } : { x: ce.body.position.x, y: b.max.y + 23 }; };
     macio('phone'); G.macio.ai.t = -999;   // Macio fermo: lo chiamiamo noi
   });
 
@@ -56,7 +54,7 @@ const path = require('path');
   check(load.cor > load.tav && load.seg > load.tav && load.tav > load.testa && load.tav > load.sub && load.tav > load.rack, 'il carico del furgone non va dal leggero al pesante: ' + JSON.stringify(load));
 
   // furgone chiuso: APRI il portellone, giù la RAMPA, poi cinghie e freni
-  const van0 = await ev(() => { moveTo(DOOR_X + 40, 500); const a = vanAction(G.player); pressGrab(); return { a, grab: !!G.player.grab, statics: G.cases.filter(c => c.body.isStatic).length }; });
+  const van0 = await ev(() => { moveTo(DOOR_X + 40, 500); const a = vanAction(G.player); pressGrab(); return { a, grab: !!G.player.grab, statics: G.cases.filter(c => locked(c)).length }; });
   await p.waitForFunction(() => G.van.open, null, { timeout: 4000 }).catch(() => {});
   await p.waitForTimeout(200);
   const van1 = await ev(() => ({ a: vanAction(G.player), lab: $('#b-grab').textContent + ' ' + (document.querySelector('#keys [data-k="grab"]') || {}).textContent }));
@@ -66,7 +64,7 @@ const path = require('path');
   const van2 = await ev(() => {
     const c = C('stativi'), at = besideOf(c, 'right'); moveTo(at.x, at.y);
     const a = vanAction(G.player); pressGrab();
-    return { ramp: G.van.ramp, a, grab: !!G.player.grab, strap: strapOn(c), free: !c.body.isStatic };
+    return { ramp: G.van.ramp, a, grab: !!G.player.grab, strap: strapOn(c), free: !locked(c) };
   });
   check(van0.a === 'doors' && !van0.grab && van0.statics >= 12 && van1.a === 'ramp' && /RAMPA/.test(van1.lab) && van2.ramp && van2.a === 'strap' && !van2.grab && !van2.strap && van2.free,
     'il furgone non si apre con portellone, rampa e cinghie: ' + JSON.stringify([van0, van1, van2]));
@@ -77,7 +75,7 @@ const path = require('path');
   const van3 = await ev(() => {
     const out = { braked: G.cases.filter(c => c.brake).map(c => c.def.id).sort().join() };
     G.straps.forEach((_, i) => releaseStrap(i)); for (const c of G.cases) releaseBrake(c);
-    out.statics = G.cases.filter(c => c.body.isStatic && !c.hidden).map(c => c.def.id);
+    out.statics = G.cases.filter(c => locked(c) && !c.hidden).map(c => c.def.id);
     return out;
   });
   check(van3.braked === 'corrente,rack,segnale,sub1,sub2' && !van3.statics.length, 'freni o cinghie non si tolgono: ' + JSON.stringify(van3));
@@ -90,7 +88,7 @@ const path = require('path');
     return { ids, grabbed: G.player.grab === r, flash: G.blockFlash && G.blockFlash.ids.length, n: G.stats.blocked };
   });
   bl.hint = await saw(/bloccato/i);
-  check(bl.ids.includes('top1') && bl.ids.includes('tavolo') && !bl.grabbed && bl.flash >= 2 && bl.n === 1 && bl.hint,
+  check((bl.ids.includes('top1') || bl.ids.includes('top2')) && bl.ids.includes('tavolo') && !bl.grabbed && bl.flash >= 2 && bl.n === 1 && bl.hint,
     'il rack in fondo si prende lo stesso: ' + JSON.stringify(bl));
 
   // due case a mano nel Pit
@@ -109,14 +107,14 @@ const path = require('path');
   // carrello: il generico CORRENTE spinto sopra (un pesante, due posti) e il case accessori
   const cart = await ev(() => {
     const t = G.trolley, out = {};
-    Matter.Body.setPosition(t.body, { x: 600, y: 650 }); Matter.Body.setAngle(t.body, 0); Matter.Body.setVelocity(t.body, { x: 0, y: 0 });
+    Matter.Body.setPosition(t.body, { x: 950, y: 650 }); Matter.Body.setAngle(t.body, 0); Matter.Body.setVelocity(t.body, { x: 0, y: 0 });
     const cor = C('corrente');
-    Matter.Body.setPosition(cor.body, { x: 600, y: 758 }); Matter.Body.setVelocity(cor.body, { x: 0, y: 0 });
-    moveTo(600, 692); G.player.facing = Math.PI / 2;
+    Matter.Body.setPosition(cor.body, { x: 950, y: 758 }); Matter.Body.setVelocity(cor.body, { x: 0, y: 0 });
+    moveTo(950, 692); G.player.facing = Math.PI / 2;
     pressGrab(); out.pushing = G.player.grab === cor && G.player.mode;
     pressGrab();
-    const r = C('ricambio'); Matter.Body.setPosition(r.body, { x: 480, y: 650 }); Matter.Body.setAngle(r.body, 0); Matter.Body.setVelocity(r.body, { x: 0, y: 0 });
-    moveTo(480 + 20 + 17, 650); pressGrab(); out.carry = G.player.grab === r;
+    const r = C('ricambio'); Matter.Body.setPosition(r.body, { x: 830, y: 650 }); Matter.Body.setAngle(r.body, 0); Matter.Body.setVelocity(r.body, { x: 0, y: 0 });
+    moveTo(830 + 20 + 23, 650); pressGrab(); out.carry = G.player.grab === r;
     moveTo(t.body.position.x - 50, t.body.position.y); G.player.facing = 0; pressGrab();
     out.load = t.load.map(c => c.def.id);
     pressGrab(); out.push = G.player.grab === t;
@@ -148,7 +146,7 @@ const path = require('path');
   const solo = await ev(() => {
     macio('idle'); G.macio.ai.t = -999;   // non viene da solo: lo chiamiamo con AIUTO
     const c = C('tavolo');
-    Matter.Body.setPosition(c.body, { x: 700, y: 330 }); Matter.Body.setVelocity(c.body, { x: 0, y: 0 });
+    Matter.Body.setPosition(c.body, { x: 950, y: 330 }); Matter.Body.setVelocity(c.body, { x: 0, y: 0 });
     const at = besideOf(c, 'right'); moveTo(at.x, at.y);
     window.x0 = c.body.position.x;
     pressGrab();
@@ -161,7 +159,7 @@ const path = require('path');
   solo2.hint = await saw(/2 PERSONE/);
   check(solo.grabbed && solo2.help && !solo2.lift && solo2.moved < 25 && solo2.solo === 1 && solo2.hint,
     'il case da due si muove da solo o non chiede il collega: ' + JSON.stringify(solo) + JSON.stringify(solo2));
-  await ev(() => { Matter.Body.setPosition(G.macio.body, { x: 700, y: 200 }); pressHelp(); });
+  await ev(() => { Matter.Body.setPosition(G.macio.body, { x: 950, y: 200 }); pressHelp(); });
   await p.waitForFunction(() => G.macio.grab === C('tavolo'), null, { timeout: 8000 }).catch(() => {});
   const team = await ev(() => ({ team: G.team, macio: G.macio.grab && G.macio.grab.def.id, pushers: C('tavolo').grabbers.length }));
   check(team.team && team.macio === 'tavolo' && team.pushers === 2, 'Macio non arriva a spingere il tavolo: ' + JSON.stringify(team));
@@ -170,7 +168,7 @@ const path = require('path');
   // Macio libero dà una mano da solo quando spingi un case pesante
   await ev(() => {
     macio('idle'); const c = C('sub1');
-    Matter.Body.setPosition(c.body, { x: 700, y: 620 }); Matter.Body.setVelocity(c.body, { x: 0, y: 0 });
+    Matter.Body.setPosition(c.body, { x: 950, y: 620 }); Matter.Body.setVelocity(c.body, { x: 0, y: 0 });
     const at = besideOf(c, 'right'); moveTo(at.x, at.y); pressGrab();
   });
   await p.waitForFunction(() => G.macio.ai.state === 'help' || G.macio.grab === C('sub1'), null, { timeout: 4000 }).catch(() => {});
@@ -182,7 +180,7 @@ const path = require('path');
   await ev(() => {
     const c = C('sub2');
     Matter.Body.setPosition(c.body, { x: GYM_X - 60, y: 500 }); Matter.Body.setAngle(c.body, 0); Matter.Body.setVelocity(c.body, { x: 0, y: 0 });
-    moveTo(GYM_X - 60 - 35 - 17, 500); G.player.facing = 0;
+    moveTo(GYM_X - 60 - 35 - 23, 500); G.player.facing = 0;
     pressGrab(); inp.keys.add('KeyD');
   });
   await p.waitForFunction(() => !document.querySelector('#keys [data-k="lift"]').hidden, null, { timeout: 5000 }).catch(() => {});
@@ -214,7 +212,7 @@ const path = require('path');
   // tutto il resto al suo posto: 100%, pausa con Macio, poi il riepilogo
   await ev(() => {
     for (const w of G.workers) release(w);
-    moveTo(700, 500);
+    moveTo(950, 500);
     const spots = { distro: [1225, 330, 0], tavolo: [1320, 710, 0], rack: [1400, 620, 0], valigetta: [1400, 700, 0], segnale: [1455, 720, 0],
       sub1: [1550, 400, 0], sub2: [1550, 480, 0], top1: [1550, 560, 0], top2: [1550, 620, 0] };
     for (const id in spots) {
