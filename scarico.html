@@ -129,8 +129,12 @@
   .lavoro li{display:flex;gap:8px}
   .lavoro li b{flex:none;width:18px;text-align:center}
   .lavoro .ok b{color:#1f7a3f}.lavoro .no b{color:#b3321f}
-  .effline{display:flex;align-items:center;gap:10px;font-family:var(--display);font-size:20px}
-  .effline .effbar{flex:1;height:10px;background:#d8d2c4;margin:0}
+  .riep{display:grid;grid-template-columns:1fr 1fr;gap:2px 14px;background:#ebe6db;border-radius:6px;padding:10px 12px;font-size:14px}
+  .riep h3{grid-column:1/-1;margin:0 0 4px;font-family:var(--display);font-size:20px;letter-spacing:.04em}
+  .riep div{display:flex;justify-content:space-between;gap:8px;border-bottom:1px dotted #cfc8b8}
+  .riep span{color:#6b665d}
+  .riep .stelle{grid-column:1/-1;border:0;font-size:16px}.riep .stelle b{color:#c79a12;font-size:20px;letter-spacing:2px}
+  @media (max-width:520px){.riep{grid-template-columns:1fr}}
   .start-quote{font-family:var(--marker);font-size:22px;line-height:1.3;color:var(--paper)}
   .start-quote small{display:block;font-family:var(--ui);font-size:13px;color:var(--muted);margin-top:4px}
   @media (max-width:520px){
@@ -246,7 +250,7 @@ const { Engine, Bodies, Body, Composite, Constraint, Events, Query } = window.Ma
 const STEP = 1000 / 60;
 const GAME_SECONDS = 360;              // 16:00 → 16:30 in 6 minuti reali
 const CAT = { WALL: 1, CASE: 2, WORKER: 4, STEP: 8, NPC: 16, DOLLY: 32, TROLLEY: 64 };
-const TROLLEY_MAX = 3;                 // case leggeri sul carrello
+const TROLLEY_MAX = 3;                 // posti sul carrello: un pesante ne prende due
 const DOOR_X = 400;                    // portellone del furgone
 const RAMP = { x: 400, y: 445, w: 120, h: 110 };
 const GYM_X = 1160;                    // muro della palestra (porta con gradino)
@@ -256,11 +260,12 @@ const WORLD = { x1: -170, y1: 60, x2: 1900, y2: 940 };
 
 /* La palestra è la stessa del montaggio, vista dall'alto: dalla porta del
    cortile si entra nel Backstage (allaccio e quadro), davanti c'è il palco
-   già montato (non ci si sale coi case), sotto il palco l'Off Stage con la
+   già montato (con la scaletta: l'asta e il microfono vanno lì), sotto il palco l'Off Stage con la
    regia, poi il Pit davanti al palco, la platea e in fondo la FOH. I case si
    lasciano dove serviranno al montaggio. */
 const STAGE = { x1: 1290, y1: 276, x2: 1490, y2: 564 };
 const ZONES = {
+  palco: { name: 'Palco', color: '#eaff2b', x: STAGE.x1 + 6, y: STAGE.y1 + 6, w: STAGE.x2 - STAGE.x1 - 12, h: STAGE.y2 - STAGE.y1 - 12 },
   back:  { name: 'Backstage', color: '#ff4fb4', x: 1170, y: 150, w: 115, h: 292 },
   foh:   { name: 'Off Stage · regia', color: '#49e07a', x: 1292, y: 574, w: 198, h: 272 },
   pit:   { name: 'Pit', color: '#4fb7ff', x: 1498, y: 160, w: 104, h: 686 }
@@ -281,51 +286,56 @@ const WHEEL = {
   hand:   { f: 7.0, s: 7.0, a: 7.0, ramp: 0.1, push: 1.0, label: 'a mano' }
 };
 
-// il carico del furgone, stivato a strati: davanti i leggeri, poi le casse
-// da spingere, in fondo i bauli da due e il rack (il mixer, dietro due case).
-// Esce prima quello caricato per ultimo: vedi blockers(). Il baule SEGNALE
-// (i cavi di stasera) sta in fondo sotto un telo: è la sorpresa finale.
+// il carico del furgone, come lo carica un service: vicino al portellone il
+// carrello a due ruote, stativi, PAR, accessori e i due generici dei cavi;
+// in mezzo tavolo regia, quadro e PC; in fondo il pesante (sub, teste, rack).
+// Esce prima quello caricato per ultimo: vedi blockers().
 const CASES = [
-  { id: 'corrente', name: 'Baule CORRENTE', short: 'CORRENTE', what: 'cavi pesanti, CEE', kg: 70, w: 100, h: 56, wheel: 'swivel', frag: 'bassa', zone: 'back', heavy2: true, unique: true, x: 195, y: 430,
+  // --- vicino al portellone
+  { id: 'corrente', name: 'Generico CORRENTE', short: 'CORRENTE', what: 'cavi e accessori di alimentazione', kg: 45, w: 56, h: 100, wheel: 'swivel', frag: 'bassa', zone: 'back', unique: true, x: 300, y: 450,
     dif: 'cavi aggrovigliati: +10 min per sbrogliarli' },
-  { id: 'rack', name: 'Rack regia', short: 'RACK', what: 'mixer + finale', kg: 55, w: 58, h: 58, wheel: 'fixed', frag: 'alta', zone: 'foh', heavy2: true, tall: true, unique: true, x: 75, y: 515,
-    dif: 'il finale va in protezione all\'accensione: +10 min' },
-  { id: 'segnale', name: 'Baule SEGNALE', short: 'SEGNALE', what: 'XLR, DMX, jack, Speakon', kg: 45, w: 100, h: 56, wheel: 'swivel', frag: 'bassa', zone: 'foh', unique: true, surprise: true, x: 75, y: 580,
+  { id: 'segnale', name: 'Generico SEGNALE', short: 'SEGNALE', what: 'cavi e accessori di segnale (XLR, DMX, Speakon)', kg: 40, w: 56, h: 100, wheel: 'swivel', frag: 'bassa', zone: 'foh', unique: true, x: 300, y: 555,
     dif: 'cavi aggrovigliati: +10 min per sbrogliarli' },
-  { id: 'sub1', name: 'Sub 1', short: 'SUB', what: 'cassa sub', kg: 40, w: 70, h: 70, wheel: 'fixed', frag: 'media', zone: 'pit', unique: true, x: 300, y: 500,
-    dif: 'la cassa vibra: +10 min per controllarla' },
-  { id: 'distro', name: 'Case distro', short: 'DISTRO', what: 'quadro + ciabatte', kg: 35, w: 60, h: 55, wheel: 'none', frag: 'bassa', zone: 'back', unique: true, x: 215, y: 488,
-    dif: 'il quadro scatta alla prima accensione: +10 min' },
-  { id: 'sub2', name: 'Sub 2', short: 'SUB', what: 'cassa sub', kg: 40, w: 70, h: 70, wheel: 'fixed', frag: 'media', zone: 'pit', unique: true, x: 300, y: 572,
-    dif: 'la cassa vibra: +10 min per controllarla' },
-  { id: 'stativi', name: 'Borsa stativi', short: 'STATIVI', what: '4 stativi + asta mic', kg: 22, w: 90, h: 34, wheel: 'hand', frag: 'bassa', zone: 'pit', x: 300, y: 408,
+  { id: 'stativi', name: 'Borsa stativi', short: 'STATIVI', what: '4 stativi', kg: 22, w: 34, h: 90, wheel: 'hand', frag: 'bassa', zone: 'pit', x: 352, y: 436,
     dif: 'uno stativo duro da aprire: +10 min' },
-  { id: 'top1', name: 'Top 1', short: 'TOP', what: 'cassa top', kg: 20, w: 44, h: 44, wheel: 'hand', frag: 'media', zone: 'pit', unique: true, x: 372, y: 418,
-    dif: 'il tweeter gracchia: +10 min' },
-  { id: 'top2', name: 'Top 2', short: 'TOP', what: 'cassa top', kg: 20, w: 44, h: 44, wheel: 'hand', frag: 'media', zone: 'pit', unique: true, x: 372, y: 582,
-    dif: 'il tweeter gracchia: +10 min' },
-  { id: 'valigetta', name: 'Valigetta regia', short: 'PC', what: 'PC, scheda, controller DMX', kg: 8, w: 40, h: 30, wheel: 'hand', frag: 'altissima', zone: 'foh', unique: true, x: 40, y: 430,
-    dif: 'il PC non parte al primo colpo: +10 min' },
-  { id: 'par', name: 'Case PAR', short: 'PAR ×4', what: '4 PAR LED', kg: 25, w: 55, h: 48, wheel: 'hand', frag: 'alta', zone: 'pit', x: 215, y: 545,
+  { id: 'ricambio', name: 'Case accessori', short: 'ACCESSORI', what: 'asta mic, microfono, ricambi', kg: 12, w: 40, h: 34, wheel: 'hand', frag: 'media', zone: 'palco', x: 374, y: 500,
+    dif: 'scorte in disordine: +10 min' },
+  { id: 'par', name: 'Case PAR', short: 'PAR ×4', what: '4 PAR LED', kg: 25, w: 55, h: 48, wheel: 'hand', frag: 'alta', zone: 'pit', x: 360, y: 558,
     dif: 'lenti da pulire: +10 min' },
-  { id: 'ricambio', name: 'Case ricambi', short: 'RICAMBI', what: '1 PAR, 1 stativo, 1 mic', kg: 18, w: 44, h: 40, wheel: 'hand', frag: 'media', zone: 'back', x: 372, y: 500,
-    dif: 'scorte in disordine: +10 min' }
+  // --- in mezzo
+  { id: 'tavolo', name: 'Tavolo regia', short: 'TAVOLO', what: 'tavolo pieghevole', kg: 38, w: 34, h: 130, wheel: 'none', frag: 'bassa', zone: 'foh', heavy2: true, unique: true, x: 168, y: 470,
+    dif: 'una gamba dura da aprire: +10 min' },
+  { id: 'distro', name: 'Quadro', short: 'QUADRO', what: 'quadro prese + ciabatte', kg: 18, w: 50, h: 46, wheel: 'hand', frag: 'media', zone: 'back', unique: true, x: 226, y: 424,
+    dif: 'il quadro scatta alla prima accensione: +10 min' },
+  { id: 'valigetta', name: 'Valigetta regia', short: 'PC', what: 'PC, scheda audio, DI, consolle luci', kg: 8, w: 40, h: 30, wheel: 'hand', frag: 'altissima', zone: 'foh', unique: true, x: 226, y: 500,
+    dif: 'il PC non parte al primo colpo: +10 min' },
+  // --- in fondo, il pesante
+  { id: 'rack', name: 'Rack regia', short: 'RACK', what: 'mixer + finale', kg: 55, w: 58, h: 58, wheel: 'fixed', frag: 'alta', zone: 'foh', heavy2: true, tall: true, unique: true, x: 46, y: 426,
+    dif: 'il finale va in protezione all\'accensione: +10 min' },
+  { id: 'sub1', name: 'Sub 1', short: 'SUB', what: 'cassa sub', kg: 40, w: 70, h: 70, wheel: 'fixed', frag: 'media', zone: 'pit', unique: true, x: 50, y: 500,
+    dif: 'la cassa vibra: +10 min per controllarla' },
+  { id: 'sub2', name: 'Sub 2', short: 'SUB', what: 'cassa sub', kg: 40, w: 70, h: 70, wheel: 'fixed', frag: 'media', zone: 'pit', unique: true, x: 50, y: 573,
+    dif: 'la cassa vibra: +10 min per controllarla' },
+  { id: 'top1', name: 'Testa 1', short: 'TESTA', what: 'cassa testa (va sul palo del sub)', kg: 20, w: 44, h: 44, wheel: 'hand', frag: 'media', zone: 'pit', unique: true, x: 112, y: 440,
+    dif: 'il tweeter gracchia: +10 min' },
+  { id: 'top2', name: 'Testa 2', short: 'TESTA', what: 'cassa testa (va sul palo del sub)', kg: 20, w: 44, h: 44, wheel: 'hand', frag: 'media', zone: 'pit', unique: true, x: 112, y: 560,
+    dif: 'il tweeter gracchia: +10 min' }
 ];
 const FRAGILE = d => d.frag === 'alta' || d.frag === 'altissima';
 // classe di peso mostrata sulla scheda del case
 function weightClass (d) {
-  if (d.heavy2) return '2 PERSONE';
-  if (d.wheel !== 'hand') return 'PESANTE · si spinge';
-  return d.kg <= 10 ? 'LEGGERO' : 'MEDIO · in mano';
+  if (d.heavy2) return 'PESANTE · in due';
+  const c = d.kg >= 38 && d.wheel !== 'swivel' ? 'PESANTE' : d.kg <= 12 ? 'LEGGERO' : 'MEDIO';
+  return c + (d.wheel !== 'hand' ? ' · si spinge' : ' · in mano');
 }
 
-// le cinghie del furgone, una per strato (il primo, coi case leggeri, è
-// sciolto: il case ricambi infatti scivola). Una cinghia tiene fermi i case
-// del suo strato finché non la sganci; i case con le ruote hanno anche il freno.
+// le cinghie del furgone, una per strato (il case accessori davanti non è
+// legato: infatti scivola giù). Una cinghia tiene fermi i case del suo
+// strato finché non la sganci; i case con le ruote hanno anche il freno.
 const VAN_STRAPS = [
-  { x: 300, ids: ['stativi', 'sub1', 'sub2'] },
-  { x: 210, ids: ['corrente', 'distro', 'par'] },
-  { x: 60, ids: ['rack', 'valigetta', 'segnale'] }
+  { x: 330, ids: ['corrente', 'segnale', 'stativi', 'par'] },
+  { x: 200, ids: ['tavolo', 'distro', 'valigetta'] },
+  { x: 84, ids: ['rack', 'sub1', 'sub2', 'top1', 'top2'] }
 ];
 
 const STATE_COLOR = { integro: '#49b06a', ammaccato: '#f2c53d', difettoso: '#f2843d', rotto: '#e0503f' };
@@ -440,7 +450,6 @@ function newGame () {
   wall(GYM_X, 130, 1870, 150); wall(GYM_X, 850, 1870, 870); wall(1850, 130, 1870, 870);
   // sedie impilate in palestra, un albero e una panchina in cortile
   wall(1640, 170, 1740, 220, false);                // sedie impilate in platea
-  wall(STAGE.x1, STAGE.y1, STAGE.x2, STAGE.y2, false);   // il palco: rialzato, i case non ci salgono
   G.statics.push(Bodies.circle(820, 260, 18, { isStatic: true, collisionFilter: { category: CAT.WALL, mask: 0xffff } }));
   wall(840, 730, 970, 758, false);
   wall(632, 118, 692, 146, false);                  // tavolino della moka
@@ -694,8 +703,8 @@ function vanStep (dt) {
       const r = G.cases.find(c => c.def.id === 'ricambio');
       r.slideUntil = G.t + 1.2; Body.setVelocity(r.body, { x: 4.2, y: 0.2 }); Body.setAngularVelocity(r.body, 0.03);
       toast('Occhio! Il case ricambi non era legato…', 'warn');
-      G.team = true;
-      bubble(G.macio, 'Io porto i leggeri, tu chiamami per quelli grossi!', 2.4);
+      G.team = true; G.cartAt = G.t + 3.2;
+      bubble(G.macio, 'Ti tiro fuori il carrello.', 2.4);
       goal('Scarica il furgone: prima i case davanti, poi sgancia le cinghie.');
     }
   }
@@ -766,6 +775,11 @@ function blockedTry (ce) {
   G.blockFlash = { ce, ids: bl, until: G.t + 1.8 };
   G.stats.blocked++; AU.locked();
   floatText(ce.body.position.x, ce.body.position.y - 20, 'ACCESSO BLOCCATO', '#e0503f');
+  // Macio lo dice ogni tanto, senza fare la predica
+  if (G.t - (G.macioBlockT || -99) > 14 && G.macio.ai.state !== 'phone') {
+    G.macioBlockT = G.t;
+    bubble(G.macio, G.stats.blocked > 1 ? 'Prima liberiamo il passaggio.' : 'Prima tiriamo fuori quello davanti, sennò per arrivare ai sub dobbiamo scavare.', 2.6);
+  }
   const tied = bl.filter(locked);
   toast('Accesso bloccato: davanti c\'è ' + bl.map(b => b.def.name).join(' e ') + (tied.length ? (tied.length > 1 || bl.length > 1 ? ', ancora legati e frenati' : ', ancora legato e frenato') + '. Prima libera e porta fuori quello.' : '. Prima porta fuori quello.'), 'warn');
 }
@@ -785,23 +799,28 @@ function learnFrom (ce) {
 }
 
 /* ---------------------------------------------------------------------
-   IL CARRELLO: arriva dopo le prime consegne a mano. Fino a 3 case leggeri
-   sopra, un viaggio solo. Si spinge come un case con le ruote; passa il
+   IL CARRELLO A DUE RUOTE: sta nel furgone vicino al portellone, lo tira
+   fuori Macio appena la rampa è giù. Tre posti sulla pala (un case pesante
+   ne prende due: un sub e una testa, per esempio), un viaggio solo. Si spinge come un case con le ruote; passa il
    gradino sulle sue ruote grandi; se sbatte, il carico si fa male.
    --------------------------------------------------------------------- */
+// posti che prende un case sul carrello; i case da due non ci stanno
+function cartSize (ce) { return ce.def.kg >= 35 ? 2 : 1; }
+function cartUsed (t) { return t.load.reduce((n, c) => n + cartSize(c), 0); }
+function cartFits (t, ce) { return !!ce && ce.kind === 'case' && !ce.def.heavy2 && cartUsed(t) + cartSize(ce) <= TROLLEY_MAX; }
 function spawnTrolley () {
-  const b = Bodies.rectangle(470, 650, 72, 50, { chamfer: { radius: 4 }, frictionAir: 0, friction: 0.05, restitution: 0.15,
+  const b = Bodies.rectangle(470, 650, 64, 46, { chamfer: { radius: 4 }, frictionAir: 0, friction: 0.05, restitution: 0.15,
     collisionFilter: { category: CAT.TROLLEY, mask: CAT.WALL | CAT.WORKER | CAT.NPC | CAT.CASE, group: 0 } });
   Body.setMass(b, 14);
   const t = { kind: 'trolley', body: b, load: [], grabbers: [], pv: { x: 0, y: 0 }, lastHit: -1,
-    def: { id: 'carrello', name: 'Carrello', kg: 14, w: 72, h: 50, wheel: 'swivel', frag: 'bassa', zone: null } };
+    def: { id: 'carrello', name: 'Carrello', kg: 14, w: 64, h: 46, wheel: 'swivel', frag: 'bassa', zone: null } };
   b.plugin.ent = t;
   Composite.add(G.world, b);
   G.trolley = t; unlock('cart');
   $('#h-cart').hidden = false; $('#h-cart').classList.add('reveal');
   ring(470, 650, '#8fa3b8'); AU.clack();
-  bubble(G.macio, 'Ti ho tirato fuori il carrello: tre case alla volta!', 2.6);
-  toast('CARRELLO: prendi un case leggero, avvicinati al carrello e ' + KA('CARICA') + '. Poi spingilo fino alla zona e ' + KA('SCARICA') + '.', 'ok');
+  bubble(G.macio, 'Ecco il carrello. Due ruote, zero pensieri.', 2.6);
+  toast('CARRELLO: avvicinati con un case (in mano o spinto) e ' + KA('CARICA') + '. Tre posti: un pesante ne prende due. Poi spingilo nella zona e ' + KA('SCARICA') + '.', 'ok');
 }
 function nearTrolley (w, reach) {
   const t = G.trolley; if (!t) return false;
@@ -810,13 +829,17 @@ function nearTrolley (w, reach) {
 function loadTrolley (w) {
   const t = G.trolley, ce = w.grab;
   release(w);
+  for (const o of [...ce.grabbers]) release(o);   // Macio lo stava spingendo con te
+  if (ce.carrier) release(ce.carrier);
+  unpark(ce);
   ce.onTrolley = t; ce.zone = null;
   Composite.remove(G.world, ce.body);
   t.load.push(ce);
   placeLoad(t);
-  AU.clack(); floatText(t.body.position.x, t.body.position.y - 34, t.load.length + '/' + TROLLEY_MAX, '#cfdbe8');
-  if (t.load.length === TROLLEY_MAX) once('pieno', 'Carrello pieno: spingilo in palestra (' + K('grab') + ' vicino al carrello).', 'ok');
-  else once('carica', 'Sul carrello. Ne stanno ancora ' + (TROLLEY_MAX - t.load.length) + '.');
+  const n = cartUsed(t);
+  AU.clack(); floatText(t.body.position.x, t.body.position.y - 34, n + '/' + TROLLEY_MAX, '#cfdbe8');
+  if (n >= TROLLEY_MAX) once('pieno', 'Carrello pieno: spingilo in palestra (' + K('grab') + ' vicino al carrello).', 'ok');
+  else once('carica', 'Sul carrello. C\'è ancora posto per ' + (TROLLEY_MAX - n === 1 ? 'un case leggero.' : 'un pesante o due leggeri.'));
 }
 // i case sul carrello: una piccola pila che segue il pianale
 function placeLoad (t) {
@@ -968,10 +991,13 @@ function pressGrab () {
   if (G.qte) { return; }
   const p = G.player, t = G.trolley;
   if (p.grab) {
-    // un case in mano vicino al carrello: va sopra
-    if (t && p.mode === 'carry' && nearTrolley(p, 26)) {
-      if (t.load.length < TROLLEY_MAX) { loadTrolley(p); return; }
-      toast('Carrello pieno (' + TROLLEY_MAX + '/' + TROLLEY_MAX + ').', 'warn');
+    // un case (in mano o spinto) vicino al carrello: va sopra. Nelle zone
+    // no: lì dal carrello si scarica, e LASCIA posa il case a terra
+    if (t && p.grab.kind === 'case' && nearTrolley(p, 26) && !zoneAt(p.body.position)) {
+      if (cartFits(t, p.grab)) { loadTrolley(p); return; }
+      if (p.grab.def.heavy2) bubble(G.macio, 'Quello lo facciamo in due.', 1.6);
+      else toast('Sul carrello non c\'è più posto (' + cartUsed(t) + '/' + TROLLEY_MAX + ').', 'warn');
+      return;
     }
     const ce = p.grab;
     release(p);
@@ -1089,22 +1115,8 @@ function macio (state, data) {
 }
 const CHAIN = [{ x: 330, y: 500 }, { x: 460, y: 500 }, { x: 590, y: 500 }, { x: GYM_X - 60, y: 500 }, { x: GYM_X + 60, y: 500 }];
 function region (p) { return p.x < DOOR_X ? 0 : p.x < 520 ? 1 : p.x < GYM_X ? 2 : 3; }
-// in palestra il palco si gira da sotto, passando per l'Off Stage
-function aroundStage (from, to) {
-  const A = { x: STAGE.x1 - 40, y: STAGE.y2 + 40 }, B = { x: STAGE.x2 + 40, y: STAGE.y2 + 40 };
-  const side = p => p.x < STAGE.x1 ? -1 : p.x > STAGE.x2 ? 1 : 0, below = p => p.y > STAGE.y2 + 25;
-  const sf = side(from), st = side(to);
-  if (sf === st || below(from) && below(to)) return to;
-  let c;
-  if (below(from)) c = st > 0 ? B : A;
-  else if (below(to)) c = sf > 0 ? B : sf < 0 ? A : (len(sub(A, from)) < len(sub(B, from)) ? A : B);
-  else c = sf > 0 ? B : sf < 0 ? A : (st > 0 ? B : A);
-  return len(sub(c, from)) > 24 ? c : to;
-}
-function navPoint (from, to) {
-  const t = navChain(from, to);
-  return from.x > GYM_X && t.x > GYM_X ? aroundStage(from, t) : t;
-}
+// il prossimo punto della strada: furgone, rampa, cortile, porta della palestra
+function navPoint (from, to) { return navChain(from, to); }
 function navChain (from, to) {
   if (region(from) === region(to)) return to;
   if (to.x > from.x) {
@@ -1231,7 +1243,7 @@ function drive (w, dir, vmax) {
 }
 function turnTo (w, a, rate) { const d = angDiff(a, w.facing); w.facing += clamp(d, -rate, rate); }
 function pushVmax (ce) {
-  if (ce.kind === 'trolley') return 3.0 - 0.15 * ce.load.length;
+  if (ce.kind === 'trolley') return 3.0 - 0.15 * cartUsed(ce);
   const base = WHEEL[ce.wheel].push * clamp(1.15 - ce.def.kg / 200, 0.6, 1.1);
   // un case da due persone, da solo, non si muove (quasi)
   if (ce.def.heavy2 && ce.grabbers.length < 2) return 0.14;
@@ -1277,7 +1289,7 @@ function updatePlayer (dt) {
     g.strainT = (g.strainT || 0) + dt;
     if (g.strainT > 2.2 && !g.strained) {
       g.strained = true; G.stats.solo++;
-      bubble(G.macio, G.macio.ai.state === 'phone' ? 'Un attimo, capo!' : 'Da solo ti spacchi la schiena! Chiamami!', 2);
+      bubble(G.macio, G.macio.ai.state === 'phone' ? 'Un attimo, capo!' : 'Quello lo facciamo in due.', 2);
       toast('⚠ 2 PERSONE: da solo non si muove. ' + K('help') + '.', 'warn');
     }
   } else if (g && g.strainT && g.grabbers.length >= 2) g.strainT = 0;
@@ -1303,9 +1315,9 @@ function countTrip (g) {
     const n = g.load.length; if (!n) return;
     S.cartTrips++; S.cartCases += n;
     if (n >= 2) { AU.good(); floatText(g.body.position.x, g.body.position.y - 40, 'Un viaggio, ' + n + ' case', '#49e07a'); }
-  } else if (G.trolley && carriable(g)) {
-    S.wasted++;   // a mano un case leggero alla volta, col carrello lì fuori
-    if (S.wasted === 2) once('viaggi', 'Un case alla volta sono tanti viaggi: col carrello ne porti tre.');
+  } else if (G.trolley && g.kind === 'case' && !g.def.heavy2) {
+    S.wasted++;   // a mano un case alla volta, col carrello lì fuori
+    if (S.wasted === 2) { bubble(G.macio, 'Prendi il carrello. Non siamo qui per fare palestra.', 2.6); once('viaggi', 'Un case alla volta sono tanti viaggi: sul carrello ne porti di più.'); }
   }
 }
 function updateCase (ce, dt) {
@@ -1427,7 +1439,7 @@ function passante (k) {
    --------------------------------------------------------------------- */
 function progress () {
   const S = G.stats, n = G.cases.filter(c => !c.def.surprise && c.zone === c.def.zone).length;
-  if (!G.trolley && (S.handDeliv >= 2 || G.t > 80)) spawnTrolley();
+  if (!G.trolley && G.cartAt && G.t >= G.cartAt) spawnTrolley();
   if (!G.unlock.eff && (S.cartTrips >= 1 && n >= 4 || n >= 7 || G.t > 170)) {
     unlock('eff'); $('#h-eff-w').hidden = false; $('#h-eff-w').classList.add('reveal');
     bubble(G.macio, 'Occhio, che il capo conta i viaggi!', 2.2);
@@ -1462,6 +1474,8 @@ function startSurprise () {
 }
 function surpriseStep () {
   const S = G.surprise; if (!S) return;
+  // nel livello 1 i generici dei cavi stanno davanti: niente telo, si chiude subito
+  if (!G.cases.some(c => c.def.surprise)) { S.revealed = true; return; }
   const dt = G.t - S.t;
   if (!S.asked && dt > 1.8) {
     S.asked = true;
@@ -1493,7 +1507,7 @@ function startWrap () {
   G.mode = 'wrap'; G.wrap = { t: 0, said: 0 };
   hintQueue.length = 0; clearTimeout(queueTimer);
   $('#pad').hidden = true;
-  goal('Materiale nelle zone: Palco, Pit, Backstage e Regia.');
+  goal('Materiale nelle zone: Backstage, Off Stage, Palco e Pit.');
 }
 function wrapStep (dt) {
   const W2 = G.wrap; W2.t += dt;
@@ -1798,34 +1812,46 @@ function drawTarp (ce, k) {
   ctx.fillStyle = 'rgba(255,255,255,.08)'; rr(-w / 2 + 4, -h / 2 + 3, w - 8, 6, 3); ctx.fill();
   ctx.restore();
 }
-function drawTrolley () {
-  const t = G.trolley; if (!t) return;
-  const b = t.body, w = t.def.w, h = t.def.h;
-  ctx.save(); ctx.translate(b.position.x, b.position.y); ctx.rotate(b.angle);
+// il carrello a due ruote da facchino, visto dall'alto: pala davanti, due
+// ruote grandi ai lati, telaio e maniglie dietro. I posti pieni in verde.
+function drawDolly (w, h, used, glow) {
   ctx.fillStyle = 'rgba(0,0,0,.35)'; rr(-w / 2 + 4, -h / 2 + 5, w, h, 5); ctx.fill();
-  // ruote grandi piroettanti, pianale in lamiera mandorlata, maniglione
   ctx.fillStyle = '#0c0d10';
-  [[-1, -1], [1, -1], [-1, 1], [1, 1]].forEach(([sx, sy]) => { rr(sx * (w / 2 - 9) - 7, sy * (h / 2 + 1) - 4, 14, 8, 4); ctx.fill(); });
-  ctx.fillStyle = '#7d848e'; rr(-w / 2, -h / 2, w, h, 5); ctx.fill();
-  ctx.fillStyle = '#9aa1ab'; rr(-w / 2 + 3, -h / 2 + 3, w - 6, h - 6, 4); ctx.fill();
-  ctx.strokeStyle = 'rgba(0,0,0,.18)'; ctx.lineWidth = 1;
-  for (let x = -w / 2 + 8; x < w / 2 - 4; x += 8) { ctx.beginPath(); ctx.moveTo(x, -h / 2 + 5); ctx.lineTo(x + 4, h / 2 - 5); ctx.stroke(); }
-  ctx.strokeStyle = '#2b2d33'; ctx.lineWidth = 4; ctx.lineCap = 'round';
-  ctx.beginPath(); ctx.moveTo(-w / 2 - 2, -h / 2 + 6); ctx.lineTo(-w / 2 - 9, -h / 2 + 6); ctx.lineTo(-w / 2 - 9, h / 2 - 6); ctx.lineTo(-w / 2 - 2, h / 2 - 6); ctx.stroke();
-  // tre posti sul pianale: pieni o vuoti
+  [-1, 1].forEach(sy => { rr(-w / 2 + 4, sy * (h / 2 - 2) - 7, 22, 14, 6); ctx.fill(); });       // ruote
+  ctx.fillStyle = '#5c636c'; ctx.fillRect(-w / 2 + 12, -h / 2 + 7, 6, h - 14);                       // asse
+  ctx.strokeStyle = '#c2353a'; ctx.lineWidth = 5; ctx.lineCap = 'round';
+  [-1, 1].forEach(sy => { ctx.beginPath(); ctx.moveTo(-w / 2 - 6, sy * (h / 2 - 10)); ctx.lineTo(w / 2 - 12, sy * (h / 2 - 10)); ctx.stroke(); });   // telaio
+  ctx.lineWidth = 3;
+  [-0.15, 0.2].forEach(k => { ctx.beginPath(); ctx.moveTo(k * w, -h / 2 + 10); ctx.lineTo(k * w, h / 2 - 10); ctx.stroke(); });
+  ctx.strokeStyle = '#2b2d33'; ctx.lineWidth = 4;                                                      // maniglie
+  [-1, 1].forEach(sy => { ctx.beginPath(); ctx.moveTo(-w / 2 - 6, sy * (h / 2 - 10)); ctx.lineTo(-w / 2 - 12, sy * (h / 2 - 6)); ctx.stroke(); });
+  ctx.fillStyle = '#9aa1ab'; rr(w / 2 - 14, -h / 2 + 2, 14, h - 4, 2); ctx.fill();                     // pala
+  ctx.fillStyle = 'rgba(0,0,0,.2)'; for (let y = -h / 2 + 6; y < h / 2 - 4; y += 6) ctx.fillRect(w / 2 - 12, y, 10, 2);
+  if (used == null) return;
   for (let i = 0; i < TROLLEY_MAX; i++) {
-    ctx.strokeStyle = i < t.load.length ? '#2f8f4e' : 'rgba(43,45,51,.8)'; ctx.lineWidth = 2; ctx.setLineDash(i < t.load.length ? [] : [4, 3]);
-    rr(-w / 2 + 6 + i * (w - 12) / 3, -h / 2 + 8, (w - 12) / 3 - 4, h - 16, 3); ctx.stroke();
+    const full = i < used;
+    ctx.fillStyle = full ? '#2f8f4e' : 'rgba(0,0,0,.35)'; ctx.strokeStyle = full ? '#49e07a' : 'rgba(207,219,232,.6)'; ctx.lineWidth = 1.5;
+    ctx.setLineDash(full ? [] : [3, 2]); rr(-6 + (i - 1) * 13, -5, 10, 10, 2); ctx.fill(); ctx.stroke();
   }
   ctx.setLineDash([]);
-  // col case in mano vicino: il carrello si illumina, si carica qui
-  const P = G.player, held = P.grab && P.mode === 'carry' && P.grab.kind === 'case';
-  if (held && t.load.length < TROLLEY_MAX && len(sub(P.body.position, b.position)) < 160) {
+  if (glow) {
     ctx.strokeStyle = 'rgba(73,224,122,' + (0.55 + 0.45 * Math.sin(performance.now() / 160)) + ')'; ctx.lineWidth = 4;
-    rr(-w / 2 - 6, -h / 2 - 6, w + 12, h + 12, 7); ctx.stroke();
+    rr(-w / 2 - 14, -h / 2 - 6, w + 20, h + 12, 7); ctx.stroke();
   }
+}
+function drawTrolley () {
+  const t = G.trolley;
+  if (!t) {   // ancora nel furgone, in piedi accanto al portellone
+    if (G.van.ramp) return;
+    ctx.save(); ctx.translate(376, 594); ctx.rotate(-Math.PI / 2); ctx.scale(0.5, 0.5); drawDolly(64, 46, null); ctx.restore();
+    return;
+  }
+  const b = t.body, w = t.def.w, h = t.def.h;
+  const P = G.player, held = P.grab && P.grab.kind === 'case' && cartFits(t, P.grab) && !zoneAt(P.body.position) && len(sub(P.body.position, b.position)) < 160;
+  ctx.save(); ctx.translate(b.position.x, b.position.y); ctx.rotate(b.angle);
+  drawDolly(w, h, cartUsed(t), held);
   ctx.restore();
-  if (held && t.load.length < TROLLEY_MAX && len(sub(P.body.position, b.position)) < 160) {
+  if (held) {
     ctx.fillStyle = '#49e07a'; ctx.font = '700 14px "Barlow Condensed", sans-serif'; ctx.textAlign = 'center';
     ctx.fillText(nearTrolley(P, 26) ? KA('CARICA') : 'AVVICINATI: CARICA QUI', b.position.x, b.position.y - 38); ctx.textAlign = 'start';
   }
@@ -2033,7 +2059,7 @@ function drawScreenUI () {
     const ce = nearestCase(P, 14), t = G.trolley;
     if (t && nearTrolley(P, 14) && (!ce || surface(t, P.body.position).dist <= surface(ce, P.body.position).dist)) {
       const s = worldToScreen(t.body.position), inZone = zoneAt(P.body.position) || zoneAt(t.body.position);
-      label(s.x, s.y - 40 * G.cam.scale, 'CARRELLO · ' + t.load.length + '/' + TROLLEY_MAX,
+      label(s.x, s.y - 40 * G.cam.scale, 'CARRELLO · ' + cartUsed(t) + '/' + TROLLEY_MAX,
         t.load.length && inZone ? 'scarica qui: ' + K('grab') : 'si spinge · ' + K('grab'), '#8fa3b8', []);
     } else if (ce) {
       const s = worldToScreen(ce.body.position), bl = blockers(ce).length;
@@ -2060,7 +2086,7 @@ function drawScreenUI () {
     edgeArrow({ x: z.x + z.w / 2, y: z.y + z.h / 2 }, z.color, z.name.toUpperCase());
   } else if (G.surprise && G.surprise.revealed) {
     const ce = G.cases.find(c => c.def.surprise);
-    if (ce.zone !== ce.def.zone && !ce.grabbers.length) edgeArrow(ce.body.position, '#eaff2b', 'BAULE SEGNALE');
+    if (ce && ce.zone !== ce.def.zone && !ce.grabbers.length) edgeArrow(ce.body.position, '#eaff2b', 'BAULE SEGNALE');
   }
   // i PAR rimasti nel loro case: quattro lucine (il danno si vede sul case)
   for (const ce of G.cases) {
@@ -2181,9 +2207,9 @@ function updateHud () {
     $('#h-eff-fill').style.background = e.score >= 75 ? 'var(--green)' : e.score >= 50 ? 'var(--yellow)' : 'var(--red)';
   }
   if (G.trolley) {
-    const n = G.trolley.load.length;
+    const n = cartUsed(G.trolley);
     $('#h-cart-n').textContent = n + '/' + TROLLEY_MAX;
-    $('#h-cart').classList.toggle('done', n === TROLLEY_MAX);
+    $('#h-cart').classList.toggle('done', n >= TROLLEY_MAX);
   }
   // comandi contestuali: ci sono solo quando servono adesso
   const P = G.player, play = G.mode === 'play', near = !P.grab && play && nearestCase(P, 14);
@@ -2205,7 +2231,7 @@ function updateHud () {
   const t = G.trolley;
   const va = !P.grab && play ? vanAction(P) : null;
   let gl = P.grab ? 'LASCIA' : va ? { doors: 'APRI', ramp: 'RAMPA', strap: 'CINGHIA', brake: 'FRENO' }[va] : 'PRENDI';
-  if (t && P.grab && P.mode === 'carry' && nearTrolley(P, 26) && t.load.length < TROLLEY_MAX) gl = 'CARICA';
+  if (t && P.grab && nearTrolley(P, 26) && cartFits(t, P.grab) && !zoneAt(P.body.position)) gl = 'CARICA';
   else if (t && !P.grab && t.load.length && nearTrolley(P, 14) && (zoneAt(P.body.position) || zoneAt(t.body.position))) gl = 'SCARICA';
   $('#b-grab').textContent = gl;
   $('#b-grab').classList.toggle('on', !!P.grab);
@@ -2229,7 +2255,9 @@ function efficiency (final, reason) {
 }
 
 // il giudizio sul lavoro, a parole: i numeri restano dentro il gioco
-function workWord (score) { return score >= 85 ? 'Ottimo' : score >= 65 ? 'Buono' : 'Così così'; }
+function workWord (score) { return score >= 85 ? 'Ottimo' : score >= 65 ? 'Buono' : 'Sufficiente'; }
+// cinque stelle solo se hai usato bene anche il carrello
+function stars (score, cartOk) { const n = Math.min(cartOk ? 5 : 4, score >= 90 ? 5 : score >= 75 ? 4 : score >= 60 ? 3 : score >= 40 ? 2 : 1); return '★'.repeat(n) + '☆'.repeat(5 - n); }
 function workVerdict (score) { return score >= 85 ? 'Lavoro da professionista.' : score >= 65 ? 'Buon ritmo.' : 'Si può fare meglio.'; }
 
 // ora a m minuti dalle 16:00
@@ -2285,7 +2313,9 @@ function endGame (reason) {
   const rep = (allIntegro ? 3 : 0) - 2 * rotti - G.kidHits - roughRep;
   const late = reason !== 'ok';
   const E = efficiency(true, reason);
-  const seg = G.cases.find(c => c.def.surprise);
+  const zn = ce => ce.zone ? ZONES[ce.zone].name : 'fuori zona';
+  const cor = G.cases.find(c => c.def.id === 'corrente'), seg = G.cases.find(c => c.def.id === 'segnale');
+  const cavi = 'Generico CORRENTE in ' + zn(cor) + ', Generico SEGNALE in ' + zn(seg) + ': li apri al montaggio.';
   const L = (ok, txt) => `<li class="${ok ? 'ok' : 'no'}"><b>${ok ? '✓' : '✗'}</b><span>${txt}</span></li>`;
   // come hai lavorato: tre righe a parole, prima quello che è andato meno bene
   const voci = [
@@ -2297,6 +2327,9 @@ function endGame (reason) {
   ];
   const lavoro = voci.map((v, i) => [...v, i]).sort((a, b) => a[0] - b[0] || a[1] - b[1] || a[3] - b[3]).slice(0, 3).map(([ok, , txt]) => L(ok, txt)).join('');
   const verdict = workVerdict(E.score);
+  const nOk = G.cases.filter(c => c.zone === c.def.zone && !c.rushed).length;
+  const nDmg = G.cases.filter(c => stateOf(c.integrity) !== 'integro').length + parsBroken;
+  const cartOk = S.cartTrips > 0 && S.cartCases >= 2 * S.cartTrips - 1;
   $('#end').innerHTML = `
     <div class="bolla">
       <header>
@@ -2309,14 +2342,22 @@ function endGame (reason) {
         <div><span>Birre</span><b>${birre ? '🍺'.repeat(birre) : '0'}</b></div>
         <div><span>Reputazione</span><b>${rep > 0 ? '+' : ''}${rep}</b></div>
       </div>
-      <div class="effline"><span>LAVORO</span><div class="effbar"><i style="width:${E.score}%;background:${E.score >= 75 ? '#2f8f4e' : E.score >= 50 ? '#c79a12' : '#b3321f'}"></i></div><b>${workWord(E.score)}</b></div>
+      <div class="riep"><h3>${reason === 'tempo' ? 'SCARICO CHIUSO DI CORSA' : 'SCARICO COMPLETATO'}</h3>
+        <div><span>Materiale scaricato</span><b>${nOk}/${G.cases.length}</b></div>
+        <div><span>Materiale danneggiato</span><b>${nDmg}</b></div>
+        <div><span>Viaggi effettuati</span><b>${S.trips}</b></div>
+        <div><span>Uso del carrello</span><b>${cartOk ? 'corretto' : 'non ottimale'}</b></div>
+        <div><span>Organizzazione</span><b>${workWord(E.ordine)}</b></div>
+        <div><span>Efficienza</span><b>${workWord(E.score)}</b></div>
+        <div class="stelle"><span>Valutazione scarico</span><b>${stars(E.score, cartOk)}</b></div>
+      </div>
       <ul class="lavoro">${lavoro}</ul>
       <p class="note">${verdict}</p>
       <div class="montaggio"><b>AL MONTAGGIO</b><br>
         PAR: ${Math.min(parAvail, 4)} su 4 · Stativi: ${Math.min(staAvail, 4)} su 4 · Pezzi da sistemare: ${G.cases.filter(c => stateOf(c.integrity) === 'difettoso').length}
         ${spareNote.length ? '<br>Dal case ricambi: ' + spareNote.join(', ') + '.' : ''}
         ${rushed.length ? '<br>Scaricati di corsa da Macio e dal bidello: ' + rushed.map(c => c.def.name).join(', ') + '.' : ''}
-        <br>${seg.rushed ? 'Il baule SEGNALE (i cavi) l\'ha portato giù Macio all\'ultimo.' : 'Baule SEGNALE recuperato: i cavi di stasera sono in regia. Lo apri al montaggio.'}
+        <br>${cavi}
       </div>
       <div class="tw"><table>
         <thead><tr><th>Case</th><th>Zona</th><th>Stato</th><th>Al montaggio</th></tr></thead>

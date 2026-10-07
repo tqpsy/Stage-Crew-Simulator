@@ -52,10 +52,10 @@ const path = require('path');
     G.straps.forEach((_, i) => releaseStrap(i)); G.cases.forEach(releaseBrake);
     macio('phone'); G.macio.ai.t = -999;
     Matter.Body.setPosition(G.player.body, { x: 700, y: 500 }); Matter.Body.setPosition(G.macio.body, { x: 700, y: 600 });
-    const spots = { corrente: [1225, 215, 0], distro: [1225, 320, 0], ricambio: [1225, 405, 0],
-      segnale: [1390, 780, 0], stativi: [1550, 195, 0], par: [1550, 260, 0],
-      sub1: [1550, 370, 0], sub2: [1550, 460, 0], top1: [1550, 550, 0], top2: [1550, 620, 0],
-      rack: [1340, 650, 0], valigetta: [1440, 650, 0] };
+    const spots = { corrente: [1225, 210, 0], distro: [1225, 330, 0], ricambio: [1380, 420, 0],
+      segnale: [1455, 720, 0], tavolo: [1320, 710, 0], rack: [1400, 620, 0], valigetta: [1400, 700, 0],
+      stativi: [1530, 230, 0], par: [1560, 310, 0],
+      sub1: [1550, 400, 0], sub2: [1550, 480, 0], top1: [1550, 560, 0], top2: [1550, 620, 0] };
     for (const ce of G.cases) {
       const [x, y, r] = spots[ce.def.id];
       Matter.Body.setPosition(ce.body, { x, y }); Matter.Body.setAngle(ce.body, r * Math.PI / 2); Matter.Body.setVelocity(ce.body, { x: 0, y: 0 });
@@ -90,7 +90,7 @@ const path = require('path');
   check(st.input, 'dopo lo scarico la scena resta bloccata');
   // i case scaricati restano gli stessi: nome, zona dove li hai lasciati, stato
   const rack = st.s.cases.find(c => c.id === 'rack'), seg = st.s.cases.find(c => c.id === 'segnale');
-  check(st.s.cases.length === 12 && rack.at === 'foh' && rack.state === 'difettoso' && rack.dents > 0 && seg.at === 'foh',
+  check(st.s.cases.length === 13 && rack.at === 'foh' && rack.state === 'difettoso' && rack.dents > 0 && seg.at === 'foh',
     'i case dello scarico non arrivano al montaggio: ' + JSON.stringify(st.s.cases));
   const sched = await ev(() => { renderSchedule(); return { now: el('#schedule-list .sched-row.now').textContent, first: el('#schedule-list .sched-row').textContent }; });
   check(/Montaggio/.test(sched.now), 'la scaletta non passa al montaggio');

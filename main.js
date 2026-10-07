@@ -283,7 +283,7 @@ const COMPONENT_TYPES = {
     ]
   },
   top: {
-    label: 'TOP', category: 'audio', powerW: 0, zone: 'pit', shape: 'top',
+    label: 'TESTA', category: 'audio', powerW: 0, zone: 'pit', shape: 'top',
     body: { w: 34, h: 72, fill: 0x232830, accent: 0x4a90e2 },
     ledPos: TOP_ISO(3, 36, 45),
     ports: [
@@ -693,7 +693,7 @@ const PIECE_FROM_CASE = {
   quadro: ['distro'], ciabatta: ['distro'], ciabatta_cee: ['distro'],
   pc: ['valigetta'], scheda: ['valigetta'], controller: ['valigetta'],
   par: ['par', 'par', 'par', 'par', 'ricambio'], stativo: ['stativi', 'stativi', 'stativi', 'stativi', 'ricambio'],
-  asta: ['stativi'], mic: ['ricambio']
+  asta: ['ricambio'], mic: ['ricambio'], tavolo: ['tavolo']
 };
 function cleanScaricoCases (list) {
   if (!Array.isArray(list)) return [];
@@ -709,17 +709,18 @@ function cleanScaricoCases (list) {
 // lasciato allo scarico (se l'hai saltato, nella sua zona). Posti fissi,
 // fuori dalle celle dove si posano i pezzi: Backstage verso la parete, la
 // fascia oltre l'Off Stage, la prima fila davanti al Pit
-const CASE_HOME = { corrente: 'back', distro: 'back', ricambio: 'back', segnale: 'foh', rack: 'foh', valigetta: 'foh',
+const CASE_HOME = { corrente: 'back', distro: 'back', ricambio: 'palco', segnale: 'foh', rack: 'foh', valigetta: 'foh',
   sub1: 'pit', sub2: 'pit', top1: 'pit', top2: 'pit', stativi: 'pit', par: 'pit' };
 const DOCK_SPOTS = {
   back: [[9.45, 2.45], [9.45, 3.45], [8.45, 2.45], [8.45, 3.45]],
   foh: [[9.5, 4.5], [9.5, 5.45], [9.5, 6.4], [9.5, 7.35]],
+  palco: [[5.5, 4.35], [4.7, 4.35]],
   pit: [[0.8, 10.5], [1.8, 10.5], [2.8, 10.5], [6.8, 10.5], [7.8, 10.5], [8.8, 10.5], [3.8, 10.5], [5.8, 10.5]]
 };
-const DOCK_TAPE = { back: 0xff4fb4, foh: 0x49e07a, pit: 0x4fb7ff };
-const DOCK_LABEL = { sub1: 'SUB 1', sub2: 'SUB 2', top1: 'TOP 1', top2: 'TOP 2', rack: 'RACK', valigetta: 'PC', par: 'PAR', stativi: 'STATIVI', distro: 'DISTRO', ricambio: 'RICAMBI' };
+const DOCK_TAPE = { back: 0xff4fb4, foh: 0x49e07a, pit: 0x4fb7ff, palco: 0xeaff2b };
+const DOCK_LABEL = { sub1: 'SUB 1', sub2: 'SUB 2', top1: 'TESTA 1', top2: 'TESTA 2', rack: 'RACK', valigetta: 'PC', par: 'PAR', stativi: 'STATIVI', distro: 'QUADRO', ricambio: 'ACCESSORI' };
 function dockCaseSpots () {
-  const used = { back: 0, foh: 0, pit: 0 }, out = [];
+  const used = { back: 0, foh: 0, pit: 0, palco: 0 }, out = [];
   // prima i bauli dei cavi, così stanno sempre nel primo posto della zona
   const ids = ['corrente', 'segnale', ...Object.keys(CASE_HOME).filter(id => !CABLE_CASES[id])];
   ids.forEach(id => {
@@ -3306,7 +3307,7 @@ function scaricoSummary () {
   if (!s.ricOk) bits.push('case ricambi perso');
   if (s.faulty.length) bits.push('da sistemare: ' + s.faulty.join(', '));
   if (s.delay) bits.push('montaggio alle ' + montaggioTime());
-  if (s.eff != null) bits.push('lavoro ' + (s.eff >= 85 ? 'ottimo' : s.eff >= 65 ? 'buono' : 'così così'));
+  if (s.eff != null) bits.push('lavoro ' + (s.eff >= 85 ? 'ottimo' : s.eff >= 65 ? 'buono' : 'sufficiente'));
   bits.push(s.beers ? '🍺'.repeat(s.beers) : 'nessuna birra');
   return bits.join(' · ') + '.';
 }

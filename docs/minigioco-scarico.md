@@ -80,9 +80,10 @@ Durata: 16:00 → 16:30 in 6 minuti reali. Il risultato porta in più
 
    | Nastro | Zona | Esempi |
    |--------|------|--------|
-   | rosa | Backstage / allaccio | baule CORRENTE, distro, ricambi |
-   | blu | Pit | sub, top, stativi, PAR |
-   | verde | Off Stage · regia | rack regia, valigetta PC, baule SEGNALE |
+   | rosa | Backstage / allaccio | Generico CORRENTE, quadro |
+   | giallo | Palco | case accessori (asta, microfono, ricambi) |
+   | blu | Pit | sub, teste, stativi, PAR |
+   | verde | Off Stage · regia | tavolo regia, rack regia, valigetta PC, Generico SEGNALE |
 
    La palestra dello scarico è quella del montaggio: il palco c'è già
    (si gira intorno) e le zone sono dove serviranno i pezzi.
@@ -381,6 +382,26 @@ si spiega. Il montaggio non cambia: legge solo i dati che lo scarico lascia.
   nella zona dove l'hai consegnato (Backstage, Off Stage, Pit); quando ne
   esce il primo pezzo diventa trasparente («aperto»). Il baule CORRENTE sta
   in Backstage vicino all'allaccio, il SEGNALE in Off Stage vicino alla regia.
+
+### Specifiche di Luca del 2026-10-07 sera
+
+- **TESTA**, mai TOP, in tutto il gioco (scarico, montaggio, carico).
+- **Carico come da specifica**: vicino al portellone il carrello a due
+  ruote, stativi, PAR, case accessori e i due generici dei cavi
+  (CORRENTE → Backstage, SEGNALE → Off Stage, non più sotto il telo); in
+  mezzo tavolo regia, quadro e PC; in fondo sub, teste e rack.
+- **Carrello a due ruote da facchino**: lo tira fuori Macio appena la rampa
+  è giù. Tre posti; un case pesante (≥ 35 kg) ne prende due; i case da due
+  (tavolo, rack) non ci stanno. Si carica anche un case spinto. Nelle zone
+  LASCIA posa a terra, non ricarica.
+- **Peso a categorie**: LEGGERO, MEDIO, PESANTE (in due).
+- **Macio**: battute rare e corte («Quello lo facciamo in due.», «Prima
+  liberiamo il passaggio.», «Prendi il carrello. Non siamo qui per fare
+  palestra.»). Nessun ERRORE per l'ordine.
+- **Riepilogo SCARICO COMPLETATO**: materiale scaricato, danneggiato,
+  viaggi, uso del carrello, organizzazione, efficienza, stelle. Pesa sulla
+  serata come prima (ritardo, danni, reputazione, birre).
+- Il palco nella palestra dello scarico si attraversa (ha la scaletta).
 
 ### Il furgone (note di Luca del 2026-10-07)
 
