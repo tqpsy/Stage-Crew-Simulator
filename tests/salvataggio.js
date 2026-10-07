@@ -69,6 +69,7 @@ const os = require('os');
   check(await p.isVisible('#schedule-modal'), 'dopo Inizia manca la scaletta della serata');
   check(await p.textContent('#schedule-list .sched-row.now') !== null && /scarico/.test(await p.textContent('#schedule-list .sched-row.now')), 'la scaletta non dice che adesso si scarica');
   check((await p.$$('#schedule-list .sched-row.done')).length === 0, 'la scaletta segna fatte fasi non giocate');
+  await ev(() => { Profile.data.scaricoPlayed = true; });   // il primo scarico non si salta: si fa finta di averlo giocato
   await p.click('#schedule-go');
   check(!(await p.isVisible('#schedule-modal')), 'la scaletta resta aperta dopo Al lavoro');
   check(await p.isVisible('#scarico-frame'), 'dopo la scaletta non parte lo scarico');
@@ -167,6 +168,7 @@ const os = require('os');
   await p.fill('#player-input', 'Nuova Tecnica');
   await p.click('#service-offers [data-offer="0"]');
   await p.click('#new-start');
+  await ev(() => { Profile.data.scaricoPlayed = true; });
   await p.click('#schedule-go');
   // lo scarico si apre sopra il gioco: qui si salta dal suo tasto
   await p.waitForSelector('#scarico-frame');

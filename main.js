@@ -1791,7 +1791,7 @@ const SAVE_FILE_KIND = 'stage-crew-simulator';   // firma del file esportato
 const SHARED_KEYS = ['settings', 'records', 'usedServices'];
 
 function defaultProfile () {
-  return { v: SAVE_VERSION, player: '', service: '', serviceInfo: null, usedServices: [], settings: { volume: 0.8, reducedFx: false, skipShow: false, skipScarico: false, testMusic: true, bossTips: true, tapeMarks: true, traceSignal: true }, tutorSeen: {}, logo: null, level: null, scarico: null, cavi: null, preside: null, cambioDj: null, dj: null, karaoke: null, carico: null, collaudo: null, serata: null, beers: 0, coffees: 0, assistant: defaultAssistant(), fatigue: 0, records: {}, reputation: { total: 0, earned: {}, log: [] }, levelsSeen: 1, savedAt: 0 };
+  return { v: SAVE_VERSION, player: '', service: '', serviceInfo: null, usedServices: [], settings: { volume: 0.8, reducedFx: false, skipShow: false, skipScarico: false, testMusic: true, bossTips: true, tapeMarks: true, traceSignal: true }, tutorSeen: {}, logo: null, level: null, scarico: null, scaricoPlayed: false, cavi: null, preside: null, cambioDj: null, dj: null, karaoke: null, carico: null, collaudo: null, serata: null, beers: 0, coffees: 0, assistant: defaultAssistant(), fatigue: 0, records: {}, reputation: { total: 0, earned: {}, log: [] }, levelsSeen: 1, savedAt: 0 };
 }
 // l'assistente della serata (dal livello 2, vedi ASSISTANTS): chi è e
 // quanti favori ha già fatto nel set in corso. Le partite salvate prima
@@ -2838,6 +2838,8 @@ function showMenuPage (page, keep) {
     el('#set-reduced').checked = !!settings().reducedFx;
     el('#set-skipshow').checked = !!settings().skipShow;
     el('#set-skipscarico').checked = !!settings().skipScarico;
+    el('#set-skipscarico').disabled = !scaricoPlayed();
+    el('#set-skipscarico-note').hidden = scaricoPlayed();
     el('#set-testmusic').checked = settings().testMusic !== false;
     el('#set-bosstips').checked = settings().bossTips !== false;
     el('#set-proinfo').checked = proInfo();
@@ -3190,9 +3192,12 @@ function minigameQuery () { return '&vol=' + settings().volume + (reducedFx() ? 
 // un messaggio vale solo se arriva davvero dall'iframe di quel minigioco
 const fromFrame = (ev, id) => { const f = el('#' + id); return !!f && ev.source === f.contentWindow; };
 const scaricoDone = () => !!Profile.data.scarico;
+// il primo scarico non si salta: è il tutorial. Dopo averlo giocato una
+// volta (in questo salvataggio) si può saltare dalle impostazioni o dal via
+const scaricoPlayed = () => !!Profile.data.scaricoPlayed || !!(Profile.data.scarico && !Profile.data.scarico.skipped);
 function openScarico () {
   if (scaricoOpen) return;
-  if (settings().skipScarico) { finishScarico({ skipped: true }); return; }
+  if (settings().skipScarico && scaricoPlayed()) { finishScarico({ skipped: true }); return; }
   scaricoOpen = true;
   setSceneInput(false);
   sceneKeyboard(false);
@@ -3200,7 +3205,7 @@ function openScarico () {
   f.id = 'scarico-frame';
   f.title = 'Lo scarico';
   const logo = serviceLogo();
-  f.src = 'scarico.html?embed=1&service=' + encodeURIComponent(serviceName()) + '&bg=' + encodeURIComponent(logo.bg) + '&fg=' + encodeURIComponent(logo.fg) + minigameQuery();
+  f.src = 'scarico.html?embed=1&service=' + encodeURIComponent(serviceName()) + '&bg=' + encodeURIComponent(logo.bg) + '&fg=' + encodeURIComponent(logo.fg) + minigameQuery() + (scaricoPlayed() ? '' : '&first=1');
   f.addEventListener('load', () => { try { f.contentWindow.focus(); } catch (e) { /* niente fuoco: si clicca */ } });
   document.body.appendChild(f);
 }
@@ -3223,6 +3228,7 @@ function finishScarico (r) {
     eff: Number.isFinite(r.eff) ? r.eff : null, rough: r.rough || 0,
     cases: cleanScaricoCases(r.cases)
   };
+  if (!r.skipped) Profile.data.scaricoPlayed = true;
   Profile.data.beers = (Profile.data.beers || 0) + Profile.data.scarico.beers;
   if (!r.skipped) {
     const rotti = parsBroken + staBroken + (ricOk ? 0 : 1);
@@ -3274,7 +3280,7 @@ function scaricoSummary () {
   if (!s.ricOk) bits.push('case ricambi perso');
   if (s.faulty.length) bits.push('da sistemare: ' + s.faulty.join(', '));
   if (s.delay) bits.push('montaggio alle ' + montaggioTime());
-  if (s.eff != null) bits.push('efficienza ' + s.eff + '%');
+  if (s.eff != null) bits.push('lavoro ' + (s.eff >= 85 ? 'ottimo' : s.eff >= 65 ? 'buono' : 'così così'));
   bits.push(s.beers ? '🍺'.repeat(s.beers) : 'nessuna birra');
   return bits.join(' · ') + '.';
 }

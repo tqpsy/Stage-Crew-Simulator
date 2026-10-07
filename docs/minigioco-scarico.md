@@ -14,8 +14,8 @@ rampa, gli oggetti fragili si rompono se sbattono. Al tuo fianco c'è
 **Macio**, il collega CPU: forte, un po' lento, da chiamare quando un
 case è troppo grosso per una persona sola.
 
-Quello che rompi **ti manca al montaggio**. Si gioca in circa 5 minuti e si
-può saltare.
+Quello che rompi **ti manca al montaggio**. Si gioca in circa 5 minuti; il
+primo scarico non si salta (è il tutorial), dal secondo sì.
 
 ## Il primo scarico come tutorial giocato (livello 1)
 
@@ -28,13 +28,28 @@ Ogni idea arriva quando serve, con una riga nella barra d'aiuto in basso
 |---|---|---|
 | Arrivo | devo scaricare | cartello «FESTA DELLA SCUOLA — 16:00», la frase di Macio, *Apri il portellone*. Solo joystick e PRENDI. |
 | Primi case | si spostano | davanti ci sono i Top e i ricambi, leggeri, in mano. |
-| Case pesante | alcuni pesano | la scheda sopra il case: nome, kg, classe (LEGGERO, MEDIO, PESANTE, ⚠ 2 PERSONE). Compare FERMO!. |
-| Baule da due | non tutto si fa da soli | da solo non si muove (quasi), Macio lo dice, si accende **CHIAMA COLLEGA**. Da quella chiamata Macio è in squadra e porta da solo i case leggeri. |
+| Case pesante | alcuni pesano | la scheda sopra il case: nome e peso a parole (LEGGERO, MEDIO, PESANTE, ⚠ 2 PERSONE), niente kg. Spingendolo in discesa o di corsa compare FERMO!. |
+| Baule da due | non tutto si fa da soli | da solo non si muove (quasi), Macio lo dice, compare **AIUTO**. Da quella chiamata Macio è in squadra e porta da solo i case leggeri. |
 | Furgone stivato | c'è un ordine | il case dietro dice ACCESSO BLOCCATO e lampeggiano quelli davanti. Il rack (mixer) sta dietro distro e case PAR. Calcolato dalle posizioni vere (`blockers()`). |
 | Carrello | si ottimizza | arriva dopo due consegne a mano (o a 80 s): fino a 3 case leggeri sopra, un viaggio solo, si scarica stando in una zona. Passa il gradino. Se sbatte, il carico si fa male. |
 | Fragile | le azioni hanno conseguenze | nastro ⚠ FRAGILE (valigetta, PAR, rack). Un urto: «Movimentazione brusca, −1 reputazione», al massimo −2. |
-| Efficienza | conta come lavori | la barra compare a metà (dopo il carrello o 7 case): tempo, viaggi e carrello, urti, squadra, ordine. Nella bolla, cinque righe «come hai lavorato», senza formule. |
+| Gradino | in due si alza | un case a spinta contro il gradino della palestra si ferma e compare **OH-ISSA**: un tocco, Macio conta «uno… due… ISSA!» e il case passa. Niente tempismo, niente errori. |
+| Lavoro | conta come lavori | la barra LAVORO compare a metà (dopo il carrello o 7 case) con un giudizio a parole (Ottimo, Buono, Così così). Nella bolla: la barra, un giudizio e tre righe «come hai lavorato», prima quello che è andato meno bene. Niente percentuali. |
 | Sorpresa | quello che scarico serve dopo | a «MATERIALE SCARICATO: 100%» Macio chiede del baule dei cavi: il baule SEGNALE era sotto il telo in fondo al furgone. È quello che si riapre al montaggio. |
+
+**Comandi contestuali**: sul telefono restano sempre joystick e PRENDI
+(che diventa LASCIA, CARICA, SCARICA). AIUTO, OH-ISSA e FERMO! compaiono solo
+quando si possono usare in quel momento, e spariscono dopo (`showCmd()`).
+
+**Tolti dal livello 1**: il ribaltamento del rack, il cavo incastrato da
+tenere premuto, le barrette dello stato sopra i case e il bagliore rosso
+«troppo veloce». Il danno si vede sul case (sobbalzo, graffi, ammaccature)
+e nelle frasi di Macio.
+
+**Primo scarico**: non si salta. Il tasto *Salta* e l'impostazione valgono
+solo dopo averlo giocato una volta in quel salvataggio
+(`Profile.data.scaricoPlayed`; il gioco passa `first=1` all'iframe). Senza
+fisica (niente rete) si può sempre saltare.
 
 Durata: 16:00 → 16:30 in 6 minuti reali. Il risultato porta in più
 `eff` (efficienza %) e `rough` (movimentazioni brusche), salvati in
@@ -66,7 +81,7 @@ Durata: 16:00 → 16:30 in 6 minuti reali. Il risultato porta in più
    | Nastro | Zona | Esempi |
    |--------|------|--------|
    | giallo | Palco | stativi, PAR, asta e microfono |
-   | rosa | Backstage / allaccio | quadro, baule CORRENTE |
+   | rosa | Backstage / allaccio | quadro (livello 1: il baule CORRENTE va in Regia FOH) |
    | blu | Pit / impianto | sub, top |
    | verde | Regia (FOH) | rack regia, valigetta PC |
 
@@ -360,8 +375,8 @@ si spiega. Il montaggio non cambia: legge solo i dati che lo scarico lascia.
 - **Danni scoperti**: il messaggio d'inizio montaggio non elenca più i pezzi
   difettosi; li trovi sul pezzo (segno arancione, «Qualcosa non va: …»),
   con la stessa riparazione di prima.
-- **Da decidere**: al montaggio i bauli CORRENTE e SEGNALE sono disegnati
-  dietro la regia FOH, mentre allo scarico vanno in Backstage e sul Palco.
+- **Bauli dei cavi**: CORRENTE e SEGNALE si consegnano in Regia FOH, dove
+  il montaggio li disegna (zona FOH dello scarico allargata).
 
 ## Tipi di flight case e materiali
 
@@ -467,9 +482,9 @@ non toccano la scena di Phaser.
   delle 16:00 diventa "Fatto" con il riassunto (ora di fine, pezzi rotti,
   da sistemare, birre) e il montaggio mostra l'ora vera d'inizio
   (16:30 più il ritardo).
-- **Saltare**: dalla schermata iniziale dello scarico ("Salta lo
-  scarico") o dalle impostazioni ("Salta lo scarico a inizio partita"):
-  tutto arriva sano, niente birre. Senza rete Matter.js non si carica e lo
+- **Saltare**: dopo il primo scarico giocato, dalla schermata iniziale
+  dello scarico ("Salta lo scarico") o dalle impostazioni ("Salta lo
+  scarico a inizio partita"): tutto arriva sano, niente birre. Senza rete Matter.js non si carica e lo
   scarico si può solo saltare.
 - **Montaggio**: i pezzi rotti mancano dalla dotazione (`levelStock()` in
   `main.js`); il case ricambi, se arriva sano, rimpiazza un PAR e uno

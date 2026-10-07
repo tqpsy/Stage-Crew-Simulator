@@ -49,8 +49,8 @@ const path = require('path');
     for (const w of G.workers) release(w);
     macio('phone'); G.macio.ai.t = -999;
     Matter.Body.setPosition(G.player.body, { x: 700, y: 500 }); Matter.Body.setPosition(G.macio.body, { x: 700, y: 600 });
-    const spots = { corrente: [1675, 230, 1], distro: [1745, 230, 0], ricambio: [1810, 230, 0],
-      segnale: [1740, 380, 0], stativi: [1740, 470, 0], par: [1740, 560, 0],
+    const spots = { corrente: [1250, 680, 0], distro: [1745, 230, 0], ricambio: [1810, 230, 0],
+      segnale: [1390, 680, 0], stativi: [1740, 470, 0], par: [1740, 560, 0],
       sub1: [1545, 380, 0], sub2: [1545, 480, 0], top1: [1545, 570, 0], top2: [1545, 640, 0],
       rack: [1260, 750, 0], valigetta: [1340, 750, 0] };
     for (const ce of G.cases) {
@@ -87,7 +87,7 @@ const path = require('path');
   check(st.input, 'dopo lo scarico la scena resta bloccata');
   // i case scaricati restano gli stessi: nome, zona dove li hai lasciati, stato
   const rack = st.s.cases.find(c => c.id === 'rack'), seg = st.s.cases.find(c => c.id === 'segnale');
-  check(st.s.cases.length === 12 && rack.at === 'foh' && rack.state === 'difettoso' && rack.dents > 0 && seg.at === 'palco',
+  check(st.s.cases.length === 12 && rack.at === 'foh' && rack.state === 'difettoso' && rack.dents > 0 && seg.at === 'foh',
     'i case dello scarico non arrivano al montaggio: ' + JSON.stringify(st.s.cases));
   const sched = await ev(() => { renderSchedule(); return { now: el('#schedule-list .sched-row.now').textContent, first: el('#schedule-list .sched-row').textContent }; });
   check(/Montaggio/.test(sched.now), 'la scaletta non passa al montaggio');
@@ -164,9 +164,18 @@ const path = require('path');
   check(await p.isVisible('#scarico-frame'), 'dopo la scaletta lo scarico non riparte');
 
   // impostazione "Salta lo scarico": niente iframe
-  await ev(() => { document.querySelector('#scarico-frame').remove(); scaricoOpen = false; settings().skipScarico = true; startNewGame('Saltatore', serviceOffers([])[0]); });
+  await ev(() => { document.querySelector('#scarico-frame').remove(); scaricoOpen = false; startNewGame('Saltatore', serviceOffers([])[0]); });
   await p.waitForFunction(() => !menuOpen);
+  // la prima volta l'impostazione non vale: lo scarico è il tutorial
+  await ev(() => { settings().skipScarico = true; });
   await p.click('#schedule-go');
+  const first = await ev(() => !!document.querySelector('#scarico-frame'));
+  check(first, 'il primo scarico si salta con l\'impostazione');
+  const fskip = await (await p.$('#scarico-frame')).contentFrame();
+  await fskip.waitForSelector('#btn-start');
+  check(await fskip.evaluate(() => document.getElementById('btn-skip').hidden), 'al primo scarico c\'è il tasto Salta');
+  // giocato una volta, dalla volta dopo l'impostazione vale
+  await ev(() => { document.querySelector('#scarico-frame').remove(); scaricoOpen = false; Profile.data.scaricoPlayed = true; openScarico(); });
   const skipped = await ev(() => ({ frame: !!document.querySelector('#scarico-frame'), sk: Profile.data.scarico && Profile.data.scarico.skipped, par: gameState.stock.par }));
   check(!skipped.frame && skipped.sk && skipped.par === 4, 'l\'impostazione "Salta lo scarico" non funziona: ' + JSON.stringify(skipped));
 

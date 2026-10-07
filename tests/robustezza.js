@@ -34,7 +34,7 @@ async function newGame (p) {
   await p.locator('#service-offers .offer-card').first().click();
   await p.locator('#new-start').click();
   await p.waitForTimeout(150);
-  await p.evaluate(() => { settings().skipScarico = true; });
+  await p.evaluate(() => { settings().skipScarico = true; Profile.data.scaricoPlayed = true; });
   await p.locator('#schedule-go').click();
   await p.waitForTimeout(300);
 }

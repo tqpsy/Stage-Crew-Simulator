@@ -30,6 +30,8 @@ const PRESA_PRIMA = !!process.env.PRESA_PRIMA;
   cnt(); await p.locator('#service-offers .offer-card').first().tap();
   cnt(); await p.locator('#new-start').tap(); await p.waitForTimeout(150);
   // la scaletta della serata, poi al lavoro
+  // il primo scarico non si salta: qui si fa finta di averlo già giocato
+  await p.evaluate(() => { Profile.data.scaricoPlayed = true; });
   cnt(); await p.locator('#schedule-go').tap(); await p.waitForTimeout(150);
   // lo scarico (minigioco a parte, tests/scarico.js): qui si salta
   await p.waitForSelector('#scarico-frame');

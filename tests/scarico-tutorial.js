@@ -114,12 +114,13 @@ const path = require('path');
     window.x0 = c.body.position.x;
     pressGrab();
     inp.keys.add('KeyA');
-    return { grabbed: G.player.grab === c, help: !$('#b-help').hidden || !document.querySelector('#keys [data-k="help"]').hidden };
+    return { grabbed: G.player.grab === c };
   });
   await p.waitForTimeout(2800);
-  const solo2 = await ev(() => { inp.keys.delete('KeyA'); const c = C('corrente'); return { moved: Math.abs(c.body.position.x - x0), solo: G.stats.solo, hint: $('#hint-txt').textContent }; });
+  const solo2 = await ev(() => { inp.keys.delete('KeyA'); const c = C('corrente'); return { moved: Math.abs(c.body.position.x - x0), solo: G.stats.solo, hint: $('#hint-txt').textContent,
+    help: !document.querySelector('#keys [data-k="help"]').hidden, lift: !document.querySelector('#keys [data-k="lift"]').hidden }; });
   solo2.hint = await saw(/2 PERSONE/);
-  check(solo.grabbed && solo.help && solo2.moved < 25 && solo2.solo === 1 && solo2.hint,
+  check(solo.grabbed && solo2.help && !solo2.lift && solo2.moved < 25 && solo2.solo === 1 && solo2.hint,
     'il case da due si muove da solo o non chiede il collega: ' + JSON.stringify(solo) + JSON.stringify(solo2));
   await ev(() => { Matter.Body.setPosition(G.macio.body, { x: 300, y: 430 }); pressHelp(); });
   await p.waitForFunction(() => G.macio.grab === C('corrente'), null, { timeout: 8000 }).catch(() => {});
@@ -127,8 +128,25 @@ const path = require('path');
   check(team.team && team.macio === 'corrente' && team.pushers === 2, 'Macio non arriva a spingere il baule: ' + JSON.stringify(team));
   await ev(() => { for (const w of G.workers) release(w); macio('phone'); G.macio.ai.t = -999; });
 
+  // gradino della palestra: il case si ferma, compare OH-ISSA; un tocco e Macio conta, il case passa
+  await ev(() => {
+    const c = C('sub2');
+    Matter.Body.setPosition(c.body, { x: GYM_X - 60, y: 500 }); Matter.Body.setAngle(c.body, 0); Matter.Body.setVelocity(c.body, { x: 0, y: 0 });
+    moveTo(GYM_X - 60 - 35 - 17, 500); G.player.facing = 0;
+    pressGrab(); inp.keys.add('KeyD');
+  });
+  await p.waitForFunction(() => !document.querySelector('#keys [data-k="lift"]').hidden, null, { timeout: 5000 }).catch(() => {});
+  const st1 = await ev(() => ({ lift: !document.querySelector('#keys [data-k="lift"]').hidden, x: C('sub2').body.position.x, grab: G.player.grab && G.player.grab.def.id }));
+  await ev(() => pressLift());
+  await p.waitForTimeout(2600);
+  const st2 = await ev(() => { inp.keys.delete('KeyD'); const x = C('sub2').body.position.x; return { x, qte: !!G.qte }; });
+  check(st1.lift && st1.x < 1160 && st2.x > 1160 && !st2.qte, 'OH-ISSA al gradino non va con un tocco: ' + JSON.stringify([st1, st2]));
+  await ev(() => { for (const w of G.workers) release(w); });
+
   // fragile sbattuto: movimentazione brusca, −1 reputazione
   const rough = await ev(() => {
+    // si conta da qui: prima Macio può aver urtato qualcosa nel furgone
+    G.stats.rough = 0; G.stats.hits = 0;
     const v = C('valigetta');
     hitCase(v, null, 6, G.statics[0]);
     return { rough: G.stats.rough, hint: $('#hint-txt').textContent, dmg: !$('#h-dmg-w').hidden || true };
@@ -142,13 +160,13 @@ const path = require('path');
   await ev(() => { G.t = Math.max(G.t, 171); });
   await p.waitForTimeout(400);
   const eff = await ev(() => ({ shown: !$('#h-eff-w').hidden, txt: $('#h-eff').textContent }));
-  check(eff.shown && /^\d+%$/.test(eff.txt), 'l\'efficienza non compare: ' + JSON.stringify(eff));
+  check(eff.shown && /^(Ottimo|Buono|Così così)$/.test(eff.txt), 'la barra del lavoro non compare: ' + JSON.stringify(eff));
 
   // tutto il resto a posto: 100%, poi la sorpresa del baule SEGNALE
   await ev(() => {
     for (const w of G.workers) release(w);
     moveTo(700, 500);
-    const spots = { corrente: [1675, 230, 1], distro: [1808, 250, 0], sub1: [1545, 640, 0], sub2: [1545, 480, 0], par: [1740, 560, 0], rack: [1260, 750, 0], valigetta: [1340, 750, 0] };
+    const spots = { corrente: [1250, 680, 0], distro: [1808, 250, 0], sub1: [1545, 640, 0], sub2: [1545, 480, 0], par: [1740, 560, 0], rack: [1260, 750, 0], valigetta: [1340, 750, 0] };
     for (const id in spots) {
       const [x, y, r] = spots[id], c = C(id);
       Matter.Body.setPosition(c.body, { x, y }); Matter.Body.setAngle(c.body, r * Math.PI / 2); Matter.Body.setVelocity(c.body, { x: 0, y: 0 });
@@ -162,16 +180,16 @@ const path = require('path');
   await p.waitForTimeout(200);
   const s2 = await ev(() => ({ hidden: C('segnale').hidden, del: $('#h-del').textContent, hint: hintGoal, blocked: blockers(C('segnale')).length, mode: G.mode }));
   check(!s2.hidden && s2.del === '11/12' && /SEGNALE/.test(s2.hint) && !s2.blocked && s2.mode === 'play', 'il baule sotto il telo non salta fuori: ' + JSON.stringify(s2));
-  await ev(() => { const c = C('segnale'); Matter.Body.setPosition(c.body, { x: 1740, y: 380 }); Matter.Body.setVelocity(c.body, { x: 0, y: 0 }); });
+  await ev(() => { const c = C('segnale'); Matter.Body.setPosition(c.body, { x: 1390, y: 680 }); Matter.Body.setVelocity(c.body, { x: 0, y: 0 }); });
   // pausa finale: la telecamera va sulle zone, Macio guarda il materiale; un tocco la accorcia
   await p.waitForFunction(() => G.mode === 'wrap' && G.wrap.t > 4.5, null, { timeout: 12000 }).catch(() => {});
   const w = await ev(() => ({ mode: G.mode, cx: G.cam.x, hint: $('#hint-txt').textContent }));
   check(w.mode === 'wrap' && w.cx > 1200 && /tutto giù/.test(w.hint), 'nella pausa finale non si vedono le zone: ' + JSON.stringify(w));
   await p.mouse.click(300, 300);
   await p.waitForFunction(() => G.mode === 'end', null, { timeout: 3000 }).catch(() => {});
-  const end = await ev(() => ({ mode: G.mode, r: G.result, html: $('#end').innerText }));
+  const end = await ev(() => ({ mode: G.mode, r: G.result, html: $('#end').innerText, li: document.querySelectorAll('#end .lavoro li').length }));
   check(end.mode === 'end' && Number.isFinite(end.r.eff) && end.r.rough === 1 && end.r.cartTrips === 1, 'il risultato non porta efficienza e movimentazioni: ' + JSON.stringify(end.r));
-  check(/EFFICIENZA/.test(end.html) && /Baule SEGNALE recuperato/.test(end.html) && /movimentazione brusca/i.test(end.html) && /col carrello/.test(end.html),
+  check(/LAVORO/.test(end.html) && !/\d+%/.test(end.html) && /Baule SEGNALE recuperato/.test(end.html) && /movimentazione brusca/i.test(end.html) && end.li === 3,
     'la bolla non racconta come hai lavorato: ' + end.html.slice(0, 400));
   await p.close();
 
