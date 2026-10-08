@@ -241,7 +241,7 @@ if (EMBED) {
 <script>
 'use strict';
 // senza rete Matter.js non arriva: si può solo saltare (vedi in fondo)
-const { Engine, Bodies, Body, Composite, Constraint, Events, Query } = window.Matter || {};
+const { Engine, Bodies, Body, Composite, Collision, Bounds, Query } = window.Matter || {};
 
 /* ---------------------------------------------------------------------
    COSTANTI — valori di partenza da tarare giocando (vedi il documento).
@@ -249,14 +249,19 @@ const { Engine, Bodies, Body, Composite, Constraint, Events, Query } = window.Ma
    --------------------------------------------------------------------- */
 const STEP = 1000 / 60;
 const GAME_SECONDS = 360;              // 16:00 → 16:30 in 6 minuti reali
-const CAT = { WALL: 1, CASE: 2, WORKER: 4, STEP: 8, NPC: 16, DOLLY: 32, TROLLEY: 64 };
+const CAT = { WALL: 1, CASE: 2, WORKER: 4, STEP: 8, NPC: 16, TROLLEY: 64 };
 const TROLLEY_MAX = 3;                 // posti sul carrello: un pesante ne prende due
-const DOOR_X = 400;                    // portellone del furgone
-const RAMP = { x: 400, y: 445, w: 120, h: 110 };
+/* Il furgone è un furgone da service (vano 3,3 × 2 m) già parcheggiato a
+   coda verso la palestra: dalla fine della rampa alla porta ci sono meno di
+   tre metri. Tu e Macio siete larghi una quarantina di centimetri. */
+const DOOR_X = 780;                    // portellone del furgone
+const VAN = { x1: DOOR_X - 330, x2: DOOR_X, y1: 400, y2: 600 };   // il vano di carico
+const RAMP = { x: DOOR_X, y: 440, w: 110, h: 120 };
 const GYM_X = 1160;                    // muro della palestra (porta con gradino)
-const SHOVE_VMAX = 0.45;               // a mani vuote contro un case: si sposta appena
-const STEP_BAND = { y1: 450, y2: 550 };
-const WORLD = { x1: -170, y1: 60, x2: 1900, y2: 940 };
+const STEP_BAND = { y1: 420, y2: 580 };   // porta a due ante della palestra: 1,6 m
+const WORLD = { x1: 290, y1: 60, x2: 1900, y2: 940 };
+// il cortile fra furgone e palestra: albero, panchina, moka del bidello
+const TREE = { x: 1075, y: 255 }, BENCH = { x: 845, y: 860 }, MOKA = { x: 1100, y: 167 };
 
 /* La palestra è la stessa del montaggio, vista dall'alto: dalla porta del
    cortile si entra nel Backstage (allaccio e quadro), davanti c'è il palco
@@ -291,34 +296,34 @@ const WHEEL = {
 // in mezzo tavolo regia, quadro e PC; in fondo il pesante (sub, teste, rack).
 // Esce prima quello caricato per ultimo: vedi blockers().
 const CASES = [
-  // --- vicino al portellone
-  { id: 'corrente', name: 'Generico CORRENTE', short: 'CORRENTE', what: 'cavi e accessori di alimentazione', kg: 45, w: 56, h: 100, wheel: 'swivel', frag: 'bassa', zone: 'back', unique: true, x: 300, y: 450,
+  // --- vicino al portellone (il carrello è in piedi fra stativi e PAR)
+  { id: 'corrente', name: 'Generico CORRENTE', short: 'CORRENTE', what: 'cavi e accessori di alimentazione', kg: 45, w: 56, h: 96, wheel: 'swivel', frag: 'bassa', zone: 'back', unique: true, x: VAN.x1 + 255, y: VAN.y1 + 50,
     dif: 'cavi aggrovigliati: +10 min per sbrogliarli' },
-  { id: 'segnale', name: 'Generico SEGNALE', short: 'SEGNALE', what: 'cavi e accessori di segnale (XLR, DMX, Speakon)', kg: 40, w: 56, h: 100, wheel: 'swivel', frag: 'bassa', zone: 'foh', unique: true, x: 300, y: 555,
+  { id: 'segnale', name: 'Generico SEGNALE', short: 'SEGNALE', what: 'cavi e accessori di segnale (XLR, DMX, Speakon)', kg: 40, w: 56, h: 96, wheel: 'swivel', frag: 'bassa', zone: 'foh', unique: true, x: VAN.x1 + 255, y: VAN.y1 + 150,
     dif: 'cavi aggrovigliati: +10 min per sbrogliarli' },
-  { id: 'stativi', name: 'Borsa stativi', short: 'STATIVI', what: '4 stativi', kg: 22, w: 34, h: 90, wheel: 'hand', frag: 'bassa', zone: 'pit', x: 352, y: 436,
+  { id: 'stativi', name: 'Borsa stativi', short: 'STATIVI', what: '4 stativi', kg: 22, w: 34, h: 90, wheel: 'hand', frag: 'bassa', zone: 'pit', x: VAN.x1 + 308, y: VAN.y1 + 47,
     dif: 'uno stativo duro da aprire: +10 min' },
-  { id: 'ricambio', name: 'Case accessori', short: 'ACCESSORI', what: 'asta mic, microfono, ricambi', kg: 12, w: 40, h: 34, wheel: 'hand', frag: 'media', zone: 'palco', x: 374, y: 500,
+  { id: 'ricambio', name: 'Case accessori', short: 'ACCESSORI', what: 'asta mic, microfono, ricambi', kg: 12, w: 40, h: 34, wheel: 'hand', frag: 'media', zone: 'palco', x: VAN.x1 + 190, y: VAN.y1 + 160,
     dif: 'scorte in disordine: +10 min' },
-  { id: 'par', name: 'Case PAR', short: 'PAR ×4', what: '4 PAR LED', kg: 25, w: 55, h: 48, wheel: 'hand', frag: 'alta', zone: 'pit', x: 360, y: 558,
+  { id: 'par', name: 'Case PAR', short: 'PAR ×4', what: '4 PAR LED', kg: 25, w: 42, h: 52, wheel: 'hand', frag: 'alta', zone: 'pit', x: VAN.x1 + 305, y: VAN.y1 + 168,
     dif: 'lenti da pulire: +10 min' },
   // --- in mezzo
-  { id: 'tavolo', name: 'Tavolo regia', short: 'TAVOLO', what: 'tavolo pieghevole', kg: 38, w: 34, h: 130, wheel: 'none', frag: 'bassa', zone: 'foh', heavy2: true, unique: true, x: 168, y: 470,
+  { id: 'tavolo', name: 'Tavolo regia', short: 'TAVOLO', what: 'tavolo pieghevole', kg: 38, w: 34, h: 130, wheel: 'none', frag: 'bassa', zone: 'foh', heavy2: true, unique: true, x: VAN.x1 + 140, y: VAN.y1 + 100,
     dif: 'una gamba dura da aprire: +10 min' },
-  { id: 'distro', name: 'Quadro', short: 'QUADRO', what: 'quadro prese + ciabatte', kg: 18, w: 50, h: 46, wheel: 'hand', frag: 'media', zone: 'back', unique: true, x: 226, y: 424,
+  { id: 'distro', name: 'Quadro', short: 'QUADRO', what: 'quadro prese + ciabatte', kg: 18, w: 50, h: 46, wheel: 'hand', frag: 'media', zone: 'back', unique: true, x: VAN.x1 + 190, y: VAN.y1 + 30,
     dif: 'il quadro scatta alla prima accensione: +10 min' },
-  { id: 'valigetta', name: 'Valigetta regia', short: 'PC', what: 'PC, scheda audio, DI, consolle luci', kg: 8, w: 40, h: 30, wheel: 'hand', frag: 'altissima', zone: 'foh', unique: true, x: 226, y: 500,
+  { id: 'valigetta', name: 'Valigetta regia', short: 'PC', what: 'PC, scheda audio, DI, consolle luci', kg: 8, w: 40, h: 30, wheel: 'hand', frag: 'altissima', zone: 'foh', unique: true, x: VAN.x1 + 190, y: VAN.y1 + 100,
     dif: 'il PC non parte al primo colpo: +10 min' },
   // --- in fondo, il pesante
-  { id: 'rack', name: 'Rack regia', short: 'RACK', what: 'mixer + finale', kg: 55, w: 58, h: 58, wheel: 'fixed', frag: 'alta', zone: 'foh', heavy2: true, tall: true, unique: true, x: 46, y: 426,
+  { id: 'rack', name: 'Rack regia', short: 'RACK', what: 'mixer + finale', kg: 55, w: 54, h: 54, wheel: 'fixed', frag: 'alta', zone: 'foh', heavy2: true, tall: true, unique: true, x: VAN.x1 + 36, y: VAN.y1 + 172,
     dif: 'il finale va in protezione all\'accensione: +10 min' },
-  { id: 'sub1', name: 'Sub 1', short: 'SUB', what: 'cassa sub', kg: 40, w: 70, h: 70, wheel: 'fixed', frag: 'media', zone: 'pit', unique: true, x: 50, y: 500,
+  { id: 'sub1', name: 'Sub 1', short: 'SUB', what: 'cassa sub', kg: 40, w: 70, h: 70, wheel: 'fixed', frag: 'media', zone: 'pit', unique: true, x: VAN.x1 + 36, y: VAN.y1 + 36,
     dif: 'la cassa vibra: +10 min per controllarla' },
-  { id: 'sub2', name: 'Sub 2', short: 'SUB', what: 'cassa sub', kg: 40, w: 70, h: 70, wheel: 'fixed', frag: 'media', zone: 'pit', unique: true, x: 50, y: 573,
+  { id: 'sub2', name: 'Sub 2', short: 'SUB', what: 'cassa sub', kg: 40, w: 70, h: 70, wheel: 'fixed', frag: 'media', zone: 'pit', unique: true, x: VAN.x1 + 36, y: VAN.y1 + 108,
     dif: 'la cassa vibra: +10 min per controllarla' },
-  { id: 'top1', name: 'Testa 1', short: 'TESTA', what: 'cassa testa (va sul palo del sub)', kg: 20, w: 44, h: 44, wheel: 'hand', frag: 'media', zone: 'pit', unique: true, x: 112, y: 440,
+  { id: 'top1', name: 'Testa 1', short: 'TESTA', what: 'cassa testa (va sul palo del sub)', kg: 20, w: 44, h: 44, wheel: 'hand', frag: 'media', zone: 'pit', unique: true, x: VAN.x1 + 98, y: VAN.y1 + 30,
     dif: 'il tweeter gracchia: +10 min' },
-  { id: 'top2', name: 'Testa 2', short: 'TESTA', what: 'cassa testa (va sul palo del sub)', kg: 20, w: 44, h: 44, wheel: 'hand', frag: 'media', zone: 'pit', unique: true, x: 112, y: 560,
+  { id: 'top2', name: 'Testa 2', short: 'TESTA', what: 'cassa testa (va sul palo del sub)', kg: 20, w: 44, h: 44, wheel: 'hand', frag: 'media', zone: 'pit', unique: true, x: VAN.x1 + 98, y: VAN.y1 + 170,
     dif: 'il tweeter gracchia: +10 min' }
 ];
 const FRAGILE = d => d.frag === 'alta' || d.frag === 'altissima';
@@ -329,13 +334,12 @@ function weightClass (d) {
   return c + (d.wheel !== 'hand' ? ' · si spinge' : ' · in mano');
 }
 
-// le cinghie del furgone, una per strato (il case accessori davanti non è
-// legato: infatti scivola giù). Una cinghia tiene fermi i case del suo
-// strato finché non la sganci; i case con le ruote hanno anche il freno.
+// le cinghie del furgone, una per strato. Una cinghia tiene fermi i case
+// del suo strato finché non la sganci; i case con le ruote hanno anche il freno.
 const VAN_STRAPS = [
-  { x: 330, ids: ['corrente', 'segnale', 'stativi', 'par'] },
-  { x: 200, ids: ['tavolo', 'distro', 'valigetta'] },
-  { x: 84, ids: ['rack', 'sub1', 'sub2', 'top1', 'top2'] }
+  { x: VAN.x1 + 289, ids: ['corrente', 'segnale', 'stativi', 'par'] },
+  { x: VAN.x1 + 164, ids: ['tavolo', 'distro', 'valigetta', 'ricambio'] },
+  { x: VAN.x1 + 74, ids: ['rack', 'sub1', 'sub2', 'top1', 'top2'] }
 ];
 
 const STATE_COLOR = { integro: '#49b06a', ammaccato: '#f2c53d', difettoso: '#f2843d', rotto: '#e0503f' };
@@ -418,13 +422,13 @@ function newGame () {
   const world = engine.world;
   G = {
     engine, world, t: 0, introT: 0, mode: 'intro', cases: [], workers: [], kids: [], statics: [],
-    cart: null, dolly: null, toasts: [], bubbles: [], history: [], qte: null,
+    cart: null, toasts: [], bubbles: [], history: [], qte: null,
     coffee: { used: false, until: 0, pauseUntil: 0 }, kidHits: 0, events: {}, endDelay: 0,
     // un po' di varietà fra una partita e l'altra: gli stessi imprevisti, ma
     // non sempre allo stesso secondo, e il cavo s'incastra in uno dei due bauli
     at: { passante1: rand(20, 40), bidello: rand(80, 115), telefono: rand(135, 170), passante2: rand(195, 230) },
     // il SEGNALE è la sorpresa finale: il cavo s'incastra nel CORRENTE
-    cam: { x: 420, y: 500, scale: 1 }, doorsOpen: 0, flashes: [], fx: [],
+    cam: { x: DOOR_X + 20, y: 500, scale: 1 }, doorsOpen: 0, flashes: [], fx: [],
     // tutorial che si gioca: comandi e strumenti compaiono quando servono
     unlock: { help: false, lift: false, stop: false, cart: false, eff: false },
     seen: {}, team: false, trolley: null, van: { open: false, ramp: false, anim: null }, straps: VAN_STRAPS.map(() => true), surprise: null, blockFlash: null, tarp: 0, prevPX: 0,
@@ -436,87 +440,79 @@ function newGame () {
   // draw = false: l'ostacolo ha un disegno suo (furgone, panchina…)
   const wall = (x1, y1, x2, y2, draw) => {
     const b = Bodies.rectangle((x1 + x2) / 2, (y1 + y2) / 2, x2 - x1, y2 - y1,
-      { isStatic: true, restitution: 0.15, friction: 0.2, collisionFilter: { category: CAT.WALL, mask: 0xffff } });
+      { isStatic: true, restitution: 0, friction: 0, collisionFilter: { category: CAT.WALL, mask: 0xffff } });
     b.plugin.draw = draw !== false;
     G.statics.push(b); return b;
   };
-  // furgone: interno 10..400 × 390..610
-  wall(-12, 378, DOOR_X, 390, false); wall(-12, 610, DOOR_X, 622, false); wall(-12, 378, 10, 622, false);
+  // furgone: fiancate e fondo del vano; ai lati della rampa il bordo del pianale
+  wall(VAN.x1 - 12, VAN.y1 - 12, DOOR_X, VAN.y1, false); wall(VAN.x1 - 12, VAN.y2, DOOR_X, VAN.y2 + 12, false);
+  wall(VAN.x1 - 12, VAN.y1 - 12, VAN.x1, VAN.y2 + 12, false);
+  // (un case in mano passa sopra al bordo: è sollevato)
+  G.edges = [wall(DOOR_X - 2, VAN.y1, DOOR_X + 4, RAMP.y, false), wall(DOOR_X - 2, RAMP.y + RAMP.h, DOOR_X + 4, VAN.y2, false)];
   // recinto del cortile
-  wall(395, 80, GYM_X, 92); wall(395, 908, GYM_X, 920);
-  wall(394, 80, 405, 378); wall(394, 622, 405, 920);
+  wall(DOOR_X - 5, 80, GYM_X, 92); wall(DOOR_X - 5, 908, GYM_X, 920);
+  wall(DOOR_X - 6, 80, DOOR_X + 5, VAN.y1 - 12); wall(DOOR_X - 6, VAN.y2 + 12, DOOR_X + 5, 920);
   // palestra
   wall(GYM_X - 10, 80, GYM_X + 10, STEP_BAND.y1); wall(GYM_X - 10, STEP_BAND.y2, GYM_X + 10, 920);
   wall(GYM_X, 130, 1870, 150); wall(GYM_X, 850, 1870, 870); wall(1850, 130, 1870, 870);
   // sedie impilate in palestra, un albero e una panchina in cortile
   wall(1640, 170, 1740, 220, false);                // sedie impilate in platea
-  G.statics.push(Bodies.circle(820, 260, 18, { isStatic: true, collisionFilter: { category: CAT.WALL, mask: 0xffff } }));
-  wall(840, 730, 970, 758, false);
-  wall(632, 118, 692, 146, false);                  // tavolino della moka
+  G.statics.push(Bodies.circle(TREE.x, TREE.y, 18, { isStatic: true, restitution: 0, friction: 0, collisionFilter: { category: CAT.WALL, mask: 0xffff } }));
+  wall(BENCH.x, BENCH.y, BENCH.x + 110, BENCH.y + 26, false);
+  wall(MOKA.x - 30, MOKA.y - 57, MOKA.x + 30, MOKA.y - 29, false);   // tavolino della moka
   // il portellone chiuso (e poi la rampa su): non si entra e non si esce
-  G.doorWall = wall(DOOR_X - 2, 380, DOOR_X + 8, 620, false);
+  G.doorWall = wall(DOOR_X - 2, VAN.y1, DOOR_X + 8, VAN.y2, false);
   // il gradino della porta: ferma solo i case a terra
   const step = Bodies.rectangle(GYM_X, 500, 10, STEP_BAND.y2 - STEP_BAND.y1,
     { isStatic: true, collisionFilter: { category: CAT.STEP, mask: CAT.CASE } });
   G.statics.push(step); G.stepBody = step;
   Composite.add(world, G.statics);
 
-  // --- i case nel furgone
+  // --- i case nel furgone: fermi finché qualcuno non li prende (vedi PRESA)
   for (const d of CASES) {
     const b = Bodies.rectangle(d.x, d.y, d.w, d.h, {
-      chamfer: { radius: 3 }, friction: 0.05, frictionAir: 0, restitution: 0.12,
+      isStatic: true, chamfer: { radius: 3 }, friction: 0, restitution: 0,
       collisionFilter: { category: CAT.CASE, mask: CAT.WALL | CAT.CASE | CAT.WORKER | CAT.STEP | CAT.NPC | CAT.TROLLEY, group: 0 }
     });
-    Body.setMass(b, d.kg);
     const ce = { kind: 'case', def: d, body: b, integrity: 100, pars: d.id === 'par' ? 4 : 0, wheel: d.wheel,
-      grabbers: [], carrier: null, liftUntil: 0, hopUntil: 0, slideUntil: 0, lastHit: -1,
-      zone: null, pv: { x: 0, y: 0 }, flash: 0, seed: Math.random() * 1000, rushed: false, onDolly: false, fell: false };
+      grabbers: [], carrier: null, liftUntil: 0, hopUntil: 0, lastHit: -1,
+      zone: null, flash: 0, seed: Math.random() * 1000, rushed: false };
     b.plugin.ent = ce;
-    if (d.surprise) { ce.hidden = true; Body.setStatic(b, true); }   // sotto il telo, in fondo
+    if (d.surprise) ce.hidden = true;   // sotto il telo, in fondo
     // come al carico: cinghie tirate sugli strati e freni sulle ruote
     ce.strap = VAN_STRAPS.findIndex(st => st.ids.includes(d.id));
     ce.brake = d.wheel === 'swivel' || d.wheel === 'fixed';
-    if (locked(ce) && !ce.hidden) Body.setStatic(b, true);
     G.cases.push(ce);
   }
   Composite.add(world, G.cases.map(c => c.body));
 
-  // --- il dolly (piattaforma con ruote) in cortile
-  const db = Bodies.rectangle(600, 720, 54, 54, { frictionAir: 0, friction: 0.05, restitution: 0.2,
-    collisionFilter: { category: CAT.DOLLY, mask: CAT.WALL | CAT.WORKER | CAT.NPC } });
-  Body.setMass(db, 8);
-  G.dolly = { kind: 'dolly', body: db, pv: { x: 0, y: 0 } }; db.plugin.ent = G.dolly;
-  Composite.add(world, db);
-
   // --- tu e Macio
-  G.player = makeWorker('Tu', 500, 470, 15, { tee: '#101114', trim: '#f2a541', skin: '#e0b48f', fmax: 0.05, vmax: 3.8 });
-  G.macio = makeWorker('Macio', 520, 590, 18, { tee: '#6d737d', trim: '#c9ccd1', skin: '#c99670', fmax: 0.06, vmax: 3.3 });
+  G.player = makeWorker('Tu', DOOR_X + 120, 470, 19, { tee: '#101114', trim: '#f2a541', skin: '#e0b48f', vmax: 3.4 });
+  G.macio = makeWorker('Macio', DOOR_X + 140, 600, 21, { tee: '#6d737d', trim: '#c9ccd1', skin: '#c99670', vmax: 3.1 });
   G.macio.ai = { state: 'idle', t: 0, stuckT: 0, side: 0, sideT: 0 };
 
   // --- bambini in cortile
-  G.kids.push(makeKid(760, 180, '#ff7a59'));
-  G.kids.push(makeKid(980, 820, '#7ad3ff'));
-
-  Events.on(engine, 'collisionStart', onCollision);
+  G.kids.push(makeKid(950, 180, '#ff7a59'));
+  G.kids.push(makeKid(1000, 820, '#7ad3ff'));
 
   bubble(G.macio, 'Apri tu il portellone, ti tengo la rampa.', 2.8);
 }
 
 function makeWorker (name, x, y, r, o) {
-  const b = Bodies.circle(x, y, r, { frictionAir: 0, friction: 0.1, restitution: 0,
-    collisionFilter: { category: CAT.WORKER, mask: CAT.WALL | CAT.CASE | CAT.NPC | CAT.DOLLY | CAT.TROLLEY, group: -1 } });
+  const b = Bodies.circle(x, y, r, { frictionAir: 0, friction: 0, restitution: 0,
+    collisionFilter: { category: CAT.WORKER, mask: CAT.WALL | CAT.CASE | CAT.NPC | CAT.TROLLEY, group: -1 } });
   Body.setMass(b, name === 'Tu' ? 80 : 95); Body.setInertia(b, Infinity);
-  const w = { kind: 'worker', name, body: b, r, facing: 0, grab: null, mode: null, con: null, carry: null, pv: { x: 0, y: 0 }, ...o };
+  const w = { kind: 'worker', name, body: b, r, facing: 0, grab: null, mode: null, hold: null, vel: { x: 0, y: 0 }, spd: 0, ...o };
   b.plugin.ent = w;
   Composite.add(G.world, b);
   G.workers.push(w);
   return w;
 }
 function makeKid (x, y, tee) {
-  const b = Bodies.circle(x, y, 11, { frictionAir: 0, friction: 0.1, restitution: 0.3,
-    collisionFilter: { category: CAT.NPC, mask: CAT.WALL | CAT.CASE | CAT.WORKER | CAT.NPC | CAT.DOLLY | CAT.TROLLEY } });
+  const b = Bodies.circle(x, y, 13, { frictionAir: 0, friction: 0, restitution: 0,
+    collisionFilter: { category: CAT.NPC, mask: CAT.WALL | CAT.CASE | CAT.WORKER | CAT.NPC | CAT.TROLLEY } });
   Body.setMass(b, 30); Body.setInertia(b, Infinity);
-  const k = { kind: 'kid', body: b, tee, target: { x, y }, wait: 0, block: 0, hitT: -9, pv: { x: 0, y: 0 }, facing: 0 };
+  const k = { kind: 'kid', body: b, tee, target: { x, y }, wait: 0, block: 0, hitT: -9, facing: 0 };
   b.plugin.ent = k;
   Composite.add(G.world, b);
   return k;
@@ -645,10 +641,15 @@ function nearestCase (w, reach) {
   return best;
 }
 
+// preso da qualcuno: chi lo tiene (gruppo −1 come le persone) non ci urta contro
 function refreshFilter (ce) {
   const f = ce.body.collisionFilter;
-  if (ce.kind === 'trolley') { f.group = ce.grabbers.length ? -1 : 0; return; }
-  const held = ce.grabbers.length > 0 || ce.carrier;
+  if (ce.kind === 'trolley') {
+    f.group = ce.grabbers.length ? -1 : 0;
+    for (const c of ce.load) c.body.collisionFilter.group = f.group;
+    return;
+  }
+  const held = ce.grabbers.length > 0 || ce.carrier || (ce.onTrolley && ce.onTrolley.grabbers.length);
   f.group = held ? -1 : 0;
   let mask = CAT.WALL | CAT.CASE | CAT.NPC | CAT.TROLLEY;
   if (!held) mask |= CAT.WORKER;
@@ -665,10 +666,6 @@ function refreshFilter (ce) {
    --------------------------------------------------------------------- */
 function strapOn (ce) { return ce.strap >= 0 && G.straps[ce.strap]; }
 function locked (ce) { return ce.kind === 'case' && (strapOn(ce) || !!ce.brake); }
-function setFree (ce) {
-  if (ce.hidden || locked(ce) || !ce.body.isStatic) return;
-  Body.setStatic(ce.body, false); Body.setMass(ce.body, ce.def.kg);
-}
 function nearDoor (w) {
   const p = w.body.position;
   return p.x > DOOR_X - 30 && p.x < DOOR_X + 110 && p.y > 370 && p.y < 630;
@@ -699,10 +696,6 @@ function vanStep (dt) {
     if (A.t >= 0.8) {
       G.van.ramp = true; G.van.anim = null; AU.thud(5);
       Composite.remove(G.world, G.doorWall); G.statics = G.statics.filter(b => b !== G.doorWall);
-      // il case ricambi non era legato: scivola giù
-      const r = G.cases.find(c => c.def.id === 'ricambio');
-      r.slideUntil = G.t + 1.2; Body.setVelocity(r.body, { x: 4.2, y: 0.2 }); Body.setAngularVelocity(r.body, 0.03);
-      toast('Occhio! Il case ricambi non era legato…', 'warn');
       G.team = true; G.cartAt = G.t + 3.2;
       bubble(G.macio, 'Ti tiro fuori il carrello.', 2.4);
       goal('Scarica il furgone: prima i case davanti, poi sgancia le cinghie.');
@@ -712,7 +705,6 @@ function vanStep (dt) {
 function releaseStrap (i) {
   if (!G.straps[i]) return;
   G.straps[i] = false; AU.tone(520, 300, 0.12, 0.08);
-  for (const ce of G.cases) if (ce.strap === i) setFree(ce);
   const st = VAN_STRAPS[i];
   floatText(st.x, 400, 'CINGHIA SGANCIATA', '#f2a541');
   const braked = G.cases.filter(c => c.strap === i && c.brake && !c.hidden);
@@ -722,7 +714,6 @@ function releaseBrake (ce) {
   if (!ce.brake) return;
   ce.brake = false; AU.tone(380, 260, 0.1, 0.08);
   floatText(ce.body.position.x, ce.body.position.y - 20, 'FRENO TOLTO', '#f2a541');
-  setFree(ce);
 }
 // cosa fa il tasto d'azione vicino al furgone, se c'è da fare qualcosa
 function vanAction (w) {
@@ -743,28 +734,17 @@ function grab (w, ce) {
     return false;
   }
   if (ce.kind === 'case' && blockers(ce).length) { if (w === G.player) blockedTry(ce); return false; }
-  if (ce.carrier) return false;
-  if (carriable(ce) && ce.grabbers.length) return false;
+  if (ce.carrier || ce.grabbers.length) return false;
   unpark(ce);
-  if (carriable(ce)) {
-    if (ce.grabbers.length) return false;
-    const dir = norm(sub(ce.body.position, w.body.position));
-    w.facing = Math.atan2(dir.y, dir.x);
-    const dl = rot(dir, -ce.body.angle);
-    const proj = Math.abs(dl.x) * ce.def.w / 2 + Math.abs(dl.y) * ce.def.h / 2;
-    w.grab = ce; w.mode = 'carry';
-    w.carry = { dist: w.r + proj + 3, rel: angDiff(ce.body.angle, w.facing) };
-    ce.carrier = w;
-    if (w === G.player) { AU.pick(); puff(w.body.position.x, w.body.position.y, 4, 'rgba(190,190,196,', 0.8); }
-  } else {
-    const s = surface(ce, w.body.position);
-    const con = Constraint.create({ bodyA: w.body, pointA: { x: 0, y: 0 }, bodyB: ce.body,
-      pointB: sub(s.world, ce.body.position), length: w.r + 1, stiffness: 0.6, damping: 0.08 });
-    Composite.add(G.world, con);
-    w.grab = ce; w.mode = 'push'; w.con = con;
-    ce.grabbers.push(w);
-    if (w === G.player) AU.pick();
-  }
+  // l'oggetto resta dov'è: chi lo prende si gira verso di lui e da adesso
+  // lo tiene a quella distanza e con quell'angolo (vedi PRESA)
+  const c = ce.body.position, p = w.body.position;
+  w.facing = Math.atan2(c.y - p.y, c.x - p.x);
+  w.hold = { off: { x: len(sub(c, p)), y: 0 }, rel: angDiff(ce.body.angle, w.facing) };
+  w.grab = ce; w.vel = { x: 0, y: 0 };
+  if (carriable(ce)) { w.mode = 'carry'; ce.carrier = w; }
+  else { w.mode = 'push'; ce.grabbers.push(w); }
+  if (w === G.player) { AU.pick(); if (w.mode === 'carry') puff(p.x, p.y, 4, 'rgba(190,190,196,', 0.8); }
   refreshFilter(ce);
   if (w === G.player && ce.kind === 'case') learnFrom(ce);
   return true;
@@ -809,22 +789,32 @@ function cartSize (ce) { return ce.def.kg >= 35 ? 2 : 1; }
 function cartUsed (t) { return t.load.reduce((n, c) => n + cartSize(c), 0); }
 function cartFits (t, ce) { return !!ce && ce.kind === 'case' && !ce.def.heavy2 && cartUsed(t) + cartSize(ce) <= TROLLEY_MAX; }
 function spawnTrolley () {
-  const b = Bodies.rectangle(470, 650, 64, 46, { chamfer: { radius: 4 }, frictionAir: 0, friction: 0.05, restitution: 0.15,
+  const b = Bodies.rectangle(TROLLEY_AT.x, TROLLEY_AT.y, 64, 46, { isStatic: true, chamfer: { radius: 4 }, friction: 0, restitution: 0,
     collisionFilter: { category: CAT.TROLLEY, mask: CAT.WALL | CAT.WORKER | CAT.NPC | CAT.CASE, group: 0 } });
-  Body.setMass(b, 14);
-  const t = { kind: 'trolley', body: b, load: [], grabbers: [], pv: { x: 0, y: 0 }, lastHit: -1,
+  const t = { kind: 'trolley', body: b, load: [], grabbers: [], lastHit: -1,
     def: { id: 'carrello', name: 'Carrello', kg: 14, w: 64, h: 46, wheel: 'swivel', frag: 'bassa', zone: null } };
   b.plugin.ent = t;
   Composite.add(G.world, b);
   G.trolley = t; unlock('cart');
   $('#h-cart').hidden = false; $('#h-cart').classList.add('reveal');
-  ring(470, 650, '#8fa3b8'); AU.clack();
+  ring(TROLLEY_AT.x, TROLLEY_AT.y, '#8fa3b8'); AU.clack();
   bubble(G.macio, 'Ecco il carrello. Due ruote, zero pensieri.', 2.6);
   toast('CARRELLO: avvicinati con un case (in mano o spinto) e ' + KA('CARICA') + '. Tre posti: un pesante ne prende due. Poi spingilo nella zona e ' + KA('SCARICA') + '.', 'ok');
 }
 function nearTrolley (w, reach) {
   const t = G.trolley; if (!t) return false;
   return surface(t, w.body.position).dist - w.r < reach;
+}
+// distanza fra due sagome (riquadri), 0 se si toccano
+function boundsGap (a, b) {
+  const dx = Math.max(a.min.x - b.max.x, b.min.x - a.max.x, 0), dy = Math.max(a.min.y - b.max.y, b.min.y - a.max.y, 0);
+  return Math.hypot(dx, dy);
+}
+// col case in mano (o spinto) vicino al carrello: si può caricare
+function canLoad (w) {
+  const t = G.trolley, ce = w.grab;
+  if (!t || !ce || ce.kind !== 'case' || zoneAt(w.body.position)) return false;
+  return nearTrolley(w, 26) || boundsGap(ce.body.bounds, t.body.bounds) < 24;
 }
 function loadTrolley (w) {
   const t = G.trolley, ce = w.grab;
@@ -833,63 +823,63 @@ function loadTrolley (w) {
   if (ce.carrier) release(ce.carrier);
   unpark(ce);
   ce.onTrolley = t; ce.zone = null;
-  Composite.remove(G.world, ce.body);
   t.load.push(ce);
-  placeLoad(t);
+  placeLoad(t); refreshFilter(t);
   const n = cartUsed(t);
   AU.clack(); floatText(t.body.position.x, t.body.position.y - 34, n + '/' + TROLLEY_MAX, '#cfdbe8');
   if (n >= TROLLEY_MAX) once('pieno', 'Carrello pieno: spingilo in palestra (' + K('grab') + ' vicino al carrello).', 'ok');
   else once('carica', 'Sul carrello. C\'è ancora posto per ' + (TROLLEY_MAX - n === 1 ? 'un case leggero.' : 'un pesante o due leggeri.'));
 }
-// i case sul carrello: una piccola pila che segue il pianale
+// i case sul carrello: una piccola pila sulla pala, ferma rispetto al carrello
 function placeLoad (t) {
   t.load.forEach((ce, i) => {
-    const off = rot({ x: -10 + i * 10, y: -i * 4 }, t.body.angle);
+    const off = rot({ x: 6 - i * 6, y: -i * 3 }, t.body.angle);
     Body.setPosition(ce.body, add(t.body.position, off));
     Body.setAngle(ce.body, t.body.angle);
-    Body.setVelocity(ce.body, { x: 0, y: 0 });
   });
 }
-// dal carrello in mano: prima il case che va nella zona dove sei
+// dal carrello in mano: prima il case che va nella zona dove sei. Va giù
+// accanto a te, dalla parte opposta al carrello (o di lato), dove c'è posto
 function unloadTrolley (w) {
   const t = G.trolley, z = zoneAt(w.body.position) || zoneAt(t.body.position);
-  let ce = t.load.find(c => c.def.zone === z) || t.load[t.load.length - 1];
+  const ce = t.load.find(c => c.def.zone === z) || t.load[t.load.length - 1];
   t.load = t.load.filter(c => c !== ce);
   ce.onTrolley = null;
-  const dir = norm(sub(w.body.position, t.body.position));
-  Body.setPosition(ce.body, add(w.body.position, mul(dir, 30)));
-  Composite.add(G.world, ce.body);
-  placeLoad(t);
-  grab(w, ce);
-  once('scarica', 'Dal carrello alla zona del suo nastro.');
-}
-/* Un case lasciato fermo nella SUA zona si «parcheggia»: freni tirati, non
-   lo sposta più nessuno urtandolo (prima bastava sfiorarlo per far partire
-   un effetto flipper fra Pit, Palco e Backstage, che sono attaccati).
-   Riprendendolo con PRENDI si sblocca. */
-function park (ce) {
-  if (ce.parked || !Body) return;
-  ce.parked = true;
-  Body.setVelocity(ce.body, { x: 0, y: 0 }); Body.setAngularVelocity(ce.body, 0);
-  Body.setStatic(ce.body, true);
-}
-function unpark (ce) {
-  if (!ce.parked) return;
-  ce.parked = false;
-  Body.setStatic(ce.body, false);
-  Body.setMass(ce.body, ce.def.kg);
-}
-function release (w, why) {
-  const ce = w.grab; if (!ce) return;
-  if (w.con) { Composite.remove(G.world, w.con); w.con = null; }
-  ce.grabbers = ce.grabbers.filter(x => x !== w);
-  ce.lastCarrier = w;
-  if (ce.carrier === w) {
-    ce.carrier = null;
-    if (why === 'slip') { if (w === G.player) { damage(ce, 10 * FRAG[ce.def.frag].mult, 'caduta'); handled(ce, 10); } AU.thud(3); }
-    else Body.setVelocity(ce.body, mul(ce.body.velocity, 0.3));
+  const p = w.body.position, away = Math.atan2(p.y - t.body.position.y, p.x - t.body.position.x);
+  const ext = Math.hypot(ce.def.w, ce.def.h) / 2;
+  // meglio un posto dentro la zona del suo nastro, se c'è
+  let spot = null;
+  for (const da of [0, Math.PI / 2, -Math.PI / 2, Math.PI / 4, -Math.PI / 4, Math.PI * 0.75, -Math.PI * 0.75]) {
+    const a = away + da, at = add(p, mul({ x: Math.cos(a), y: Math.sin(a) }, w.r + ext + 4));
+    Body.setPosition(ce.body, at); Body.setAngle(ce.body, t.body.angle);
+    if (overlap(ce.body, obstacles(w, ce))) continue;
+    if (zoneAt(at) === ce.def.zone) { spot = at; break; }
+    if (!spot) spot = at;
   }
-  w.grab = null; w.mode = null; w.carry = null;
+  if (spot) {
+    Body.setPosition(ce.body, spot);
+    refreshFilter(ce); placeLoad(t); grab(w, ce);
+    once('scarica', 'Dal carrello alla zona del suo nastro.');
+    return;
+  }
+  t.load.push(ce); ce.onTrolley = t; placeLoad(t);
+  toast('Qui non c\'è posto per scaricarlo: sposta un po\' il carrello.', 'warn');
+}
+/* Un case lasciato nella SUA zona è consegnato («parcheggiato»): conta
+   come a posto finché qualcuno non lo riprende. */
+function park (ce) { ce.parked = true; }
+function unpark (ce) { ce.parked = false; }
+// lasciare: l'oggetto resta esattamente dov'è. Se lo lascia chi guida,
+// lo lascia anche chi aiutava
+function release (w) {
+  const ce = w.grab; if (!ce) return;
+  const leader = holderOf(ce) === w;
+  ce.grabbers = ce.grabbers.filter(x => x !== w);
+  if (ce.carrier === w) ce.carrier = null;
+  ce.lastCarrier = w;
+  if (w.hold && w.hold.helper) w.body.collisionFilter.mask = w.hold.mask;
+  w.grab = null; w.mode = null; w.hold = null; w.vel = { x: 0, y: 0 };
+  if (leader) for (const h of [...ce.grabbers]) release(h);
   refreshFilter(ce);
 }
 
@@ -914,18 +904,13 @@ function damage (ce, amt, cause) {
     if (bad) AU.crack();
   }
 }
-function onCollision (ev) {
-  for (const pair of ev.pairs) {
-    const A = pair.bodyA.parent, B = pair.bodyB.parent;
-    const ea = A.plugin && A.plugin.ent, eb = B.plugin && B.plugin.ent;
-    const n = pair.collision.normal;
-    const va = ea ? ea.pv : { x: 0, y: 0 }, vb = eb ? eb.pv : { x: 0, y: 0 };
-    const rel = Math.abs((va.x - vb.x) * n.x + (va.y - vb.y) * n.y);
-    if (ea && ea.kind === 'case') hitCase(ea, eb, rel, B);
-    if (eb && eb.kind === 'case') hitCase(eb, ea, rel, A);
-    if (ea && ea.kind === 'trolley') hitTrolley(ea, eb, rel);
-    if (eb && eb.kind === 'trolley') hitTrolley(eb, ea, rel);
-  }
+// chi tiene qualcosa e va a sbattere: lo ferma la PRESA, ma se andava
+// forte il colpo c'è stato (il carrello lo sente il carico, il bambino lo sente)
+function bump (ent, body, speed) {
+  const other = body && body.plugin && body.plugin.ent;
+  if (other && other.kind === 'kid') { kidHit(other); return; }
+  const rel = speed * 1.25;
+  if (ent.kind === 'trolley') hitTrolley(ent, other, rel); else hitCase(ent, other, rel, body);
 }
 // il carrello che sbatte scuote quello che c'è sopra
 function hitTrolley (t, other, rel) {
@@ -956,15 +941,10 @@ function handled (ce, dmg) {
   if (S.rough === 1) bubble(G.macio, 'Piano! Lì dentro c\'è ' + ({ par: 'i PAR', valigetta: 'il PC', rack: 'il mixer' }[ce.def.id] || 'roba delicata') + '!', 1.8);
 }
 function hitCase (ce, other, rel, otherBody) {
-  if (other && (other.kind === 'worker' || other.kind === 'dolly')) return;
+  if (other && other.kind === 'worker') return;
   if (other && other.kind === 'kid') { if (rel > 1.3) kidHit(other); return; }
   if (rel > 1.4) AU.thud(rel);
   if (rel > 1.8) puff(ce.body.position.x, ce.body.position.y, Math.min(10, Math.round(rel * 2)), 'rgba(190,190,196,', 1 + rel / 3);
-  // in mano il case viene «tirato» verso chi lo porta: quella spinta non è
-  // un urto, conta solo quanto andava davvero chi lo porta (anche quando è
-  // il case in mano a urtarne un altro)
-  if (ce.carrier) rel = Math.min(rel, speedOf(ce.carrier.body) + 0.3);
-  if (other && other.carrier) rel = Math.min(rel, speedOf(other.carrier.body) + 0.3);
   const f = FRAG[ce.def.frag];
   if (rel <= f.thr || G.t - ce.lastHit < 0.5) return;
   ce.lastHit = G.t;
@@ -972,7 +952,7 @@ function hitCase (ce, other, rel, otherBody) {
   if (other && other.kind === 'case') dmg *= clamp(other.def.kg / ce.def.kg, 0.5, 1.6);
   // Macio è lento ma sicuro: quello che porta lui si fa poco male
   if (ce.carrier === G.macio || (other && other.carrier === G.macio)) dmg *= 0.15;
-  const what = otherBody === G.stepBody ? 'contro il gradino' : other && other.kind === 'case' ? 'contro ' + other.def.name : other && other.kind === 'cart' ? 'contro il carrello' : 'urto';
+  const what = otherBody === G.stepBody ? 'contro il gradino' : other && other.kind === 'case' ? 'contro ' + other.def.name : other && other.kind === 'trolley' ? 'contro il carrello' : 'urto';
   damage(ce, dmg, what);
   handled(ce, dmg);
 }
@@ -993,7 +973,7 @@ function pressGrab () {
   if (p.grab) {
     // un case (in mano o spinto) vicino al carrello: va sopra. Nelle zone
     // no: lì dal carrello si scarica, e LASCIA posa il case a terra
-    if (t && p.grab.kind === 'case' && nearTrolley(p, 26) && !zoneAt(p.body.position)) {
+    if (canLoad(p)) {
       if (cartFits(t, p.grab)) { loadTrolley(p); return; }
       if (p.grab.def.heavy2) bubble(G.macio, 'Quello lo facciamo in due.', 1.6);
       else toast('Sul carrello non c\'è più posto (' + cartUsed(t) + '/' + TROLLEY_MAX + ').', 'warn');
@@ -1017,7 +997,7 @@ function pressGrab () {
     if (t.load.length && inZone) { unloadTrolley(p); return; }
     grab(p, t);
     if (t.load.length) once('spingi', 'Spingi il carrello fino alle zone, poi lascialo lì e ' + KA('SCARICA') + '.');
-    else toast('Il carrello è vuoto: prima caricalo. Prendi un case leggero e avvicinati al carrello.', 'warn');
+    else toast('Il carrello è vuoto: prima caricalo. Prendi un case e avvicinati al carrello.', 'warn');
     return;
   }
   if (!ce) { toast('Avvicinati a un case per prenderlo.'); return; }
@@ -1029,7 +1009,7 @@ function pressHelp () {
   const p = G.player, T = G.macio;
   // un passante sulla rampa? prima si chiede permesso
   const blocker = G.kids.find(k => k.block > G.t && len(sub(k.body.position, p.body.position)) < 110);
-  if (blocker) { bubble(p, 'Permesso!', 1.2); blocker.block = 0; blocker.wait = 0; blocker.target = { x: rand(700, 1000), y: rand(150, 300) }; bubble(blocker, 'Oh, scusi!', 1.2); return; }
+  if (blocker) { bubble(p, 'Permesso!', 1.2); blocker.block = 0; blocker.wait = 0; blocker.target = { x: rand(850, 1100), y: rand(150, 300) }; bubble(blocker, 'Oh, scusi!', 1.2); return; }
   if (T.ai.state === 'phone') { toast('Macio è al telefono…'); return; }
   // da adesso Macio è in squadra: fra una chiamata e l'altra lavora da solo
   if (!G.team) { G.team = true; once('squadra', 'Macio è in squadra: quando è libero porta lui i case leggeri.', 'ok'); }
@@ -1113,8 +1093,8 @@ function macio (state, data) {
   if (T.grab && !(state === 'help' && T.grab === data.ce)) release(T);
   T.ai = Object.assign({ state, t: 0, stuckT: 0, side: 0, sideT: 0 }, data || {});
 }
-const CHAIN = [{ x: 330, y: 500 }, { x: 460, y: 500 }, { x: 590, y: 500 }, { x: GYM_X - 60, y: 500 }, { x: GYM_X + 60, y: 500 }];
-function region (p) { return p.x < DOOR_X ? 0 : p.x < 520 ? 1 : p.x < GYM_X ? 2 : 3; }
+const CHAIN = [{ x: DOOR_X - 70, y: 500 }, { x: DOOR_X + 60, y: 500 }, { x: DOOR_X + 190, y: 500 }, { x: GYM_X - 60, y: 500 }, { x: GYM_X + 60, y: 500 }];
+function region (p) { return p.x < DOOR_X ? 0 : p.x < DOOR_X + 120 ? 1 : p.x < GYM_X ? 2 : 3; }
 // il prossimo punto della strada: furgone, rampa, cortile, porta della palestra
 function navPoint (from, to) { return navChain(from, to); }
 function navChain (from, to) {
@@ -1131,14 +1111,14 @@ function steer (w, to, stopDist) {
   if (len(sub(to, p)) < stopDist) return { x: 0, y: 0 };
   let d = norm(sub(navPoint(p, to), p));
   // incastrato? un passo di lato
-  if (speedOf(w.body) < 0.3) ai.stuckT += 1 / 60; else ai.stuckT = Math.max(0, ai.stuckT - 1 / 30);
+  if (w.spd < 0.3) ai.stuckT += 1 / 60; else ai.stuckT = Math.max(0, ai.stuckT - 1 / 30);
   if (ai.stuckT > 0.7 && ai.sideT <= 0) { ai.sideT = 0.6; ai.side = Math.random() < 0.5 ? -1 : 1; ai.stuckT = 0; }
   if (ai.sideT > 0) { ai.sideT -= 1 / 60; d = norm(add(d, mul({ x: -d.y, y: d.x }, ai.side * 1.4))); }
   return d;
 }
 function helpPoint (ce, pw) {
   // lato opposto a chi spinge; se è contro un muro, il lato libero più lontano
-  const pl = pw && pw.con ? rot(pw.con.pointB, -ce.body.angle) : { x: -ce.def.w / 2, y: 0 };
+  const pl = pw && pw.grab === ce ? surface(ce, pw.body.position).local : { x: -ce.def.w / 2, y: 0 };
   const hw = ce.def.w / 2, hh = ce.def.h / 2;
   const cands = [{ x: -pl.x, y: -pl.y }, { x: hw, y: 0 }, { x: -hw, y: 0 }, { x: 0, y: hh }, { x: 0, y: -hh },
     { x: -hw, y: hh * 0.6 }, { x: -hw, y: -hh * 0.6 }, { x: hw, y: hh * 0.6 }, { x: hw, y: -hh * 0.6 }];
@@ -1161,7 +1141,6 @@ function pickJob (T) {
     if (!carriable(ce) || delicate(ce) || ce.carrier || ce.grabbers.length || ce.zone === ce.def.zone) continue;
     if (ce.hidden || ce.onTrolley || locked(ce) || blockers(ce).length) continue;
     if (ce.skipUntil > G.t || G.player.grab === ce) continue;
-    if (ce.body.position.x > GYM_X && ce.zone === null && speedOf(ce.body) > 0.3) continue;
     if (!helpPoint(ce, null)) continue;
     const d = len(sub(ce.body.position, T.body.position));
     if (d < bd) { bd = d; best = ce; }
@@ -1172,7 +1151,7 @@ function updateMacio (dt) {
   const T = G.macio, ai = G.macio.ai, P = G.player;
   ai.t += dt;
   let dir = { x: 0, y: 0 }, vmax = T.vmax * (G.coffee.until > G.t ? 1.2 : 1);
-  if (G.coffee.pauseUntil > G.t) { drive(T, dir, 0); return; }
+  if (G.coffee.pauseUntil > G.t) { moveWorker(T, dir, 0); return; }
 
   if (ai.state === 'phone') {
     if (ai.t > 12) { macio('idle'); bubble(T, 'Scusa capo, eccomi.', 1.6); }
@@ -1180,17 +1159,13 @@ function updateMacio (dt) {
     const ce = ai.ce;
     if (!P.grab || P.grab !== ce) { macio('idle'); }
     else if (T.grab === ce) {
-      // spinge nella direzione che davi 0,4 s fa (0,2 s col caffè)
-      const lag = G.coffee.until > G.t ? 12 : 24;
-      const h = G.history; const past = h.length > lag ? h[h.length - 1 - lag] : { x: 0, y: 0 };
-      dir = ce.hopUntil > G.t ? { x: 1, y: 0 } : inp.stop ? { x: 0, y: 0 } : past;
-      vmax = pushVmax(ce);
+      // tiene il case con te: lo mette a posto chi guida (placeHelpers)
     } else {
       const hp = helpPoint(ce, P);
       if (!hp) { if (ai.t > 1) { bubble(T, 'Da qui non ci arrivo, spostalo un po\'!', 1.8); macio('idle'); } }
       else {
         dir = steer(T, hp.world, 4);
-        if (len(sub(hp.world, T.body.position)) < 16) grab(T, ce);
+        if (len(sub(hp.world, T.body.position)) < 16) joinHelp(T, ce);
         if (ai.t > 7) { bubble(T, 'Da qui non ci arrivo, spostalo un po\'!', 1.8); macio('idle'); }
       }
     }
@@ -1207,7 +1182,7 @@ function updateMacio (dt) {
     } else {
       dir = steer(T, ai.dest, 0);
       vmax = T.vmax * clamp(1 - ce.def.kg / 90, 0.6, 1);
-      if (len(sub(ai.dest, T.body.position)) < 22 + T.carry.dist) { release(T); bubble(T, 'Fatto!', 1); macio('idle'); }
+      if (len(sub(ai.dest, T.body.position)) < 22 + T.hold.off.x) { release(T); bubble(T, 'Fatto!', 1); macio('idle'); }
     }
   } else if (ai.state === 'goto') {
     const to = ai.to();
@@ -1216,23 +1191,174 @@ function updateMacio (dt) {
   } else { // idle: ti dà una mano sui case pesanti, se no porta da solo un case leggero
     const pc = P.grab && P.grab.kind === 'case' && P.mode === 'push' ? P.grab : null;
     if (pc && G.team && ai.t > 0.6 && (pc.def.heavy2 || pc.def.kg >= 35) && !pc.grabbers.includes(T) && helpPoint(pc, P)) {
-      macio('help', { ce: pc }); bubble(T, pc.def.heavy2 ? 'Questo in due, arrivo!' : 'Ti do una mano!', 1.4); AU.hey(); drive(T, dir, vmax); return;
+      macio('help', { ce: pc }); bubble(T, pc.def.heavy2 ? 'Questo in due, arrivo!' : 'Ti do una mano!', 1.4); AU.hey(); moveWorker(T, dir, vmax); return;
     }
     const job = ai.t > 1.2 && G.mode === 'play' && G.team && pickJob(T);
-    if (job) { macio('carry', { ce: job, auto: true }); bubble(T, 'Porto io ' + job.def.name + '!', 1.4); drive(T, dir, vmax); return; }
+    if (job) { macio('carry', { ce: job, auto: true }); bubble(T, 'Porto io ' + job.def.name + '!', 1.4); moveWorker(T, dir, vmax); return; }
     const d = len(sub(P.body.position, T.body.position));
     if (d > 190) dir = steer(T, P.body.position, 120);
     if (ai.t > 9 && !ai.said) { ai.said = true; bubble(T, ['Che faccio, capo?', 'Questo pesa come mia suocera…', 'Dimmi tu, io spingo.'][Math.floor(Math.random() * 3)], 1.8); }
   }
   if (T.mode === 'carry') vmax = Math.min(vmax, T.vmax * clamp(1 - T.grab.def.kg / 90, 0.6, 1));
-  drive(T, dir, vmax);
-  if (len(dir) > 0.1 && T.mode !== 'push') turnTo(T, Math.atan2(dir.y, dir.x), T.mode === 'carry' ? 0.07 : 0.3);
+  moveWorker(T, dir, vmax);
 }
 
 /* ---------------------------------------------------------------------
-   MOVIMENTO
+   MOVIMENTO E PRESA — un sistema solo per persone, case e carrello.
+
+   Le persone hanno la velocità impostata direttamente: partono e si
+   fermano in un attimo (accelerazione e frenata brevi), non scivolano e non
+   rimbalzano. A mani vuote le muove il motore fisico, che le ferma contro
+   muri e case.
+
+   Quello che si prende (case in mano, case spinto, carrello col suo carico)
+   diventa rigido con chi lo tiene: sta sempre alla stessa distanza e con lo
+   stesso angolo rispetto a lui, gira quando lui gira. Il passo lo fa la
+   PRESA: prima di muovere si prova la posizione nuova di chi tiene e
+   dell'oggetto; se qualcosa entrerebbe in un muro, in un case o in una
+   persona, si prova senza girare, poi solo in orizzontale o in verticale
+   (così si scivola lungo il muro), poi a metà; se niente va, ci si ferma.
+   Lasciato, l'oggetto resta esattamente lì. I case non presi sono fermi:
+   non si spostano a spallate.
    --------------------------------------------------------------------- */
-// forza verso la velocità voluta, con un tetto: così i pesi hanno inerzia
+const TROLLEY_AT = { x: DOOR_X + 70, y: 640 };   // dove Macio lascia il carrello, accanto alla rampa
+const MOVE = { acc: 0.5, dec: 0.8 };    // px/passo per passo: da fermo a pieno in ~7 passi, stop in ~4
+function holderOf (ent) { return ent.carrier || ent.grabbers[0] || null; }
+// quello che ferma chi tiene ent (ent = null: a mani vuote)
+function obstacles (w, ent) {
+  const out = [];
+  for (const b of G.statics) {
+    // il gradino ferma solo un case spinto a terra (in mano o col carrello passa)
+    if (b === G.stepBody) { if (ent && ent.kind === 'case' && !ent.carrier && !(ent.liftUntil > G.t)) out.push(b); continue; }
+    // il bordo del pianale ai lati della rampa: un case in mano ci passa sopra
+    if (ent && ent.carrier && G.edges.includes(b)) continue;
+    out.push(b);
+  }
+  for (const c of G.cases) {
+    if (c === ent || c.hidden || (ent && c.onTrolley === ent)) continue;
+    out.push(c.body);
+  }
+  if (G.trolley && G.trolley !== ent) out.push(G.trolley.body);
+  for (const k of G.kids) out.push(k.body);
+  if (G.cart) out.push(G.cart.body);
+  return out;
+}
+// il primo corpo della lista che body tocca davvero (non basta sfiorarlo);
+// allow: corpi già toccati prima del passo, con quanto ci entrava: se ne
+// può uscire o scorrere lungo, ma non entrarci di più
+function overlap (body, list, allow) {
+  for (const o of list) {
+    if (o === body || !Bounds.overlaps(o.bounds, body.bounds)) continue;
+    const c = Collision.collides(body, o);
+    if (!c || c.depth <= 0.6) continue;
+    if (allow && allow.has(o) && c.depth <= allow.get(o) + 0.3) continue;
+    return o;
+  }
+  return null;
+}
+function depths (body, list, into) {
+  for (const o of list) {
+    if (o === body || !Bounds.overlaps(o.bounds, body.bounds)) continue;
+    const c = Collision.collides(body, o);
+    if (c && c.depth > 0.6) into.set(o, Math.max(into.get(o) || 0, c.depth));
+  }
+  return into;
+}
+// mette chi tiene e quello che tiene nella posizione pos/facing; dice cosa
+// lo impedirebbe (null = c'è posto)
+function setHoldPose (w, pos, facing) {
+  const ent = w.grab;
+  Body.setPosition(w.body, pos);
+  Body.setPosition(ent.body, add(pos, rot(w.hold.off, facing)));
+  Body.setAngle(ent.body, facing + w.hold.rel);
+  if (ent.kind === 'trolley') placeLoad(ent);
+}
+function holdObstacles (w, ent) {
+  return {
+    ow: obstacles(w, null).filter(b => b !== G.stepBody && b !== ent.body && !(ent.kind === 'trolley' && ent.load.some(c => c.body === b))),
+    obs: obstacles(w, ent)
+  };
+}
+// cosa tocca, nella posa attuale (mappa corpo → profondità)
+function holdContacts (w, ent, o) {
+  const m = new Map();
+  depths(w.body, o.ow, m); depths(ent.body, o.obs, m);
+  if (ent.kind === 'trolley') for (const c of ent.load) depths(c.body, o.obs, m);
+  return m;
+}
+function holdBlocked (w, ent, o, allow) {
+  o = o || holdObstacles(w, ent);
+  const hit = overlap(w.body, o.ow, allow);
+  if (hit) return hit;
+  let h = overlap(ent.body, o.obs, allow);
+  if (!h && ent.kind === 'trolley') for (const c of ent.load) { h = overlap(c.body, o.obs, allow); if (h) break; }
+  return h;
+}
+// un passo di chi tiene qualcosa (e guida): prova, se non c'è posto riprova
+// più piano, alla fine si ferma
+function holdStep (w, face) {
+  const ent = w.grab, p0 = { x: w.body.position.x, y: w.body.position.y }, f0 = w.facing, v = w.vel;
+  const tries = [[v, face], [v, f0], [{ x: v.x, y: 0 }, f0], [{ x: 0, y: v.y }, f0], [mul(v, 0.5), f0], [mul(v, 0.25), f0], [{ x: 0, y: 0 }, face]];
+  let firstHit = null;
+  // se si parte già a contatto con qualcosa (un case appoggiato al muro) se
+  // ne può uscire, ma non entrarci di più
+  const o = holdObstacles(w, ent), allow = holdContacts(w, ent, o);
+  for (const [tv, tf] of tries) {
+    if (len(tv) < 0.01 && Math.abs(angDiff(tf, f0)) < 1e-4) break;
+    setHoldPose(w, add(p0, tv), tf);
+    const hit = holdBlocked(w, ent, o, allow);
+    if (!hit) { w.facing = tf; w.vel = tv; return; }
+    firstHit = firstHit || hit;
+  }
+  setHoldPose(w, p0, f0);
+  if (firstHit && len(v) > 1.3) bump(ent, firstHit, len(v));
+  w.vel = { x: 0, y: 0 };
+}
+/* muove una persona: dir è dove vuole andare (lunghezza 0..1), vmax quanto
+   forte. Col carrello o un case spinto: se tiri all'indietro tiri (senza
+   girarti), altrimenti giri piano e vai avanti quanto sei girato. */
+function moveWorker (w, dir, vmax) {
+  const ent = w.grab;
+  if (ent && holderOf(ent) !== w) { w.vel = { x: 0, y: 0 }; return; }   // aiuta: lo mette a posto chi guida
+  const pushing = ent && w.mode === 'push';
+  let face = w.facing, spd = vmax;
+  if (len(dir) > 0.1 && vmax > 0) {
+    const want = Math.atan2(dir.y, dir.x), dot = Math.cos(angDiff(want, w.facing));
+    if (pushing) {
+      // indietro: tiri; di lato: ti sposti di fianco (come in due con un
+      // tavolo); avanti: spingi e intanto giri piano verso dove vai
+      if (dot < -0.35) spd *= 0.7;
+      else if (dot < 0.35 && ent.kind === 'case') spd *= 0.5;   // il carrello invece gira
+      else { face = w.facing + clamp(angDiff(want, w.facing), -0.05, 0.05); spd *= Math.max(0.3, dot); }
+    } else face = w.facing + clamp(angDiff(want, w.facing), -(ent ? 0.09 : 0.4), ent ? 0.09 : 0.4);
+  }
+  const tv = mul(dir, spd), dv = sub(tv, w.vel), m = len(dv);
+  const rate = (len(tv) >= len(w.vel) ? MOVE.acc : MOVE.dec) * (pushing ? 0.5 : ent ? 0.75 : 1);
+  w.vel = m <= rate ? tv : add(w.vel, mul(dv, rate / m));
+  if (!ent) { Body.setVelocity(w.body, w.vel); w.facing = face; return; }
+  Body.setVelocity(w.body, { x: 0, y: 0 });
+  holdStep(w, face);
+}
+// chi aiuta (Macio sull'altro lato di un case da due) segue l'oggetto
+function placeHelpers () {
+  for (const w of G.workers) {
+    const ent = w.grab;
+    if (!ent || !w.hold || !w.hold.helper) continue;
+    const at = add(ent.body.position, rot(w.hold.local, ent.body.angle));
+    Body.setPosition(w.body, at); Body.setVelocity(w.body, { x: 0, y: 0 });
+    w.facing = Math.atan2(ent.body.position.y - at.y, ent.body.position.x - at.x);
+    const L = holderOf(ent); w.spd = L ? L.spd : 0;
+  }
+}
+// Macio arriva dall'altro lato di un case che già guidi tu e lo tiene con te
+function joinHelp (w, ent) {
+  if (w.grab) release(w);
+  w.grab = ent; w.mode = 'push'; ent.grabbers.push(w);
+  w.hold = { helper: true, local: rot(sub(w.body.position, ent.body.position), -ent.body.angle), mask: w.body.collisionFilter.mask };
+  w.body.collisionFilter.mask = 0;
+  refreshFilter(ent);
+}
+// i bambini e il resto: forza verso la velocità voluta
 function drive (w, dir, vmax) {
   const boost = G.coffee.until > G.t ? 1.2 : 1;
   const tv = { x: dir.x * vmax, y: dir.y * vmax };
@@ -1241,12 +1367,11 @@ function drive (w, dir, vmax) {
   const f = Math.min(1, m / 0.6) * w.fmax * boost;
   Body.applyForce(w.body, w.body.position, { x: dv.x / m * f, y: dv.y / m * f });
 }
-function turnTo (w, a, rate) { const d = angDiff(a, w.facing); w.facing += clamp(d, -rate, rate); }
 function pushVmax (ce) {
   if (ce.kind === 'trolley') return 3.0 - 0.15 * cartUsed(ce);
   const base = WHEEL[ce.wheel].push * clamp(1.15 - ce.def.kg / 200, 0.6, 1.1);
-  // un case da due persone, da solo, non si muove (quasi)
-  if (ce.def.heavy2 && ce.grabbers.length < 2) return 0.14;
+  // un case da due persone, da solo, non si muove
+  if (ce.def.heavy2 && ce.grabbers.length < 2) return 0;
   return base * (ce.grabbers.length >= 2 ? 1.15 : 1);
 }
 function readInput () {
@@ -1262,7 +1387,7 @@ function readInput () {
 function updatePlayer (dt) {
   const P = G.player;
   let dir = readInput();
-  if (inp.stop || G.coffee.pauseUntil > G.t || G.qte) dir = { x: 0, y: 0 };
+  if (inp.stop || G.coffee.pauseUntil > G.t || G.qte || G.mode !== 'play') dir = { x: 0, y: 0 };
   if (P.grab && P.grab.hopUntil > G.t) dir = { x: 1, y: 0 };
   G.history.push(dir); if (G.history.length > 60) G.history.shift();
   let vmax = P.vmax * (G.coffee.until > G.t ? 1.25 : 1);
@@ -1270,19 +1395,7 @@ function updatePlayer (dt) {
   if (P.mode === 'carry') vmax *= clamp(1 - P.grab.def.kg / 90, 0.6, 1);
   if (P.mode === 'carry' && P.grab.def.frag === 'altissima') vmax = Math.min(vmax, 2.0);
   if (inp.slow) vmax *= 0.5;
-  // a mani vuote contro un case: lo sposti appena, a spallate non conviene
-  if (!P.grab) {
-    const ce = nearestCase(P, 4);
-    if (ce && !ce.parked && !ce.carrier && !ce.grabbers.length && len(dir) > 0.1) {
-      const to = norm(sub(ce.body.position, P.body.position));
-      if (to.x * dir.x + to.y * dir.y > 0.3) {
-        vmax = Math.min(vmax, SHOVE_VMAX * clamp(30 / ce.def.kg, 0.35, 1));
-        if (!G.shoveHint && G.mode === 'play') { G.shoveHint = true; toast('A spallate non si sposta: prendilo con PRENDI.'); }
-      }
-    }
-  }
-  drive(P, dir, vmax);
-  if (len(dir) > 0.1 && P.mode !== 'push') turnTo(P, Math.atan2(dir.y, dir.x), P.mode === 'carry' ? 0.075 : 0.35);
+  moveWorker(P, dir, vmax);
   // da solo contro un case da due: non si muove, Macio te lo dice
   const g = P.grab;
   if (g && g.kind === 'case' && g.def.heavy2 && g.grabbers.length < 2 && len(dir) > 0.3 && G.mode === 'play') {
@@ -1297,11 +1410,10 @@ function updatePlayer (dt) {
   const px = P.body.position.x;
   if (G.prevPX < GYM_X && px >= GYM_X && g && G.mode === 'play') countTrip(g);
   G.prevPX = px;
-  if (P.mode === 'push' && P.con) { const a = add(P.grab.body.position, P.con.pointB); P.facing = Math.atan2(a.y - P.body.position.y, a.x - P.body.position.x); }
 
   // pausa caffè
   const c = G.coffee;
-  if (!c.used && !P.grab && len(sub(P.body.position, { x: 662, y: 175 })) < 45) {
+  if (!c.used && !P.grab && len(sub(P.body.position, MOKA)) < 45) {
     c.used = true; c.pauseUntil = G.t + 2.5; c.until = G.t + 2.5 + 45;
     bubble(P, 'Pausa caffè…', 2.4); bubble(G.macio, 'Un caffè al volo!', 2.4);
     toast('Caffè: per 45 secondi tu e Macio siete più svelti.', 'ok');
@@ -1320,66 +1432,17 @@ function countTrip (g) {
     if (S.wasted === 2) { bubble(G.macio, 'Prendi il carrello. Non siamo qui per fare palestra.', 2.6); once('viaggi', 'Un case alla volta sono tanti viaggi: sul carrello ne porti di più.'); }
   }
 }
+// i case non hanno una fisica loro: li muove chi li prende (PRESA)
 function updateCase (ce, dt) {
-  const b = ce.body;
   if (ce.hidden) return;
   if (ce.flash > 0) ce.flash -= dt;
-  // in mano: il case segue chi lo porta
-  if (ce.carrier) {
-    const w = ce.carrier, f = { x: Math.cos(w.facing), y: Math.sin(w.facing) };
-    const target = add(w.body.position, mul(f, w.carry.dist));
-    const err = sub(target, b.position);
-    // case bloccato (contro un muro o un altro case): chi lo porta si ferma,
-    // non gli sfugge di mano; sfugge solo se viene proprio strappato via
-    if (len(err) > 38) Body.setVelocity(w.body, mul(w.body.velocity, 0.2));
-    if (len(err) > 70) { const who = w; release(w, 'slip'); if (who === G.player) toast('Ti è sfuggito di mano!', 'bad'); else bubble(who, 'Oops!', 1); return; }
-    let v = mul(err, 0.35); if (len(v) > 6) v = mul(norm(v), 6);
-    Body.setVelocity(b, add(mul(w.body.velocity, 0.9), v));
-    Body.setAngularVelocity(b, angDiff(w.facing + w.carry.rel, b.angle) * 0.3);
-    return;
-  }
-  if (ce.parked) return;
-  // un case da due spinto da solo non va dritto: ogni tanto sbanda di lato
-  if (ce.onTrolley) return;          // sul carrello: lo muove il carrello
-  if (ce.def.heavy2 && ce.grabbers.length === 1 && speedOf(b) > 0.3 && G.mode === 'play') {
-    ce.soloT = (ce.soloT || 0) + dt;
-    if (ce.soloT > 2.2) {
-      ce.soloT = -rand(0, 1.2);
-      const v = norm(b.velocity), side = Math.random() < 0.5 ? -1 : 1;
-      Body.setVelocity(b, add(b.velocity, mul({ x: -v.y, y: v.x }, side * 2.2)));
-      Body.setAngularVelocity(b, side * 0.04);
-      bubble(ce, 'Sbanda!', 1.2); AU.thud(2);
-      if (!G.soloHint) { G.soloHint = true; toast('Da solo non lo tieni dritto: chiama Macio con AIUTO.', 'warn'); }
-    }
-  } else if (ce.soloT > 0) ce.soloT = 0;
-  // attrito del pavimento, diverso per tipo di ruote
-  const W = WHEEL[ce.wheel];
-  let kf = W.f, ks = W.s, ka = W.a;
-  if (ce.def.heavy2 && ce.grabbers.length === 1) { kf += 5; ks += 5; ka += 4; }
-  if (ce.slideUntil > G.t) { kf = ks = 1.2; }
-  if (b.position.x > GYM_X) { kf *= 0.9; ks *= 0.9; }
-  const lv = rot(b.velocity, -b.angle);
-  lv.x *= Math.max(0, 1 - kf * dt); lv.y *= Math.max(0, 1 - ks * dt);
-  Body.setVelocity(b, rot(lv, b.angle));
-  Body.setAngularVelocity(b, b.angularVelocity * Math.max(0, 1 - ka * dt));
-  // OH-ISSA riuscito: il case viene sollevato oltre il gradino
-  if (ce.hopUntil > G.t) Body.setVelocity(b, { x: 2.6, y: b.velocity.y * 0.5 });
-  // la rampa spinge in giù (verso il cortile)
-  const p = b.position;
-  if (p.x > RAMP.x && p.x < RAMP.x + RAMP.w && p.y > RAMP.y - 5 && p.y < RAMP.y + RAMP.h + 5) {
-    Body.applyForce(b, p, { x: ce.def.kg * 0.14 * W.ramp / 278, y: 0 });
-  }
   // il gradino: resta sollevato finché è a cavallo
   if (ce.liftUntil > 0) {
-    const bb = b.bounds;
-    if (G.t > ce.liftUntil && !(bb.max.x > GYM_X - 8 && bb.min.x < GYM_X + 8)) { ce.liftUntil = 0; refreshFilter(ce); }
+    const bb = ce.body.bounds;
+    const astride = bb.max.x > GYM_X - 8 && bb.min.x < GYM_X + 8;
+    if (astride && G.t > ce.liftUntil - 0.1) ce.liftUntil = G.t + 0.1;
+    else if (G.t > ce.liftUntil) { ce.liftUntil = 0; refreshFilter(ce); }
   }
-  // il case senza ruote finisce sul dolly
-  if (ce.wheel === 'none' && G.dolly && len(sub(G.dolly.body.position, p)) < 24) {
-    Composite.remove(G.world, G.dolly.body); G.dolly = null;
-    ce.wheel = 'swivel'; ce.onDolly = true; toast(ce.def.name + ' sul dolly: adesso scorre!', 'ok'); AU.ding();
-  }
-  // ribaltamento dei case alti se curvi forte
 }
 
 function updateKids (dt) {
@@ -1394,8 +1457,8 @@ function updateKids (dt) {
       dir = norm(sub(k.target, p));
       if (len(sub(k.target, p)) < 14 || Math.random() < 0.002) {
         k.wait = rand(0.3, 2);
-        k.target = { x: rand(560, 1110), y: rand(120, 880) };
-        if (len(sub(k.target, { x: 820, y: 260 })) < 70) k.target.y += 120;
+        k.target = { x: rand(DOOR_X + 40, GYM_X - 40), y: rand(120, 880) };
+        if (len(sub(k.target, TREE)) < 70) k.target.y += 120;
       }
     }
     drive(Object.assign(k, { fmax: 0.028 }), dir, v);
@@ -1416,7 +1479,7 @@ function scriptEvents () {
   // il primo passante aspetta che tu sappia chiamare (serve a chiedere permesso)
   if (G.team) once('passante1', G.at.passante1, () => passante(G.kids[0]));
   once('bidello', G.at.bidello, () => {
-    const b = Bodies.rectangle(1010, 110, 56, 80, { frictionAir: 0, collisionFilter: { category: CAT.NPC, mask: CAT.WALL | CAT.CASE | CAT.WORKER | CAT.NPC | CAT.DOLLY } });
+    const b = Bodies.rectangle(1010, 110, 56, 80, { frictionAir: 0, collisionFilter: { category: CAT.NPC, mask: CAT.WALL | CAT.CASE | CAT.WORKER | CAT.NPC } });
     Body.setMass(b, 150); Body.setInertia(b, Infinity);
     G.cart = { kind: 'cart', body: b, pv: { x: 0, y: 1.1 } }; b.plugin.ent = G.cart;
     b.collisionFilter.mask &= ~CAT.WALL;
@@ -1430,7 +1493,7 @@ function scriptEvents () {
   if (G.team) once('passante2', G.at.passante2, () => passante(G.kids[1]));
 }
 function passante (k) {
-  k.block = G.t + 9; k.target = { x: 505, y: rand(478, 522) };
+  k.block = G.t + 9; k.target = { x: DOOR_X + 105, y: rand(478, 522) };
   setTimeout(() => { if (G && k.block > G.t) bubble(k, 'Ma chi suona stasera?', 3); }, 2500);
 }
 
@@ -1485,7 +1548,7 @@ function surpriseStep () {
   if (!S.revealed && dt > 3.6) {
     S.revealed = true;
     const ce = G.cases.find(c => c.def.surprise);
-    if (ce.hidden) { ce.hidden = false; setFree(ce); }   // legato o frenato resta fermo
+    ce.hidden = false;
     G.tarp = G.t;
     ring(ce.body.position.x, ce.body.position.y, '#eaff2b'); AU.clack();
     $('#h-del-w').classList.remove('done');
@@ -1522,7 +1585,7 @@ function wrapStep (dt) {
 function skipWrap () { if (G && G.mode === 'wrap' && G.wrap.t > 1) G.wrap.t = WRAP.end; }
 // dove guarda la telecamera durante la pausa finale
 function wrapView () {
-  if (G.wrap.t < WRAP.van) return { x: 260, y: 500, fit: 760 };
+  if (G.wrap.t < WRAP.van) return { x: (VAN.x1 + DOOR_X) / 2 + 60, y: 500, fit: 700 };
   const z = Object.values(ZONES), x1 = Math.min(...z.map(a => a.x)), x2 = Math.max(...z.map(a => a.x + a.w));
   const y1 = Math.min(...z.map(a => a.y)), y2 = Math.max(...z.map(a => a.y + a.h));
   return { x: (x1 + x2) / 2, y: (y1 + y2) / 2, fit: Math.max(x2 - x1, y2 - y1) + 80 };
@@ -1544,29 +1607,30 @@ function stepSim () {
     progress();
     updateQte(dt); autoLift();
   }
+  const prevX = G.cases.map(c => c.body.position.x);
+  const prevW = G.workers.map(w => ({ x: w.body.position.x, y: w.body.position.y }));
   updatePlayer(dt);
   updateMacio(dt);
+  placeHelpers();
   updateKids(dt);
   for (const ce of G.cases) updateCase(ce, dt);
-  if (G.dolly) { const b = G.dolly.body; Body.setVelocity(b, mul(b.velocity, 1 - 1.5 * dt)); Body.setAngularVelocity(b, b.angularVelocity * (1 - 3 * dt)); }
-  if (G.trolley) { const b = G.trolley.body; Body.setVelocity(b, mul(b.velocity, 1 - 1.1 * dt)); Body.setAngularVelocity(b, b.angularVelocity * (1 - 3 * dt)); }
 
-  const prevX = G.cases.map(c => c.body.position.x);
   Engine.update(G.engine, STEP);
   if (G.trolley) placeLoad(G.trolley);
 
-  // dopo il passo: velocità di riferimento per gli urti, cadute, consegne
-  for (const e of [...G.cases, ...G.workers, ...G.kids]) e.pv = { x: e.body.velocity.x, y: e.body.velocity.y };
-  if (G.trolley) G.trolley.pv = { ...G.trolley.body.velocity };
-  for (const e of [...G.workers, ...G.kids]) e.stride = (e.stride || 0) + speedOf(e.body);
-  if (G.dolly) G.dolly.pv = { ...G.dolly.body.velocity };
+  // dopo il passo: quanto si è mosso davvero ognuno (passi, incastri), cadute, consegne
+  G.workers.forEach((w, i) => {
+    w.spd = len(sub(w.body.position, prevW[i]));
+    if (!w.grab) { w.vel = { x: w.body.velocity.x, y: w.body.velocity.y }; if (len(w.vel) > w.vmax * 1.3) w.vel = mul(norm(w.vel), w.vmax * 1.3); }
+    w.stride = (w.stride || 0) + w.spd;
+  });
+  for (const k of G.kids) k.stride = (k.stride || 0) + speedOf(k.body);
   G.cases.forEach((ce, i) => {
     const p = ce.body.position;
     if (ce.onTrolley) { ce.zone = null; return; }
     // giù dal pianale fuori dalla rampa
     if (!ce.carrier && prevX[i] <= DOOR_X && p.x > DOOR_X && (p.y < RAMP.y || p.y > RAMP.y + RAMP.h)) {
       damage(ce, 30 * FRAG[ce.def.frag].mult, 'caduto dal furgone'); AU.thud(6);
-      Body.setVelocity(ce.body, mul(ce.body.velocity, 0.2));
       bubble(ce, 'Giù dal furgone!', 1.6);
     }
     const held = ce.carrier || ce.grabbers.length;
@@ -1607,37 +1671,38 @@ function seeded (s) { let x = Math.sin(s) * 10000; return () => { x = Math.sin(x
 function drawGround () {
   // strada e marciapiede fuori
   ctx.fillStyle = '#1a1b1f'; ctx.fillRect(WORLD.x1 - 400, WORLD.y1 - 400, 3000, 1800);
-  ctx.fillStyle = '#23252a'; ctx.fillRect(-170, 320, 580, 360);
+  ctx.fillStyle = '#23252a'; ctx.fillRect(VAN.x1 - 200, VAN.y1 - 80, DOOR_X - VAN.x1 + 200, VAN.y2 - VAN.y1 + 160);
   // cortile in asfalto
-  ctx.fillStyle = '#2d3036'; ctx.fillRect(400, 88, GYM_X - 400, 826);
+  ctx.fillStyle = '#2d3036'; ctx.fillRect(DOOR_X, 88, GYM_X - DOOR_X, 826);
   ctx.save(); ctx.globalAlpha = 0.5; const r = seeded(7);
-  ctx.fillStyle = '#3a3d44'; for (let i = 0; i < 260; i++) ctx.fillRect(400 + r() * (GYM_X - 400), 90 + r() * 820, 2, 2);
+  ctx.fillStyle = '#3a3d44'; for (let i = 0; i < 200; i++) ctx.fillRect(DOOR_X + r() * (GYM_X - DOOR_X), 90 + r() * 820, 2, 2);
   ctx.restore();
   // strisce del parcheggio accanto al furgone, tombino, crepe e foglie
   ctx.strokeStyle = 'rgba(238,233,223,.18)'; ctx.lineWidth = 3;
-  [[420, 330], [420, 670]].forEach(([x, y]) => { ctx.beginPath(); ctx.moveTo(x, y); ctx.lineTo(x + 110, y); ctx.stroke(); });
-  ctx.fillStyle = '#26282d'; ctx.beginPath(); ctx.arc(1010, 180, 20, 0, Math.PI * 2); ctx.fill();
-  ctx.strokeStyle = '#3c3f46'; ctx.lineWidth = 2; ctx.beginPath(); ctx.arc(1010, 180, 20, 0, Math.PI * 2); ctx.stroke();
-  for (let i = -12; i <= 12; i += 6) { ctx.beginPath(); ctx.moveTo(1010 + i, 163); ctx.lineTo(1010 + i, 197); ctx.stroke(); }
+  [[VAN.x1 + 40, VAN.y1 - 44], [VAN.x1 + 40, VAN.y2 + 44]].forEach(([x, y]) => { ctx.beginPath(); ctx.moveTo(x, y); ctx.lineTo(x + 110, y); ctx.stroke(); });
+  const MH = { x: 905, y: 330 };
+  ctx.fillStyle = '#26282d'; ctx.beginPath(); ctx.arc(MH.x, MH.y, 20, 0, Math.PI * 2); ctx.fill();
+  ctx.strokeStyle = '#3c3f46'; ctx.lineWidth = 2; ctx.beginPath(); ctx.arc(MH.x, MH.y, 20, 0, Math.PI * 2); ctx.stroke();
+  for (let i = -12; i <= 12; i += 6) { ctx.beginPath(); ctx.moveTo(MH.x + i, MH.y - 17); ctx.lineTo(MH.x + i, MH.y + 17); ctx.stroke(); }
   ctx.strokeStyle = 'rgba(15,16,19,.6)'; ctx.lineWidth = 1.5;
-  [[[560, 250], [590, 262], [604, 290], [640, 300]], [[960, 520], [985, 540], [990, 575]], [[700, 860], [735, 850], [760, 870]]].forEach(pts => {
+  [[[815, 230], [845, 242], [859, 270], [895, 280]], [[1000, 520], [1025, 540], [1030, 575]], [[800, 860], [830, 850], [790, 885]]].forEach(pts => {
     ctx.beginPath(); pts.forEach(([x, y], i) => i ? ctx.lineTo(x, y) : ctx.moveTo(x, y)); ctx.stroke();
   });
   const lf = seeded(3);
   for (let i = 0; i < 26; i++) {
     const a = lf() * Math.PI * 2, d = 50 + lf() * 45;
     ctx.fillStyle = ['#6b5a2a', '#7a4e24', '#4f6b2e'][i % 3];
-    ctx.beginPath(); ctx.ellipse(820 + Math.cos(a) * d, 262 + Math.sin(a) * d, 4, 2.2, a, 0, Math.PI * 2); ctx.fill();
+    ctx.beginPath(); ctx.ellipse(TREE.x + Math.cos(a) * d, TREE.y + 2 + Math.sin(a) * d, 4, 2.2, a, 0, Math.PI * 2); ctx.fill();
   }
   // campetto e campana disegnati per terra
   ctx.strokeStyle = 'rgba(238,233,223,.14)'; ctx.lineWidth = 3;
-  ctx.strokeRect(640, 600, 380, 250); ctx.beginPath(); ctx.arc(830, 725, 50, 0, Math.PI * 2); ctx.stroke();
-  ctx.beginPath(); ctx.moveTo(830, 600); ctx.lineTo(830, 850); ctx.stroke();
+  ctx.strokeRect(810, 610, 250, 220); ctx.beginPath(); ctx.arc(935, 720, 40, 0, Math.PI * 2); ctx.stroke();
+  ctx.beginPath(); ctx.moveTo(935, 610); ctx.lineTo(935, 830); ctx.stroke();
   ctx.strokeStyle = 'rgba(242,197,61,.35)';
-  [[470, 800], [470, 760], [450, 720], [490, 720], [470, 680], [450, 640], [490, 640]].forEach(([x, y]) => ctx.strokeRect(x - 18, y - 18, 36, 36));
+  [[1110, 800], [1110, 760], [1090, 720], [1130, 720], [1110, 680], [1090, 640], [1130, 640]].forEach(([x, y]) => ctx.strokeRect(x - 18, y - 18, 36, 36));
   // scritta della scuola
   ctx.save(); ctx.fillStyle = 'rgba(238,233,223,.07)'; ctx.font = '700 64px "Barlow Condensed", sans-serif'; ctx.textAlign = 'center';
-  ctx.fillText('I.C. GALILEI', 820, 420); ctx.restore();
+  ctx.fillText('I.C. GALILEI', (DOOR_X + GYM_X) / 2, 420); ctx.restore();
   // palestra: parquet
   ctx.fillStyle = '#5a3d25'; ctx.fillRect(GYM_X, 140, 700, 720);
   ctx.strokeStyle = 'rgba(0,0,0,.18)'; ctx.lineWidth = 1;
@@ -1687,31 +1752,32 @@ function drawZones () {
   }
 }
 function drawStatics () {
-  // furgone: guscio, pianale a costole, cabina
-  ctx.fillStyle = 'rgba(0,0,0,.35)'; rr(-150, 380, 560, 256, 18); ctx.fill();
-  ctx.fillStyle = '#e9ebee'; rr(-160, 372, 562, 256, 16); ctx.fill();
-  ctx.fillStyle = '#3a3d44'; ctx.fillRect(10, 390, DOOR_X - 10, 220);
+  // furgone: guscio, pianale a costole, cabina (vano 3,3 × 2 m, come un furgone medio)
+  const X0 = VAN.x1, X1 = DOOR_X, Y0 = VAN.y1, Y1 = VAN.y2, VH = Y1 - Y0;
+  ctx.fillStyle = 'rgba(0,0,0,.35)'; rr(X0 - 150, Y0 - 16, X1 - X0 + 160, VH + 48, 18); ctx.fill();
+  ctx.fillStyle = '#e9ebee'; rr(X0 - 160, Y0 - 24, X1 - X0 + 162, VH + 48, 16); ctx.fill();
+  ctx.fillStyle = '#3a3d44'; ctx.fillRect(X0, Y0, X1 - X0, VH);
   ctx.strokeStyle = 'rgba(0,0,0,.25)'; ctx.lineWidth = 2;
-  for (let y = 398; y < 610; y += 14) { ctx.beginPath(); ctx.moveTo(12, y); ctx.lineTo(DOOR_X, y); ctx.stroke(); }
-  ctx.fillStyle = '#d6d8dc'; rr(-150, 384, 150, 232, 14); ctx.fill();
-  ctx.fillStyle = '#34414f'; rr(-146, 398, 34, 204, 8); ctx.fill();
-  ctx.fillStyle = '#e9ebee'; ctx.fillRect(-160, 392, 10, 22); ctx.fillRect(-160, 586, 10, 22);
+  for (let y = Y0 + 8; y < Y1; y += 14) { ctx.beginPath(); ctx.moveTo(X0 + 2, y); ctx.lineTo(X1, y); ctx.stroke(); }
+  ctx.fillStyle = '#d6d8dc'; rr(X0 - 150, Y0 - 12, 150, VH + 24, 14); ctx.fill();
+  ctx.fillStyle = '#34414f'; rr(X0 - 146, Y0 + 4, 34, VH - 8, 8); ctx.fill();
   // ruote che sporgono, specchietti, fanali posteriori
   ctx.fillStyle = '#111214';
-  [[-118, 366], [-118, 624], [52, 366], [52, 624], [300, 366], [300, 624]].forEach(([x, y]) => { rr(x, y, 46, 10, 4); ctx.fill(); });
-  ctx.fillStyle = '#c9ccd1'; ctx.fillRect(-70, 360, 12, 14); ctx.fillRect(-70, 626, 12, 14);
-  ctx.fillStyle = '#e0503f'; ctx.fillRect(DOOR_X - 2, 372, 6, 12); ctx.fillRect(DOOR_X - 2, 616, 6, 12);
+  [X0 - 128, X0 + 40, X1 - 84].forEach(x => { rr(x, Y0 - 30, 46, 10, 4); ctx.fill(); rr(x, Y1 + 20, 46, 10, 4); ctx.fill(); });
+  ctx.fillStyle = '#c9ccd1'; ctx.fillRect(X0 - 70, Y0 - 38, 12, 14); ctx.fillRect(X0 - 70, Y1 + 24, 12, 14);
+  ctx.fillStyle = '#e0503f'; ctx.fillRect(X1 - 2, Y0 - 24, 6, 12); ctx.fillRect(X1 - 2, Y1 + 12, 6, 12);
   // livrea del service lungo le fiancate e il marchio sul tetto della cabina
-  ctx.fillStyle = LIVERY.bg; ctx.fillRect(0, 372, DOOR_X, 7); ctx.fillRect(0, 621, DOOR_X, 7);
-  ctx.fillStyle = LIVERY.fg; ctx.fillRect(0, 375, DOOR_X, 2); ctx.fillRect(0, 623, DOOR_X, 2);
-  ctx.fillStyle = LIVERY.bg; ctx.beginPath(); ctx.arc(-60, 425, 17, 0, Math.PI * 2); ctx.fill();
-  ctx.strokeStyle = LIVERY.fg; ctx.lineWidth = 3; ctx.beginPath(); ctx.arc(-60, 425, 12, 0, Math.PI * 2); ctx.stroke();
-  ctx.save(); ctx.translate(-60, 515); ctx.rotate(-Math.PI / 2); ctx.fillStyle = '#8b8e98'; ctx.font = '700 22px "Barlow Condensed", sans-serif'; ctx.textAlign = 'center'; ctx.fillText((SERVICE || 'Service audio luci').toUpperCase(), 0, 8, 170); ctx.restore();
+  ctx.fillStyle = LIVERY.bg; ctx.fillRect(X0 - 10, Y0 - 24, X1 - X0 + 10, 7); ctx.fillRect(X0 - 10, Y1 + 17, X1 - X0 + 10, 7);
+  ctx.fillStyle = LIVERY.fg; ctx.fillRect(X0 - 10, Y0 - 21, X1 - X0 + 10, 2); ctx.fillRect(X0 - 10, Y1 + 19, X1 - X0 + 10, 2);
+  ctx.fillStyle = LIVERY.bg; ctx.beginPath(); ctx.arc(X0 - 60, Y0 + 28, 17, 0, Math.PI * 2); ctx.fill();
+  ctx.strokeStyle = LIVERY.fg; ctx.lineWidth = 3; ctx.beginPath(); ctx.arc(X0 - 60, Y0 + 28, 12, 0, Math.PI * 2); ctx.stroke();
+  ctx.save(); ctx.translate(X0 - 60, (Y0 + Y1) / 2 + 18); ctx.rotate(-Math.PI / 2); ctx.fillStyle = '#8b8e98'; ctx.font = '700 22px "Barlow Condensed", sans-serif'; ctx.textAlign = 'center'; ctx.fillText((SERVICE || 'Service audio luci').toUpperCase(), 0, 8, VH - 50); ctx.restore();
   // portelloni che si aprono
   const a = (1 - G.doorsOpen) * Math.PI / 2;
   ctx.fillStyle = '#dfe1e5'; ctx.strokeStyle = '#9aa0a8'; ctx.lineWidth = 2;
-  ctx.save(); ctx.translate(DOOR_X, 380); ctx.rotate(a); ctx.fillRect(0, -8, 112, 9); ctx.strokeRect(0, -8, 112, 9); ctx.restore();
-  ctx.save(); ctx.translate(DOOR_X, 620); ctx.rotate(-a); ctx.fillRect(0, -1, 112, 9); ctx.strokeRect(0, -1, 112, 9); ctx.restore();
+  const DL = VH / 2 + 8;
+  ctx.save(); ctx.translate(DOOR_X, Y0 - 12); ctx.rotate(a); ctx.fillRect(0, -8, DL, 9); ctx.strokeRect(0, -8, DL, 9); ctx.restore();
+  ctx.save(); ctx.translate(DOOR_X, Y1 + 12); ctx.rotate(-a); ctx.fillRect(0, -1, DL, 9); ctx.strokeRect(0, -1, DL, 9); ctx.restore();
   // rampa in alluminio: su (agganciata al pianale) finché non la tiri giù
   const rk = G.van && G.van.ramp ? 1 : (G.van && G.van.rampK) || 0;
   if (rk > 0) {
@@ -1722,7 +1788,8 @@ function drawStatics () {
     ctx.strokeStyle = '#555a62'; ctx.lineWidth = 4; ctx.strokeRect(RAMP.x, RAMP.y, rw, RAMP.h);
     if (rk === 1) {
       ctx.fillStyle = 'rgba(20,21,25,.55)';
-      for (let i = 0; i < 3; i++) { const x = RAMP.x + 30 + i * 30; ctx.beginPath(); ctx.moveTo(x, 485); ctx.lineTo(x + 14, 500); ctx.lineTo(x, 515); ctx.lineTo(x + 5, 500); ctx.fill(); }
+      const cy = RAMP.y + RAMP.h / 2;
+      for (let i = 0; i < 3; i++) { const x = RAMP.x + 25 + i * 26; ctx.beginPath(); ctx.moveTo(x, cy - 15); ctx.lineTo(x + 14, cy); ctx.lineTo(x, cy + 15); ctx.lineTo(x + 5, cy); ctx.fill(); }
     }
   } else if (G.van && G.van.open) {
     // la rampa ripiegata dentro il portellone
@@ -1730,7 +1797,7 @@ function drawStatics () {
     ctx.strokeStyle = '#555a62'; ctx.lineWidth = 2; ctx.strokeRect(DOOR_X - 14, RAMP.y, 10, RAMP.h);
   }
   // bordo del pianale: si cade se si esce fuori dalla rampa
-  ctx.fillStyle = '#f2c53d'; ctx.fillRect(DOOR_X - 4, 390, 4, RAMP.y - 390); ctx.fillRect(DOOR_X - 4, RAMP.y + RAMP.h, 4, 610 - RAMP.y - RAMP.h);
+  ctx.fillStyle = '#f2c53d'; ctx.fillRect(DOOR_X - 4, Y0, 4, RAMP.y - Y0); ctx.fillRect(DOOR_X - 4, RAMP.y + RAMP.h, 4, Y1 - RAMP.y - RAMP.h);
   // muri: recinzione metallica del cortile, muri in cemento della palestra
   for (const b of G.statics) {
     if (!b.plugin.draw) continue;
@@ -1765,39 +1832,30 @@ function drawStatics () {
   ctx.fillStyle = '#26303d'; rr(1640, 170, 100, 50, 4); ctx.fill();
   ctx.strokeStyle = '#3d4b5e'; ctx.lineWidth = 2; for (let x = 1648; x < 1740; x += 12) { ctx.beginPath(); ctx.moveTo(x, 174); ctx.lineTo(x, 216); ctx.stroke(); }
   // panchina
-  ctx.fillStyle = '#6a4a2c'; rr(840, 730, 130, 28, 4); ctx.fill();
-  ctx.strokeStyle = '#4b331d'; for (let y = 736; y < 756; y += 7) { ctx.beginPath(); ctx.moveTo(844, y); ctx.lineTo(966, y); ctx.stroke(); }
+  ctx.fillStyle = '#6a4a2c'; rr(BENCH.x, BENCH.y, 110, 26, 4); ctx.fill();
+  ctx.strokeStyle = '#4b331d'; for (let y = BENCH.y + 6; y < BENCH.y + 24; y += 7) { ctx.beginPath(); ctx.moveTo(BENCH.x + 4, y); ctx.lineTo(BENCH.x + 106, y); ctx.stroke(); }
   // tavolino con la moka
-  ctx.fillStyle = '#7a6a58'; rr(632, 118, 60, 28, 4); ctx.fill();
+  const MX = MOKA.x, MY = MOKA.y;
+  ctx.fillStyle = '#7a6a58'; rr(MX - 30, MY - 57, 60, 28, 4); ctx.fill();
   if (!G.coffee.used) {
-    ctx.fillStyle = '#b9bcc2'; ctx.beginPath(); ctx.moveTo(655, 124); ctx.lineTo(669, 124); ctx.lineTo(672, 140); ctx.lineTo(652, 140); ctx.fill();
-    ctx.fillStyle = '#222'; ctx.fillRect(658, 120, 8, 4);
+    ctx.fillStyle = '#b9bcc2'; ctx.beginPath(); ctx.moveTo(MX - 7, MY - 51); ctx.lineTo(MX + 7, MY - 51); ctx.lineTo(MX + 10, MY - 35); ctx.lineTo(MX - 10, MY - 35); ctx.fill();
+    ctx.fillStyle = '#222'; ctx.fillRect(MX - 4, MY - 55, 8, 4);
     const tt = performance.now() / 400;
     ctx.strokeStyle = 'rgba(238,233,223,.35)'; ctx.lineWidth = 2;
-    for (let i = 0; i < 2; i++) { const o = (tt + i * 0.5) % 1; ctx.globalAlpha = 1 - o; ctx.beginPath(); ctx.moveTo(662 + i * 4, 118 - o * 22); ctx.quadraticCurveTo(668 + i * 4, 110 - o * 22, 660 + i * 4, 100 - o * 22); ctx.stroke(); }
+    for (let i = 0; i < 2; i++) { const o = (tt + i * 0.5) % 1; ctx.globalAlpha = 1 - o; ctx.beginPath(); ctx.moveTo(MX + i * 4, MY - 57 - o * 22); ctx.quadraticCurveTo(MX + 6 + i * 4, MY - 65 - o * 22, MX - 2 + i * 4, MY - 75 - o * 22); ctx.stroke(); }
     ctx.globalAlpha = 1;
     ctx.save(); ctx.globalAlpha = 0.6 + 0.4 * Math.sin(performance.now() / 300); ctx.strokeStyle = '#f2a541'; ctx.lineWidth = 3;
-    ctx.beginPath(); ctx.arc(662, 132, 34, 0, Math.PI * 2); ctx.stroke(); ctx.restore();
+    ctx.beginPath(); ctx.arc(MX, MY - 43, 34, 0, Math.PI * 2); ctx.stroke(); ctx.restore();
   }
   ctx.fillStyle = 'rgba(238,233,223,.6)'; ctx.font = '700 12px "Barlow Condensed", sans-serif'; ctx.textAlign = 'center';
-  ctx.fillText(G.coffee.used ? 'MOKA (VUOTA)' : 'MOKA DEL BIDELLO', 662, 178); ctx.textAlign = 'left';
+  ctx.fillText(G.coffee.used ? 'MOKA (VUOTA)' : 'MOKA DEL BIDELLO', MX, MY + 3); ctx.textAlign = 'left';
 }
 function drawTreeTop () {
   ctx.save();
-  ctx.fillStyle = 'rgba(0,0,0,.25)'; ctx.beginPath(); ctx.arc(830, 272, 62, 0, Math.PI * 2); ctx.fill();
-  ctx.fillStyle = '#27432f'; ctx.beginPath(); ctx.arc(820, 260, 60, 0, Math.PI * 2); ctx.fill();
-  ctx.fillStyle = '#34583d'; [[800, 240, 26], [845, 250, 22], [815, 285, 24]].forEach(([x, y, r]) => { ctx.beginPath(); ctx.arc(x, y, r, 0, Math.PI * 2); ctx.fill(); });
-  ctx.restore();
-}
-function drawDolly () {
-  if (!G.dolly) return;
-  const b = G.dolly.body;
-  ctx.save(); ctx.translate(b.position.x, b.position.y); ctx.rotate(b.angle);
-  ctx.fillStyle = 'rgba(0,0,0,.3)'; ctx.fillRect(-25, -23, 54, 54);
-  ctx.fillStyle = '#a07b4f'; rr(-27, -27, 54, 54, 4); ctx.fill();
-  ctx.strokeStyle = '#7d5d38'; ctx.lineWidth = 2; for (let y = -18; y < 27; y += 9) { ctx.beginPath(); ctx.moveTo(-25, y); ctx.lineTo(25, y); ctx.stroke(); }
-  ctx.fillStyle = '#141519'; [[-22, -22], [22, -22], [-22, 22], [22, 22]].forEach(([x, y]) => { ctx.beginPath(); ctx.arc(x, y, 5, 0, Math.PI * 2); ctx.fill(); });
-  ctx.fillStyle = '#141519'; ctx.font = '700 12px "Barlow Condensed", sans-serif'; ctx.textAlign = 'center'; ctx.fillText('DOLLY', 0, 4);
+  const X = TREE.x, Y = TREE.y;
+  ctx.fillStyle = 'rgba(0,0,0,.25)'; ctx.beginPath(); ctx.arc(X + 10, Y + 12, 62, 0, Math.PI * 2); ctx.fill();
+  ctx.fillStyle = '#27432f'; ctx.beginPath(); ctx.arc(X, Y, 60, 0, Math.PI * 2); ctx.fill();
+  ctx.fillStyle = '#34583d'; [[-20, -20, 26], [25, -10, 22], [-5, 25, 24]].forEach(([x, y, r]) => { ctx.beginPath(); ctx.arc(X + x, Y + y, r, 0, Math.PI * 2); ctx.fill(); });
   ctx.restore();
 }
 // il telo grigio sopra il baule in fondo al furgone (vola via alla sorpresa)
@@ -1814,7 +1872,7 @@ function drawTarp (ce, k) {
 }
 // il carrello a due ruote da facchino, visto dall'alto: pala davanti, due
 // ruote grandi ai lati, telaio e maniglie dietro. I posti pieni in verde.
-function drawDolly (w, h, used, glow) {
+function drawHandTruck (w, h, used, glow) {
   ctx.fillStyle = 'rgba(0,0,0,.35)'; rr(-w / 2 + 4, -h / 2 + 5, w, h, 5); ctx.fill();
   ctx.fillStyle = '#0c0d10';
   [-1, 1].forEach(sy => { rr(-w / 2 + 4, sy * (h / 2 - 2) - 7, 22, 14, 6); ctx.fill(); });       // ruote
@@ -1843,17 +1901,17 @@ function drawTrolley () {
   const t = G.trolley;
   if (!t) {   // ancora nel furgone, in piedi accanto al portellone
     if (G.van.ramp) return;
-    ctx.save(); ctx.translate(376, 594); ctx.rotate(-Math.PI / 2); ctx.scale(0.5, 0.5); drawDolly(64, 46, null); ctx.restore();
+    ctx.save(); ctx.translate(VAN.x1 + 312, VAN.y1 + 112); ctx.rotate(-Math.PI / 2); ctx.scale(0.5, 0.5); drawHandTruck(64, 46, null); ctx.restore();
     return;
   }
   const b = t.body, w = t.def.w, h = t.def.h;
   const P = G.player, held = P.grab && P.grab.kind === 'case' && cartFits(t, P.grab) && !zoneAt(P.body.position) && len(sub(P.body.position, b.position)) < 160;
   ctx.save(); ctx.translate(b.position.x, b.position.y); ctx.rotate(b.angle);
-  drawDolly(w, h, cartUsed(t), held);
+  drawHandTruck(w, h, cartUsed(t), held);
   ctx.restore();
   if (held) {
     ctx.fillStyle = '#49e07a'; ctx.font = '700 14px "Barlow Condensed", sans-serif'; ctx.textAlign = 'center';
-    ctx.fillText(nearTrolley(P, 26) ? KA('CARICA') : 'AVVICINATI: CARICA QUI', b.position.x, b.position.y - 38); ctx.textAlign = 'start';
+    ctx.fillText(canLoad(P) ? KA('CARICA') : 'AVVICINATI: CARICA QUI', b.position.x, b.position.y - 38); ctx.textAlign = 'start';
   }
 }
 // cinghie tirate attraverso il furgone e freni sulle ruote (P rossa)
@@ -1884,7 +1942,6 @@ function drawCase (ce) {
   ctx.restore();
   if (lifted) ctx.translate(-2, -5);
   ctx.rotate(b.angle);
-  if (ce.onDolly) { ctx.fillStyle = '#a07b4f'; rr(-w / 2 - 3, -h / 2 - 3, w + 6, h + 6, 4); ctx.fill(); }
   // ruote che sporgono dagli angoli: le piroettanti girano col moto
   if (!lifted && (ce.wheel === 'swivel' || ce.wheel === 'fixed')) {
     const lv = rot(b.velocity, -b.angle), sw = len(lv) > 0.3 ? Math.atan2(lv.y, lv.x) : 0;
@@ -1948,7 +2005,7 @@ function drawWorker (w) {
   // braccia verso il case
   if (w.grab) {
     const ce = w.grab;
-    const tgt = w.con ? add(ce.body.position, w.con.pointB) : add(p, mul({ x: Math.cos(w.facing), y: Math.sin(w.facing) }, w.carry.dist - 6));
+    const tgt = ce.kind === 'case' ? surface(ce, p).world : add(p, mul({ x: Math.cos(w.facing), y: Math.sin(w.facing) }, w.hold ? w.hold.off.x - 22 : 20));
     const side = { x: -Math.sin(w.facing), y: Math.cos(w.facing) };
     ctx.strokeStyle = w.skin; ctx.lineWidth = 5; ctx.lineCap = 'round';
     [-1, 1].forEach(s => { ctx.beginPath(); ctx.moveTo(p.x + side.x * r * 0.75 * s, p.y + side.y * r * 0.75 * s); ctx.lineTo(tgt.x + side.x * 9 * s, tgt.y + side.y * 9 * s); ctx.stroke(); });
@@ -1957,7 +2014,7 @@ function drawWorker (w) {
   ctx.fillStyle = 'rgba(0,0,0,.35)'; ctx.beginPath(); ctx.ellipse(3, 4, r * 1.05, r * 1.05, 0, 0, Math.PI * 2); ctx.fill();
   ctx.rotate(w.facing);
   // passo: i piedi escono avanti e indietro, le mani ondeggiano al contrario
-  const moving = speedOf(w.body) > 0.25, ph = Math.sin((w.stride || 0) * 0.28) * (moving ? 1 : 0);
+  const moving = w.spd > 0.25, ph = Math.sin((w.stride || 0) * 0.28) * (moving ? 1 : 0);
   ctx.fillStyle = '#17181c';
   [-1, 1].forEach(sd => { ctx.beginPath(); ctx.ellipse(ph * sd * r * 0.55 + 1, sd * r * 0.38, r * 0.34, r * 0.2, 0, 0, Math.PI * 2); ctx.fill(); });
   if (!w.grab) {
@@ -1978,7 +2035,7 @@ function drawWorker (w) {
   ctx.restore();
   if (w === G.macio && w.ai.state === 'phone') { ctx.fillStyle = '#eee9df'; ctx.fillRect(p.x + 10, p.y - 18, 7, 12); }
   // gocce di sudore spingendo da solo un case da due
-  if (w.grab && w.grab.def.heavy2 && w.grab.grabbers.length < 2 && speedOf(w.body) > 0.2) {
+  if (w.grab && w.grab.def.heavy2 && w.grab.grabbers.length < 2 && w === G.player && G.player.grab.strainT > 0.1 && len(G.history[G.history.length - 1] || { x: 0, y: 0 }) > 0.3) {
     const tt = (performance.now() / 500) % 1;
     ctx.fillStyle = 'rgba(122,211,255,' + (1 - tt) + ')';
     ctx.beginPath(); ctx.arc(p.x - 10, p.y - 18 - tt * 10, 2.5, 0, Math.PI * 2); ctx.fill();
@@ -2163,7 +2220,7 @@ function render () {
   ctx.setTransform(1, 0, 0, 1, 0, 0);
   ctx.fillStyle = '#141519'; ctx.fillRect(0, 0, cv.width, cv.height);
   ctx.setTransform(DPR * scale, 0, 0, DPR * scale, DPR * (W / 2 - G.cam.x * scale), DPR * (H / 2 - G.cam.y * scale));
-  drawGround(); drawZones(); drawStatics(); drawDolly();
+  drawGround(); drawZones(); drawStatics();
   const ground = G.cases.filter(c => !c.carrier && !c.onTrolley && !(G.t < c.liftUntil)).sort((a, b) => a.body.position.y - b.body.position.y);
   ground.forEach(drawCase);
   drawLocks();
@@ -2219,9 +2276,7 @@ function updateHud () {
   if (need) unlock('help');
   showCmd('help', play && G.macio.ai.state !== 'phone' && !!(need || kid));
   showCmd('lift', play && !!(G.qte || liftReady()));
-  const pushed = P.grab && P.grab.kind === 'case' && P.mode === 'push' ? P.grab.body : null;
-  const onRamp = pushed && pushed.position.x > RAMP.x - 30 && pushed.position.x < RAMP.x + RAMP.w + 40 && pushed.position.y > RAMP.y - 20 && pushed.position.y < RAMP.y + RAMP.h + 20;
-  showCmd('stop', play && !!pushed && (onRamp || speedOf(pushed) > 1.3));
+  showCmd('stop', false);
   $('#b-help').classList.toggle('call', !!need);
   const cf = G.coffee.until - G.t;
   $('#h-coffee').hidden = !(cf > 0);
@@ -2231,7 +2286,7 @@ function updateHud () {
   const t = G.trolley;
   const va = !P.grab && play ? vanAction(P) : null;
   let gl = P.grab ? 'LASCIA' : va ? { doors: 'APRI', ramp: 'RAMPA', strap: 'CINGHIA', brake: 'FRENO' }[va] : 'PRENDI';
-  if (t && P.grab && nearTrolley(P, 26) && cartFits(t, P.grab) && !zoneAt(P.body.position)) gl = 'CARICA';
+  if (t && P.grab && canLoad(P) && cartFits(t, P.grab)) gl = 'CARICA';
   else if (t && !P.grab && t.load.length && nearTrolley(P, 14) && (zoneAt(P.body.position) || zoneAt(t.body.position))) gl = 'SCARICA';
   $('#b-grab').textContent = gl;
   $('#b-grab').classList.toggle('on', !!P.grab);
