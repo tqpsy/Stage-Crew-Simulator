@@ -6659,6 +6659,21 @@ function compCenter (c) {
   const f = c.foot || [1, 1];
   return { gx: c.gx + f[0] * CELL / 2, gy: c.gy + f[1] * CELL / 2 };
 }
+/* sagoma del tavolo regia sullo schermo (t: centro del tavolo): i quattro
+   angoli dell'ingombro a terra e, alzati, quelli dietro, fino in cima agli
+   apparecchi più alti. q (centro di un pezzo) ci sta dentro con un margine? */
+const TAVOLO_SIL_Z = TAVOLO_TOP + 30;
+function insideTavolo (t, q) {
+  const f = FOOTPRINT.tavolo, hx = f[0] * CELL / 2, hy = f[1] * CELL / 2, IN = 6;
+  const c = (dx, dy, z) => ({ x: t.x + (dx - dy) * TILE_W / 2, y: t.y + (dx + dy) * TILE_H / 2 - z });
+  // in senso orario: dietro alzato, destra alzata e a terra, davanti a terra, sinistra a terra e alzata
+  const H = TAVOLO_SIL_Z;
+  const pts = [c(-hx, -hy, H), c(hx, -hy, H), c(hx, -hy, 0), c(hx, hy, 0), c(-hx, hy, 0), c(-hx, hy, H)];
+  return pts.every((a, i) => {
+    const b = pts[(i + 1) % pts.length], ex = b.x - a.x, ey = b.y - a.y;
+    return (ex * (q.y - a.y) - ey * (q.x - a.x)) / Math.hypot(ex, ey) > IN;
+  });
+}
 // il quadro della palestra è appeso alla parete dietro al palco
 function allaccioPos () { return gridToScreen(3.3, CARICO_ROWS + 0.25); }
 /* le coordinate di schermo dei pezzi dipendono dall'altezza del canvas, misurata
@@ -7506,6 +7521,9 @@ class StageScene extends Phaser.Scene {
         .setInteractive({ useHandCursor: true });
       hit.on('pointerdown', (pointer, lx, ly, event) => {
         if (event && event.stopPropagation) event.stopPropagation();
+        // un pezzo armato si posa: il baule sta sul bordo dell'Off Stage e
+        // il suo tocco non deve rubare il posto al tavolo regia
+        if (gameState.selectedPieceType) { this.placeArmedPieceAt(pointer.worldX, pointer.worldY); return; }
         // aprire un baule porta anche nella scheda Cavi
         const tab = document.querySelector('.tab-btn[data-tab="cavi"]');
         if (tab && !isWiringTabActive()) tab.click();
@@ -8686,16 +8704,15 @@ class StageScene extends Phaser.Scene {
      tavolo e della regia lo coprirebbe e non si riuscirebbe più a prenderlo.
      Vale nei due sensi: un pezzo a terra non va sotto il disegno del tavolo,
      il tavolo non si mette sopra un pezzo già posato (pos: centro del pezzo
-     sullo schermo) */
+     sullo schermo). Conta la sagoma vera del tavolo (il suo ingombro a terra
+     alzato fino in cima agli apparecchi), non il rettangolo che la contiene:
+     quello prendeva mezzo Off Stage e una ciabatta bastava a non farlo posare */
   hiddenByTable (type, pos, ignoreId) {
     if (MOUNTS[type]) return false;
-    const def = COMPONENT_TYPES.tavolo.body, IN = 6;
-    const covers = (t, q) => Math.abs(q.x - t.x) < def.w / 2 - IN
-      && q.y > t.y + def.oy - def.h / 2 + IN && q.y < t.y + def.oy + def.h / 2 - IN;
     const P = Object.values(gameState.placed).filter(c => c.id !== ignoreId && c.gx != null && !MOUNTS[c.type] && this.compVisuals[c.id]);
     const at = c => this.compVisuals[c.id].container;
-    if (type === 'tavolo') return P.some(c => c.type !== 'tavolo' && covers(pos, at(c)));
-    return P.some(c => c.type === 'tavolo' && covers(at(c), pos));
+    if (type === 'tavolo') return P.some(c => c.type !== 'tavolo' && insideTavolo(pos, at(c)));
+    return P.some(c => c.type === 'tavolo' && insideTavolo(at(c), pos));
   }
 
   /* ---------------- anteprima durante il trascinamento dalla toolbar ---------------- */
