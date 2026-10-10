@@ -326,7 +326,10 @@ livelli futuri.
   spiegato da Macio); la porta antipanico che si richiude da sola se
   nessuno la tiene; bambini che corrono in cortile (passanti veloci ma
   prevedibili); Gerry Scotti, il bidello, che passa col carrello delle
-  pulizie.
+  pulizie. Bambini e Gerry non spingono contro gli ostacoli: guardano un
+  passo avanti, rallentano, si fermano e girano di lato dove c'è posto; i
+  bambini fanno spazio a chi porta un case, Gerry aspetta («Prego!») e si
+  sposta di corsia (`kidAdapt`, `gerryStep`, test `tests/scarico-npc.js`).
 - **Tempo**: largo, 30 minuti di gioco per circa 12 pezzi.
 - **Insegna**: peso, rampa, spinta in coppia, zone.
 
