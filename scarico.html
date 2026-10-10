@@ -1138,6 +1138,7 @@ function groupHits (w, kb) {
   return bs.some(b => Bounds.overlaps(b.bounds, kb.bounds) && Collision.collides(b, kb));
 }
 function updateKids (dt) {
+  const obs = npcObstacles();
   for (const k of G.kids) {
     const p = k.body.position;
     if (k.slip && G.t > k.slip && !G.workers.some(w => groupHits(w, k.body))) { k.slip = 0; k.body.collisionFilter.mask = k.mask0; }
@@ -1150,19 +1151,143 @@ function updateKids (dt) {
       dir = norm(sub(k.target, p));
       if (len(sub(k.target, p)) < 14 || Math.random() < 0.002) {
         k.wait = rand(0.3, 2);
-        k.target = { x: rand(DOOR_X + 40, GYM_X - 40), y: rand(120, 880) };
-        if (len(sub(k.target, TREE)) < 70) k.target.y += 120;
+        k.target = kidTarget(k, obs);
       }
     }
+    // il passante sulla rampa ti deve fermare (si chiede permesso): gli altri si adattano
+    if (!(k.block > G.t)) [dir, v] = kidAdapt(k, dir, v, obs, dt);
     drive(Object.assign(k, { fmax: 0.028 }), dir, v);
     if (len(dir) > 0.1) k.facing = Math.atan2(dir.y, dir.x);
   }
   // il bidello col carrello delle pulizie attraversa il cortile
-  if (G.cart) {
-    const c = G.cart, b = c.body;
-    Body.setVelocity(b, { x: 0, y: 1.1 }); Body.setAngle(b, 0); Body.setAngularVelocity(b, 0);
-    if (b.position.y > 880) { Composite.remove(G.world, b); G.cart = null; }
+  if (G.cart) gerryStep(G.cart, dt);
+}
+/* I bambini e Gerry non spingono contro gli ostacoli: guardano un passo
+   avanti; se è occupato rallentano, si fermano e provano a girare di lato
+   dove c'è posto; se non si passa cambiano meta. A chi porta qualcosa
+   verso di loro fanno spazio. Niente percorsi calcolati: solo il passo dopo. */
+// quello contro cui sbattono in cortile (il gradino ferma solo i case)
+function npcObstacles () {
+  const out = G.statics.filter(b => b !== G.stepBody);
+  for (const c of G.cases) if (!c.hidden && !c.onTrolley) out.push(c.body);
+  if (G.trolley) out.push(G.trolley.body);
+  for (const w of G.workers) out.push(w.body);
+  for (const k of G.kids) out.push(k.body);
+  if (G.cart) out.push(G.cart.body);
+  return out;
+}
+let kidProbe = null;
+// c'è posto per un bambino in pt? (lui stesso escluso)
+function kidFree (k, pt, obs) {
+  kidProbe = kidProbe || Bodies.circle(0, 0, 13);
+  Body.setPosition(kidProbe, pt);
+  return !overlap(kidProbe, obs.filter(b => b !== k.body));
+}
+// una meta in cortile dove si può stare davvero (non dentro panchina, moka, case)
+function kidTarget (k, obs) {
+  let t;
+  for (let i = 0; i < 10; i++) {
+    t = { x: rand(DOOR_X + 40, GYM_X - 40), y: rand(120, 880) };
+    if (len(sub(t, TREE)) < 70) t.y += 120;
+    if (kidFree(k, t, obs)) break;
   }
+  k.tries = 0;
+  return t;
+}
+// chi arriva verso il bambino con qualcosa in mano (o spinto), o di corsa
+function kidThreat (k) {
+  const p = k.body.position;
+  for (const w of G.workers) {
+    if ((w.hold && w.hold.helper) || len(w.vel) < 0.4) continue;
+    const d = norm(w.vel), rel = sub(p, w.body.position);
+    const along = rel.x * d.x + rel.y * d.y, side = rel.x * d.y - rel.y * d.x;
+    const ext = w.grab ? w.hold.off.x + Math.max(w.grab.def.w, w.grab.def.h) / 2 : 0;
+    if (along > 0 && along < w.r + ext + 70 && Math.abs(side) < (w.grab ? Math.max(w.grab.def.w, w.grab.def.h) / 2 + 26 : 34)) return { d, side };
+  }
+  return null;
+}
+function kidAdapt (k, dir, v, obs, dt) {
+  const p = k.body.position;
+  // si fa da parte: di lato rispetto a chi arriva, dalla parte dove già sta
+  const th = kidThreat(k);
+  if (th && !(k.detour && k.detour.yield && k.detour.until > G.t)) {
+    const s = th.side >= 0 ? 1 : -1;
+    let found = false;
+    for (const sd of [s, -s]) {
+      const a = { x: th.d.y * sd, y: -th.d.x * sd };
+      if (kidFree(k, add(p, mul(a, 18)), obs)) { k.detour = { dir: a, until: G.t + 0.6, yield: true }; found = true; break; }
+    }
+    if (!found) return [{ x: 0, y: 0 }, 0];   // niente posto: fermo, non gli va addosso
+  }
+  if (k.detour && k.detour.until > G.t) {
+    if (kidFree(k, add(p, mul(k.detour.dir, 16)), obs)) return [k.detour.dir, k.detour.yield ? 2.1 : 1.6];
+    k.detour = null;
+  }
+  if (len(dir) < 0.1) { k.jamT = 0; return [dir, v]; }
+  // un passo avanti è libero e si cammina davvero: avanti così
+  const stalled = speedOf(k.body) < 0.25;
+  k.slowT = stalled ? (k.slowT || 0) + dt : 0;
+  if (kidFree(k, add(p, mul(dir, 16)), obs) && k.slowT < 0.5) { k.jamT = 0; return [dir, v]; }
+  // bloccato: rallenta, si ferma, poi gira di lato dove c'è posto
+  k.jamT = (k.jamT || 0) + dt;
+  if (k.jamT < 0.3) return [dir, 0.5];
+  const sd = k.side || (Math.random() < 0.5 ? 1 : -1);
+  for (const deg of [50, -50, 90, -90, 130, -130]) {
+    const d = rot(dir, deg * sd * Math.PI / 180);
+    if (kidFree(k, add(p, mul(d, 18)), obs) && kidFree(k, add(p, mul(d, 32)), obs)) {
+      k.side = deg * sd > 0 ? 1 : -1;
+      k.detour = { dir: d, until: G.t + rand(0.5, 0.9) };
+      k.jamT = 0; k.slowT = 0; k.tries = (k.tries || 0) + 1;
+      if (k.tries > 4) { k.wait = rand(0.3, 1); k.target = kidTarget(k, obs); }
+      return [d, 1.6];
+    }
+  }
+  // chiuso da tutte le parti: fermo, e dopo un po' cambia idea
+  if (k.jamT > 2) { k.jamT = 0; k.wait = rand(0.5, 1.5); k.target = kidTarget(k, obs); }
+  return [{ x: 0, y: 0 }, 0];
+}
+/* Gerry fa sempre la sua strada, dall'alto in basso, ma non travolge
+   nessuno: se davanti c'è qualcuno o qualcosa si ferma («Prego!»), poi
+   si sposta di lato su una corsia libera; se proprio non si passa torna
+   indietro. Non sente i muri (entra ed esce dal cortile), però gira
+   intorno all'albero, alla panchina e al tavolino della moka. */
+function gerryObstacles () {
+  const inYard = b => b.bounds.min.x > DOOR_X + 10 && b.bounds.max.x < GYM_X - 15 && b.bounds.min.y > 95 && b.bounds.max.y < 905;
+  return npcObstacles().filter(b => b !== G.cart.body && (!b.isStatic || !G.statics.includes(b) || inYard(b)));
+}
+// qualcosa sulla strada di Gerry: spostandosi di lato di dx (tutto il
+// tratto) e, arrivato lì, per ahead px verso dove va
+function gerryHit (c, obs, dx, ahead) {
+  const bb = c.body.bounds, vy = c.back ? -1 : 1;
+  const side = { min: { x: bb.min.x + Math.min(dx, 0) - 3, y: bb.min.y }, max: { x: bb.max.x + Math.max(dx, 0) + 3, y: bb.max.y } };
+  const front = { min: { x: bb.min.x + dx - 3, y: bb.min.y + (vy < 0 ? -ahead : 0) }, max: { x: bb.max.x + dx + 3, y: bb.max.y + (vy > 0 ? ahead : 0) } };
+  return (dx !== 0 && Query.region(obs, side).length > 0) || (ahead > 0 && Query.region(obs, front).length > 0);
+}
+function gerryStep (c, dt) {
+  const b = c.body, obs = gerryObstacles(), vy = c.back ? -1.1 : 1.1;
+  let v = { x: 0, y: vy };
+  if (c.sideTo != null) {
+    // si sposta di lato finché non è sulla corsia libera
+    const dx = c.sideTo - b.position.x;
+    if (Math.abs(dx) < 1.2 || gerryHit(c, obs, Math.sign(dx) * 4, 0)) c.sideTo = null;
+    else v = { x: Math.sign(dx) * 1.1, y: 0 };
+  }
+  if (c.sideTo == null && gerryHit(c, obs, 0, 22)) {
+    v = { x: 0, y: 0 }; c.waitT = (c.waitT || 0) + dt;
+    if (!c.said && c.waitT > 0.6) { c.said = true; bubble(c, 'Prego, prego… passate!', 2); }
+    if (c.waitT > 2.5 && (c.sideT || 0) < G.t) {
+      c.sideT = G.t + 1;
+      for (const dx of [35, -35, 70, -70, 105, -105, 140, -140, 175, -175]) {
+        const x = b.position.x + dx;
+        if (x < DOOR_X + 60 || x > GYM_X - 60) continue;
+        if (!gerryHit(c, obs, dx, 40)) { c.sideTo = x; c.waitT = 0; break; }
+      }
+    }
+    if (c.waitT > 10 && !c.back) { c.back = true; c.waitT = 0; bubble(c, 'Va be\', passo dopo!', 2); }
+  } else if (c.sideTo == null) c.waitT = 0;
+  Body.setVelocity(b, v); Body.setAngle(b, 0); Body.setAngularVelocity(b, 0);
+  // (chiuso anche all'indietro: se ne va, non resta piantato in cortile)
+  if (b.position.y > 880 || (c.back && (b.position.y < 110 || c.waitT > 10))) { Composite.remove(G.world, b); G.cart = null; }
 }
 
 /* imprevisti a copione, a tempo di gioco */
@@ -1172,7 +1297,7 @@ function scriptEvents () {
   // il primo passante aspetta che tu sappia chiamare (serve a chiedere permesso)
   if (G.team) once('passante1', G.at.passante1, () => passante(G.kids[0]));
   once('bidello', G.at.bidello, () => {
-    const b = Bodies.rectangle(1010, 110, 56, 80, { frictionAir: 0, collisionFilter: { category: CAT.NPC, mask: CAT.WALL | CAT.CASE | CAT.WORKER | CAT.NPC } });
+    const b = Bodies.rectangle(1010, 110, 56, 80, { frictionAir: 0, collisionFilter: { category: CAT.NPC, mask: CAT.WALL | CAT.CASE | CAT.WORKER | CAT.NPC | CAT.TROLLEY } });
     Body.setMass(b, 150); Body.setInertia(b, Infinity);
     G.cart = { kind: 'cart', body: b, pv: { x: 0, y: 1.1 } }; b.plugin.ent = G.cart;
     b.collisionFilter.mask &= ~CAT.WALL;

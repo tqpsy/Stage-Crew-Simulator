@@ -705,33 +705,6 @@ function cleanScaricoCases (list) {
     dents: Math.max(0, Math.min(6, parseInt(c.dents, 10) || 0)), rushed: !!c.rushed
   }));
 }
-// dove sta ogni case in palestra al montaggio: nella zona dove l'hai
-// lasciato allo scarico (se l'hai saltato, nella sua zona). Posti fissi,
-// fuori dalle celle dove si posano i pezzi: Backstage verso la parete, la
-// fascia oltre l'Off Stage, la prima fila davanti al Pit
-const CASE_HOME = { corrente: 'back', distro: 'back', ricambio: 'palco', segnale: 'foh', rack: 'foh', valigetta: 'foh',
-  sub1: 'pit', sub2: 'pit', top1: 'pit', top2: 'pit', stativi: 'pit', par: 'pit' };
-const DOCK_SPOTS = {
-  back: [[9.45, 2.45], [9.45, 3.45], [8.45, 2.45], [8.45, 3.45]],
-  foh: [[9.5, 4.5], [9.5, 5.45], [9.5, 6.4], [9.5, 7.35]],
-  palco: [[5.5, 4.35], [4.7, 4.35]],
-  pit: [[0.8, 10.5], [1.8, 10.5], [2.8, 10.5], [6.8, 10.5], [7.8, 10.5], [8.8, 10.5], [3.8, 10.5], [5.8, 10.5]]
-};
-const DOCK_TAPE = { back: 0xff4fb4, foh: 0x49e07a, pit: 0x4fb7ff, palco: 0xeaff2b };
-const DOCK_LABEL = { sub1: 'SUB 1', sub2: 'SUB 2', top1: 'TESTA 1', top2: 'TESTA 2', rack: 'RACK', valigetta: 'PC', par: 'PAR', stativi: 'STATIVI', distro: 'QUADRO', ricambio: 'ACCESSORI' };
-function dockCaseSpots () {
-  const used = { back: 0, foh: 0, pit: 0, palco: 0 }, out = [];
-  // prima i bauli dei cavi, così stanno sempre nel primo posto della zona
-  const ids = ['corrente', 'segnale', ...Object.keys(CASE_HOME).filter(id => !CABLE_CASES[id])];
-  ids.forEach(id => {
-    const sc = scaricoCase(id);
-    let zone = sc && DOCK_SPOTS[sc.at] ? sc.at : sc && DOCK_SPOTS[sc.zone] ? sc.zone : CASE_HOME[id];
-    if (used[zone] >= DOCK_SPOTS[zone].length) zone = CASE_HOME[id];
-    const spot = DOCK_SPOTS[zone][used[zone]++];
-    if (spot) out.push({ id, gx: spot[0], gy: spot[1], zone, sc });
-  });
-  return out;
-}
 function scaricoCase (id) {
   const s = Profile.data.scarico;
   return (s && Array.isArray(s.cases) && s.cases.find(c => c.id === id)) || null;
@@ -6608,7 +6581,6 @@ const VEHICLES = {
   bilico:  { A: 100, B: 560, Z: 160, chassis: 30, cabL: 90, cabZ: 118, gap: 12, wheels: [48, 110, 440, 480, 520], wheelR: 16, spoiler: true, cabColor: 0xc9ccd1 }
 };
 const LEVEL_VEHICLE = 'furgone';
-const CASE_ISO = isoFrame(46, 64, 44);   // flight case dei cavi
 const BACKSTAGE_ROWS = 2;   // gy 2-3: allaccio venue + quadro elettrico
 // palco: gy STAGE_ORIGIN_Y .. +STAGE_H (righe 4-7)
 const PIT_ROWS = 2;         // subito davanti al palco: impianto audio principale
@@ -7481,57 +7453,17 @@ class StageScene extends Phaser.Scene {
     this.drawZoneOutline([[0, fohStart], [VENUE_W, fohStart], [VENUE_W, VENUE_H], [0, VENUE_H]], 'REGIA FOH', [4.6, fohStart + 1.2]);
   }
 
-  /* Carico e scarico: il mezzo del service e i flight case, nella stessa
-     prospettiva isometrica dei dispositivi. Il mezzo cresce coi livelli
-     (LEVEL_VEHICLE: furgone -> camion -> bilico); il retro guarda i case,
-     il muso sta verso il fondo. I primi due case sono i bauli dei cavi. */
+  /* Carico e scarico: il mezzo del service, nella stessa prospettiva
+     isometrica dei dispositivi. Il mezzo cresce coi livelli (LEVEL_VEHICLE:
+     furgone -> camion -> bilico); il muso sta verso il fondo. I case dello
+     scarico non si disegnano in palestra: i loro dati (provenienza, stato,
+     ammaccature, difetti) restano in Profile.data.scarico.cases e i bauli
+     dei cavi si aprono dai pulsanti della scheda Cavi. */
   drawLoadingDock () {
     const v = VEHICLES[LEVEL_VEHICLE];
     const vp = gridToScreen(0.5 + v.B / 204, 1.0);
     const vg = this.add.graphics().setDepth(1).setPosition(vp.x, vp.y);
     this.van = { vp, v, ...this.drawVehicle(vg, v) };
-
-    this.refreshDockCases();
-  }
-
-  /* i case dello scarico, in palestra dove li hai lasciati: Backstage, Off
-     Stage (regia) e davanti al Pit. Sono scenografia, tranne i bauli dei
-     cavi che si aprono; un case da cui è già uscito un pezzo resta aperto
-     (più chiaro). Le ammaccature prese allo scarico restano sul case. */
-  refreshDockCases () {
-    (this.dockCases || []).forEach(o => o.destroy());
-    this.dockCases = [];
-    this.casePos = {};
-    dockCaseSpots().forEach(({ id, gx, gy, zone, sc }) => {
-      const p = gridToScreen(gx, gy), cable = CABLE_CASES[id] ? id : null;
-      const open = !cable && this.casesOpened && this.casesOpened.has(id);
-      const cg = this.add.graphics().setDepth(isoDepth(p.y) - 0.0005).setPosition(p.x, p.y).setAlpha(open ? 0.4 : 1);
-      this.drawFlightCase(cg, CASE_ISO, DOCK_TAPE[zone]);
-      if (sc && sc.dents) {
-        cg.lineStyle(1.2, 0xd2d6de, 0.55);
-        for (let k = 0; k < Math.min(4, sc.dents); k++) { const x = -14 + k * 9, y = -10 + (k % 2) * 7; cg.lineBetween(x, y, x + 6, y + 3); }
-      }
-      const label = this.add.text(p.x, p.y - 34, cable ? CABLE_CASES[id].title : (DOCK_LABEL[id] || id.toUpperCase()) + (open ? ' · aperto' : ''), {
-        fontFamily: 'Barlow Condensed, sans-serif', fontSize: '11px', fontStyle: 'bold', color: open ? '#9a9da4' : '#e6e8eb'
-      }).setOrigin(0.5).setDepth(isoDepth(p.y));
-      this.dockCases.push(cg, label);
-      if (!cable) return;
-      this.casePos[id] = p;
-      const hit = this.add.rectangle(p.x, p.y - 6, 58, 58, 0xffffff, 0.001).setDepth(isoDepth(p.y) + 0.0001)
-        .setInteractive({ useHandCursor: true });
-      hit.on('pointerdown', (pointer, lx, ly, event) => {
-        if (event && event.stopPropagation) event.stopPropagation();
-        // un pezzo armato si posa: il baule sta sul bordo dell'Off Stage e
-        // il suo tocco non deve rubare il posto al tavolo regia
-        if (gameState.selectedPieceType) { this.placeArmedPieceAt(pointer.worldX, pointer.worldY); return; }
-        // aprire un baule porta anche nella scheda Cavi
-        const tab = document.querySelector('.tab-btn[data-tab="cavi"]');
-        if (tab && !isWiringTabActive()) tab.click();
-        openCase(id);
-      });
-      this.dockCases.push(hit);
-    });
-    if (this.refreshFaultMarks && this.faultMarks) this.refreshFaultMarks();
   }
 
   /* mezzo del service visto di tre quarti: fiancata (faccia a=0) verso il
@@ -7680,42 +7612,6 @@ class StageScene extends Phaser.Scene {
       // il vecchio si toglie solo quando nessuno show lo sta usando
       if (old && !this.fx) this.textures.remove(old);
     });
-  }
-
-  /* flight case da tour: guscio nero in multistrato, profili e angolari in
-     alluminio, chiusure a farfalla, maniglia, ruote pivottanti e nastro
-     fluo sul coperchio (lo stesso dei cavi nei bauli) */
-  drawFlightCase (g, P, tape) {
-    const k = this.isoKit(g, P);
-    const { A, B, Z } = P;
-    const alu = 0xc3c7ce, aluDk = 0x8a8e98;
-    k.quadZ(0, -3, A + 3, -3, B + 3, 0x000000, 0.3);
-    // ruote
-    [[3, 9, B - 9, B - 3], [3, 9, 3, 9], [A - 9, A - 3, B - 9, B - 3]].forEach(([a0, a1, b0, b1]) =>
-      k.box(a0, a1, b0, b1, 0, 6, { top: 0x2a2c32, left: 0x111215, right: 0x0c0d10 }));
-    const z0 = 6;
-    k.box(0, A, 0, B, z0, Z, { top: 0x2e3036, left: 0x232428, right: 0x1a1b1f });
-    // profilo di chiusura del coperchio
-    const zs = z0 + (Z - z0) * 0.7;
-    k.quadA(-0.2, 0, B, zs - 1.2, zs + 1.2, alu);
-    k.quadB(B + 0.2, 0, A, zs - 1.2, zs + 1.2, alu);
-    // profili sugli spigoli
-    k.quadA(-0.3, B - 2.5, B, z0, Z, alu);
-    k.quadA(-0.3, 0, 2.5, z0, Z, aluDk);
-    k.quadB(B + 0.3, A - 2.5, A, z0, Z, aluDk);
-    k.quadZ(Z + 0.2, 0, A, B - 2.5, B, alu);
-    k.quadZ(Z + 0.2, 0, 2.5, 0, B, alu);
-    // angolari a sfera
-    [[0, B], [0, 0]].forEach(([a, b]) => { k.discA(-0.5, b === 0 ? 3 : B - 3, Z - 3, 3.2, 0xdcdfe4); k.discA(-0.5, b === 0 ? 3 : B - 3, z0 + 3, 3.2, 0xdcdfe4); });
-    k.discB(B + 0.5, A - 3, Z - 3, 3.2, 0xdcdfe4); k.discB(B + 0.5, A - 3, z0 + 3, 3.2, 0xdcdfe4);
-    // chiusure a farfalla sul fianco e sul fronte
-    [B * 0.28, B * 0.72].forEach(b => k.quadA(-0.5, b - 4, b + 4, zs - 3.5, zs + 3.5, 0xd7dadd));
-    k.quadB(B + 0.5, A / 2 - 4, A / 2 + 4, zs - 3.5, zs + 3.5, 0xd7dadd);
-    // maniglie incassate
-    k.quadA(-0.5, B / 2 - 7, B / 2 + 7, z0 + (Z - z0) * 0.38, z0 + (Z - z0) * 0.46, 0x0c0d10);
-    k.quadB(B + 0.5, A / 2 - 6, A / 2 + 6, z0 + (Z - z0) * 0.38, z0 + (Z - z0) * 0.46, 0x0c0d10);
-    // nastro fluo sul coperchio
-    if (tape) k.quadZ(Z + 0.4, A * 0.25, A * 0.75, B * 0.2, B * 0.8, tape);
   }
 
   drawStagePlatform () {
@@ -8877,7 +8773,6 @@ class StageScene extends Phaser.Scene {
     this.casesOpened = this.casesOpened || new Set();
     if (!sc || this.casesOpened.has(sc.id)) return '';
     this.casesOpened.add(sc.id);
-    this.refreshDockCases();
     const t = caseOriginHtml(sc).replace(/<[^>]+>/g, '');
     return t + (t.endsWith('»') ? ' ' : '. ');
   }
@@ -10817,7 +10712,6 @@ class StageScene extends Phaser.Scene {
   /* ---------------- reset ---------------- */
   resetLevel (quiet) {
     this.casesOpened = null;   // i case scaricati si riaprono da capo
-    if (this.dockCases) this.refreshDockCases();
     // giro e conti di prima: un Annulla subito dopo il reset li rimette
     const before = { giro: gameState.giro || 0, giroFails: (gameState.giroFails || [0, 0, 0]).slice(), stats: { ...freshStats(), ...gameState.stats }, trips: gameState.trips || 0, rcdTrips: gameState.rcdTrips || 0, procErrors: (gameState.procErrors || []).slice() };
     this.stopFx();
@@ -10984,7 +10878,8 @@ class StageScene extends Phaser.Scene {
     this.refreshFaultMarks();
   }
 
-  // segno arancione "!" sopra i pezzi (e i bauli) arrivati difettosi dallo scarico
+  // segno arancione "!" sopra i pezzi arrivati difettosi dallo scarico (e
+  // sul pulsante del baule dei cavi, finché i cavi sono aggrovigliati)
   refreshFaultMarks () {
     (this.faultMarks || []).forEach(o => o.destroy());
     this.faultMarks = [];
@@ -10999,7 +10894,7 @@ class StageScene extends Phaser.Scene {
       const v = this.compVisuals[id];
       if (v) mark(v.container.x, v.container.y - 44);
     });
-    Object.entries(this.casePos || {}).forEach(([name, p]) => { if (faultsLeft('baule:' + name)) mark(p.x + 22, p.y - 44); });
+    document.querySelectorAll('.case-btn').forEach(b => b.classList.toggle('faulty', faultsLeft('baule:' + b.dataset.case) > 0));
   }
 }
 

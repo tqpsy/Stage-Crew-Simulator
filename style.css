@@ -340,6 +340,13 @@
     font-family:var(--font-display); font-size:13px; letter-spacing:.08em;
   }
   .case-btn:hover{ border-color:var(--amber); }
+  /* baule arrivato con i cavi aggrovigliati dallo scarico: segno arancione */
+  .case-btn{ position:relative; }
+  .case-btn.faulty{ border-color:#f2843d; }
+  .case-btn.faulty::after{
+    content:'!'; position:absolute; top:-7px; right:-7px; width:18px; height:18px; border-radius:50%;
+    background:#141519; border:2px solid #f2843d; color:#f2843d; font:700 12px/18px Inter, sans-serif; text-align:center;
+  }
   .case-ico{ width:54px; height:37px; display:block; }
   .cable-hand{
     display:flex; align-items:center; gap:10px; min-height:52px;

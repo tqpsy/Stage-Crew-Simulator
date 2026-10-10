@@ -120,6 +120,7 @@ const path = require('path');
   const beers = await ev(() => ({ n: Profile.data.beers, btn: el('#beer-n').textContent, shown: !el('#beer-btn').hidden }));
   check(beers.n === 1 && beers.btn === '1' && beers.shown, 'birre dello scarico sbagliate: ' + JSON.stringify(beers));
   // pezzi difettosi: il finale col segno arancione blocca il giro audio finché non lo sistemi
+  // (il baule SEGNALE aggrovigliato ha il segno sul suo pulsante, non più in palestra)
   const f1 = await ev(() => {
     const S = window.__scene, P = (ty, gx, gy) => { const w = gridToScreen(gx + .5, gy + .5); S.placeComponentAt(ty, w.x, w.y); };
     P('tavolo', 7, 5);
@@ -127,12 +128,12 @@ const path = require('path');
     const amp = placedOfType('ampli')[0];
     const item = giroChecks(1).find(x => x.kind === 'fault');
     openRearPanel(amp.id);
-    return { counts: faultCounts(), faulty: amp && isFaulty(amp.id), item: item && item.ok, marks: (S.faultMarks || []).length, box: !el('#rear-fault').hidden, id: amp && amp.id,
+    return { counts: faultCounts(), faulty: amp && isFaulty(amp.id), item: item && item.ok, marks: (S.faultMarks || []).length, baule: document.querySelector('.case-btn[data-case="segnale"]').classList.contains('faulty'), box: !el('#rear-fault').hidden, id: amp && amp.id,
       origin: el('#rear-origin').hidden ? '' : el('#rear-origin').textContent, opened: el('#toast').textContent };
   });
   check(/CASE RACK REGIA/.test(f1.origin) && /Off Stage/.test(f1.origin) && /ammaccatur/.test(f1.origin) && /CASE RACK REGIA.*botta/.test(f1.opened),
     'il finale non si riconosce come quello del rack scaricato: ' + JSON.stringify([f1.origin, f1.opened]));
-  check(f1.counts.ampli === 1 && f1.counts['baule:segnale'] === 1 && f1.faulty && f1.item === false && f1.marks >= 4 && f1.box,
+  check(f1.counts.ampli === 1 && f1.counts['baule:segnale'] === 1 && f1.faulty && f1.item === false && f1.marks >= 2 && f1.baule && f1.box,
     'finale difettoso non segnalato: ' + JSON.stringify(f1));
   await p.click('#rear-fault .fault-fix');
   await p.waitForTimeout(1500);

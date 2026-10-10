@@ -432,7 +432,10 @@ livelli futuri.
   spiegato da Macio); la porta antipanico che si richiude da sola se
   nessuno la tiene; bambini che corrono in cortile (passanti veloci ma
   prevedibili); Gerry Scotti, il bidello, che passa col carrello delle
-  pulizie.
+  pulizie. Bambini e Gerry non spingono contro gli ostacoli: guardano un
+  passo avanti, rallentano, si fermano e girano di lato dove c'è posto; i
+  bambini fanno spazio a chi porta un case, Gerry aspetta («Prego!») e si
+  sposta di corsia (`kidAdapt`, `gerryStep`, test `tests/scarico-npc.js`).
 - **Tempo**: largo, 30 minuti di gioco per circa 12 pezzi.
 - **Insegna**: peso, rampa, spinta in coppia, zone.
 
@@ -516,14 +519,15 @@ si spiega. Il montaggio non cambia: legge solo i dati che lo scarico lascia.
   (avviso «CASE SUB 1 · Pit»); il pannello del pezzo e quello del baule
   hanno la riga del case. Se il case ha preso colpi «ha ancora
   l'ammaccatura» e la prima volta Macio: «Questo ha preso una bella botta.»
-  Le ammaccature si vedono anche sui bauli disegnati dietro la regia.
 - **Danni scoperti**: il messaggio d'inizio montaggio non elenca più i pezzi
   difettosi; li trovi sul pezzo (segno arancione, «Qualcosa non va: …»),
   con la stessa riparazione di prima.
-- **Case dove li hai lasciati**: al montaggio ogni case è disegnato a terra
-  nella zona dove l'hai consegnato (Backstage, Off Stage, Pit); quando ne
-  esce il primo pezzo diventa trasparente («aperto»). Il baule CORRENTE sta
-  in Backstage vicino all'allaccio, il SEGNALE in Off Stage vicino alla regia.
+- **Case in palestra (dal 2026-10-10 non più disegnati)**: al montaggio i
+  case dello scarico non compaiono più a terra in palestra; resta il
+  furgone. I dati (`cases`, zona dove l'hai lasciato, stato, ammaccature,
+  difetti) restano e si vedono nella riga del case dei pannelli. I bauli
+  dei cavi si aprono dai pulsanti SEGNALE e CORRENTE della scheda Cavi; se
+  sono arrivati aggrovigliati il pulsante ha il segno arancione «!».
 
 ### Specifiche di Luca del 2026-10-07 sera
 
