@@ -112,10 +112,12 @@ const path = require('path');
   check(B.stopDrift < 0.01 && B.after < 0.01, 'B: fermo o lasciato, il case si muove ancora: ' + JSON.stringify(B));
   check(!B.inWall && B.top >= 91, 'B: il case in mano entra nel recinto: ' + JSON.stringify(B));
 
-  /* ---- C: carrello ---- */
+  /* ---- C: carrello (si prende solo dalle maniglie) ---- */
   const Cr = await ev(() => {
     spawnTrolley(); const t = G.trolley;
     Matter.Body.setPosition(t.body, { x: 1000, y: 500 }); Matter.Body.setAngle(t.body, 0);
+    put(1000, 500 - 23 - P().r - 4, Math.PI / 2); pressGrab(); const side = P().grab === t;      // di lato: no
+    put(1000 + 32 + P().r + 4, 500, Math.PI); pressGrab(); const front = P().grab === t;          // dalla pala: no
     put(1000 - 32 - P().r - 4, 500, 0); pressGrab();
     const took = P().grab === t && P().mode === 'push';
     const dist = () => Math.hypot(t.body.position.x - P().body.position.x, t.body.position.y - P().body.position.y);
@@ -127,42 +129,57 @@ const path = require('path');
     const s1 = pos(t.body); run(15, null, each); const s2 = pos(t.body); run(20, null, each); const s3 = pos(t.body);
     const glide = Math.hypot(s3.x - s2.x, s3.y - s2.y);
     pressGrab(); const rp = pos(t.body); run(30); const after = Math.hypot(t.body.position.x - rp.x, t.body.position.y - rp.y);
-    return { took, push, pull, turn, dd, jump, glide, after, free: !P().grab };
+    return { side, front, took, push, pull, turn, dd, jump, glide, after, free: !P().grab };
   });
-  check(Cr.took && Cr.free, 'C: il carrello non si prende o non si lascia: ' + JSON.stringify(Cr));
+  check(!Cr.side && !Cr.front, 'C: il carrello si prende anche di lato o dalla pala: ' + JSON.stringify(Cr));
+  check(Cr.took && Cr.free, 'C: il carrello non si prende dalle maniglie o non si lascia: ' + JSON.stringify(Cr));
   check(Cr.push > 60 && Cr.pull > 40, 'C: il carrello non si spinge o non si tira: ' + JSON.stringify(Cr));
   check(Cr.turn > 0.6, 'C: il carrello non gira: ' + Cr.turn);
   check(Cr.dd < 0.5 && Cr.jump < 6, 'C: il carrello si stacca o salta: ' + JSON.stringify(Cr));
   check(Cr.glide < 0.01 && Cr.after < 0.01, 'C: il carrello scivola da solo: ' + JSON.stringify(Cr));
 
-  /* ---- D: case sul carrello ---- */
+  /* ---- D: case sul carrello: il carrello va al case (CARICA), un case piccolo sopra (METTI SOPRA), da fermo SCARICA ---- */
   const D = await ev(() => {
-    const t = G.trolley, ce = C('valigetta');
-    Matter.Body.setPosition(t.body, { x: 950, y: 500 }); Matter.Body.setAngle(t.body, 0);
-    moveCase(ce, 950, 420); const at = { x: 950, y: 420 + 15 + P().r + 4 };
-    put(950, 420 - 15 - P().r - 4, Math.PI / 2); pressGrab();
-    const held = P().grab === ce;
-    run(25, { x: 0, y: 1 });
-    pressGrab(); const loaded = ce.onTrolley === t && !P().grab;
-    put(950 - 32 - P().r - 4, 500, 0); pressGrab();
-    const rel = () => { const l = rot(sub(ce.body.position, t.body.position), -t.body.angle); return { x: l.x, y: l.y, a: ce.body.angle - t.body.angle }; };
-    const r0 = rel(); let dev = 0;
-    const each = () => { const r = rel(); dev = Math.max(dev, Math.abs(r.x - r0.x), Math.abs(r.y - r0.y), Math.abs(r.a - r0.a)); };
-    run(40, { x: 1, y: 0 }, each); run(40, { x: 0, y: 1 }, each);
-    run(15, null, each); const s0 = pos(ce.body); run(20, null, each); const still = Math.hypot(ce.body.position.x - s0.x, ce.body.position.y - s0.y);
-    // nella zona del Off Stage: lasci il carrello e scarichi
-    pressGrab(); const z = ZONES.foh;
-    Matter.Body.setPosition(t.body, { x: z.x + z.w / 2, y: z.y + z.h / 2 }); Matter.Body.setAngle(t.body, 0); placeLoad(t);
-    put(z.x + z.w / 2 - 32 - P().r - 4, z.y + z.h / 2, 0);
-    pressGrab(); const off = !ce.onTrolley && t.load.length === 0;
-    const inHand = P().grab === ce; pressGrab();
-    run(30); const ov = overlap(ce.body, obstacles(P(), ce));
-    return { held, loaded, dev, still, off, inHand, overlap: !!ov, zone: ce.zone };
+    const t = G.trolley, base = C('segnale'), top = C('valigetta');
+    Matter.Body.setPosition(t.body, { x: 900, y: 500 }); Matter.Body.setAngle(t.body, 0);
+    moveCase(base, 1010, 505); moveCase(top, 900, 360);
+    // un case in mano sul carrello vuoto: no, prima va appoggiato e ci si va col carrello
+    put(900, 360 + 15 + P().r + 4, -Math.PI / 2); pressGrab(); run(20, { x: 0, y: 1 }); const noTopFirst = !cartCmd(P()); pressGrab();
+    moveCase(top, 900, 360);
+    put(900 - 32 - P().r - 4, 500, 0); pressGrab();
+    let cmd = null; for (let i = 0; i < 80 && !(cmd = cartCmd(P())); i++) run(1, { x: 1, y: 0 });
+    const caricaLbl = cmd && cmd.label; const b0 = pos(base.body); pressCart();
+    const onBase = base.onTrolley === t, slide = Math.hypot(base.body.position.x - b0.x, base.body.position.y - b0.y);
+    // il secondo case: in mano, ci si avvicina, METTI SOPRA
+    pressGrab(); put(900, 360 + 15 + P().r + 4, Math.PI / 2); pressGrab(); const held = P().grab === top;
+    let c2 = null; for (let i = 0; i < 200 && !(c2 = cartCmd(P())); i++) { const d = sub(base.body.position, P().body.position); run(1, norm(d)); }
+    const sopraLbl = c2 && c2.label; pressCart();
+    const both = top.onTrolley === t && t.load.length === 2 && !P().grab;
+    // si riprende dalle maniglie e si porta in giro: il carico resta fermo sul carrello
+    const back = add(t.body.position, rot({ x: -32 - P().r - 4, y: 0 }, t.body.angle)); put(back.x, back.y, t.body.angle); pressGrab();
+    const rel = c => { const l = rot(sub(c.body.position, t.body.position), -t.body.angle); return { x: l.x, y: l.y, a: c.body.angle - t.body.angle }; };
+    const r0 = [rel(base), rel(top)]; let dev = 0, moving = null;
+    const each = i => { [base, top].forEach((c, k) => { const r = rel(c); dev = Math.max(dev, Math.abs(r.x - r0[k].x), Math.abs(r.y - r0[k].y), Math.abs(r.a - r0[k].a)); }); if (i === 20) moving = cartCmd(P()); };
+    run(40, { x: 0.3, y: 1 }, each); run(40, { x: 1, y: 0.2 }, each);
+    run(15, null, each); const s0 = pos(base.body); run(20, null, each); const still = Math.hypot(base.body.position.x - s0.x, base.body.position.y - s0.y);
+    // nell'Off Stage, da fermo: SCARICA due volte
+    pressGrab(); const z = ZONES.foh, zc = { x: z.x + z.w / 2 - 20, y: z.y + z.h / 2 };
+    Matter.Body.setPosition(t.body, zc); Matter.Body.setAngle(t.body, 0); placeLoad(t);
+    put(zc.x - 32 - P().r - 4, zc.y, 0); pressGrab(); run(10);
+    const scLbl = (cartCmd(P()) || {}).label; pressCart(); const topOff = !top.onTrolley && t.load.length === 1;
+    const bp = pos(base.body); pressCart(); const baseOff = !base.onTrolley && !t.load.length;
+    const baseStay = Math.hypot(base.body.position.x - bp.x, base.body.position.y - bp.y);
+    run(30, { x: -1, y: 0 }); pressGrab(); run(30);
+    const ov = overlap(base.body, obstacles(P(), base)) || overlap(top.body, obstacles(P(), top));
+    return { noTopFirst, caricaLbl, onBase, slide, held, sopraLbl, both, moving: moving && moving.label, dev, still, scLbl, topOff, baseOff, baseStay, overlap: !!ov, zones: [base.zone, top.zone] };
   });
-  check(D.held && D.loaded, 'D: il case non va sul carrello: ' + JSON.stringify(D));
-  check(D.dev < 0.01, 'D: il case sul carrello si sposta rispetto al carrello: ' + D.dev);
-  check(D.still < 0.01, 'D: carrello fermo ma il case si muove');
-  check(D.off && !D.overlap && D.zone === 'foh', 'D: lo scarico dal carrello non va: ' + JSON.stringify(D));
+  check(D.noTopFirst, 'D: un case in mano va sul carrello vuoto (deve andare prima a terra)');
+  check(D.caricaLbl === 'CARICA' && D.onBase && D.slide < 40, 'D: avvicinando il carrello al case non compare CARICA o il case salta: ' + JSON.stringify(D));
+  check(D.held && D.sopraLbl === 'METTI SOPRA' && D.both, 'D: il secondo case non va sopra: ' + JSON.stringify(D));
+  check(D.moving === undefined || D.moving === null, 'D: SCARICA compare anche mentre il carrello si muove: ' + D.moving);
+  check(D.dev < 0.01 && D.still < 0.01, 'D: il carico si sposta rispetto al carrello: ' + JSON.stringify(D));
+  check(D.scLbl === 'SCARICA' && D.topOff && D.baseOff && D.baseStay < 0.01, 'D: da fermo SCARICA non va: ' + JSON.stringify(D));
+  check(!D.overlap && D.zones.join() === 'foh,foh', 'D: scaricati, i case non sono a posto nell\'Off Stage: ' + JSON.stringify(D));
 
   /* ---- E: furgone, dal vano alla palestra ---- */
   const E = await ev(() => {
@@ -171,9 +188,13 @@ const path = require('path');
     // cammina verso un punto, come col joystick
     const go = (to, n) => { for (let i = 0; i < (n || 400); i++) { const d = sub(to, P().body.position); if (len(d) < 6) break; run(1, norm(d)); } return len(sub(to, P().body.position)); };
     put(DOOR_X + 90, 500, Math.PI);
-    // nel vano, fra la borsa stativi e il case PAR (il primo strato del carico)
+    // il carico è tutto attaccato: prima la borsa stativi, presa dalla rampa, e portata in palestra
+    const st = C('stativi');
+    const r0 = go({ x: st.body.bounds.max.x + P().r + 5, y: st.body.position.y }); P().facing = Math.PI; pressGrab(); const tookSt = P().grab === st;
+    const rSt = go({ x: DOOR_X + 120, y: 500 }) + go({ x: GYM_X - 60, y: 500 }) + go({ x: GYM_X + 120, y: 500 }); pressGrab();
+    // poi si entra nel posto lasciato libero e si prende il PAR sotto
     const ce = C('par'), yIn = ce.body.bounds.min.y - P().r - 4;
-    const r1 = go({ x: DOOR_X + 40, y: yIn }) + go({ x: DOOR_X - 22, y: yIn });
+    const r1 = go({ x: DOOR_X + 60, y: 500 }) + go({ x: DOOR_X + 40, y: yIn }) + go({ x: DOOR_X - 24, y: yIn });
     const inVan = P().body.position.x < DOOR_X - 15;
     const r2 = 0; P().facing = Math.PI / 2; pressGrab(); const took = P().grab === ce;
     window.trace = [];
@@ -184,11 +205,12 @@ const path = require('path');
     put(TROLLEY_AT.x - 32 - P().r - 4, TROLLEY_AT.y, 0); pressGrab(); const tt = P().grab === t;
     const stuck0 = go({ x: TROLLEY_AT.x + 150, y: 520 }) + go({ x: GYM_X - 80, y: 500 }) + go({ x: GYM_X + 140, y: 500 }, 500);
     const tInGym = t.body.position.x > GYM_X + 20;
-    return { r1, inVan, r2, took, r3, inGym, tt, stuck0, tInGym, tx: t.body.position.x };
+    return { r0, tookSt, rSt, r1, inVan, r2, took, r3, inGym, tt, stuck0, tInGym, tx: t.body.position.x };
   });
-  check(E.inVan && E.r1 < 12, 'E: non si entra nel vano dalla rampa: ' + JSON.stringify(E));
+  check(E.tookSt && E.r0 < 10 && E.rSt < 30, 'E: la borsa stativi in coda non si prende dalla rampa: ' + JSON.stringify(E));
+  check(E.inVan && E.r1 < 18, 'E: non si entra nel vano dalla rampa: ' + JSON.stringify(E));
   check(E.took, 'E: nel vano non si prende il PAR: ' + JSON.stringify(E));
-  check(E.inGym && E.r3 < 30, 'E: col PAR in mano non si arriva in palestra: ' + JSON.stringify(E));
+  check(E.inGym, 'E: col PAR in mano non si arriva in palestra: ' + JSON.stringify(E));
   check(E.tt && E.tInGym, 'E: col carrello ci si incastra fra furgone e palestra: ' + JSON.stringify(E));
 
   /* ---- F: il tavolo regia in due, dal cortile all'Off Stage, porta e gradino compresi ---- */
@@ -197,7 +219,7 @@ const path = require('path');
     G.team = true;
     // strada libera: carrello e case delle prove precedenti via dal percorso
     Matter.Body.setPosition(G.trolley.body, { x: 1700, y: 300 }); placeLoad(G.trolley);
-    moveCase(C('distro'), 1700, 420); moveCase(C('par'), 1700, 520); moveCase(C('valigetta'), 1700, 620);
+    moveCase(C('distro'), 1700, 420); moveCase(C('par'), 1700, 520); moveCase(C('valigetta'), 1700, 620); moveCase(C('segnale'), 1780, 420); moveCase(C('stativi'), 1780, 620);
     const t = C('tavolo'); moveCase(t, 950, 300); t.zone = null; t.liftUntil = 0;
     put(950, 300 + 65 + 23); Matter.Body.setPosition(G.macio.body, { x: 850, y: 200 }); macio('idle'); G.macio.ai.t = 5;
     pressGrab();

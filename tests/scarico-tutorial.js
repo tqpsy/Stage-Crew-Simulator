@@ -88,7 +88,7 @@ const path = require('path');
     return { ids, grabbed: G.player.grab === r, flash: G.blockFlash && G.blockFlash.ids.length, n: G.stats.blocked };
   });
   bl.hint = await saw(/bloccato/i);
-  check((bl.ids.includes('top1') || bl.ids.includes('top2')) && bl.ids.includes('tavolo') && !bl.grabbed && bl.flash >= 2 && bl.n === 1 && bl.hint,
+  check((bl.ids.includes('top1') || bl.ids.includes('top2')) && bl.ids.length >= 3 && !bl.grabbed && bl.flash >= 2 && bl.n === 1 && bl.hint,
     'il rack in fondo si prende lo stesso: ' + JSON.stringify(bl));
 
   // due case a mano nel Pit
@@ -104,42 +104,46 @@ const path = require('path');
   await p.waitForTimeout(600);
   check(await ev(() => $('#h-del').textContent) === '2/13', 'due case consegnati a mano non si contano');
 
-  // carrello: il generico CORRENTE spinto sopra (un pesante, due posti) e il case accessori
+  // carrello: si prende dalle maniglie, la pala va sotto il generico CORRENTE (CARICA), il case accessori sopra (METTI SOPRA)
   const cart = await ev(() => {
     const t = G.trolley, out = {};
-    Matter.Body.setPosition(t.body, { x: 950, y: 650 }); Matter.Body.setAngle(t.body, 0); Matter.Body.setVelocity(t.body, { x: 0, y: 0 });
-    const cor = C('corrente');
-    Matter.Body.setPosition(cor.body, { x: 950, y: 758 }); Matter.Body.setVelocity(cor.body, { x: 0, y: 0 });
-    moveTo(950, 692); G.player.facing = Math.PI / 2;
-    pressGrab(); out.pushing = G.player.grab === cor && G.player.mode;
+    if (G.player.grab) release(G.player);
+    // i bambini lontano: qui si prova il carrello, non chi passa in mezzo
+    for (const k of G.kids) { Matter.Body.setPosition(k.body, { x: 1800, y: 820 }); k.target = { x: 1800, y: 820 }; k.wait = 999; }
+    Matter.Body.setPosition(t.body, { x: 900, y: 650 }); Matter.Body.setAngle(t.body, 0);
+    const cor = C('corrente'); Matter.Body.setPosition(cor.body, { x: 900 + 32 + 28 + 6, y: 650 }); Matter.Body.setAngle(cor.body, 0);
+    moveTo(900, 650 - 23 - 23); pressGrab(); out.side = G.player.grab === t;            // di lato non si prende
+    G.player.facing = 0; moveTo(900 - 32 - 23, 650); pressGrab(); out.handles = G.player.grab === t;
+    out.cmd1 = (cartCmd(G.player) || {}).label; pressCart(); out.base = cor.onTrolley === t;
     pressGrab();
-    const r = C('ricambio'); Matter.Body.setPosition(r.body, { x: 830, y: 650 }); Matter.Body.setAngle(r.body, 0); Matter.Body.setVelocity(r.body, { x: 0, y: 0 });
-    moveTo(830 + 20 + 23, 650); pressGrab(); out.carry = G.player.grab === r;
-    moveTo(t.body.position.x - 50, t.body.position.y); G.player.facing = 0; pressGrab();
+    const r = C('ricambio'); Matter.Body.setPosition(r.body, { x: 1060, y: 760 }); Matter.Body.setAngle(r.body, 0);
+    moveTo(1060, 760 - 20 - 23); G.player.facing = Math.PI / 2; pressGrab(); out.carry = G.player.grab === r;
+    G.player.facing = -Math.PI / 2; moveTo(cor.body.position.x, cor.body.bounds.max.y + 20 + 23 + 4);
+    out.cmd2 = (cartCmd(G.player) || {}).label; pressCart();
     out.load = t.load.map(c => c.def.id);
-    pressGrab(); out.push = G.player.grab === t;
+    G.player.facing = 0; moveTo(900 - 32 - 23, 650); pressGrab(); out.push = G.player.grab === t;
     return out;
   });
   await p.waitForTimeout(300);
   cart.chip = await ev(() => $('#h-cart').innerText.replace(/\s+/g, ' ').toUpperCase());
-  check(cart.pushing === 'push' && cart.load.join() === 'corrente,ricambio' && cart.chip === 'CARRELLO 3/3' && cart.push,
+  check(!cart.side && cart.handles && cart.cmd1 === 'CARICA' && cart.base && cart.carry && cart.cmd2 === 'METTI SOPRA' && cart.load.join() === 'corrente,ricambio' && cart.chip === 'CARRELLO 2/2' && cart.push,
     'il carrello a due ruote non si carica o non si spinge: ' + JSON.stringify(cart));
-  await ev(() => { const t = G.trolley; Matter.Body.setPosition(t.body, { x: 1230, y: 330 }); moveTo(1230, 390); });
-  await p.waitForTimeout(300);
+  // in Backstage col carrello, da fermo: SCARICA (prima gli accessori di fianco, poi il generico resta lì)
+  await ev(() => { G.player.facing = -Math.PI / 2; moveTo(1228, 385); });
+  await p.waitForTimeout(400);
   const un = await ev(() => {
-    const t = G.trolley; pressGrab();       // lascia il carrello
-    pressGrab();                            // sei in Backstage: scarica il generico CORRENTE
-    const first = G.player.grab && G.player.grab.def.id;
+    const t = G.trolley, out = { cmd: (cartCmd(G.player) || {}).label };
+    pressCart(); out.first = C('ricambio').onTrolley ? null : 'ricambio';
+    pressCart(); out.second = C('corrente').onTrolley ? null : 'corrente';
+    out.load = t.load.length; out.cartTrips = G.stats.cartTrips; out.cartCases = G.stats.cartCases;
     pressGrab();
-    Matter.Body.setPosition(C('corrente').body, { x: 1225, y: 215 }); Matter.Body.setVelocity(C('corrente').body, { x: 0, y: 0 });
-    moveTo(1230, 390); G.player.facing = -Math.PI / 2; pressGrab();          // ora gli accessori
-    const second = G.player.grab && G.player.grab.def.id;
+    const r = C('ricambio'), at = besideOf(r, 'right'); moveTo(at.x, at.y); pressGrab(); out.took = G.player.grab === r;
     G.player.facing = 0; moveTo(1360, 420); pressGrab();                      // sul palco
-    return { first, second, load: t.load.length, cartTrips: G.stats.cartTrips, cartCases: G.stats.cartCases };
+    return out;
   });
   await p.waitForTimeout(600);
   const un2 = await ev(() => ({ cor: C('corrente').zone, ric: C('ricambio').zone }));
-  check(un.first === 'corrente' && un.second === 'ricambio' && un.load === 0 && un.cartTrips === 1 && un.cartCases === 2 && un2.cor === 'back' && un2.ric === 'palco',
+  check(un.cmd === 'SCARICA' && un.first === 'ricambio' && un.second === 'corrente' && un.load === 0 && un.cartTrips === 1 && un.cartCases === 2 && un.took && un2.cor === 'back' && un2.ric === 'palco',
     'dal carrello non si scarica nelle zone: ' + JSON.stringify(un) + JSON.stringify(un2));
 
   // case da due (il tavolo regia): da solo non si muove, poi arriva Macio

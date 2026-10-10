@@ -81,7 +81,7 @@
   @keyframes fresh{0%{transform:scale(.6);opacity:.2}60%{transform:scale(1.1)}100%{transform:scale(1);opacity:1}}
   #btns #b-help{border-color:#8fa3b8}
   #btns #b-lift{border-color:var(--green)}
-  #btns #b-stop{border-color:var(--red)}
+  #btns #b-cart{border-color:#8fa3b8}
   #keys{flex:none;font-size:12px;color:var(--muted);display:flex;gap:12px;flex-wrap:nowrap}
   @media (max-width:820px){ #keys{display:none} }
   kbd{font-family:var(--ui);font-size:11px;font-weight:700;color:var(--text);background:var(--bg-raised);border:1px solid var(--hairline);border-bottom-width:2px;border-radius:4px;padding:0 5px}
@@ -180,7 +180,7 @@
       <span><kbd>Spazio</kbd> prendi / lascia</span>
       <span data-k="help" hidden><kbd>E</kbd> aiuto</span>
       <span data-k="lift" hidden><kbd>Q</kbd> oh-issa</span>
-      <span data-k="stop" hidden><kbd>F</kbd> fermo!</span>
+      <span data-k="cart" hidden><kbd>F</kbd> <i id="k-cart">carica</i></span>
       <span><kbd>Shift</kbd> piano</span>
     </div>
   </div>
@@ -190,7 +190,7 @@
     <div id="btns">
       <button id="b-help" hidden>AIUTO</button>
       <button id="b-grab" class="big">PRENDI</button>
-      <button id="b-stop" hidden>FERMO!</button>
+      <button id="b-cart" hidden>CARICA</button>
       <button id="b-lift" hidden>OH-ISSA</button>
     </div>
   </div>
@@ -250,12 +250,12 @@ const { Engine, Bodies, Body, Composite, Collision, Bounds, Query } = window.Mat
 const STEP = 1000 / 60;
 const GAME_SECONDS = 360;              // 16:00 → 16:30 in 6 minuti reali
 const CAT = { WALL: 1, CASE: 2, WORKER: 4, STEP: 8, NPC: 16, TROLLEY: 64 };
-const TROLLEY_MAX = 3;                 // posti sul carrello: un pesante ne prende due
+const TROLLEY_MAX = 2;                 // sul carrello: un case sulla pala e, se è piccolo, uno sopra
 /* Il furgone è un furgone da service (vano 3,3 × 2 m) già parcheggiato a
    coda verso la palestra: dalla fine della rampa alla porta ci sono meno di
    tre metri. Tu e Macio siete larghi una quarantina di centimetri. */
 const DOOR_X = 780;                    // portellone del furgone
-const VAN = { x1: DOOR_X - 330, x2: DOOR_X, y1: 400, y2: 600 };   // il vano di carico
+const VAN = { x1: DOOR_X - 270, x2: DOOR_X, y1: 400, y2: 600 };   // il vano di carico
 const RAMP = { x: DOOR_X, y: 440, w: 110, h: 120 };
 const GYM_X = 1160;                    // muro della palestra (porta con gradino)
 const STEP_BAND = { y1: 420, y2: 580 };   // porta a due ante della palestra: 1,6 m
@@ -296,34 +296,37 @@ const WHEEL = {
 // in mezzo tavolo regia, quadro e PC; in fondo il pesante (sub, teste, rack).
 // Esce prima quello caricato per ultimo: vedi blockers().
 const CASES = [
-  // --- vicino al portellone (il carrello è in piedi fra stativi e PAR)
-  { id: 'corrente', name: 'Generico CORRENTE', short: 'CORRENTE', what: 'cavi e accessori di alimentazione', kg: 45, w: 56, h: 96, wheel: 'swivel', frag: 'bassa', zone: 'back', unique: true, x: VAN.x1 + 255, y: VAN.y1 + 50,
+  // stivati uno contro l'altro, senza vuoti, a colonne dal portellone al fondo:
+  // carrello in piedi, stativi, PAR | i due generici | tavolo, accessori |
+  // quadro, PC, teste | sub, rack. Una cinghia in coda tiene fermo tutto.
+  // --- vicino al portellone
+  { id: 'corrente', name: 'Generico CORRENTE', short: 'CORRENTE', what: 'cavi e accessori di alimentazione', kg: 45, w: 56, h: 96, wheel: 'swivel', frag: 'bassa', zone: 'back', unique: true, x: VAN.x1 + 195, y: VAN.y1 + 50,
     dif: 'cavi aggrovigliati: +10 min per sbrogliarli' },
-  { id: 'segnale', name: 'Generico SEGNALE', short: 'SEGNALE', what: 'cavi e accessori di segnale (XLR, DMX, Speakon)', kg: 40, w: 56, h: 96, wheel: 'swivel', frag: 'bassa', zone: 'foh', unique: true, x: VAN.x1 + 255, y: VAN.y1 + 150,
+  { id: 'segnale', name: 'Generico SEGNALE', short: 'SEGNALE', what: 'cavi e accessori di segnale (XLR, DMX, Speakon)', kg: 40, w: 56, h: 96, wheel: 'swivel', frag: 'bassa', zone: 'foh', unique: true, x: VAN.x1 + 195, y: VAN.y1 + 148,
     dif: 'cavi aggrovigliati: +10 min per sbrogliarli' },
-  { id: 'stativi', name: 'Borsa stativi', short: 'STATIVI', what: '4 stativi', kg: 22, w: 34, h: 90, wheel: 'hand', frag: 'bassa', zone: 'pit', x: VAN.x1 + 308, y: VAN.y1 + 47,
+  { id: 'stativi', name: 'Borsa stativi', short: 'STATIVI', what: '4 stativi', kg: 22, w: 40, h: 90, wheel: 'hand', frag: 'bassa', zone: 'pit', x: VAN.x1 + 246, y: VAN.y1 + 95,
     dif: 'uno stativo duro da aprire: +10 min' },
-  { id: 'ricambio', name: 'Case accessori', short: 'ACCESSORI', what: 'asta mic, microfono, ricambi', kg: 12, w: 40, h: 34, wheel: 'hand', frag: 'media', zone: 'palco', x: VAN.x1 + 190, y: VAN.y1 + 160,
+  { id: 'ricambio', name: 'Case accessori', short: 'ACCESSORI', what: 'asta mic, microfono, ricambi', kg: 12, w: 34, h: 40, wheel: 'hand', frag: 'media', zone: 'palco', x: VAN.x1 + 147, y: VAN.y1 + 154,
     dif: 'scorte in disordine: +10 min' },
-  { id: 'par', name: 'Case PAR', short: 'PAR ×4', what: '4 PAR LED', kg: 25, w: 42, h: 52, wheel: 'hand', frag: 'alta', zone: 'pit', x: VAN.x1 + 305, y: VAN.y1 + 168,
+  { id: 'par', name: 'Case PAR', short: 'PAR ×4', what: '4 PAR LED', kg: 25, w: 42, h: 52, wheel: 'hand', frag: 'alta', zone: 'pit', x: VAN.x1 + 246, y: VAN.y1 + 168,
     dif: 'lenti da pulire: +10 min' },
   // --- in mezzo
-  { id: 'tavolo', name: 'Tavolo regia', short: 'TAVOLO', what: 'tavolo pieghevole', kg: 38, w: 34, h: 130, wheel: 'none', frag: 'bassa', zone: 'foh', heavy2: true, unique: true, x: VAN.x1 + 140, y: VAN.y1 + 100,
+  { id: 'tavolo', name: 'Tavolo regia', short: 'TAVOLO', what: 'tavolo pieghevole', kg: 38, w: 34, h: 130, wheel: 'none', frag: 'bassa', zone: 'foh', heavy2: true, unique: true, x: VAN.x1 + 147, y: VAN.y1 + 67,
     dif: 'una gamba dura da aprire: +10 min' },
-  { id: 'distro', name: 'Quadro', short: 'QUADRO', what: 'quadro prese + ciabatte', kg: 18, w: 50, h: 46, wheel: 'hand', frag: 'media', zone: 'back', unique: true, x: VAN.x1 + 190, y: VAN.y1 + 30,
+  { id: 'distro', name: 'Quadro', short: 'QUADRO', what: 'quadro prese + ciabatte', kg: 18, w: 50, h: 46, wheel: 'hand', frag: 'media', zone: 'back', unique: true, x: VAN.x1 + 101, y: VAN.y1 + 25,
     dif: 'il quadro scatta alla prima accensione: +10 min' },
-  { id: 'valigetta', name: 'Valigetta regia', short: 'PC', what: 'PC, scheda audio, DI, consolle luci', kg: 8, w: 40, h: 30, wheel: 'hand', frag: 'altissima', zone: 'foh', unique: true, x: VAN.x1 + 190, y: VAN.y1 + 100,
+  { id: 'valigetta', name: 'Valigetta regia', short: 'PC', what: 'PC, scheda audio, DI, consolle luci', kg: 8, w: 50, h: 30, wheel: 'hand', frag: 'altissima', zone: 'foh', unique: true, x: VAN.x1 + 101, y: VAN.y1 + 65,
     dif: 'il PC non parte al primo colpo: +10 min' },
   // --- in fondo, il pesante
-  { id: 'rack', name: 'Rack regia', short: 'RACK', what: 'mixer + finale', kg: 55, w: 54, h: 54, wheel: 'fixed', frag: 'alta', zone: 'foh', heavy2: true, tall: true, unique: true, x: VAN.x1 + 36, y: VAN.y1 + 172,
+  { id: 'rack', name: 'Rack regia', short: 'RACK', what: 'mixer + finale', kg: 55, w: 54, h: 54, wheel: 'fixed', frag: 'alta', zone: 'foh', heavy2: true, tall: true, unique: true, x: VAN.x1 + 37, y: VAN.y1 + 172,
     dif: 'il finale va in protezione all\'accensione: +10 min' },
-  { id: 'sub1', name: 'Sub 1', short: 'SUB', what: 'cassa sub', kg: 40, w: 70, h: 70, wheel: 'fixed', frag: 'media', zone: 'pit', unique: true, x: VAN.x1 + 36, y: VAN.y1 + 36,
+  { id: 'sub1', name: 'Sub 1', short: 'SUB', what: 'cassa sub', kg: 40, w: 70, h: 70, wheel: 'fixed', frag: 'media', zone: 'pit', unique: true, x: VAN.x1 + 37, y: VAN.y1 + 37,
     dif: 'la cassa vibra: +10 min per controllarla' },
-  { id: 'sub2', name: 'Sub 2', short: 'SUB', what: 'cassa sub', kg: 40, w: 70, h: 70, wheel: 'fixed', frag: 'media', zone: 'pit', unique: true, x: VAN.x1 + 36, y: VAN.y1 + 108,
+  { id: 'sub2', name: 'Sub 2', short: 'SUB', what: 'cassa sub', kg: 40, w: 70, h: 70, wheel: 'fixed', frag: 'media', zone: 'pit', unique: true, x: VAN.x1 + 37, y: VAN.y1 + 109,
     dif: 'la cassa vibra: +10 min per controllarla' },
-  { id: 'top1', name: 'Testa 1', short: 'TESTA', what: 'cassa testa (va sul palo del sub)', kg: 20, w: 44, h: 44, wheel: 'hand', frag: 'media', zone: 'pit', unique: true, x: VAN.x1 + 98, y: VAN.y1 + 30,
+  { id: 'top1', name: 'Testa 1', short: 'TESTA', what: 'cassa testa (va sul palo del sub)', kg: 20, w: 44, h: 44, wheel: 'hand', frag: 'media', zone: 'pit', unique: true, x: VAN.x1 + 101, y: VAN.y1 + 104,
     dif: 'il tweeter gracchia: +10 min' },
-  { id: 'top2', name: 'Testa 2', short: 'TESTA', what: 'cassa testa (va sul palo del sub)', kg: 20, w: 44, h: 44, wheel: 'hand', frag: 'media', zone: 'pit', unique: true, x: VAN.x1 + 98, y: VAN.y1 + 170,
+  { id: 'top2', name: 'Testa 2', short: 'TESTA', what: 'cassa testa (va sul palo del sub)', kg: 20, w: 44, h: 44, wheel: 'hand', frag: 'media', zone: 'pit', unique: true, x: VAN.x1 + 101, y: VAN.y1 + 150,
     dif: 'il tweeter gracchia: +10 min' }
 ];
 const FRAGILE = d => d.frag === 'alta' || d.frag === 'altissima';
@@ -334,12 +337,10 @@ function weightClass (d) {
   return c + (d.wheel !== 'hand' ? ' · si spinge' : ' · in mano');
 }
 
-// le cinghie del furgone, una per strato. Una cinghia tiene fermi i case
-// del suo strato finché non la sganci; i case con le ruote hanno anche il freno.
+// la cinghia in coda al carico: tiene fermo tutto finché non la sganci; i
+// case con le ruote hanno anche il freno.
 const VAN_STRAPS = [
-  { x: VAN.x1 + 289, ids: ['corrente', 'segnale', 'stativi', 'par'] },
-  { x: VAN.x1 + 164, ids: ['tavolo', 'distro', 'valigetta', 'ricambio'] },
-  { x: VAN.x1 + 74, ids: ['rack', 'sub1', 'sub2', 'top1', 'top2'] }
+  { x: VAN.x1 + 266, ids: ['corrente', 'segnale', 'stativi', 'par', 'tavolo', 'distro', 'valigetta', 'ricambio', 'rack', 'sub1', 'sub2', 'top1', 'top2'] }
 ];
 
 const STATE_COLOR = { integro: '#49b06a', ammaccato: '#f2c53d', difettoso: '#f2843d', rotto: '#e0503f' };
@@ -565,9 +566,11 @@ function once (key, msg, kind) {
 }
 // il nome del comando: pulsante sul telefono, tasto sul computer
 function K (what) {
-  return touchUI ? { grab: 'PRENDI', help: 'AIUTO', lift: 'OH-ISSA', stop: 'FERMO!' }[what]
-    : { grab: 'PRENDI (Spazio)', help: 'AIUTO (E)', lift: 'OH-ISSA (Q)', stop: 'FERMO (F)' }[what];
+  return touchUI ? { grab: 'PRENDI', help: 'AIUTO', lift: 'OH-ISSA' }[what]
+    : { grab: 'PRENDI (Spazio)', help: 'AIUTO (E)', lift: 'OH-ISSA (Q)' }[what];
 }
+// il pulsante del carrello col nome che ha adesso (CARICA, METTI SOPRA, SCARICA)
+function KC (label) { return touchUI ? label : label + ' (F)'; }
 // il tasto d'azione col nome che ha adesso (APRI, RAMPA, CINGHIA, FRENO)
 function KA (label) { return touchUI ? label : label + ' (Spazio)'; }
 // una cosa imparata (Macio in squadra, il carrello, la barra del lavoro)
@@ -579,13 +582,12 @@ function unlock (what) {
 // davanti al case da due, OH-ISSA al gradino, FERMO spingendo in discesa.
 // La prima volta che compaiono, un piccolo guizzo.
 function showCmd (what, on) {
-  const b = $({ help: '#b-help', lift: '#b-lift', stop: '#b-stop' }[what]);
+  const b = $({ help: '#b-help', lift: '#b-lift', cart: '#b-cart' }[what]);
   const k = document.querySelector('#keys [data-k="' + what + '"]');
   if (k) k.hidden = !on;
   if (b.hidden === !on) return;
   b.hidden = !on;
   if (on && !G.seen['cmd-' + what]) { G.seen['cmd-' + what] = true; b.classList.add('fresh'); setTimeout(() => b.classList.remove('fresh'), 1900); }
-  if (!on && what === 'stop') { inp.stop = inp.keys.has('KeyF'); b.classList.remove('on'); }
 }
 // testo che sale e sparisce sopra un punto del mondo (feedback piccolo)
 function floatText (x, y, text, color) { if (G) G.fx.push({ kind: 'text', x, y, text, color: color || '#eee9df', born: performance.now(), life: 1400 }); }
@@ -784,10 +786,15 @@ function learnFrom (ce) {
    ne prende due: un sub e una testa, per esempio), un viaggio solo. Si spinge come un case con le ruote; passa il
    gradino sulle sue ruote grandi; se sbatte, il carico si fa male.
    --------------------------------------------------------------------- */
-// posti che prende un case sul carrello; i case da due non ci stanno
-function cartSize (ce) { return ce.def.kg >= 35 ? 2 : 1; }
-function cartUsed (t) { return t.load.reduce((n, c) => n + cartSize(c), 0); }
-function cartFits (t, ce) { return !!ce && ce.kind === 'case' && !ce.def.heavy2 && cartUsed(t) + cartSize(ce) <= TROLLEY_MAX; }
+// sulla pala va qualsiasi case che non sia da due persone; sopra, solo un
+// case da mano non più grande di quello sotto
+function cartUsed (t) { return t.load.length; }
+function canBase (ce) { return !!ce && ce.kind === 'case' && !ce.def.heavy2; }
+function canTop (t, ce) {
+  const b = t.load[0];
+  return !!b && t.load.length === 1 && !!ce && ce.kind === 'case' && carriable(ce) && ce.def.w * ce.def.h <= b.def.w * b.def.h && Math.max(ce.def.w, ce.def.h) <= Math.max(b.def.w, b.def.h);
+}
+function cartFits (t, ce) { return t.load.length ? canTop(t, ce) : canBase(ce); }
 function spawnTrolley () {
   const b = Bodies.rectangle(TROLLEY_AT.x, TROLLEY_AT.y, 64, 46, { isStatic: true, chamfer: { radius: 4 }, friction: 0, restitution: 0,
     collisionFilter: { category: CAT.TROLLEY, mask: CAT.WALL | CAT.WORKER | CAT.NPC | CAT.CASE, group: 0 } });
@@ -799,7 +806,7 @@ function spawnTrolley () {
   $('#h-cart').hidden = false; $('#h-cart').classList.add('reveal');
   ring(TROLLEY_AT.x, TROLLEY_AT.y, '#8fa3b8'); AU.clack();
   bubble(G.macio, 'Ecco il carrello. Due ruote, zero pensieri.', 2.6);
-  toast('CARRELLO: avvicinati con un case (in mano o spinto) e ' + KA('CARICA') + '. Tre posti: un pesante ne prende due. Poi spingilo nella zona e ' + KA('SCARICA') + '.', 'ok');
+  toast('CARRELLO: si prende dalle maniglie. Appoggia il case a terra, prendi il carrello e avvicina la pala al case: ' + KC('CARICA') + '. Sopra ci sta un case piccolo: ' + KC('METTI SOPRA') + '. Da fermo: ' + KC('SCARICA') + '.', 'ok');
 }
 function nearTrolley (w, reach) {
   const t = G.trolley; if (!t) return false;
@@ -810,60 +817,133 @@ function boundsGap (a, b) {
   const dx = Math.max(a.min.x - b.max.x, b.min.x - a.max.x, 0), dy = Math.max(a.min.y - b.max.y, b.min.y - a.max.y, 0);
   return Math.hypot(dx, dy);
 }
-// col case in mano (o spinto) vicino al carrello: si può caricare
-function canLoad (w) {
-  const t = G.trolley, ce = w.grab;
-  if (!t || !ce || ce.kind !== 'case' || zoneAt(w.body.position)) return false;
-  return nearTrolley(w, 26) || boundsGap(ce.body.bounds, t.body.bounds) < 24;
+// dal lato delle maniglie (dietro, -x del carrello) e non di lato o davanti
+function atHandles (w, t) {
+  const L = toLocal(t.body, w.body.position), hw = t.def.w / 2, hh = t.def.h / 2;
+  return L.x < -hw + 2 && Math.abs(L.y) < hh * 0.7 && surface(t, w.body.position).dist - w.r < 14;
 }
-function loadTrolley (w) {
+function grabTrolley (w, t) {
+  if (!atHandles(w, t)) { if (w === G.player) toast('Il carrello si prende dalle maniglie: mettiti dietro, dalla parte del manico.', 'warn'); return false; }
+  if (t.grabbers.length) return false;
+  // dritto dietro al manico: guarda dove guarda il carrello, nessuno scatto
+  w.facing = t.body.angle;
+  w.hold = { off: rot(sub(t.body.position, w.body.position), -w.facing), rel: 0 };
+  w.grab = t; w.mode = 'push'; w.vel = { x: 0, y: 0 }; t.grabbers.push(w);
+  if (w === G.player) AU.pick();
+  refreshFilter(t);
+  return true;
+}
+// la pala del carrello che tieni tocca un case a terra: si può caricare
+function baseTarget (w) {
+  const t = G.trolley;
+  if (!t || w.grab !== t || t.load.length) return null;
+  const hw = t.def.w / 2, B = add(t.body.position, rot({ x: hw + 2, y: 0 }, t.body.angle));
+  let best = null, bd = 18;
+  for (const ce of G.cases) {
+    if (ce.hidden || ce.onTrolley || ce.carrier || ce.grabbers.length) continue;
+    if (toLocal(t.body, ce.body.position).x < hw * 0.5) continue;      // davanti alla pala, non di lato
+    const d = surface(ce, B).dist;
+    if (d < bd) { bd = d; best = ce; }
+  }
+  return best;
+}
+// il case in mano vicino al carrello già carico: si può mettere sopra
+function topTarget (w) {
   const t = G.trolley, ce = w.grab;
-  release(w);
-  for (const o of [...ce.grabbers]) release(o);   // Macio lo stava spingendo con te
-  if (ce.carrier) release(ce.carrier);
+  if (!t || !ce || ce.kind !== 'case' || w.mode !== 'carry' || t.load.length !== 1) return null;
+  const b = t.load[0];
+  return boundsGap(ce.body.bounds, b.body.bounds) < 22 || boundsGap(ce.body.bounds, t.body.bounds) < 22 ? ce : null;
+}
+// cosa fa adesso il pulsante del carrello (null = niente)
+function cartCmd (w) {
+  const t = G.trolley;
+  if (!t || G.mode !== 'play' || G.qte) return null;
+  if (w.grab === t) {
+    const ce = baseTarget(w);
+    if (ce) return { label: 'CARICA', ce };
+    if (t.load.length && w.spd < 0.15 && len(w.vel) < 0.15) return { label: 'SCARICA' };
+    return null;
+  }
+  const ce = topTarget(w);
+  return ce ? { label: 'METTI SOPRA', ce } : null;
+}
+function pressCart () {
+  const w = G.player, c = cartCmd(w);
+  if (!c) return;
+  if (c.label === 'CARICA') loadBase(w, c.ce);
+  else if (c.label === 'METTI SOPRA') loadTop(w);
+  else unloadTrolley(w);
+}
+// la pala va sotto il case: il case si gira (di poco) dritto sul carrello e
+// resta davanti al telaio, appoggiato alla pala
+function loadBase (w, ce) {
+  const t = G.trolley;
+  if (locked(ce)) { toast(ce.def.name + (strapOn(ce) ? ': è ancora legato con la cinghia.' : ': ha il freno tirato.'), 'warn'); return; }
+  if (blockers(ce).length) { blockedTry(ce); return; }
+  if (!canBase(ce)) { bubble(G.macio, 'Quello lo facciamo in due, non sul carrello.', 1.8); return; }
+  // dritto o di traverso, come è più vicino a com'è adesso
+  const d0 = angDiff(ce.body.angle, t.body.angle), quarter = Math.round(d0 / (Math.PI / 2));
+  const rel = quarter * Math.PI / 2, depth = quarter % 2 ? ce.def.h : ce.def.w;
+  const off = { x: t.def.w / 2 + depth / 2 + 1, y: 0 };
+  const p0 = { x: ce.body.position.x, y: ce.body.position.y }, a0 = ce.body.angle;
+  Body.setPosition(ce.body, add(t.body.position, rot(off, t.body.angle))); Body.setAngle(ce.body, t.body.angle + rel);
+  if (overlap(ce.body, obstacles(w, ce).filter(b => b !== t.body))) {
+    Body.setPosition(ce.body, p0); Body.setAngle(ce.body, a0);
+    toast('Qui non c\'è spazio per caricarlo: allarga un po\'.', 'warn'); return;
+  }
   unpark(ce);
-  ce.onTrolley = t; ce.zone = null;
+  ce.onTrolley = t; ce.zone = null; ce.cart = { off, rel };
+  t.load = [ce];
+  placeLoad(t); refreshFilter(t);
+  AU.clack(); floatText(t.body.position.x, t.body.position.y - 34, 'CARICATO', '#cfdbe8');
+  learnFrom(ce);
+  once('carica', 'Sul carrello. ' + (G.cases.some(c => canTop(t, c)) ? 'Sopra ci sta anche un case piccolo: prendilo e avvicinati, ' + KC('METTI SOPRA') + '.' : 'Spingilo nella sua zona e, da fermo, ' + KC('SCARICA') + '.'));
+}
+function loadTop (w) {
+  const t = G.trolley, ce = w.grab, b = t.load[0];
+  if (!canTop(t, ce)) { toast('Sopra al ' + b.def.short + ' ci sta solo un case piccolo da mano.', 'warn'); return; }
+  release(w);
+  unpark(ce);
+  ce.onTrolley = t; ce.zone = null; ce.cart = { off: b.cart.off, rel: b.cart.rel, top: true };
   t.load.push(ce);
   placeLoad(t); refreshFilter(t);
-  const n = cartUsed(t);
-  AU.clack(); floatText(t.body.position.x, t.body.position.y - 34, n + '/' + TROLLEY_MAX, '#cfdbe8');
-  if (n >= TROLLEY_MAX) once('pieno', 'Carrello pieno: spingilo in palestra (' + K('grab') + ' vicino al carrello).', 'ok');
-  else once('carica', 'Sul carrello. C\'è ancora posto per ' + (TROLLEY_MAX - n === 1 ? 'un case leggero.' : 'un pesante o due leggeri.'));
+  AU.clack(); floatText(t.body.position.x, t.body.position.y - 34, 'SOPRA', '#cfdbe8');
+  once('pieno', 'Carrello pieno: prendilo dalle maniglie e spingilo nella zona. Da fermo, ' + KC('SCARICA') + '.', 'ok');
 }
-// i case sul carrello: una piccola pila sulla pala, ferma rispetto al carrello
+// i case sul carrello stanno fermi rispetto a lui
 function placeLoad (t) {
-  t.load.forEach((ce, i) => {
-    const off = rot({ x: 6 - i * 6, y: -i * 3 }, t.body.angle);
-    Body.setPosition(ce.body, add(t.body.position, off));
-    Body.setAngle(ce.body, t.body.angle);
-  });
+  for (const ce of t.load) {
+    Body.setPosition(ce.body, add(t.body.position, rot(ce.cart.off, t.body.angle)));
+    Body.setAngle(ce.body, t.body.angle + ce.cart.rel);
+  }
 }
-// dal carrello in mano: prima il case che va nella zona dove sei. Va giù
-// accanto a te, dalla parte opposta al carrello (o di lato), dove c'è posto
+// da fermo: quello sopra va giù di fianco (meglio dentro la zona del suo
+// nastro); quello sulla pala resta lì dov'è e il carrello si stacca
 function unloadTrolley (w) {
-  const t = G.trolley, z = zoneAt(w.body.position) || zoneAt(t.body.position);
-  const ce = t.load.find(c => c.def.zone === z) || t.load[t.load.length - 1];
-  t.load = t.load.filter(c => c !== ce);
-  ce.onTrolley = null;
-  const p = w.body.position, away = Math.atan2(p.y - t.body.position.y, p.x - t.body.position.x);
-  const ext = Math.hypot(ce.def.w, ce.def.h) / 2;
-  // meglio un posto dentro la zona del suo nastro, se c'è
-  let spot = null;
-  for (const da of [0, Math.PI / 2, -Math.PI / 2, Math.PI / 4, -Math.PI / 4, Math.PI * 0.75, -Math.PI * 0.75]) {
-    const a = away + da, at = add(p, mul({ x: Math.cos(a), y: Math.sin(a) }, w.r + ext + 4));
-    Body.setPosition(ce.body, at); Body.setAngle(ce.body, t.body.angle);
-    if (overlap(ce.body, obstacles(w, ce))) continue;
-    if (zoneAt(at) === ce.def.zone) { spot = at; break; }
-    if (!spot) spot = at;
-  }
-  if (spot) {
+  const t = G.trolley;
+  const ce = t.load[t.load.length - 1];
+  if (ce.cart.top) {
+    const b = t.load[0], bw = b.cart.rel % Math.PI ? b.def.h : b.def.w, bh = b.cart.rel % Math.PI ? b.def.w : b.def.h;
+    const cw = Math.max(ce.def.w, ce.def.h);
+    const cands = [{ x: 0, y: bh / 2 + cw / 2 + 3 }, { x: 0, y: -bh / 2 - cw / 2 - 3 }, { x: bw / 2 + cw / 2 + 3, y: 0 }];
+    let spot = null;
+    t.load = t.load.filter(c => c !== ce); ce.onTrolley = null;
+    for (const c of cands) {
+      const at = add(b.body.position, rot(c, b.body.angle));
+      Body.setPosition(ce.body, at); Body.setAngle(ce.body, b.body.angle);
+      if (overlap(ce.body, obstacles(w, ce))) continue;
+      if (zoneAt(at) === ce.def.zone) { spot = at; break; }
+      if (!spot) spot = at;
+    }
+    if (!spot) { t.load.push(ce); ce.onTrolley = t; placeLoad(t); toast('Qui non c\'è posto per appoggiarlo: sposta un po\' il carrello.', 'warn'); return; }
     Body.setPosition(ce.body, spot);
-    refreshFilter(ce); placeLoad(t); grab(w, ce);
-    once('scarica', 'Dal carrello alla zona del suo nastro.');
-    return;
+  } else {
+    t.load = []; ce.onTrolley = null;
   }
-  t.load.push(ce); ce.onTrolley = t; placeLoad(t);
-  toast('Qui non c\'è posto per scaricarlo: sposta un po\' il carrello.', 'warn');
+  delete ce.cart; ce.lastCarrier = w;
+  refreshFilter(ce); refreshFilter(t);
+  AU.drop(); floatText(ce.body.position.x, ce.body.position.y - 26, 'SCARICATO', '#cfdbe8');
+  if (!t.load.length) once('scarica', 'Scaricato. Tira indietro il carrello e vai a prendere il prossimo.');
 }
 /* Un case lasciato nella SUA zona è consegnato («parcheggiato»): conta
    come a posto finché qualcuno non lo riprende. */
@@ -971,14 +1051,6 @@ function pressGrab () {
   if (G.qte) { return; }
   const p = G.player, t = G.trolley;
   if (p.grab) {
-    // un case (in mano o spinto) vicino al carrello: va sopra. Nelle zone
-    // no: lì dal carrello si scarica, e LASCIA posa il case a terra
-    if (canLoad(p)) {
-      if (cartFits(t, p.grab)) { loadTrolley(p); return; }
-      if (p.grab.def.heavy2) bubble(G.macio, 'Quello lo facciamo in due.', 1.6);
-      else toast('Sul carrello non c\'è più posto (' + cartUsed(t) + '/' + TROLLEY_MAX + ').', 'warn');
-      return;
-    }
     const ce = p.grab;
     release(p);
     if (ce.kind === 'case' && ce.def.wheel === 'hand') AU.drop();
@@ -991,13 +1063,11 @@ function pressGrab () {
   if (va === 'strap') { releaseStrap(nearestCase(p, 14).strap); return; }
   if (va === 'brake') { releaseBrake(nearestCase(p, 14)); return; }
   const ce = nearestCase(p, 14);
-  // il carrello: in una zona si scarica, altrove si spinge
+  // il carrello: si prende dal manico, poi si va col carrello verso il case
   if (t && nearTrolley(p, 14) && (!ce || surface(t, p.body.position).dist <= surface(ce, p.body.position).dist)) {
-    const inZone = zoneAt(p.body.position) || zoneAt(t.body.position);
-    if (t.load.length && inZone) { unloadTrolley(p); return; }
-    grab(p, t);
-    if (t.load.length) once('spingi', 'Spingi il carrello fino alle zone, poi lascialo lì e ' + KA('SCARICA') + '.');
-    else toast('Il carrello è vuoto: prima caricalo. Prendi un case e avvicinati al carrello.', 'warn');
+    if (!grabTrolley(p, t)) return;
+    if (t.load.length) once('spingi', 'Spingi il carrello fino alla zona del case e, da fermo, ' + KC('SCARICA') + '.');
+    else once('pala', 'Avvicina la pala del carrello a un case appoggiato a terra: ' + KC('CARICA') + '.');
     return;
   }
   if (!ce) { toast('Avvicinati a un case per prenderlo.'); return; }
@@ -1901,27 +1971,40 @@ function drawTrolley () {
   const t = G.trolley;
   if (!t) {   // ancora nel furgone, in piedi accanto al portellone
     if (G.van.ramp) return;
-    ctx.save(); ctx.translate(VAN.x1 + 312, VAN.y1 + 112); ctx.rotate(-Math.PI / 2); ctx.scale(0.5, 0.5); drawHandTruck(64, 46, null); ctx.restore();
+    ctx.save(); ctx.translate(VAN.x1 + 246, VAN.y1 + 25); ctx.rotate(-Math.PI / 2); ctx.scale(0.62, 0.62); drawHandTruck(64, 46, null); ctx.restore();
     return;
   }
-  const b = t.body, w = t.def.w, h = t.def.h;
-  const P = G.player, held = P.grab && P.grab.kind === 'case' && cartFits(t, P.grab) && !zoneAt(P.body.position) && len(sub(P.body.position, b.position)) < 160;
+  const b = t.body, w = t.def.w, h = t.def.h, P = G.player;
+  // col case piccolo in mano e il carrello carico: lo si mette sopra
+  const top = P.grab && P.grab.kind === 'case' && canTop(t, P.grab) && len(sub(P.body.position, b.position)) < 160;
   ctx.save(); ctx.translate(b.position.x, b.position.y); ctx.rotate(b.angle);
-  drawHandTruck(w, h, cartUsed(t), held);
+  drawHandTruck(w, h, cartUsed(t), top);
+  const pulse = 0.55 + 0.45 * Math.sin(performance.now() / 160);
+  // a mani vuote lì vicino: le maniglie si illuminano (si prende da lì)
+  if (!P.grab && G.mode === 'play' && len(sub(P.body.position, b.position)) < 110) {
+    ctx.strokeStyle = 'rgba(143,163,184,' + pulse + ')'; ctx.lineWidth = 3;
+    rr(-w / 2 - 16, -h / 2 + 4, 14, h - 8, 4); ctx.stroke();
+  }
+  // col carrello in mano, la pala sotto un case: CARICA
+  if (P.grab === t && baseTarget(P)) {
+    ctx.strokeStyle = 'rgba(73,224,122,' + pulse + ')'; ctx.lineWidth = 4;
+    rr(w / 2 - 16, -h / 2, 18, h, 3); ctx.stroke();
+  }
   ctx.restore();
-  if (held) {
+  if (top) {
     ctx.fillStyle = '#49e07a'; ctx.font = '700 14px "Barlow Condensed", sans-serif'; ctx.textAlign = 'center';
-    ctx.fillText(canLoad(P) ? KA('CARICA') : 'AVVICINATI: CARICA QUI', b.position.x, b.position.y - 38); ctx.textAlign = 'start';
+    ctx.fillText(topTarget(P) ? KC('METTI SOPRA') : 'AVVICINATI: METTI SOPRA', b.position.x, b.position.y - 38); ctx.textAlign = 'start';
   }
 }
 // cinghie tirate attraverso il furgone e freni sulle ruote (P rossa)
 function drawLocks () {
   VAN_STRAPS.forEach((st, i) => {
     if (!G.straps[i]) return;
-    ctx.fillStyle = '#f2a541'; ctx.fillRect(st.x - 4, 392, 8, 216);
-    ctx.fillStyle = 'rgba(0,0,0,.25)'; for (let y = 396; y < 606; y += 10) ctx.fillRect(st.x - 4, y, 8, 2);
-    ctx.fillStyle = '#c9ccd1'; rr(st.x - 7, 488, 14, 24, 3); ctx.fill();          // cricchetto
-    ctx.fillStyle = '#55585f'; ctx.fillRect(st.x - 4, 494, 8, 3); ctx.fillRect(st.x - 4, 502, 8, 3);
+    const y0 = VAN.y1 - 8, hh = VAN.y2 - VAN.y1 + 16, cy = (VAN.y1 + VAN.y2) / 2;
+    ctx.fillStyle = '#f2a541'; ctx.fillRect(st.x - 4, y0, 8, hh);
+    ctx.fillStyle = 'rgba(0,0,0,.25)'; for (let y = y0 + 4; y < y0 + hh - 2; y += 10) ctx.fillRect(st.x - 4, y, 8, 2);
+    ctx.fillStyle = '#c9ccd1'; rr(st.x - 7, cy - 12, 14, 24, 3); ctx.fill();          // cricchetto
+    ctx.fillStyle = '#55585f'; ctx.fillRect(st.x - 4, cy - 6, 8, 3); ctx.fillRect(st.x - 4, cy + 2, 8, 3);
   });
   for (const ce of G.cases) {
     if (!ce.brake || ce.hidden || ce.onTrolley) continue;
@@ -2115,9 +2198,9 @@ function drawScreenUI () {
   if (G.mode === 'play' && !P.grab) {
     const ce = nearestCase(P, 14), t = G.trolley;
     if (t && nearTrolley(P, 14) && (!ce || surface(t, P.body.position).dist <= surface(ce, P.body.position).dist)) {
-      const s = worldToScreen(t.body.position), inZone = zoneAt(P.body.position) || zoneAt(t.body.position);
+      const s = worldToScreen(t.body.position);
       label(s.x, s.y - 40 * G.cam.scale, 'CARRELLO · ' + cartUsed(t) + '/' + TROLLEY_MAX,
-        t.load.length && inZone ? 'scarica qui: ' + K('grab') : 'si spinge · ' + K('grab'), '#8fa3b8', []);
+        atHandles(P, t) ? 'dalle maniglie · ' + K('grab') : 'si prende dalle maniglie (dietro)', '#8fa3b8', []);
     } else if (ce) {
       const s = worldToScreen(ce.body.position), bl = blockers(ce).length;
       const tags = [];
@@ -2276,7 +2359,9 @@ function updateHud () {
   if (need) unlock('help');
   showCmd('help', play && G.macio.ai.state !== 'phone' && !!(need || kid));
   showCmd('lift', play && !!(G.qte || liftReady()));
-  showCmd('stop', false);
+  const cc = cartCmd(P);
+  if (cc) { $('#b-cart').textContent = cc.label; $('#k-cart').textContent = cc.label.toLowerCase(); }
+  showCmd('cart', !!cc);
   $('#b-help').classList.toggle('call', !!need);
   const cf = G.coffee.until - G.t;
   $('#h-coffee').hidden = !(cf > 0);
@@ -2286,8 +2371,6 @@ function updateHud () {
   const t = G.trolley;
   const va = !P.grab && play ? vanAction(P) : null;
   let gl = P.grab ? 'LASCIA' : va ? { doors: 'APRI', ramp: 'RAMPA', strap: 'CINGHIA', brake: 'FRENO' }[va] : 'PRENDI';
-  if (t && P.grab && canLoad(P) && cartFits(t, P.grab)) gl = 'CARICA';
-  else if (t && !P.grab && t.load.length && nearTrolley(P, 14) && (zoneAt(P.body.position) || zoneAt(t.body.position))) gl = 'SCARICA';
   $('#b-grab').textContent = gl;
   $('#b-grab').classList.toggle('on', !!P.grab);
 }
@@ -2327,7 +2410,7 @@ function endGame (reason) {
   for (const w of G.workers) release(w);
   const rushed = [];
   // quello ancora sul carrello lo sistemano di corsa Macio e il bidello
-  if (G.trolley) for (const ce of [...G.trolley.load]) { ce.onTrolley = null; Composite.add(G.world, ce.body); ce.rushed = true; ce.zone = ce.def.zone; rushed.push(ce); }
+  if (G.trolley) for (const ce of [...G.trolley.load]) { ce.onTrolley = null; delete ce.cart; ce.rushed = true; ce.zone = ce.def.zone; rushed.push(ce); }
   if (G.trolley) G.trolley.load = [];
   if (reason === 'tempo') {
     for (const ce of G.cases) {
@@ -2457,14 +2540,13 @@ window.addEventListener('keydown', e => {
   if (e.code === 'KeyE') pressHelp();
   if (e.code === 'KeyQ') pressLift();
   if (e.code === 'ShiftLeft' || e.code === 'ShiftRight') inp.slow = true;
-  if (e.code === 'KeyF') inp.stop = true;
+  if (e.code === 'KeyF') pressCart();
   if (e.code === 'Escape' || e.code === 'KeyP') togglePause();
 });
 window.addEventListener('keyup', e => {
   inp.keys.delete(e.code);
   if (e.code === 'Space') inp.grabHeld = false;
   if (e.code === 'ShiftLeft' || e.code === 'ShiftRight') inp.slow = false;
-  if (e.code === 'KeyF') inp.stop = false;
 });
 window.addEventListener('blur', () => { inp.keys.clear(); inp.stop = false; inp.slow = false; inp.grabHeld = false; });
 
@@ -2478,7 +2560,7 @@ cv.addEventListener('pointerdown', skipWrap);
 bindBtn('#b-grab', () => { inp.grabHeld = true; pressGrab(); }, () => { inp.grabHeld = false; });
 bindBtn('#b-help', pressHelp);
 bindBtn('#b-lift', pressLift);
-bindBtn('#b-stop', () => { inp.stop = true; $('#b-stop').classList.add('on'); }, () => { inp.stop = false; $('#b-stop').classList.remove('on'); });
+bindBtn('#b-cart', pressCart);
 
 // joystick: dove appoggi il pollice nasce la base
 (() => {
@@ -2523,7 +2605,7 @@ function startGame () {
   $('#start').hidden = true; $('#end').hidden = true; $('#pause').hidden = true;
   $('#pad').hidden = !touchUI; $('#keys').hidden = touchUI;
   // i comandi in più compaiono solo quando servono
-  for (const id of ['#b-help', '#b-lift', '#b-stop']) $(id).hidden = true;
+  for (const id of ['#b-help', '#b-lift', '#b-cart']) $(id).hidden = true;
   document.querySelectorAll('#keys [data-k]').forEach(k => { k.hidden = true; });
   for (const id of ['#h-cart', '#h-eff-w', '#h-dmg-w']) $(id).hidden = true;
   $('#h-del-w').classList.remove('done');

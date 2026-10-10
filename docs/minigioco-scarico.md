@@ -134,10 +134,19 @@ avanzata. In `scarico.html` (sezione *MOVIMENTO E PRESA*):
   due con un tavolo. Un case da due, da solo, non si muove.
 - **Macio che aiuta** (`joinHelp`, `placeHelpers`): si mette sull'altro
   lato e da lì segue il case; niente più ritardo di 0,4 s né FERMO.
-- **Carrello**: stesso sistema dei case spinti. I case caricati restano
-  oggetti del mondo, messi a posto sopra il carrello a ogni passo e
-  controllati contro i muri col carrello; scaricati tornano case normali.
-- **Furgone**: vano 3,3 × 2 m, parcheggiato col portellone a 3,8 m dalla
+- **Carrello** (note di Luca, 2026-10-08): si prende solo dalle maniglie
+  (dietro). Il case si appoggia a terra, si prende il carrello e si
+  avvicina la pala al case: compare CARICA. Sopra ci sta un secondo case,
+  se è piccolo e da mano: lo prendi, ti avvicini, compare METTI SOPRA.
+  Col carrello in mano, da fermo, compare SCARICA: prima quello sopra va
+  giù di fianco, poi quello sulla pala resta dov'è. Pulsante a parte
+  (tasto F). Il carrello si muove come un case spinto; il carico resta
+  fermo sopra ed è controllato contro i muri.
+- **Furgone stivato pieno**: case uno contro l'altro, senza vuoti, a
+  colonne dal portellone al fondo (carrello, stativi, PAR | generici |
+  tavolo, accessori | quadro, PC, teste | sub, rack). Una sola cinghia in
+  coda al carico tiene fermo tutto.
+- **Furgone**: vano 2,7 × 2 m (pieno), parcheggiato col portellone a 3,8 m dalla
   porta della palestra (prima 7 m); porta della palestra a due ante,
   1,6 m. Persone larghe 38 cm (Macio 42).
 - Test: `tests/scarico-fisica.js` (personaggio, case in mano, carrello,
