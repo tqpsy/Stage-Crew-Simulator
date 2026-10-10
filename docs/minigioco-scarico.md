@@ -110,6 +110,55 @@ si passa al montaggio con quello che è arrivato davvero.
 
 ## Meccaniche di fisica e controllo
 
+### Scarico a ordini (2026-10-10): niente joystick
+
+Richiesta di Luca: nello scarico non si guida più il personaggio. Si dà un
+ordine — **chi** (Tu o Macio), **cosa** (un case), **dove** (una zona),
+**col carrello** o no — e il gioco lo esegue da solo: strada, presa,
+trasporto, posa. Il joystick resta solo fuori dallo scarico (che non lo
+aveva comunque). In `scarico.html`, sezione *ORDINI*.
+
+- **Barra degli ordini** in basso (`#cmd`): i due pulsanti TU / MACIO con
+  quello che stanno facendo, poi le azioni del momento: APRI IL PORTELLONE,
+  TIRA GIÙ LA RAMPA, SGANCIA LA CINGHIA (uno per volta); scelto un case,
+  CARRELLO, + SOPRA, le quattro zone (prima quella del nastro, con ✓) e ✕.
+  Sulla scena si tocca/clicca un personaggio, un case, il carrello o una
+  zona; trascinando si sposta la vista. Tasti: 1/2, C, Esc, P.
+- **Un ordine = una fila di passi** (`buildSteps`): a mano raggiungi →
+  prendi → porta → posa; col carrello, se il case è nel furgone lo si posa
+  prima a terra accanto alla rampa, poi maniglie → pala sotto il case
+  (CARICA) → l'eventuale case sopra (METTI SOPRA) → viaggio → SCARICA →
+  carrello riportato accanto al furgone. Il carrello si muove solo con chi
+  lo tiene dalle maniglie e va solo avanti o indietro (due ruote).
+- **Percorsi** (`plan`): ricerca A* su griglia di 8 cm con otto versi per
+  chi porta; ogni posa è provata con la sagoma vera (persona + case +
+  carrello, con Matter.js) contro muri, bordi del pianale, case e persone.
+  Una mappa delle distanze "a piedi" (`distField`) guida la ricerca e dice
+  subito se una meta non si raggiunge. Seguendo la strada ci si ferma per
+  chi passa (bambini, Gerry, il collega), si chiede permesso, dopo un po'
+  si cerca un'altra strada; contro uno spigolo si scivola lungo il muro.
+  Se non si arriva: ci si ferma, il case resta dov'è e la barra d'aiuto
+  dice perché (nessun avanti e indietro: un controllo apposta).
+- **Senso unico** (`LANES`): nel furgone con la rampa e nella porta della
+  palestra si passa uno per volta; chi deve entrare aspetta di lato.
+- **Dal furgone**: un case si sceglie solo se davanti non c'è niente
+  (ACCESSO BLOCCATO, come prima); in più, per un case in mano si prova
+  prima se poi esce dal furgone, e se no si dice quale case togliere prima
+  (es. il QUADRO sopra la VALIGETTA).
+- **Macio**: si sceglie come te. Tu gli dai l'ordine in un fumetto
+  ("Macio, QUADRO in Backstage!") e lui risponde con le sue battute di
+  sempre. Non tocca l'elettronica delicata. Al telefono, l'ordine aspetta.
+- **Case da due** (tavolo, rack, sub): partono quando siete liberi tutti e
+  due; ognuno va al suo lato e il tavolo si alza in due.
+- **Posa**: un posto libero nella zona, dal fondo e lontano dai passaggi
+  (rampa, porta della palestra, posto del carrello); la zona del case
+  resta quella dove l'hai posato (`ce.zone`), come prima.
+- **Bauli dei cavi** (Generico CORRENTE e SEGNALE): per ora niente fisica,
+  sono già nelle loro zone (Backstage, Off Stage) e i cavi si prendono dai
+  pulsanti di sempre al montaggio. Il vano del furgone è 2,1 m.
+- **Urti**: con il percorso che evita i muri non ci sono più colpi da
+  guida; i danni restano quelli già stabiliti dal passaggio al montaggio.
+
 ### Revisione fisica del livello 1 (2026-10-07): un sistema solo, la PRESA
 
 Richiesta di Luca: movimento e presa credibili prima di aggiungere altro.
@@ -162,16 +211,16 @@ il disegno usa la stessa prospettiva isometrica del gioco (`isoFrame`,
 
 ### Controlli
 
-| | Telefono | Tastiera |
-|---|---|---|
-| Muoversi | joystick virtuale a sinistra | WASD / frecce |
-| Prendi / lascia | tasto grande a destra | Spazio |
-| Chiama Macio | tasto AIUTO (tocco = aiutami, tenuto = "porta tu") | E |
-| Oh-issa (sollevare insieme) | tasto OH-ISSA a tempo | Q |
-| Passo attento | joystick poco inclinato | Shift |
-| Frena / FERMO! | rilasciare il joystick; tasto FERMO! | F |
+Dal 2026-10-10 lo scarico va a ordini (vedi sopra).
 
-Niente mira fine: il personaggio si aggancia al lato del case più vicino.
+| | Telefono / mouse | Tastiera |
+|---|---|---|
+| Chi lavora | tocco su TU / MACIO (o sul personaggio) | 1 / 2 |
+| Il case | tocco sul case | — |
+| Col carrello | CARRELLO, poi + SOPRA per un case piccolo | C |
+| Dove | tocco su una zona (pulsante o scena) | — |
+| Annulla / pausa | ✕ / ⏸ | Esc / P |
+| Spostare la vista | trascinare la scena | — |
 
 ### Peso e inerzia
 
