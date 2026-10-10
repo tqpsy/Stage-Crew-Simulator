@@ -1665,7 +1665,7 @@ function follow (g, s) {
     if (a > 0.6) v = Math.min(v, Math.max(1, vmax * (1 - a / Math.PI)) + Math.sqrt(dist) * 0.3);
   }
   // chi va più piano davanti (il collega, un bambino): ci si accoda senza sbatterci
-  const ah = aheadHit(g, o, p, mul(d, 1 / dist), Math.min(dist, v) + 14, allow);
+  const ah = aheadHit(g, o, p, mul(d, 1 / dist), Math.min(dist, v), allow);
   if (ah) {
     v = Math.min(v, ah.along * 0.9);
     if (v < 0.25) { s.v = 0; s.hit = ah.body; w.vel = { x: 0, y: 0 }; return 'blocked'; }
@@ -1710,16 +1710,16 @@ function moverOf (b) {
   const h = G.workers.find(x => x.grab && (x.grab === e || e.onTrolley === x.grab));
   return h ? { v: h.mv || { x: 0, y: 0 } } : null;
 }
-function aheadHit (g, o, p, u, ahead, allow) {
-  const dyn = b => !!moverOf(b);
-  const q = add(p, mul(u, ahead));
-  setPose(g, q.x, q.y, g.w.facing);
-  const hit = poseHit(g, { ow: o.ow.filter(dyn), obs: o.obs.filter(dyn) }, allow);
-  setPose(g, p.x, p.y, g.w.facing);
+function aheadHit (g, o, p, u, step, allow) {
+  const dyn = b => !!moverOf(b), lists = { ow: o.ow.filter(dyn), obs: o.obs.filter(dyn) };
+  const probe = d => { const q = add(p, mul(u, d)); setPose(g, q.x, q.y, g.w.facing); const h = poseHit(g, lists, allow); setPose(g, p.x, p.y, g.w.facing); return h; };
+  const hit = probe(step + 14);
   if (!hit) return null;
   const mv = moverOf(hit).v;
-  if (len(mv) < 0.3) return null;          // chi sta fermo non si insegue: lo ferma il passo vero (e si chiede permesso)
-  return { body: hit, along: Math.max(0, mv.x * u.x + mv.y * u.y) };
+  if (len(mv) >= 0.8) return { body: hit, along: Math.max(0, mv.x * u.x + mv.y * u.y) };
+  // chi sta fermo non si insegue, ma non ci si struscia addosso: ci si ferma a un passo
+  const near = probe(step + 2);
+  return near ? { body: near, along: 0 } : null;
 }
 // un posto libero lì accanto, di lato rispetto a chi deve passare
 function sidestep (k, w) {
@@ -2287,6 +2287,7 @@ function failJob (w, j, why, line) {
   endJob(w, j);
   if (j.kind === 'help') return;
   if (why) toast(why, 'warn');
+  w.failT = G.t;
   if (w === G.macio && line) bubble(w, line, 1.8);
   AU.locked();
 }
@@ -2351,7 +2352,7 @@ function selectCase (ce) {
   // in mano non esce dal furgone: si dice subito cosa togliere prima
   if (inVan(ce) && carriable(ce) && !bl.length && !extractPoses(S.who, ce, 1).length) { const nd = extractNeeds(S.who, ce); if (!nd.some(o => o.job)) { cantExtract(S.who, ce, nd); return; } }
   // la regola di Macio, subito: l'elettronica delicata la porti tu
-  if (S.who === G.macio && delicate(ce)) { macioNo(ce); S.who = G.player; }
+  if (S.who === G.macio && delicate(ce)) { macioNo(ce); S.who = G.player; cmdDirty = true; }
   Object.assign(S, { ce, cart: false, top: null, pickTop: false });
   learnFrom(ce);
   cmdDirty = true;
@@ -2377,6 +2378,8 @@ function sendTo (dest) {
   // la regola di Macio: l'elettronica delicata la porti tu
   if (w === G.macio && delicate(ce)) { macioNo(ce); return; }
   if (S.cart && !cartFree(w)) { toggleCart(); return; }
+  // nella zona non c'è proprio più posto (neanche finiti gli altri ordini): si dice subito
+  if (dest.zone) { const res = G.spots; G.spots = []; const none = !dropSpots(ce, dest, S.cart ? S.top : null).length; G.spots = res; if (none) { toast('In ' + ZONES[dest.zone].name + ' non c\'è più posto per ' + ce.def.short + (S.cart ? ' col carrello' : '') + ': fai spazio o scegli un\'altra zona.', 'warn'); AU.locked(); return; } }
   const j = { kind: S.cart ? 'cart' : 'move', who: w, ce, top: S.cart ? S.top : null, dest };
   ce.job = j; if (j.top) j.top.job = j;
   if (j.kind === 'cart') G.trolley.job = j;
@@ -2407,7 +2410,8 @@ function tapAt (p) {
   const m = Math.max(6, TAP_PX / G.cam.scale), hit = caseAt(p, m);
   let who = null, wd = Infinity;
   for (const w of G.workers) { const d = Math.max(0, len(sub(p, w.body.position)) - w.r); if (d <= m && d < wd) { wd = d; who = w; } }
-  if (who && (!hit || wd < hit.d || (wd === 0 && hit.d > 0))) { selectWorker(who); return; }
+  // chi è già scelto non si riprende: se lì vicino c'è un case, vale il case
+  if (who && (!hit || (who !== G.sel.who && (wd < hit.d || (wd === 0 && hit.d > 0))))) { selectWorker(who); return; }
   const ce = hit && hit.ce;
   if (ce) { selectCase(ce); return; }
   if (G.trolley && Bounds.contains(G.trolley.body.bounds, p)) { if (G.sel.ce) toggleCart(); else toast('Il carrello: scegli un case, poi CARRELLO e la zona.'); return; }
@@ -3000,12 +3004,15 @@ function drawScreenUI () {
   // chi ha un ordine ed è fermo: perché (sopra la testa, piccolo)
   ctx.font = '700 12px "Barlow Condensed", sans-serif';
   for (const w of G.workers) {
-    if (G.mode !== 'play' || (w.stillT || 0) < 0.6 || G.bubbles.some(b => b.ent === w)) continue;
-    const why = waitWhy(w); if (!why) continue;
+    if (G.mode !== 'play' || G.bubbles.some(b => b.ent === w)) continue;
+    // ordine impossibile (rosso, un attimo) o attesa con un perché (giallo)
+    const failed = !w.job && G.t - (w.failT || -9) < 2.5;
+    const why = failed ? '✕ non si può' : (w.stillT || 0) >= 0.6 && waitWhy(w); if (!why) continue;
+    const col = failed ? '#e0503f' : '#f2c53d';
     const s = worldToScreen(w.body.position), t = why.toUpperCase(), tw = ctx.measureText(t).width + 12;
     const x = clamp(s.x - tw / 2, 6, W - tw - 6), y = Math.max(64, s.y - w.r * G.cam.scale - 24);
-    ctx.fillStyle = 'rgba(28,29,34,.92)'; ctx.strokeStyle = '#f2c53d'; ctx.lineWidth = 1; rr(x, y, tw, 17, 5); ctx.fill(); ctx.stroke();
-    ctx.fillStyle = '#f2c53d'; ctx.fillText(t, x + 6, y + 13);
+    ctx.fillStyle = 'rgba(28,29,34,.92)'; ctx.strokeStyle = col; ctx.lineWidth = 1; rr(x, y, tw, 17, 5); ctx.fill(); ctx.stroke();
+    ctx.fillStyle = col; ctx.fillText(t, x + 6, y + 13);
   }
   // nuvolette
   ctx.font = '600 13px Inter, system-ui, sans-serif';
@@ -3349,6 +3356,7 @@ let cmdDirty = true, cmdSig = '';
 function jobWord (w) {
   if (w === G.macio && w.ai.state === 'phone') return 'al telefono';
   const j = w.job;
+  if (!j && G.t - (w.failT || -9) < 3) return 'non si può: fermo';
   if (!j) return w.jobs.length ? 'ha ' + w.jobs.length + ' ordin' + (w.jobs.length > 1 ? 'i' : 'e') : 'libero';
   const more = w.jobs.length ? ' +' + w.jobs.length : '';
   if (j.kind === 'help') return 'aiuta con ' + j.ce.def.short + more;

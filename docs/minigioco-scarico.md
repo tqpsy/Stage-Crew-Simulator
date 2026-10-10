@@ -159,6 +159,54 @@ aveva comunque). In `scarico.html`, sezione *ORDINI*.
 - **Urti**: con il percorso che evita i muri non ci sono più colpi da
   guida; i danni restano quelli già stabiliti dal passaggio al montaggio.
 
+### Scarico pratico e fluido (2026-10-10, pomeriggio)
+
+Richiesta di Luca: lo scarico deve essere semplice da comandare, fluido da
+guardare e credibile, soprattutto sul telefono ("la complessità sta nel
+lavoro del tecnico, non nell'interfaccia e non nella fisica"). Interventi
+mirati sullo scarico a ordini, senza cambiarne la struttura:
+
+- **Telefono, barra degli ordini**: in alto TU, MACIO e CARRELLO (+ SOPRA),
+  sotto ✕ e le quattro zone tutte in vista (prima quella del nastro). Il
+  nome del case si legge sulla scheda in scena, che dice anche chi lo porta
+  e come ("TU · MEDIO · in mano · va in PIT") e DOPO L'ORDINE IN CORSO se
+  chi è scelto è già occupato.
+- **Tocco**: non serve centrare il case, vale il più vicino entro un dito
+  (14 px di schermo); chi è già scelto non "ruba" il tocco a un case.
+- **Telecamera**: sul case scelto; dato l'ordine torna sul furgone, dove c'è
+  il prossimo case (prima seguiva chi lavorava fino in palestra e bisognava
+  trascinare la scena a ogni ordine); scelto un collega, va su di lui.
+- **Macio e l'elettronica**: con Macio scelto, toccando PC o PAR lui dice
+  subito di no e l'ordine passa a TU (prima lo diceva solo alla fine).
+- **Perché è fermo**: sopra la testa (e sul pulsante) una scritta breve
+  gialla: ASPETTA IL FURGONE, ASPETTA LA PORTA, ASPETTA PC, ASPETTA IL
+  COLLEGA, PRONTO, FA PASSARE GERRY; in rosso ✕ NON SI PUÒ quando un ordine
+  si ferma (il perché è nella barra d'aiuto). Zona piena: l'ordine non parte
+  e si dice subito.
+- **Percorsi**: chi porta gira camminando (curve arrotondate partendo dai
+  nodi della griglia, provate sulla posa vera); il carrello e i case a
+  ruote fisse girano solo nel loro verso. Il calcolo guarda anche i giri che
+  mancano per arrivare nel verso giusto: il calcolo più lungo di un giro è
+  circa dimezzato (su questa macchina ~70-200 ms contro ~250-500 ms).
+- **Incroci**: dietro a chi va più piano ci si accoda alla sua velocità;
+  contro chi è fermo ci si ferma a un passo (niente avanti e indietro).
+  Faccia a faccia, chi ha le mani libere si scansa subito, chi porta aspetta
+  un attimo e poi gira attorno. Il collega fermo senza ordini sulla strada:
+  "Permesso!" e si sposta di lato. Gerry col carrello delle pulizie: chi gli
+  sta davanti si fa da parte ("Prego, Gerry!") e riparte quando è passato.
+  Un urto (Gerry, un bambino) non trascina più nessuno: le persone e quello
+  che tengono si muovono solo coi loro passi.
+- **Carrello dal furgone**: il carrello aspetta accanto alla rampa; il case
+  si porta a mano dritto sulla pala (niente più appoggio a terra e manovra
+  per infilarci sotto la pala); se il carrello è lontano lo si va a
+  prendere da soli. Poi + SOPRA, viaggio, scarico, carrello di nuovo alla
+  rampa. Un bambino sulla pala: "Permesso!" e si aspetta.
+- **Prova**: tests/scarico-fluido.js (tocchi veri sul telefono, tre giri
+  completi con controllo di fermate, giri sul posto, carrello e urti,
+  collega fermo, Gerry, zona piena). Su 18 giri diversi dello scarico
+  completo: 18 finiti senza ordini falliti, fermate e ripartenze da
+  ~130-800 a ~80-110 a giro.
+
 ### Revisione fisica del livello 1 (2026-10-07): un sistema solo, la PRESA
 
 Richiesta di Luca: movimento e presa credibili prima di aggiungere altro.
