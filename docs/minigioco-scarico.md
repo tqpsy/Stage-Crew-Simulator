@@ -711,11 +711,14 @@ non toccano la scena di Phaser.
   consegne, vapore della moka. L'isometrico resta un'idea per dopo.
 - **Vista S1** (2026-10-10): dall'alto con la telecamera inclinata in
   avanti, scelta da Luca. Cambia solo il disegno: la fisica resta in pianta.
-  A schermo y si accorcia (`KY` 0,78) e le altezze salgono (`KZ` 0,63):
-  dei case, del furgone, dei muri, della panchina e della moka si vedono
-  coperchio e faccia davanti, disegnati dal fondo verso chi guarda. La
-  fiancata davanti del furgone e il muro in fondo alla palestra sono
-  tagliati bassi, così il carico e le zone si vedono. Le altezze dei case
+  La telecamera è quella della foto di Topsy: 38° dall'alto e mondo girato
+  di 45° (isometrico, `EL`/`TH`). Dei case, del furgone, dei muri, della
+  panchina e della moka si vedono coperchio e facce davanti, disegnati dal
+  fondo verso chi guarda. Il furgone è bianco a tetto alto (come la foto di
+  Luca): fiancata davanti e tetto trasparenti, così il carico si vede. I
+  flight case (laminato nero, profili, sfere, chiusure, maniglie, ruote) si
+  dipingono una volta per misura; il pavimento è dipinto una volta sola. Le
+  altezze dei case
   sono in `CASE_Z`. I tocchi prendono la sagoma in piedi (coperchio e
   facce, `caseAtScreen`), le persone si toccano anche sulla testa.
   Personaggi in piedi: Topsy è la foto della sua action figure
