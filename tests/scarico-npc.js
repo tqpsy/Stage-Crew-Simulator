@@ -26,11 +26,11 @@ const path = require('path');
   await p.waitForFunction(() => G && G.mode === 'play', null, { timeout: 10000 });
   const ev = (fn, arg) => p.evaluate(fn, arg);
 
-  // passi fissi, joystick finto, tutto il furgone aperto; bambini e Gerry li mettiamo noi
+  // passi fissi, tutto il furgone aperto; bambini e Gerry li mettiamo noi
   await ev(() => {
     paused = true;
     window.C = id => G.cases.find(x => x.def.id === id);
-    window.run = (n, dir, each) => { inp.stick = dir || { x: 0, y: 0 }; for (let i = 0; i < n; i++) { stepSim(); if (each) each(i); } inp.stick = { x: 0, y: 0 }; };
+    window.run = (n, each) => { for (let i = 0; i < n; i++) { stepSim(); if (each) each(i); } };
     window.put = (x, y, f) => { const w = G.player; Matter.Body.setPosition(w.body, { x, y }); Matter.Body.setVelocity(w.body, { x: 0, y: 0 }); w.vel = { x: 0, y: 0 }; if (f !== undefined) w.facing = f; };
     window.moveCase = (ce, x, y, a) => { Matter.Body.setPosition(ce.body, { x, y }); Matter.Body.setAngle(ce.body, a || 0); };
     window.depth = (a, o) => { const c = Matter.Collision.collides(a, o); return c ? c.depth : 0; };
@@ -53,7 +53,7 @@ const path = require('path');
     const c0 = { x: ce.body.position.x, y: ce.body.position.y };
     kidAt(k, 880, 500, 1050, 500);
     let push = 0, arrived = -1;
-    steady(() => run(600, null, i => {
+    steady(() => run(600, i => {
       if (Matter.Collision.collides(k.body, ce.body)) push++;
       if (arrived < 0 && k.body.position.x > 1000) arrived = i;
     }));
@@ -87,14 +87,16 @@ const path = require('path');
     const k = G.kids[0], ce = C('stativi');
     kidAt(k, 1030, 500, 1030, 500); k.wait = 99;
     moveCase(ce, 900, 500, 0); put(900 - ce.def.w / 2 - 23, 500, 0);
-    pressGrab(); const held = G.player.grab === ce;
+    const held = grab(G.player, ce) !== false && G.player.grab === ce;
+    // niente più joystick: un ordine «vai là» col case in mano
+    startJob(G.player, { kind: 'clear', who: G.player, to: { x: 1180, y: 500 } });
     const h0 = G.kidHits; let stuck = 0, minGap = 99;
-    run(150, { x: 1, y: 0 }, () => {
-      if (G.player.spd < 0.5) stuck++;
+    run(150, () => {
+      if (G.player.job && G.player.spd < 0.5) stuck++;
       minGap = Math.min(minGap, Matter.Collision.collides(k.body, ce.body) ? 0 : 99);
     });
     const out = { held, x: Math.round(G.player.body.position.x), stuck, hits: G.kidHits - h0, touched: minGap === 0 };
-    release(G.player); moveCase(ce, 1700, 380); away(); put(1700, 700);
+    if (G.player.job) endJob(G.player, G.player.job); if (G.player.grab) release(G.player); moveCase(ce, 1700, 380); away(); put(1700, 700);
     return out;
   });
   check(C2.held && C2.x > 1080 && C2.hits === 0 && C2.stuck < 20, 'C: il bambino non si sposta davanti a chi porta un case: ' + JSON.stringify(C2));

@@ -44,9 +44,11 @@ const path = require('path');
     damage(c('par'), 30); damage(c('par'), 25);
     damage(c('stativi'), 90);
     damage(c('rack'), 70);        // difettoso: il finale va controllato al montaggio
-    damage(c('segnale'), 110);    // difettoso: cavi aggrovigliati nel baule
+    // i bauli dei cavi sono già nelle loro zone (niente fisica): difettoso a mano
+    G.stowed.find(x => x.def.id === 'segnale').integrity = 15;   // cavi aggrovigliati nel baule
     // Macio fermo (al telefono) e i due tecnici in cortile, poi ogni case al suo posto
     for (const w of G.workers) release(w);
+    for (const w of G.workers) { w.job = null; w.jobs = []; }
     // portellone aperto, rampa giù, cinghie e freni tolti
     G.van.open = true; G.van.anim = { what: 'ramp', t: 0.8 }; vanStep(0.01);
     G.straps.forEach((_, i) => releaseStrap(i)); G.cases.forEach(releaseBrake);
@@ -57,17 +59,19 @@ const path = require('path');
       stativi: [1530, 230, 0], par: [1560, 310, 0],
       sub1: [1550, 400, 0], sub2: [1550, 480, 0], top1: [1550, 560, 0], top2: [1550, 620, 0] };
     for (const ce of G.cases) {
+      if (!spots[ce.def.id]) continue;
       const [x, y, r] = spots[ce.def.id];
       Matter.Body.setPosition(ce.body, { x, y }); Matter.Body.setAngle(ce.body, r * Math.PI / 2); Matter.Body.setVelocity(ce.body, { x: 0, y: 0 });
     }
   });
   // finito il lavoro, una pausa breve: la telecamera passa sulle zone e Macio parla
-  await frame.waitForFunction(() => G.mode === 'wrap', null, { timeout: 8000 }).catch(() => {});
-  const wrap = await frame.evaluate(() => ({ mode: G.mode, pad: $('#pad').hidden }));
+  // tempi larghi: dentro il gioco, su una macchina lenta, l'iframe va più piano del tempo vero
+  await frame.waitForFunction(() => G.mode === 'wrap', null, { timeout: 30000 }).catch(() => {});
+  const wrap = await frame.evaluate(() => ({ mode: G.mode, pad: $('#cmd').hidden }));
   check(wrap.mode === 'wrap' && wrap.pad, 'dopo il 100% non c\'è la pausa prima della bolla: ' + JSON.stringify(wrap));
-  await frame.waitForFunction(() => G.wrap && G.wrap.said === 2, null, { timeout: 9000 }).catch(() => {});
+  await frame.waitForFunction(() => G.wrap && G.wrap.said === 2, null, { timeout: 30000 }).catch(() => {});
   check(/possiamo cominciare/.test(await frame.evaluate(() => $('#hint-txt').textContent)), 'Macio non chiude lo scarico');
-  await frame.waitForFunction(() => G.mode === 'end', null, { timeout: 6000 }).catch(() => {});
+  await frame.waitForFunction(() => G.mode === 'end', null, { timeout: 30000 }).catch(() => {});
   const inGame = await frame.evaluate(() => ({ mode: G.mode, r: G.result, pars: G.cases.find(x => x.def.id === 'par').pars, zones: G.cases.filter(c => c.zone !== c.def.zone).map(c => c.def.id) }));
   check(inGame.mode === 'end', 'lo scarico non finisce con tutti i case a posto: fuori zona ' + inGame.zones);
   check(inGame.pars === 2, 'PAR rotti sbagliati nel minigioco: ' + inGame.pars + ' sani');

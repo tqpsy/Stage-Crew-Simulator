@@ -110,6 +110,103 @@ si passa al montaggio con quello che è arrivato davvero.
 
 ## Meccaniche di fisica e controllo
 
+### Scarico a ordini (2026-10-10): niente joystick
+
+Richiesta di Luca: nello scarico non si guida più il personaggio. Si dà un
+ordine — **chi** (Tu o Macio), **cosa** (un case), **dove** (una zona),
+**col carrello** o no — e il gioco lo esegue da solo: strada, presa,
+trasporto, posa. Il joystick resta solo fuori dallo scarico (che non lo
+aveva comunque). In `scarico.html`, sezione *ORDINI*.
+
+- **Barra degli ordini** in basso (`#cmd`): i due pulsanti TU / MACIO con
+  quello che stanno facendo, poi le azioni del momento: APRI IL PORTELLONE,
+  TIRA GIÙ LA RAMPA, SGANCIA LA CINGHIA (uno per volta); scelto un case,
+  CARRELLO, + SOPRA, le quattro zone (prima quella del nastro, con ✓) e ✕.
+  Sulla scena si tocca/clicca un personaggio, un case, il carrello o una
+  zona; trascinando si sposta la vista. Tasti: 1/2, C, Esc, P.
+- **Un ordine = una fila di passi** (`buildSteps`): a mano raggiungi →
+  prendi → porta → posa; col carrello, se il case è nel furgone lo si posa
+  prima a terra accanto alla rampa, poi maniglie → pala sotto il case
+  (CARICA) → l'eventuale case sopra (METTI SOPRA) → viaggio → SCARICA →
+  carrello riportato accanto al furgone. Il carrello si muove solo con chi
+  lo tiene dalle maniglie e va solo avanti o indietro (due ruote).
+- **Percorsi** (`plan`): ricerca A* su griglia di 8 cm con otto versi per
+  chi porta; ogni posa è provata con la sagoma vera (persona + case +
+  carrello, con Matter.js) contro muri, bordi del pianale, case e persone.
+  Una mappa delle distanze "a piedi" (`distField`) guida la ricerca e dice
+  subito se una meta non si raggiunge. Seguendo la strada ci si ferma per
+  chi passa (bambini, Gerry, il collega), si chiede permesso, dopo un po'
+  si cerca un'altra strada; contro uno spigolo si scivola lungo il muro.
+  Se non si arriva: ci si ferma, il case resta dov'è e la barra d'aiuto
+  dice perché (nessun avanti e indietro: un controllo apposta).
+- **Senso unico** (`LANES`): nel furgone con la rampa e nella porta della
+  palestra si passa uno per volta; chi deve entrare aspetta di lato.
+- **Dal furgone**: un case si sceglie solo se davanti non c'è niente
+  (ACCESSO BLOCCATO, come prima); in più, per un case in mano si prova
+  prima se poi esce dal furgone, e se no si dice quale case togliere prima
+  (es. il QUADRO sopra la VALIGETTA).
+- **Macio**: si sceglie come te. Tu gli dai l'ordine in un fumetto
+  ("Macio, QUADRO in Backstage!") e lui risponde con le sue battute di
+  sempre. Non tocca l'elettronica delicata. Al telefono, l'ordine aspetta.
+- **Case da due** (tavolo, rack, sub): partono quando siete liberi tutti e
+  due; ognuno va al suo lato e il tavolo si alza in due.
+- **Posa**: un posto libero nella zona, dal fondo e lontano dai passaggi
+  (rampa, porta della palestra, posto del carrello); la zona del case
+  resta quella dove l'hai posato (`ce.zone`), come prima.
+- **Bauli dei cavi** (Generico CORRENTE e SEGNALE): per ora niente fisica,
+  sono già nelle loro zone (Backstage, Off Stage) e i cavi si prendono dai
+  pulsanti di sempre al montaggio. Il vano del furgone è 2,1 m.
+- **Urti**: con il percorso che evita i muri non ci sono più colpi da
+  guida; i danni restano quelli già stabiliti dal passaggio al montaggio.
+
+### Scarico pratico e fluido (2026-10-10, pomeriggio)
+
+Richiesta di Luca: lo scarico deve essere semplice da comandare, fluido da
+guardare e credibile, soprattutto sul telefono ("la complessità sta nel
+lavoro del tecnico, non nell'interfaccia e non nella fisica"). Interventi
+mirati sullo scarico a ordini, senza cambiarne la struttura:
+
+- **Telefono, barra degli ordini**: in alto TU, MACIO e CARRELLO (+ SOPRA),
+  sotto ✕ e le quattro zone tutte in vista (prima quella del nastro). Il
+  nome del case si legge sulla scheda in scena, che dice anche chi lo porta
+  e come ("TU · MEDIO · in mano · va in PIT") e DOPO L'ORDINE IN CORSO se
+  chi è scelto è già occupato.
+- **Tocco**: non serve centrare il case, vale il più vicino entro un dito
+  (14 px di schermo); chi è già scelto non "ruba" il tocco a un case.
+- **Telecamera**: sul case scelto; dato l'ordine torna sul furgone, dove c'è
+  il prossimo case (prima seguiva chi lavorava fino in palestra e bisognava
+  trascinare la scena a ogni ordine); scelto un collega, va su di lui.
+- **Macio e l'elettronica**: con Macio scelto, toccando PC o PAR lui dice
+  subito di no e l'ordine passa a TU (prima lo diceva solo alla fine).
+- **Perché è fermo**: sopra la testa (e sul pulsante) una scritta breve
+  gialla: ASPETTA IL FURGONE, ASPETTA LA PORTA, ASPETTA PC, ASPETTA IL
+  COLLEGA, PRONTO, FA PASSARE GERRY; in rosso ✕ NON SI PUÒ quando un ordine
+  si ferma (il perché è nella barra d'aiuto). Zona piena: l'ordine non parte
+  e si dice subito.
+- **Percorsi**: chi porta gira camminando (curve arrotondate partendo dai
+  nodi della griglia, provate sulla posa vera); il carrello e i case a
+  ruote fisse girano solo nel loro verso. Il calcolo guarda anche i giri che
+  mancano per arrivare nel verso giusto: il calcolo più lungo di un giro è
+  circa dimezzato (su questa macchina ~70-200 ms contro ~250-500 ms).
+- **Incroci**: dietro a chi va più piano ci si accoda alla sua velocità;
+  contro chi è fermo ci si ferma a un passo (niente avanti e indietro).
+  Faccia a faccia, chi ha le mani libere si scansa subito, chi porta aspetta
+  un attimo e poi gira attorno. Il collega fermo senza ordini sulla strada:
+  "Permesso!" e si sposta di lato. Gerry col carrello delle pulizie: chi gli
+  sta davanti si fa da parte ("Prego, Gerry!") e riparte quando è passato.
+  Un urto (Gerry, un bambino) non trascina più nessuno: le persone e quello
+  che tengono si muovono solo coi loro passi.
+- **Carrello dal furgone**: il carrello aspetta accanto alla rampa; il case
+  si porta a mano dritto sulla pala (niente più appoggio a terra e manovra
+  per infilarci sotto la pala); se il carrello è lontano lo si va a
+  prendere da soli. Poi + SOPRA, viaggio, scarico, carrello di nuovo alla
+  rampa. Un bambino sulla pala: "Permesso!" e si aspetta.
+- **Prova**: tests/scarico-fluido.js (tocchi veri sul telefono, tre giri
+  completi con controllo di fermate, giri sul posto, carrello e urti,
+  collega fermo, Gerry, zona piena). Su 18 giri diversi dello scarico
+  completo: 18 finiti senza ordini falliti, fermate e ripartenze da
+  ~130-800 a ~80-110 a giro.
+
 ### Revisione fisica del livello 1 (2026-10-07): un sistema solo, la PRESA
 
 Richiesta di Luca: movimento e presa credibili prima di aggiungere altro.
@@ -134,10 +231,19 @@ avanzata. In `scarico.html` (sezione *MOVIMENTO E PRESA*):
   due con un tavolo. Un case da due, da solo, non si muove.
 - **Macio che aiuta** (`joinHelp`, `placeHelpers`): si mette sull'altro
   lato e da lì segue il case; niente più ritardo di 0,4 s né FERMO.
-- **Carrello**: stesso sistema dei case spinti. I case caricati restano
-  oggetti del mondo, messi a posto sopra il carrello a ogni passo e
-  controllati contro i muri col carrello; scaricati tornano case normali.
-- **Furgone**: vano 3,3 × 2 m, parcheggiato col portellone a 3,8 m dalla
+- **Carrello** (note di Luca, 2026-10-08): si prende solo dalle maniglie
+  (dietro). Il case si appoggia a terra, si prende il carrello e si
+  avvicina la pala al case: compare CARICA. Sopra ci sta un secondo case,
+  se è piccolo e da mano: lo prendi, ti avvicini, compare METTI SOPRA.
+  Col carrello in mano, da fermo, compare SCARICA: prima quello sopra va
+  giù di fianco, poi quello sulla pala resta dov'è. Pulsante a parte
+  (tasto F). Il carrello si muove come un case spinto; il carico resta
+  fermo sopra ed è controllato contro i muri.
+- **Furgone stivato pieno**: case uno contro l'altro, senza vuoti, a
+  colonne dal portellone al fondo (carrello, stativi, PAR | generici |
+  tavolo, accessori | quadro, PC, teste | sub, rack). Una sola cinghia in
+  coda al carico tiene fermo tutto.
+- **Furgone**: vano 2,7 × 2 m (pieno), parcheggiato col portellone a 3,8 m dalla
   porta della palestra (prima 7 m); porta della palestra a due ante,
   1,6 m. Persone larghe 38 cm (Macio 42).
 - Test: `tests/scarico-fisica.js` (personaggio, case in mano, carrello,
@@ -153,16 +259,16 @@ il disegno usa la stessa prospettiva isometrica del gioco (`isoFrame`,
 
 ### Controlli
 
-| | Telefono | Tastiera |
-|---|---|---|
-| Muoversi | joystick virtuale a sinistra | WASD / frecce |
-| Prendi / lascia | tasto grande a destra | Spazio |
-| Chiama Macio | tasto AIUTO (tocco = aiutami, tenuto = "porta tu") | E |
-| Oh-issa (sollevare insieme) | tasto OH-ISSA a tempo | Q |
-| Passo attento | joystick poco inclinato | Shift |
-| Frena / FERMO! | rilasciare il joystick; tasto FERMO! | F |
+Dal 2026-10-10 lo scarico va a ordini (vedi sopra).
 
-Niente mira fine: il personaggio si aggancia al lato del case più vicino.
+| | Telefono / mouse | Tastiera |
+|---|---|---|
+| Chi lavora | tocco su TU / MACIO (o sul personaggio) | 1 / 2 |
+| Il case | tocco sul case | — |
+| Col carrello | CARRELLO, poi + SOPRA per un case piccolo | C |
+| Dove | tocco su una zona (pulsante o scena) | — |
+| Annulla / pausa | ✕ / ⏸ | Esc / P |
+| Spostare la vista | trascinare la scena | — |
 
 ### Peso e inerzia
 
