@@ -2683,28 +2683,143 @@ function shade (c, k) {
 }
 function rectPts (c, w, h, a) { return [[-1, -1], [1, -1], [1, 1], [-1, 1]].map(([sx, sy]) => add(c, rot({ x: sx * w / 2, y: sy * h / 2 }, a || 0))); }
 const boxPts = (x1, y1, x2, y2) => [{ x: x1, y: y1 }, { x: x2, y: y1 }, { x: x2, y: y2 }, { x: x1, y: y2 }];
-// un solido: le facce rivolte verso chi guarda (verso il basso dello schermo), poi il coperchio
+/* materiali veri, come nelle foto dell'action figure: la grana si fa una
+   volta sola (due texel per cm, così resta fine anche da vicino) */
+const MAT = {};
+function texture (w, h, paint) {
+  const c = document.createElement('canvas'); c.width = w * 2; c.height = h * 2;
+  const g = c.getContext('2d'); g.scale(2, 2); paint(g, seeded(w * 7 + h)); return c;
+}
+function specks (g, r, w, h, n, cols, s0, s1) {
+  for (let i = 0; i < n; i++) { g.fillStyle = cols[Math.floor(r() * cols.length)]; const s = s0 + r() * (s1 - s0); g.fillRect(r() * w, r() * h, s, s); }
+}
+function mats () {
+  if (MAT.ok) return MAT;
+  const T = {
+    // asfalto: ghiaietto chiaro e scuro nel bitume
+    asphalt: texture(160, 160, (g, r) => { g.fillStyle = '#33363b'; g.fillRect(0, 0, 160, 160); specks(g, r, 160, 160, 2600, ['#3d4046', '#2a2c30', '#45484e', '#26282c', '#4c4f55'], 0.5, 1.6); specks(g, r, 160, 160, 90, ['#55585e', '#1f2125'], 1.5, 2.6); }),
+    // cemento lisciato con le macchie
+    concrete: texture(120, 120, (g, r) => { g.fillStyle = '#5a5d64'; g.fillRect(0, 0, 120, 120); specks(g, r, 120, 120, 1400, ['#62656c', '#53565c', '#676a71', '#4d5056'], 0.4, 1.2); for (let i = 0; i < 6; i++) { g.fillStyle = 'rgba(0,0,0,.05)'; g.beginPath(); g.arc(r() * 120, r() * 120, 8 + r() * 18, 0, 7); g.fill(); } }),
+    // parquet della palestra: listoni di tono diverso, con la venatura
+    wood: texture(216, 144, (g, r) => {
+      // listoni da 9 cm, lunghi, sfalsati, di tono appena diverso
+      g.fillStyle = '#6c4a2d'; g.fillRect(0, 0, 216, 144);
+      for (let y = 0; y < 144; y += 9) for (let x = -r() * 120; x < 216; ) {
+        const L = 110 + r() * 90, t = r();
+        g.fillStyle = `rgb(${100 + t * 14},${70 + t * 10},${42 + t * 7})`; g.fillRect(x, y, L, 9);
+        g.strokeStyle = 'rgba(50,30,14,.13)'; g.lineWidth = 0.5;
+        for (let k = 0; k < 3; k++) { g.beginPath(); const yy = y + 1.5 + r() * 6; g.moveTo(x, yy); g.bezierCurveTo(x + L * 0.3, yy + r() * 2 - 1, x + L * 0.7, yy + r() * 2 - 1, x + L, yy); g.stroke(); }
+        g.fillStyle = 'rgba(0,0,0,.22)'; g.fillRect(x, y, 0.6, 9); x += L;
+      }
+      g.fillStyle = 'rgba(0,0,0,.2)'; for (let y = 0; y < 144; y += 9) g.fillRect(0, y, 216, 0.5);
+    }),
+    // guscio dei flight case: laminato nero a buccia d'arancia
+    shell: texture(40, 40, (g, r) => { g.fillStyle = '#1b1c20'; g.fillRect(0, 0, 40, 40); specks(g, r, 40, 40, 700, ['#24252a', '#151619', '#2a2b30'], 0.4, 1.1); }),
+    // lamiera mandorlata della rampa
+    plate: texture(24, 24, (g, r) => {
+      const gr = g.createLinearGradient(0, 0, 24, 24); gr.addColorStop(0, '#a9afb7'); gr.addColorStop(1, '#8d939b'); g.fillStyle = gr; g.fillRect(0, 0, 24, 24);
+      [[6, 6, 1], [18, 18, 1], [18, 6, -1], [6, 18, -1]].forEach(([x, y, d]) => { g.save(); g.translate(x, y); g.rotate(d * Math.PI / 4); g.fillStyle = '#c8cdd3'; g.fillRect(-4, -1, 8, 2); g.fillStyle = 'rgba(0,0,0,.25)'; g.fillRect(-4, 1, 8, 0.8); g.restore(); });
+      specks(g, r, 24, 24, 60, ['rgba(255,255,255,.15)', 'rgba(0,0,0,.08)'], 0.3, 0.8);
+    }),
+    // rete del recinto, a maglia romboidale
+    mesh: texture(12, 12, g => { g.strokeStyle = 'rgba(196,202,210,.55)'; g.lineWidth = 0.7; g.beginPath(); g.moveTo(0, 0); g.lineTo(12, 12); g.moveTo(12, 0); g.lineTo(0, 12); g.stroke(); })
+  };
+  for (const k in T) { const p = ctx.createPattern(T[k], 'repeat'); if (p.setTransform) p.setTransform(new DOMMatrix().scale(0.5)); MAT[k] = p; }
+  MAT.ok = true;
+  return MAT;
+}
+// un solido: le facce rivolte verso chi guarda (verso il basso dello schermo), poi il coperchio.
+// o.mat: grana sopra il colore (MAT); o.gloss: riflesso della vernice; o.flat: niente luce
 function prism (pts, z0, z1, top, side, o) {
   o = o || {};
-  const n = pts.length; let cx = 0, cy = 0;
+  const n = pts.length, M = mats(), pat = o.mat && M[o.mat];
+  let cx = 0, cy = 0;
   pts.forEach(p => { cx += p.x / n; cy += p.y / n; });
   for (let i = 0; i < n; i++) {
     const a = pts[i], b = pts[(i + 1) % n];
     let nx = b.y - a.y, ny = a.x - b.x; const l = Math.hypot(nx, ny) || 1; nx /= l; ny /= l;
     if (nx * ((a.x + b.x) / 2 - cx) + ny * ((a.y + b.y) / 2 - cy) < 0) { nx = -nx; ny = -ny; }
     if (ny <= 0.02) continue;
-    ctx.fillStyle = shade(side, -nx * 0.14 - (1 - ny) * 0.12);   // luce da sinistra
-    ctx.beginPath(); ctx.moveTo(a.x, a.y - z0 * ZK); ctx.lineTo(b.x, b.y - z0 * ZK); ctx.lineTo(b.x, b.y - z1 * ZK); ctx.lineTo(a.x, a.y - z1 * ZK); ctx.closePath(); ctx.fill();
+    const face = () => { ctx.beginPath(); ctx.moveTo(a.x, a.y - z0 * ZK); ctx.lineTo(b.x, b.y - z0 * ZK); ctx.lineTo(b.x, b.y - z1 * ZK); ctx.lineTo(a.x, a.y - z1 * ZK); ctx.closePath(); };
+    face();
+    ctx.fillStyle = shade(side, -nx * 0.14 - (1 - ny) * 0.12); ctx.fill();   // luce da sinistra
+    if (pat) { ctx.save(); ctx.globalAlpha = o.matA || 0.9; ctx.fillStyle = pat; ctx.fill(); ctx.restore(); }
+    if (!o.flat) {
+      // luce dall'alto: il bordo in alto più chiaro, il piede in ombra (occlusione)
+      const ym = Math.max(a.y, b.y), g = ctx.createLinearGradient(0, ym - z1 * ZK, 0, ym - z0 * ZK);
+      g.addColorStop(0, 'rgba(255,255,255,.10)'); g.addColorStop(0.55, 'rgba(0,0,0,0)'); g.addColorStop(1, z0 > 0 ? 'rgba(0,0,0,.12)' : 'rgba(0,0,0,.32)');
+      ctx.fillStyle = g; ctx.fill();
+      if (o.gloss && Math.hypot(b.x - a.x, b.y - a.y) > 60) {   // riflesso obliquo della vernice
+        const x0 = Math.min(a.x, b.x), w = Math.abs(b.x - a.x);
+        ctx.save(); ctx.clip();
+        const gl = ctx.createLinearGradient(x0 + w * 0.2, 0, x0 + w * 0.45, 0);
+        gl.addColorStop(0, 'rgba(255,255,255,0)'); gl.addColorStop(0.5, 'rgba(255,255,255,.22)'); gl.addColorStop(1, 'rgba(255,255,255,0)');
+        ctx.fillStyle = gl; ctx.fillRect(x0, ym - z1 * ZK - 10, w, (z1 - z0) * ZK + 20);
+        ctx.restore();
+      }
+    }
     if (o.edge) { ctx.strokeStyle = o.edge; ctx.lineWidth = o.edgeW || 1.5; ctx.beginPath(); ctx.moveTo(a.x, a.y - z1 * ZK); ctx.lineTo(b.x, b.y - z1 * ZK); ctx.stroke(); }
   }
-  if (top) { ctx.fillStyle = top; ctx.beginPath(); pts.forEach((p, i) => i ? ctx.lineTo(p.x, p.y - z1 * ZK) : ctx.moveTo(p.x, p.y - z1 * ZK)); ctx.closePath(); ctx.fill(); }
+  if (top) {
+    ctx.beginPath(); pts.forEach((p, i) => i ? ctx.lineTo(p.x, p.y - z1 * ZK) : ctx.moveTo(p.x, p.y - z1 * ZK)); ctx.closePath();
+    ctx.fillStyle = top; ctx.fill();
+    if (pat) { ctx.save(); ctx.globalAlpha = o.matA || 0.9; ctx.fillStyle = pat; ctx.fill(); ctx.restore(); }
+    if (!o.flat) {   // il coperchio prende il sole da in alto a sinistra
+      const xs = pts.map(p => p.x), ys = pts.map(p => p.y - z1 * ZK);
+      const g = ctx.createLinearGradient(Math.min(...xs), Math.min(...ys), Math.max(...xs), Math.max(...ys));
+      g.addColorStop(0, 'rgba(255,255,255,.12)'); g.addColorStop(1, 'rgba(0,0,0,.08)');
+      ctx.fillStyle = g; ctx.fill();
+    }
+  }
 }
-// l'ombra per terra di un solido alto h (sole in alto a sinistra)
+// l'ombra per terra di un solido alto h (sole in alto a sinistra), sfumata:
+// la sagoma si disegna lontano e torna al suo posto solo come ombra
 function dropShadow (pts, h, a) {
-  const dx = h * 0.35, dy = h * 0.22;
-  ctx.fillStyle = 'rgba(0,0,0,' + (a || 0.3) + ')'; ctx.beginPath();
-  pts.forEach((p, i) => i ? ctx.lineTo(p.x + dx, p.y + dy) : ctx.moveTo(p.x + dx, p.y + dy));
+  const dx = h * 0.35, dy = h * 0.22, t = ctx.getTransform(), far = 20000;
+  ctx.save();
+  ctx.shadowColor = 'rgba(0,0,0,' + (a || 0.3) + ')';
+  ctx.shadowBlur = Math.max(2, (4 + h * 0.1) * t.a);
+  ctx.shadowOffsetX = far * t.a; ctx.shadowOffsetY = 0;
+  ctx.fillStyle = '#000'; ctx.beginPath();
+  pts.forEach((p, i) => i ? ctx.lineTo(p.x + dx - far, p.y + dy) : ctx.moveTo(p.x + dx - far, p.y + dy));
   ctx.closePath(); ctx.fill();
+  ctx.restore();
+}
+// le facce di un flight case: laminato con la grana, profili d'alluminio su
+// spigoli e bordi, sfere cromate agli angoli, chiusure a farfalla
+function caseFaces (pts, z0, z1, c) {
+  prism(pts, z0, z1, null, '#1f2025', { mat: 'shell', matA: 0.85 });
+  pts.forEach((a, i) => {
+    const b = pts[(i + 1) % 4], m = { x: (a.x + b.x) / 2 - c.x, y: (a.y + b.y) / 2 - c.y };
+    if (m.y <= 0.5) return;
+    const L = Math.hypot(b.x - a.x, b.y - a.y);
+    // profili: in alto e in basso
+    ctx.strokeStyle = '#c3c8cf'; ctx.lineWidth = 2.4;
+    ctx.beginPath(); ctx.moveTo(a.x, a.y - z1 * ZK + 1); ctx.lineTo(b.x, b.y - z1 * ZK + 1); ctx.stroke();
+    ctx.strokeStyle = '#7d838c'; ctx.lineWidth = 2;
+    ctx.beginPath(); ctx.moveTo(a.x, a.y - z0 * ZK - 1); ctx.lineTo(b.x, b.y - z0 * ZK - 1); ctx.stroke();
+    // la riga del coperchio, un quarto sotto l'alto
+    const zl = z1 - (z1 - z0) * 0.28;
+    ctx.strokeStyle = 'rgba(160,166,175,.8)'; ctx.lineWidth = 1.4;
+    ctx.beginPath(); ctx.moveTo(a.x, a.y - zl * ZK); ctx.lineTo(b.x, b.y - zl * ZK); ctx.stroke();
+    // spigoli verticali
+    [a, b].forEach(q => {
+      const g = ctx.createLinearGradient(q.x - 2, 0, q.x + 2, 0); g.addColorStop(0, '#e8ebef'); g.addColorStop(1, '#7a8089');
+      ctx.fillStyle = g; ctx.fillRect(q.x - 1.8, q.y - z1 * ZK, 3.6, (z1 - z0) * ZK);
+      const s = ctx.createRadialGradient(q.x - 1, q.y - z0 * ZK - 3, 0.3, q.x, q.y - z0 * ZK - 2, 4);
+      s.addColorStop(0, '#fff'); s.addColorStop(0.4, '#bfc4cb'); s.addColorStop(1, '#4f545c');
+      ctx.fillStyle = s; ctx.beginPath(); ctx.ellipse(q.x, q.y - z0 * ZK - 2.5, 3.8, 3.8 * ZK + 0.6, 0, 0, Math.PI * 2); ctx.fill();
+    });
+    // chiusure a farfalla sulla riga del coperchio (sui lati lunghi due)
+    if (L > 24 && z1 - z0 > 20) {
+      const k = L > 50 ? [0.25, 0.75] : [0.5];
+      k.forEach(t => {
+        const x = a.x + (b.x - a.x) * t, y = a.y + (b.y - a.y) * t - zl * ZK;
+        ctx.fillStyle = '#d5d9df'; ctx.fillRect(x - 3.5, y - 2.5, 7, 6);
+        ctx.fillStyle = 'rgba(0,0,0,.35)'; ctx.fillRect(x - 3.5, y + 2.5, 7, 1); ctx.fillRect(x - 0.6, y - 1.5, 1.2, 3.5);
+      });
+    }
+  });
 }
 // la faccia davanti (y massima) di un case, per l'ordine di disegno
 const frontY = pts => Math.max(...pts.map(p => p.y));
@@ -2746,13 +2861,16 @@ function drawFigure (p, who, hU, o) {
 
 function drawGround () {
   // strada e marciapiede fuori
-  ctx.fillStyle = '#1a1b1f'; ctx.fillRect(WORLD.x1 - 400, WORLD.y1 - 400, 3000, 1800);
-  ctx.fillStyle = '#23252a'; ctx.fillRect(VAN.x1 - 200, VAN.y1 - 80, DOOR_X - VAN.x1 + 200, VAN.y2 - VAN.y1 + 160);
-  // cortile in asfalto
-  ctx.fillStyle = '#2d3036'; ctx.fillRect(DOOR_X, 88, GYM_X - DOOR_X, 826);
-  ctx.save(); ctx.globalAlpha = 0.5; const r = seeded(7);
-  ctx.fillStyle = '#3a3d44'; for (let i = 0; i < 200; i++) ctx.fillRect(DOOR_X + r() * (GYM_X - DOOR_X), 90 + r() * 820, 2, 2);
-  ctx.restore();
+  const M = mats();
+  ctx.fillStyle = M.asphalt; ctx.fillRect(WORLD.x1 - 400, WORLD.y1 - 400, 3000, 1800);
+  ctx.fillStyle = 'rgba(8,9,11,.55)'; ctx.fillRect(WORLD.x1 - 400, WORLD.y1 - 400, 3000, 1800);
+  ctx.fillStyle = 'rgba(8,9,11,.25)'; ctx.fillRect(VAN.x1 - 200, VAN.y1 - 80, DOOR_X - VAN.x1 + 200, VAN.y2 - VAN.y1 + 160);
+  // cortile in asfalto, più chiaro al sole, con le toppe di catrame
+  ctx.fillStyle = M.asphalt; ctx.fillRect(DOOR_X, 88, GYM_X - DOOR_X, 826);
+  const r = seeded(7);
+  for (let i = 0; i < 9; i++) { ctx.fillStyle = 'rgba(14,15,18,' + (0.12 + r() * 0.12) + ')'; ctx.beginPath(); ctx.ellipse(DOOR_X + 40 + r() * 300, 140 + r() * 720, 20 + r() * 50, 12 + r() * 30, r() * 3, 0, Math.PI * 2); ctx.fill(); }
+  // cordolo in cemento lungo il recinto
+  ctx.fillStyle = M.concrete; ctx.fillRect(DOOR_X + 4, 92, GYM_X - DOOR_X - 14, 14); ctx.fillRect(DOOR_X + 4, 894, GYM_X - DOOR_X - 14, 14);
   // strisce del parcheggio accanto al furgone, tombino, crepe e foglie
   ctx.strokeStyle = 'rgba(238,233,223,.18)'; ctx.lineWidth = 3;
   [[VAN.x1 + 40, VAN.y1 - 44], [VAN.x1 + 40, VAN.y2 + 44]].forEach(([x, y]) => { ctx.beginPath(); ctx.moveTo(x, y); ctx.lineTo(x + 110, y); ctx.stroke(); });
@@ -2780,9 +2898,10 @@ function drawGround () {
   ctx.save(); ctx.fillStyle = 'rgba(238,233,223,.07)'; ctx.font = '700 64px "Barlow Condensed", sans-serif'; ctx.textAlign = 'center';
   ctx.fillText('I.C. GALILEI', (DOOR_X + GYM_X) / 2, 420); ctx.restore();
   // palestra: parquet
-  ctx.fillStyle = '#5a3d25'; ctx.fillRect(GYM_X, 140, 700, 720);
+  ctx.fillStyle = mats().wood; ctx.fillRect(GYM_X, 140, 700, 720);
+  ctx.fillStyle = 'rgba(255,214,150,.06)'; ctx.fillRect(GYM_X, 140, 700, 720);   // vernice lucida del parquet
   ctx.strokeStyle = 'rgba(0,0,0,.18)'; ctx.lineWidth = 1;
-  for (let y = 150; y < 860; y += 18) { ctx.beginPath(); ctx.moveTo(GYM_X, y); ctx.lineTo(1860, y); ctx.stroke(); }
+
   ctx.strokeStyle = 'rgba(255,220,160,.12)'; ctx.lineWidth = 3;
   ctx.strokeRect(1200, 190, 620, 620); ctx.beginPath(); ctx.arc(1510, 500, 70, 0, Math.PI * 2); ctx.stroke();
   // luce delle finestrone sul parquet
@@ -2852,9 +2971,11 @@ function drawStatics () {
   const rk = G.van && G.van.ramp ? 1 : (G.van && G.van.rampK) || 0;
   if (rk > 0) {
     const rw = RAMP.w * rk;
-    ctx.fillStyle = '#8f959e'; ctx.fillRect(RAMP.x, RAMP.y, rw, RAMP.h);
-    ctx.strokeStyle = '#6b7078'; ctx.lineWidth = 2;
-    for (let x = RAMP.x + 6; x < RAMP.x + rw; x += 9) { ctx.beginPath(); ctx.moveTo(x, RAMP.y + 3); ctx.lineTo(x, RAMP.y + RAMP.h - 3); ctx.stroke(); }
+    // lamiera mandorlata, più scura verso terra; lo spessore si vede davanti
+    ctx.fillStyle = mats().plate; ctx.fillRect(RAMP.x, RAMP.y, rw, RAMP.h);
+    const rg = ctx.createLinearGradient(RAMP.x, 0, RAMP.x + rw, 0); rg.addColorStop(0, 'rgba(255,255,255,.12)'); rg.addColorStop(1, 'rgba(0,0,0,.18)');
+    ctx.fillStyle = rg; ctx.fillRect(RAMP.x, RAMP.y, rw, RAMP.h);
+    ctx.fillStyle = '#5f646c'; ctx.fillRect(RAMP.x, RAMP.y + RAMP.h, rw, 4);
     ctx.strokeStyle = '#555a62'; ctx.lineWidth = 4; ctx.strokeRect(RAMP.x, RAMP.y, rw, RAMP.h);
     if (rk === 1) {
       ctx.fillStyle = 'rgba(20,21,25,.55)';
@@ -2905,24 +3026,26 @@ function sceneSolids (put) {
   // furgone: parete in fondo e testata alte, la fiancata davanti tagliata
   // bassa (come in uno spaccato) così il carico si vede; cabina piena
   put(Y0 - 30, () => {
-    prism(boxPts(X0 - 12, Y0 - 24, X1, Y0), 0, 150, '#f1f2f4', '#d3d6db', { edge: '#ffffff' });
+    prism(boxPts(X0 - 12, Y0 - 24, X1, Y0), 0, 150, '#f1f2f4', '#c9ccd1', { edge: '#ffffff' });
     ctx.fillStyle = 'rgba(0,0,0,.07)';   // costole della parete
     for (let x = X0 + 20; x < X1; x += 38) ctx.fillRect(x, Y0 - 150 * ZK, 3, 150 * ZK);
   });
-  put(Y0 - 29, () => prism(boxPts(X0 - 12, Y0 - 24, X0, Y1 + 24), 0, 150, '#f1f2f4', '#d3d6db'));
+  put(Y0 - 29, () => prism(boxPts(X0 - 12, Y0 - 24, X0, Y1 + 24), 0, 150, '#f1f2f4', '#c9ccd1'));
   put(Y1 + 25, () => {
     const C = boxPts(X0 - 160, Y0 - 24, X0 - 12, Y1 + 24);
-    prism(C, 0, 175, '#e9ebee', '#cfd2d7', { edge: '#f6f7f8' });
-    // parabrezza sul muso, vetro della portiera e il marchio sul tetto
-    ctx.fillStyle = '#2c3a48';
-    ctx.beginPath(); ctx.moveTo(X0 - 160, Y0 - 10 - 175 * ZK); ctx.lineTo(X0 - 124, Y0 - 10 - 175 * ZK); ctx.lineTo(X0 - 124, Y1 + 10 - 175 * ZK); ctx.lineTo(X0 - 160, Y1 + 10 - 175 * ZK); ctx.fill();
-    ctx.fillStyle = '#3d4f61'; ctx.fillRect(X0 - 150, Y1 + 24 - 160 * ZK, 70, 60 * ZK);
+    prism(C, 0, 175, '#eceef1', '#d5d8dd', { edge: '#ffffff', gloss: true });
+    // parabrezza sul muso (vetro scuro che riflette il cielo), vetro della portiera
+    const glass = (x, y, w, h) => { const g = ctx.createLinearGradient(x, y, x + w, y + h); g.addColorStop(0, '#5d7286'); g.addColorStop(0.45, '#1f2a35'); g.addColorStop(0.6, '#2c3b4a'); g.addColorStop(1, '#141b22'); ctx.fillStyle = g; ctx.fillRect(x, y, w, h); ctx.strokeStyle = '#111317'; ctx.lineWidth = 2; ctx.strokeRect(x, y, w, h); };
+    glass(X0 - 160, Y0 - 10 - 175 * ZK, 36, Y1 - Y0 + 20);
+    glass(X0 - 150, Y1 + 24 - 160 * ZK, 70, 60 * ZK);
+    ctx.fillStyle = '#9aa0a8'; ctx.fillRect(X0 - 70, Y1 + 24 - 105 * ZK, 14, 3);   // maniglia della portiera
+    ctx.fillStyle = '#c9ccd1'; ctx.fillRect(X0 - 172, Y1 + 18 - 120 * ZK, 12, 22 * ZK);   // specchietto
     ctx.fillStyle = LIVERY.bg; ctx.beginPath(); ctx.ellipse(X0 - 70, (Y0 + Y1) / 2 - 175 * ZK, 22, 22, 0, 0, Math.PI * 2); ctx.fill();
     ctx.strokeStyle = LIVERY.fg; ctx.lineWidth = 3; ctx.beginPath(); ctx.ellipse(X0 - 70, (Y0 + Y1) / 2 - 175 * ZK, 15, 15, 0, 0, Math.PI * 2); ctx.stroke();
     wheel(X0 - 105, Y1 + 24, 30);
   });
   put(Y1 + 24, () => {
-    prism(boxPts(X0 - 12, Y1, X1, Y1 + 24), 0, 36, '#f1f2f4', '#e3e5e9', { edge: '#ffffff' });
+    prism(boxPts(X0 - 12, Y1, X1, Y1 + 24), 0, 36, '#f1f2f4', '#e3e5e9', { edge: '#ffffff', gloss: true });
     // livrea del service sulla fiancata e le ruote che spuntano sotto
     const fy = Y1 + 24;
     ctx.fillStyle = LIVERY.bg; ctx.fillRect(X0 - 12, fy - 12 * ZK, X1 - X0 + 12, 6 * ZK);
@@ -2940,7 +3063,7 @@ function sceneSolids (put) {
     const a = sd * (Math.PI / 2 - da * Math.PI * 1.5);
     const tip = { x: X1 + Math.cos(a) * DL, y: hy + Math.sin(a) * DL };
     const pts = rectPts({ x: (X1 + tip.x) / 2, y: (hy + tip.y) / 2 }, DL, 8, a);
-    put(frontY(pts), () => prism(pts, 0, dh, '#dfe1e5', '#c3c7cd', { edge: '#9aa0a8' }));
+    put(frontY(pts), () => prism(pts, 0, dh, '#e6e8eb', '#cdd0d5', { edge: '#9aa0a8', gloss: true }));
   });
   // muri e recinto (i pezzi lunghi a fette, per l'ordine di disegno)
   for (const b of G.statics) {
@@ -2952,37 +3075,40 @@ function sceneSolids (put) {
     for (let y = bb.min.y; y < bb.max.y; y += step) {
       const y2 = Math.min(bb.max.y, y + step), pts = boxPts(bb.min.x, y, bb.max.x, y2);
       put(y2, fence ? () => {
-        prism(pts, 0, hgt, null, 'rgba(154,160,168,.16)');
-        ctx.strokeStyle = 'rgba(190,196,204,.35)'; ctx.lineWidth = 1;   // rete
-        if (horiz) { ctx.beginPath(); for (let x = bb.min.x; x < bb.max.x; x += 10) { ctx.moveTo(x, y2); ctx.lineTo(x + 8, y2 - hgt * ZK); } ctx.stroke(); }
-        prism(pts, hgt - 3, hgt, '#9aa0a8', '#7d838b');
-        ctx.fillStyle = '#8d939b';
-        if (horiz) for (let x = bb.min.x; x <= bb.max.x; x += 60) ctx.fillRect(x - 2, y2 - hgt * ZK, 4, hgt * ZK);
+        // rete a maglia zincata, pali tondi e corrimano
+        if (horiz) { ctx.fillStyle = mats().mesh; ctx.fillRect(bb.min.x, y2 - hgt * ZK, bb.max.x - bb.min.x, hgt * ZK); }
+        prism(pts, hgt - 3, hgt, '#b3b9c1', '#8d939b', { flat: true });
+        const post = x => { const g = ctx.createLinearGradient(x - 2.5, 0, x + 2.5, 0); g.addColorStop(0, '#d9dde2'); g.addColorStop(1, '#6d737b'); ctx.fillStyle = g; ctx.fillRect(x - 2.5, y2 - hgt * ZK, 5, hgt * ZK); };
+        if (horiz) for (let x = bb.min.x; x <= bb.max.x; x += 60) post(x);
         else ctx.fillRect(bb.min.x, y2 - hgt * ZK, bb.max.x - bb.min.x, 3);
-      } : () => prism(pts, 0, hgt, '#6a6e77', '#50545d', { edge: '#7a7e87' }));
+      } : () => prism(pts, 0, hgt, '#6e727a', '#5a5e66', { edge: '#8a8e96', mat: 'concrete', matA: 0.55 }));
     }
   }
   // sedie impilate, panchina, tavolino con la moka
   put(220, () => {
-    prism(boxPts(1640, 170, 1740, 220), 0, 95, '#26303d', '#1d2530');
+    prism(boxPts(1640, 170, 1740, 220), 0, 95, '#2b3646', '#1d2530');
     ctx.strokeStyle = '#3d4b5e'; ctx.lineWidth = 2;
     for (let x = 1648; x < 1740; x += 12) { ctx.beginPath(); ctx.moveTo(x, 220); ctx.lineTo(x, 220 - 95 * ZK); ctx.stroke(); }
   });
   put(BENCH.y + 26, () => {
-    prism(boxPts(BENCH.x, BENCH.y, BENCH.x + 110, BENCH.y + 26), 0, 42, '#6a4a2c', '#4b331d');
+    prism(boxPts(BENCH.x, BENCH.y, BENCH.x + 110, BENCH.y + 26), 0, 42, '#7a5532', '#4b331d', { mat: 'wood', matA: 0.5 });
     ctx.strokeStyle = '#4b331d'; ctx.lineWidth = 1.5;
     for (let y = BENCH.y + 6; y < BENCH.y + 24; y += 7) { ctx.beginPath(); ctx.moveTo(BENCH.x + 4, y - 42 * ZK); ctx.lineTo(BENCH.x + 106, y - 42 * ZK); ctx.stroke(); }
   });
-  put(MOKA.y - 29, () => { prism(boxPts(MOKA.x - 30, MOKA.y - 57, MOKA.x + 30, MOKA.y - 29), 0, 74, '#7a6a58', '#5b4e40'); ctx.save(); lift(74); drawMoka(); ctx.restore(); });
+  put(MOKA.y - 29, () => { prism(boxPts(MOKA.x - 30, MOKA.y - 57, MOKA.x + 30, MOKA.y - 29), 0, 74, '#8a7660', '#5b4e40', { mat: 'wood', matA: 0.45 }); ctx.save(); lift(74); drawMoka(); ctx.restore(); });
   put(TREE.y + 6, () => {   // il tronco (la chioma si disegna alla fine, sopra tutto)
-    ctx.fillStyle = '#4b3524'; ctx.fillRect(TREE.x - 7, TREE.y - 170 * ZK, 14, 170 * ZK);
-    ctx.fillStyle = '#3a291c'; ctx.fillRect(TREE.x + 2, TREE.y - 170 * ZK, 5, 170 * ZK);
+    const g = ctx.createLinearGradient(TREE.x - 8, 0, TREE.x + 8, 0); g.addColorStop(0, '#6b5038'); g.addColorStop(0.5, '#4b3524'); g.addColorStop(1, '#2c1f15');
+    ctx.fillStyle = g; ctx.beginPath(); ctx.moveTo(TREE.x - 10, TREE.y); ctx.lineTo(TREE.x - 6, TREE.y - 170 * ZK); ctx.lineTo(TREE.x + 6, TREE.y - 170 * ZK); ctx.lineTo(TREE.x + 10, TREE.y); ctx.fill();
+    ctx.strokeStyle = 'rgba(20,12,6,.4)'; ctx.lineWidth = 1; for (let k = 0; k < 5; k++) { ctx.beginPath(); ctx.moveTo(TREE.x - 6 + k * 3, TREE.y); ctx.lineTo(TREE.x - 4 + k * 2, TREE.y - 170 * ZK); ctx.stroke(); }
   });
 }
 // una ruota vista di fianco (in pianta il cerchio va allungato di 1/KY)
 function wheel (x, fy, r) {
-  ctx.fillStyle = '#111214'; ctx.beginPath(); ctx.ellipse(x, fy - r * ZK, r, r * ZK, 0, 0, Math.PI * 2); ctx.fill();
-  ctx.fillStyle = '#9aa0a8'; ctx.beginPath(); ctx.ellipse(x, fy - r * ZK, r * 0.38, r * 0.38 * ZK, 0, 0, Math.PI * 2); ctx.fill();
+  const cy = fy - r * ZK, el = (k, f) => { ctx.fillStyle = f; ctx.beginPath(); ctx.ellipse(x, cy, r * k, r * k * ZK, 0, 0, Math.PI * 2); ctx.fill(); };
+  el(1, '#141518'); el(0.86, '#24262a');
+  const h = ctx.createRadialGradient(x - r * 0.15, cy - r * 0.12 * ZK, 1, x, cy, r * 0.55);
+  h.addColorStop(0, '#f1f3f6'); h.addColorStop(0.6, '#9aa0a8'); h.addColorStop(1, '#565b63');
+  el(0.55, h); el(0.16, '#3b3f45');
 }
 function drawTreeShadow () {
   ctx.fillStyle = 'rgba(0,0,0,.25)'; ctx.beginPath(); ctx.ellipse(TREE.x + 70, TREE.y + 40, 66, 50, 0, 0, Math.PI * 2); ctx.fill();
@@ -2991,10 +3117,16 @@ function drawTreeShadow () {
 function drawTreeTop () {
   ctx.save(); lift(190);
   const X = TREE.x, Y = TREE.y, ball = (x, y, r) => { ctx.beginPath(); ctx.ellipse(X + x, Y + y / KY, r, r / KY, 0, 0, Math.PI * 2); ctx.fill(); };
-  ctx.globalAlpha = 0.96;
-  ctx.fillStyle = '#27432f'; ball(0, 0, 62);
-  ctx.fillStyle = '#34583d'; [[-20, -22, 28], [25, -12, 24], [-5, 22, 26]].forEach(([x, y, r]) => ball(x, y, r));
-  ctx.fillStyle = 'rgba(255,255,255,.06)'; ball(-22, -26, 18);
+  ctx.globalAlpha = 0.97;
+  ctx.fillStyle = '#1d3524'; ball(0, 4, 62);
+  // ciuffi di foglie: più chiari verso il sole (in alto a sinistra)
+  const r = seeded(11);
+  for (let i = 0; i < 70; i++) {
+    const a = r() * Math.PI * 2, d = Math.sqrt(r()) * 52, x = Math.cos(a) * d, y = Math.sin(a) * d, sz = 9 + r() * 12;
+    const lit = clamp(0.5 - (x + y) / 140, 0, 1), g = ctx.createRadialGradient(X + x - sz * 0.3, Y + (y - sz * 0.3) / KY, 1, X + x, Y + y / KY, sz);
+    g.addColorStop(0, `rgb(${70 + lit * 50},${110 + lit * 50},${60 + lit * 25})`); g.addColorStop(1, `rgba(${28 + lit * 20},${54 + lit * 25},${34 + lit * 10},0)`);
+    ctx.fillStyle = g; ball(x, y, sz);
+  }
   ctx.restore();
 }
 // il telo grigio sopra il baule in fondo al furgone (vola via alla sorpresa)
@@ -3055,7 +3187,8 @@ function drawTrolley () {
   ctx.lineCap = 'round';
   [-1, 1].forEach(sy => {
     const y = sy * (h / 2 - 10);
-    ctx.strokeStyle = '#c2353a'; ctx.lineWidth = 5; ctx.beginPath(); ctx.moveTo(...P3(w / 2 - 12, y, 4)); ctx.lineTo(...P3(-w / 2 - 6, y, 100)); ctx.stroke();
+    ctx.strokeStyle = '#a3262c'; ctx.lineWidth = 5; ctx.beginPath(); ctx.moveTo(...P3(w / 2 - 12, y, 4)); ctx.lineTo(...P3(-w / 2 - 6, y, 100)); ctx.stroke();
+    ctx.strokeStyle = 'rgba(255,170,170,.55)'; ctx.lineWidth = 1.4; ctx.beginPath(); ctx.moveTo(...P3(w / 2 - 12, y - 1.2, 5)); ctx.lineTo(...P3(-w / 2 - 6, y - 1.2, 101)); ctx.stroke();   // riflesso del tubo
     ctx.strokeStyle = '#2b2d33'; ctx.lineWidth = 5; ctx.beginPath(); ctx.moveTo(...P3(-w / 2 - 6, y, 100)); ctx.lineTo(...P3(-w / 2 - 12, y, 104)); ctx.stroke();
   });
   ctx.strokeStyle = '#c2353a'; ctx.lineWidth = 3;
@@ -3085,27 +3218,31 @@ function drawCase (ce) {
   // ruote che sporgono dagli angoli: le piroettanti girano col moto
   if (!lifted && !ce.onTrolley && (ce.wheel === 'swivel' || ce.wheel === 'fixed')) {
     const lv = rot(b.velocity, -b.angle), sw = len(lv) > 0.3 ? Math.atan2(lv.y, lv.x) : 0;
-    ctx.fillStyle = '#0c0d10';
     [[-1, -1], [1, -1], [-1, 1], [1, 1]].forEach(([sx, sy]) => {
       ctx.save(); ctx.translate(sx * (w / 2 - 6), sy * (h / 2 + 1));
       if (ce.wheel === 'swivel') ctx.rotate(sw);
-      rr(-6, -3, 12, 6, 3); ctx.fill(); ctx.restore();
+      ctx.fillStyle = '#0c0d10'; rr(-6, -3.5, 12, 7, 3); ctx.fill();
+      ctx.fillStyle = '#6b7079'; ctx.fillRect(-2, -3.5, 4, 7); ctx.restore();
     });
   }
   ctx.restore();
-  // le facce davanti: guscio nero con i profili in alluminio
-  prism(pts, z0, z1, null, '#1d1e23', { edge: '#9aa0a8', edgeW: 2 });
+  // le facce davanti: guscio nero a buccia d'arancia con i profili in alluminio
+  caseFaces(pts, z0, z1, b.position);
   ctx.save(); ctx.translate(b.position.x, b.position.y - z1 * ZK);
   ctx.rotate(b.angle);
-  // guscio
-  ctx.fillStyle = '#1b1c20'; rr(-w / 2, -h / 2, w, h, 4); ctx.fill();
-  ctx.fillStyle = '#2b2d33'; rr(-w / 2 + 3, -h / 2 + 3, w - 6, h - 6, 3); ctx.fill();
-  if (d.tall) { ctx.strokeStyle = '#3d4048'; ctx.lineWidth = 2; ctx.strokeRect(-w / 2 + 8, -h / 2 + 8, w - 16, h - 16); }
-  // riflesso sul bordo in alto a sinistra e maniglie incassate sui lati corti
-  ctx.strokeStyle = 'rgba(255,255,255,.12)'; ctx.lineWidth = 1.5;
-  ctx.beginPath(); ctx.moveTo(-w / 2 + 4, h / 2 - 5); ctx.lineTo(-w / 2 + 4, -h / 2 + 4); ctx.lineTo(w / 2 - 5, -h / 2 + 4); ctx.stroke();
+  // coperchio: laminato con la grana, profilo in alluminio tutto intorno
+  ctx.fillStyle = mats().shell; rr(-w / 2, -h / 2, w, h, 3); ctx.fill();
+  const sh = ctx.createLinearGradient(-w / 2, -h / 2, w / 2, h / 2);
+  sh.addColorStop(0, 'rgba(255,255,255,.10)'); sh.addColorStop(0.5, 'rgba(255,255,255,.02)'); sh.addColorStop(1, 'rgba(0,0,0,.18)');
+  ctx.fillStyle = sh; rr(-w / 2, -h / 2, w, h, 3); ctx.fill();
+  const al = ctx.createLinearGradient(-w / 2, -h / 2, w / 2, h / 2);
+  al.addColorStop(0, '#eef1f5'); al.addColorStop(0.45, '#9ba1aa'); al.addColorStop(0.55, '#c9ced5'); al.addColorStop(1, '#6f757e');
+  ctx.strokeStyle = al; ctx.lineWidth = 2.6; rr(-w / 2 + 1.3, -h / 2 + 1.3, w - 2.6, h - 2.6, 2.5); ctx.stroke();
+  ctx.strokeStyle = 'rgba(0,0,0,.45)'; ctx.lineWidth = 0.8; rr(-w / 2 + 3, -h / 2 + 3, w - 6, h - 6, 2); ctx.stroke();
+  if (d.tall) { ctx.strokeStyle = 'rgba(0,0,0,.4)'; ctx.lineWidth = 1.5; ctx.strokeRect(-w / 2 + 8, -h / 2 + 8, w - 16, h - 16); ctx.strokeStyle = 'rgba(255,255,255,.08)'; ctx.strokeRect(-w / 2 + 9.5, -h / 2 + 9.5, w - 19, h - 19); }
+  // maniglie incassate sui lati corti: vaschetta d'acciaio col manico
   if (Math.min(w, h) >= 26) {
-    ctx.fillStyle = '#0e0f12'; ctx.strokeStyle = '#6a6e76'; ctx.lineWidth = 1;
+    ctx.fillStyle = '#0e0f12'; ctx.strokeStyle = '#b9bec6'; ctx.lineWidth = 1;
     const hl = Math.min(16, Math.min(w, h) - 14);
     if (w >= h) { [-1, 1].forEach(sx => { rr(sx * (w / 2 - 5) - 2, -hl / 2, 4, hl, 2); ctx.fill(); ctx.stroke(); }); }
     else { [-1, 1].forEach(sy => { rr(-hl / 2, sy * (h / 2 - 5) - 2, hl, 4, 2); ctx.fill(); ctx.stroke(); }); }
@@ -3115,13 +3252,21 @@ function drawCase (ce) {
   const long = w >= h;
   ctx.save(); if (!long) ctx.rotate(Math.PI / 2);
   const L = long ? w : h;
-  ctx.fillStyle = z.color; ctx.fillRect(-L / 2 + 5, -6, L - 10, 12);
+  // nastro telato: bordi un po' irregolari, la trama e un filo di lucido
+  ctx.fillStyle = z.color; ctx.beginPath(); ctx.moveTo(-L / 2 + 5, -6);
+  for (let x = -L / 2 + 5; x <= L / 2 - 5; x += 4) ctx.lineTo(x, -6 + (Math.sin(x * 3.1 + ce.seed) * 0.5));
+  ctx.lineTo(L / 2 - 5, 6); for (let x = L / 2 - 5; x >= -L / 2 + 5; x -= 4) ctx.lineTo(x, 6 + (Math.sin(x * 2.3 + ce.seed) * 0.5)); ctx.closePath(); ctx.fill();
+  ctx.fillStyle = 'rgba(255,255,255,.18)'; ctx.fillRect(-L / 2 + 5, -6, L - 10, 3);
+  ctx.fillStyle = 'rgba(0,0,0,.12)'; for (let x = -L / 2 + 7; x < L / 2 - 5; x += 3) ctx.fillRect(x, -6, 0.6, 12);
   ctx.fillStyle = '#141519'; ctx.font = '700 10px "Barlow Condensed", sans-serif'; ctx.textAlign = 'center';
   ctx.fillText(d.short, 0, 4, L - 14);
   ctx.restore();
-  // angolari
-  ctx.fillStyle = '#a9adb4';
-  [[-1, -1], [1, -1], [-1, 1], [1, 1]].forEach(([sx, sy]) => ctx.fillRect(sx * w / 2 - (sx > 0 ? 7 : 0), sy * h / 2 - (sy > 0 ? 7 : 0), 7, 7));
+  // angolari a sfera cromati
+  [[-1, -1], [1, -1], [-1, 1], [1, 1]].forEach(([sx, sy]) => {
+    const x = sx * (w / 2 - 3.5), y = sy * (h / 2 - 3.5), g = ctx.createRadialGradient(x - 1.2, y - 1.4, 0.4, x, y, 4.6);
+    g.addColorStop(0, '#ffffff'); g.addColorStop(0.35, '#c9ced5'); g.addColorStop(1, '#4f545c');
+    ctx.fillStyle = g; ctx.beginPath(); ctx.arc(x, y, 4.4, 0, Math.PI * 2); ctx.fill();
+  });
   // graffi secondo il danno
   const n = Math.floor((100 - ce.integrity) / 7);
   if (n > 0) {
@@ -3403,7 +3548,12 @@ function render () {
   ctx.fillStyle = '#141519'; ctx.fillRect(0, 0, cv.width, cv.height);
   ctx.setTransform(DPR * scale, 0, 0, DPR * scale * KY, DPR * (W / 2 - G.cam.x * scale), DPR * (H / 2 - G.cam.y * scale * KY));
   // per terra: cortile, zone, pianale, rampa, gli ordini
-  drawGround(); drawZones(); drawStatics(); drawTreeShadow();
+  drawGround();
+  // la luce del pomeriggio: calda da in alto a sinistra, più fresca in basso a destra
+  const sun = ctx.createLinearGradient(VAN.x1, WORLD.y1, GYM_X + 400, WORLD.y2);
+  sun.addColorStop(0, 'rgba(255,214,150,.10)'); sun.addColorStop(0.6, 'rgba(255,214,150,0)'); sun.addColorStop(1, 'rgba(40,60,90,.12)');
+  ctx.fillStyle = sun; ctx.fillRect(WORLD.x1 - 400, WORLD.y1 - 400, 3000, 1800);
+  drawZones(); drawStatics(); drawTreeShadow();
   drawOrders();
   // in piedi: dal fondo verso chi guarda (y della faccia davanti)
   const L = [], put = (y, f) => L.push({ y, f });
