@@ -709,6 +709,19 @@ non toccano la scena di Phaser.
   soli un case da due; ruote dei case (le piroettanti girano col moto) e
   maniglie; polvere negli urti, scintille nei danni, onda colorata alle
   consegne, vapore della moka. L'isometrico resta un'idea per dopo.
+- **Vista S1** (2026-10-10): dall'alto con la telecamera inclinata in
+  avanti, scelta da Luca. Cambia solo il disegno: la fisica resta in pianta.
+  A schermo y si accorcia (`KY` 0,78) e le altezze salgono (`KZ` 0,63):
+  dei case, del furgone, dei muri, della panchina e della moka si vedono
+  coperchio e faccia davanti, disegnati dal fondo verso chi guarda. La
+  fiancata davanti del furgone e il muro in fondo alla palestra sono
+  tagliati bassi, così il carico e le zone si vedono. Le altezze dei case
+  sono in `CASE_Z`. I tocchi prendono la sagoma in piedi (coperchio e
+  facce, `caseAtScreen`), le persone si toccano anche sulla testa.
+  Personaggi in piedi: Topsy è la foto della sua action figure
+  (`img/personaggi/topsy-s1.png`), gli altri il ritratto a caricatura di
+  oggi (`personaggi-s1.js`) finché non hanno la loro immagine; senza
+  immagine, una sagoma. Test: `tests/scarico-s1.js`.
 - **Più avanti**: i case consegnati nella zona sbagliata costano solo
   tempo (potranno comparire lì nel montaggio); scenari 2-5 coi mezzi più
   grandi.
