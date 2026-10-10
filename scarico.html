@@ -253,6 +253,7 @@ if (EMBED) {
 }
 </script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/matter-js/0.19.0/matter.min.js"></script>
+<script src="personaggi-s1.js"></script>
 <script>
 'use strict';
 // senza rete Matter.js non arriva: si può solo saltare (vedi in fondo)
@@ -2530,11 +2531,31 @@ function caseAt (p, m) {
   }
   return best && { ce: best, d: bd };
 }
-function tapAt (p) {
+// il case sotto un punto dello schermo: si prova il punto a ogni altezza del
+// case (coperchio e facce davanti); a parità vince quello disegnato sopra
+function caseAtScreen (sp, m) {
+  let best = null, bd = Infinity, bk = -Infinity;
+  for (const ce of G.cases) {
+    if (ce.hidden) continue;
+    const z0 = caseZ(ce), z1 = z0 + caseH(ce);
+    let d = Infinity;
+    for (let z = z0; z <= z1 + 0.1; z += Math.max(4, (z1 - z0) / 12)) d = Math.min(d, Math.max(0, surface(ce, screenToWorld(sp, z)).dist));
+    if (d > m) continue;
+    const k = frontY(rectPts(ce.body.position, ce.def.w, ce.def.h, ce.body.angle)) + z0 * 0.01;
+    if (d < bd - 0.5 || (Math.abs(d - bd) <= 0.5 && k > bk)) { bd = d; bk = k; best = ce; }
+  }
+  return best && { ce: best, d: bd };
+}
+function tapAt (p, sp) {
   if (!G || G.mode !== 'play') return;
-  const m = Math.max(6, TAP_PX / G.cam.scale), hit = caseAt(p, m);
+  const m = Math.max(6, TAP_PX / G.cam.scale), hit = sp ? caseAtScreen(sp, m) : caseAt(p, m);
   let who = null, wd = Infinity;
-  for (const w of G.workers) { const d = Math.max(0, len(sub(p, w.body.position)) - w.r); if (d <= m && d < wd) { wd = d; who = w; } }
+  for (const w of G.workers) {
+    // le persone in piedi: dai piedi alla testa
+    let d = Infinity;
+    for (let z = 0; z <= 160; z += 20) d = Math.min(d, Math.max(0, len(sub(sp ? screenToWorld(sp, z) : p, w.body.position)) - w.r));
+    if (d <= m && d < wd) { wd = d; who = w; }
+  }
   // chi è già scelto non si riprende: se lì vicino c'è un case, vale il case
   if (who && (!hit || (who !== G.sel.who && (wd < hit.d || (wd === 0 && hit.d > 0))))) { selectWorker(who); return; }
   const ce = hit && hit.ce;
@@ -2547,7 +2568,7 @@ function tapAt (p) {
   if (G.sel.pickTop) return;
   cancelSel();
 }
-function screenToWorld (s) { return { x: (s.x - W / 2) / G.cam.scale + G.cam.x, y: (s.y - H / 2) / G.cam.scale + G.cam.y }; }
+function screenToWorld (s, z) { return { x: (s.x - W / 2) / G.cam.scale + G.cam.x, y: ((s.y - H / 2) / G.cam.scale + (z || 0) * KZ) / KY + G.cam.y }; }
 
 /* ---------------------------------------------------------------------
    PASSO DI SIMULAZIONE
@@ -2636,15 +2657,220 @@ window.addEventListener('resize', resize);
 function rr (x, y, w, h, r) { ctx.beginPath(); ctx.roundRect ? ctx.roundRect(x, y, w, h, r) : ctx.rect(x, y, w, h); }
 function seeded (s) { let x = Math.sin(s) * 10000; return () => { x = Math.sin(x) * 10000; return x - Math.floor(x); }; }
 
+/* ---------------------------------------------------------------------
+   VISTA S1: dall'alto, con la telecamera inclinata in avanti. Solo disegno:
+   il mondo e la fisica restano in pianta (x, y). A schermo y si accorcia
+   (KY) e le altezze z salgono (KZ): dei case e dei muri si vedono il
+   coperchio e la faccia davanti, le persone stanno in piedi.
+   --------------------------------------------------------------------- */
+const KY = 0.78, KZ = 0.63, ZK = KZ / KY;
+// altezze vere (1 px = 1 cm), che la pianta non ha
+const CASE_Z = { stativi: 24, ricambio: 34, par: 48, tavolo: 74, distro: 42, valigetta: 16, rack: 96, sub1: 72, sub2: 72, top1: 58, top2: 58 };
+function caseH (ce) { return CASE_Z[ce.def.id] || 50; }
+// dove poggia il case: per terra, sul carrello (sopra quello sulla pala), in mano
+function caseZ (ce) {
+  if (ce.onTrolley) { const t = G.trolley, i = t ? t.load.indexOf(ce) : 0; return 5 + (i > 0 ? caseH(t.load[0]) : 0); }
+  if (ce.carrier) return 46;
+  if (liftedByTwo(ce)) return 40;
+  return G.t < ce.liftUntil ? 10 : 0;
+}
+const lift = z => ctx.translate(0, -z * ZK);
+function shade (c, k) {
+  if (c[0] !== '#') return c;
+  const n = parseInt(c.slice(1).replace(/^(.)(.)(.)$/, '$1$1$2$2$3$3'), 16);
+  const f = v => clamp(Math.round(k >= 0 ? v + (255 - v) * k : v * (1 + k)), 0, 255);
+  return 'rgb(' + f(n >> 16) + ',' + f((n >> 8) & 255) + ',' + f(n & 255) + ')';
+}
+function rectPts (c, w, h, a) { return [[-1, -1], [1, -1], [1, 1], [-1, 1]].map(([sx, sy]) => add(c, rot({ x: sx * w / 2, y: sy * h / 2 }, a || 0))); }
+const boxPts = (x1, y1, x2, y2) => [{ x: x1, y: y1 }, { x: x2, y: y1 }, { x: x2, y: y2 }, { x: x1, y: y2 }];
+/* materiali veri, come nelle foto dell'action figure: la grana si fa una
+   volta sola (due texel per cm, così resta fine anche da vicino) */
+const MAT = {};
+function texture (w, h, paint) {
+  const c = document.createElement('canvas'); c.width = w * 2; c.height = h * 2;
+  const g = c.getContext('2d'); g.scale(2, 2); paint(g, seeded(w * 7 + h)); return c;
+}
+function specks (g, r, w, h, n, cols, s0, s1) {
+  for (let i = 0; i < n; i++) { g.fillStyle = cols[Math.floor(r() * cols.length)]; const s = s0 + r() * (s1 - s0); g.fillRect(r() * w, r() * h, s, s); }
+}
+function mats () {
+  if (MAT.ok) return MAT;
+  const T = {
+    // asfalto: ghiaietto chiaro e scuro nel bitume
+    asphalt: texture(160, 160, (g, r) => { g.fillStyle = '#33363b'; g.fillRect(0, 0, 160, 160); specks(g, r, 160, 160, 2600, ['#3d4046', '#2a2c30', '#45484e', '#26282c', '#4c4f55'], 0.5, 1.6); specks(g, r, 160, 160, 90, ['#55585e', '#1f2125'], 1.5, 2.6); }),
+    // cemento lisciato con le macchie
+    concrete: texture(120, 120, (g, r) => { g.fillStyle = '#5a5d64'; g.fillRect(0, 0, 120, 120); specks(g, r, 120, 120, 1400, ['#62656c', '#53565c', '#676a71', '#4d5056'], 0.4, 1.2); for (let i = 0; i < 6; i++) { g.fillStyle = 'rgba(0,0,0,.05)'; g.beginPath(); g.arc(r() * 120, r() * 120, 8 + r() * 18, 0, 7); g.fill(); } }),
+    // parquet della palestra: listoni di tono diverso, con la venatura
+    wood: texture(216, 144, (g, r) => {
+      // listoni da 9 cm, lunghi, sfalsati, di tono appena diverso
+      g.fillStyle = '#6c4a2d'; g.fillRect(0, 0, 216, 144);
+      for (let y = 0; y < 144; y += 9) for (let x = -r() * 120; x < 216; ) {
+        const L = 110 + r() * 90, t = r();
+        g.fillStyle = `rgb(${100 + t * 14},${70 + t * 10},${42 + t * 7})`; g.fillRect(x, y, L, 9);
+        g.strokeStyle = 'rgba(50,30,14,.13)'; g.lineWidth = 0.5;
+        for (let k = 0; k < 3; k++) { g.beginPath(); const yy = y + 1.5 + r() * 6; g.moveTo(x, yy); g.bezierCurveTo(x + L * 0.3, yy + r() * 2 - 1, x + L * 0.7, yy + r() * 2 - 1, x + L, yy); g.stroke(); }
+        g.fillStyle = 'rgba(0,0,0,.22)'; g.fillRect(x, y, 0.6, 9); x += L;
+      }
+      g.fillStyle = 'rgba(0,0,0,.2)'; for (let y = 0; y < 144; y += 9) g.fillRect(0, y, 216, 0.5);
+    }),
+    // guscio dei flight case: laminato nero a buccia d'arancia
+    shell: texture(40, 40, (g, r) => { g.fillStyle = '#1b1c20'; g.fillRect(0, 0, 40, 40); specks(g, r, 40, 40, 700, ['#24252a', '#151619', '#2a2b30'], 0.4, 1.1); }),
+    // lamiera mandorlata della rampa
+    plate: texture(24, 24, (g, r) => {
+      const gr = g.createLinearGradient(0, 0, 24, 24); gr.addColorStop(0, '#a9afb7'); gr.addColorStop(1, '#8d939b'); g.fillStyle = gr; g.fillRect(0, 0, 24, 24);
+      [[6, 6, 1], [18, 18, 1], [18, 6, -1], [6, 18, -1]].forEach(([x, y, d]) => { g.save(); g.translate(x, y); g.rotate(d * Math.PI / 4); g.fillStyle = '#c8cdd3'; g.fillRect(-4, -1, 8, 2); g.fillStyle = 'rgba(0,0,0,.25)'; g.fillRect(-4, 1, 8, 0.8); g.restore(); });
+      specks(g, r, 24, 24, 60, ['rgba(255,255,255,.15)', 'rgba(0,0,0,.08)'], 0.3, 0.8);
+    }),
+    // rete del recinto, a maglia romboidale
+    mesh: texture(12, 12, g => { g.strokeStyle = 'rgba(196,202,210,.55)'; g.lineWidth = 0.7; g.beginPath(); g.moveTo(0, 0); g.lineTo(12, 12); g.moveTo(12, 0); g.lineTo(0, 12); g.stroke(); })
+  };
+  for (const k in T) { const p = ctx.createPattern(T[k], 'repeat'); if (p.setTransform) p.setTransform(new DOMMatrix().scale(0.5)); MAT[k] = p; }
+  MAT.ok = true;
+  return MAT;
+}
+// un solido: le facce rivolte verso chi guarda (verso il basso dello schermo), poi il coperchio.
+// o.mat: grana sopra il colore (MAT); o.gloss: riflesso della vernice; o.flat: niente luce
+function prism (pts, z0, z1, top, side, o) {
+  o = o || {};
+  const n = pts.length, M = mats(), pat = o.mat && M[o.mat];
+  let cx = 0, cy = 0;
+  pts.forEach(p => { cx += p.x / n; cy += p.y / n; });
+  for (let i = 0; i < n; i++) {
+    const a = pts[i], b = pts[(i + 1) % n];
+    let nx = b.y - a.y, ny = a.x - b.x; const l = Math.hypot(nx, ny) || 1; nx /= l; ny /= l;
+    if (nx * ((a.x + b.x) / 2 - cx) + ny * ((a.y + b.y) / 2 - cy) < 0) { nx = -nx; ny = -ny; }
+    if (ny <= 0.02) continue;
+    const face = () => { ctx.beginPath(); ctx.moveTo(a.x, a.y - z0 * ZK); ctx.lineTo(b.x, b.y - z0 * ZK); ctx.lineTo(b.x, b.y - z1 * ZK); ctx.lineTo(a.x, a.y - z1 * ZK); ctx.closePath(); };
+    face();
+    ctx.fillStyle = shade(side, -nx * 0.14 - (1 - ny) * 0.12); ctx.fill();   // luce da sinistra
+    if (pat) { ctx.save(); ctx.globalAlpha = o.matA || 0.9; ctx.fillStyle = pat; ctx.fill(); ctx.restore(); }
+    if (!o.flat) {
+      // luce dall'alto: il bordo in alto più chiaro, il piede in ombra (occlusione)
+      const ym = Math.max(a.y, b.y), g = ctx.createLinearGradient(0, ym - z1 * ZK, 0, ym - z0 * ZK);
+      g.addColorStop(0, 'rgba(255,255,255,.10)'); g.addColorStop(0.55, 'rgba(0,0,0,0)'); g.addColorStop(1, z0 > 0 ? 'rgba(0,0,0,.12)' : 'rgba(0,0,0,.32)');
+      ctx.fillStyle = g; ctx.fill();
+      if (o.gloss && Math.hypot(b.x - a.x, b.y - a.y) > 60) {   // riflesso obliquo della vernice
+        const x0 = Math.min(a.x, b.x), w = Math.abs(b.x - a.x);
+        ctx.save(); ctx.clip();
+        const gl = ctx.createLinearGradient(x0 + w * 0.2, 0, x0 + w * 0.45, 0);
+        gl.addColorStop(0, 'rgba(255,255,255,0)'); gl.addColorStop(0.5, 'rgba(255,255,255,.22)'); gl.addColorStop(1, 'rgba(255,255,255,0)');
+        ctx.fillStyle = gl; ctx.fillRect(x0, ym - z1 * ZK - 10, w, (z1 - z0) * ZK + 20);
+        ctx.restore();
+      }
+    }
+    if (o.edge) { ctx.strokeStyle = o.edge; ctx.lineWidth = o.edgeW || 1.5; ctx.beginPath(); ctx.moveTo(a.x, a.y - z1 * ZK); ctx.lineTo(b.x, b.y - z1 * ZK); ctx.stroke(); }
+  }
+  if (top) {
+    ctx.beginPath(); pts.forEach((p, i) => i ? ctx.lineTo(p.x, p.y - z1 * ZK) : ctx.moveTo(p.x, p.y - z1 * ZK)); ctx.closePath();
+    ctx.fillStyle = top; ctx.fill();
+    if (pat) { ctx.save(); ctx.globalAlpha = o.matA || 0.9; ctx.fillStyle = pat; ctx.fill(); ctx.restore(); }
+    if (!o.flat) {   // il coperchio prende il sole da in alto a sinistra
+      const xs = pts.map(p => p.x), ys = pts.map(p => p.y - z1 * ZK);
+      const g = ctx.createLinearGradient(Math.min(...xs), Math.min(...ys), Math.max(...xs), Math.max(...ys));
+      g.addColorStop(0, 'rgba(255,255,255,.12)'); g.addColorStop(1, 'rgba(0,0,0,.08)');
+      ctx.fillStyle = g; ctx.fill();
+    }
+  }
+}
+// l'ombra per terra di un solido alto h (sole in alto a sinistra), sfumata:
+// la sagoma si disegna lontano e torna al suo posto solo come ombra
+function dropShadow (pts, h, a) {
+  const dx = h * 0.35, dy = h * 0.22, t = ctx.getTransform(), far = 20000;
+  ctx.save();
+  ctx.shadowColor = 'rgba(0,0,0,' + (a || 0.3) + ')';
+  ctx.shadowBlur = Math.max(2, (4 + h * 0.1) * t.a);
+  ctx.shadowOffsetX = far * t.a; ctx.shadowOffsetY = 0;
+  ctx.fillStyle = '#000'; ctx.beginPath();
+  pts.forEach((p, i) => i ? ctx.lineTo(p.x + dx - far, p.y + dy) : ctx.moveTo(p.x + dx - far, p.y + dy));
+  ctx.closePath(); ctx.fill();
+  ctx.restore();
+}
+// le facce di un flight case: laminato con la grana, profili d'alluminio su
+// spigoli e bordi, sfere cromate agli angoli, chiusure a farfalla
+function caseFaces (pts, z0, z1, c) {
+  prism(pts, z0, z1, null, '#1f2025', { mat: 'shell', matA: 0.85 });
+  pts.forEach((a, i) => {
+    const b = pts[(i + 1) % 4], m = { x: (a.x + b.x) / 2 - c.x, y: (a.y + b.y) / 2 - c.y };
+    if (m.y <= 0.5) return;
+    const L = Math.hypot(b.x - a.x, b.y - a.y);
+    // profili: in alto e in basso
+    ctx.strokeStyle = '#c3c8cf'; ctx.lineWidth = 2.4;
+    ctx.beginPath(); ctx.moveTo(a.x, a.y - z1 * ZK + 1); ctx.lineTo(b.x, b.y - z1 * ZK + 1); ctx.stroke();
+    ctx.strokeStyle = '#7d838c'; ctx.lineWidth = 2;
+    ctx.beginPath(); ctx.moveTo(a.x, a.y - z0 * ZK - 1); ctx.lineTo(b.x, b.y - z0 * ZK - 1); ctx.stroke();
+    // la riga del coperchio, un quarto sotto l'alto
+    const zl = z1 - (z1 - z0) * 0.28;
+    ctx.strokeStyle = 'rgba(160,166,175,.8)'; ctx.lineWidth = 1.4;
+    ctx.beginPath(); ctx.moveTo(a.x, a.y - zl * ZK); ctx.lineTo(b.x, b.y - zl * ZK); ctx.stroke();
+    // spigoli verticali
+    [a, b].forEach(q => {
+      const g = ctx.createLinearGradient(q.x - 2, 0, q.x + 2, 0); g.addColorStop(0, '#e8ebef'); g.addColorStop(1, '#7a8089');
+      ctx.fillStyle = g; ctx.fillRect(q.x - 1.8, q.y - z1 * ZK, 3.6, (z1 - z0) * ZK);
+      const s = ctx.createRadialGradient(q.x - 1, q.y - z0 * ZK - 3, 0.3, q.x, q.y - z0 * ZK - 2, 4);
+      s.addColorStop(0, '#fff'); s.addColorStop(0.4, '#bfc4cb'); s.addColorStop(1, '#4f545c');
+      ctx.fillStyle = s; ctx.beginPath(); ctx.ellipse(q.x, q.y - z0 * ZK - 2.5, 3.8, 3.8 * ZK + 0.6, 0, 0, Math.PI * 2); ctx.fill();
+    });
+    // chiusure a farfalla sulla riga del coperchio (sui lati lunghi due)
+    if (L > 24 && z1 - z0 > 20) {
+      const k = L > 50 ? [0.25, 0.75] : [0.5];
+      k.forEach(t => {
+        const x = a.x + (b.x - a.x) * t, y = a.y + (b.y - a.y) * t - zl * ZK;
+        ctx.fillStyle = '#d5d9df'; ctx.fillRect(x - 3.5, y - 2.5, 7, 6);
+        ctx.fillStyle = 'rgba(0,0,0,.35)'; ctx.fillRect(x - 3.5, y + 2.5, 7, 1); ctx.fillRect(x - 0.6, y - 1.5, 1.2, 3.5);
+      });
+    }
+  });
+}
+// la faccia davanti (y massima) di un case, per l'ordine di disegno
+const frontY = pts => Math.max(...pts.map(p => p.y));
+
+/* le persone in piedi: Topsy è la foto della sua action figure (dal thread dei
+   personaggi), gli altri il ritratto a caricatura di oggi finché non hanno la
+   loro immagine; se l'immagine non c'è ancora, una sagoma semplice */
+const TOPSY_IMG = new Image();
+TOPSY_IMG.src = 'img/personaggi/topsy-s1.png';
+const FIG_CACHE = {};
+function figImg (who, o) {
+  if (!window.FIGURE_S1) return null;
+  const k = who + '|' + (o.back ? 1 : 0) + (o.arms || 'giu') + (o.step || 0);
+  let im = FIG_CACHE[k];
+  if (!im) {
+    im = FIG_CACHE[k] = new Image();
+    im.src = 'data:image/svg+xml;charset=utf-8,' + encodeURIComponent(FIGURE_S1.svg(who, o, { bg: LIVERY.bg, fg: LIVERY.fg, name: (SERVICE || 'SERVICE').toUpperCase() }));
+  }
+  return im.complete && im.naturalWidth ? im : null;
+}
+// piedi in p (pianta), alta hU cm; flip = guarda a sinistra
+function drawFigure (p, who, hU, o) {
+  const s = worldToScreen(p), sc = G.cam.scale, hpx = hU * sc * KZ * 1.1;
+  const photo = who === 'topsy' && TOPSY_IMG.complete && TOPSY_IMG.naturalWidth ? TOPSY_IMG : null;
+  const im = photo || figImg(who, o);
+  ctx.save(); ctx.setTransform(DPR, 0, 0, DPR, 0, 0);
+  ctx.translate(s.x, s.y - (o.bob || 0) * hpx);
+  if (!im) {   // sagoma: gambe, maglia, testa
+    ctx.fillStyle = '#26272c'; ctx.fillRect(-hpx * 0.09, -hpx * 0.42, hpx * 0.18, hpx * 0.42);
+    ctx.fillStyle = o.tee || '#555'; rr(-hpx * 0.14, -hpx * 0.78, hpx * 0.28, hpx * 0.4, hpx * 0.06); ctx.fill();
+    ctx.fillStyle = o.skin || '#d9a07c'; ctx.beginPath(); ctx.arc(0, -hpx * 0.88, hpx * 0.11, 0, Math.PI * 2); ctx.fill();
+  } else {
+    if (photo && o.flip) ctx.scale(-1, 1);
+    const ax = photo ? 0.45 : 0.5, foot = photo ? 0.975 : 226 / 228, wpx = hpx * im.naturalWidth / im.naturalHeight;
+    ctx.drawImage(im, -wpx * ax, -hpx * foot, wpx, hpx);
+  }
+  ctx.restore();
+}
+
 function drawGround () {
   // strada e marciapiede fuori
-  ctx.fillStyle = '#1a1b1f'; ctx.fillRect(WORLD.x1 - 400, WORLD.y1 - 400, 3000, 1800);
-  ctx.fillStyle = '#23252a'; ctx.fillRect(VAN.x1 - 200, VAN.y1 - 80, DOOR_X - VAN.x1 + 200, VAN.y2 - VAN.y1 + 160);
-  // cortile in asfalto
-  ctx.fillStyle = '#2d3036'; ctx.fillRect(DOOR_X, 88, GYM_X - DOOR_X, 826);
-  ctx.save(); ctx.globalAlpha = 0.5; const r = seeded(7);
-  ctx.fillStyle = '#3a3d44'; for (let i = 0; i < 200; i++) ctx.fillRect(DOOR_X + r() * (GYM_X - DOOR_X), 90 + r() * 820, 2, 2);
-  ctx.restore();
+  const M = mats();
+  ctx.fillStyle = M.asphalt; ctx.fillRect(WORLD.x1 - 400, WORLD.y1 - 400, 3000, 1800);
+  ctx.fillStyle = 'rgba(8,9,11,.55)'; ctx.fillRect(WORLD.x1 - 400, WORLD.y1 - 400, 3000, 1800);
+  ctx.fillStyle = 'rgba(8,9,11,.25)'; ctx.fillRect(VAN.x1 - 200, VAN.y1 - 80, DOOR_X - VAN.x1 + 200, VAN.y2 - VAN.y1 + 160);
+  // cortile in asfalto, più chiaro al sole, con le toppe di catrame
+  ctx.fillStyle = M.asphalt; ctx.fillRect(DOOR_X, 88, GYM_X - DOOR_X, 826);
+  const r = seeded(7);
+  for (let i = 0; i < 9; i++) { ctx.fillStyle = 'rgba(14,15,18,' + (0.12 + r() * 0.12) + ')'; ctx.beginPath(); ctx.ellipse(DOOR_X + 40 + r() * 300, 140 + r() * 720, 20 + r() * 50, 12 + r() * 30, r() * 3, 0, Math.PI * 2); ctx.fill(); }
+  // cordolo in cemento lungo il recinto
+  ctx.fillStyle = M.concrete; ctx.fillRect(DOOR_X + 4, 92, GYM_X - DOOR_X - 14, 14); ctx.fillRect(DOOR_X + 4, 894, GYM_X - DOOR_X - 14, 14);
   // strisce del parcheggio accanto al furgone, tombino, crepe e foglie
   ctx.strokeStyle = 'rgba(238,233,223,.18)'; ctx.lineWidth = 3;
   [[VAN.x1 + 40, VAN.y1 - 44], [VAN.x1 + 40, VAN.y2 + 44]].forEach(([x, y]) => { ctx.beginPath(); ctx.moveTo(x, y); ctx.lineTo(x + 110, y); ctx.stroke(); });
@@ -2672,9 +2898,10 @@ function drawGround () {
   ctx.save(); ctx.fillStyle = 'rgba(238,233,223,.07)'; ctx.font = '700 64px "Barlow Condensed", sans-serif'; ctx.textAlign = 'center';
   ctx.fillText('I.C. GALILEI', (DOOR_X + GYM_X) / 2, 420); ctx.restore();
   // palestra: parquet
-  ctx.fillStyle = '#5a3d25'; ctx.fillRect(GYM_X, 140, 700, 720);
+  ctx.fillStyle = mats().wood; ctx.fillRect(GYM_X, 140, 700, 720);
+  ctx.fillStyle = 'rgba(255,214,150,.06)'; ctx.fillRect(GYM_X, 140, 700, 720);   // vernice lucida del parquet
   ctx.strokeStyle = 'rgba(0,0,0,.18)'; ctx.lineWidth = 1;
-  for (let y = 150; y < 860; y += 18) { ctx.beginPath(); ctx.moveTo(GYM_X, y); ctx.lineTo(1860, y); ctx.stroke(); }
+
   ctx.strokeStyle = 'rgba(255,220,160,.12)'; ctx.lineWidth = 3;
   ctx.strokeRect(1200, 190, 620, 620); ctx.beginPath(); ctx.arc(1510, 500, 70, 0, Math.PI * 2); ctx.stroke();
   // luce delle finestrone sul parquet
@@ -2740,19 +2967,15 @@ function drawStatics () {
   ctx.fillStyle = LIVERY.bg; ctx.beginPath(); ctx.arc(X0 - 60, Y0 + 28, 17, 0, Math.PI * 2); ctx.fill();
   ctx.strokeStyle = LIVERY.fg; ctx.lineWidth = 3; ctx.beginPath(); ctx.arc(X0 - 60, Y0 + 28, 12, 0, Math.PI * 2); ctx.stroke();
   ctx.save(); ctx.translate(X0 - 60, (Y0 + Y1) / 2 + 18); ctx.rotate(-Math.PI / 2); ctx.fillStyle = '#8b8e98'; ctx.font = '700 22px "Barlow Condensed", sans-serif'; ctx.textAlign = 'center'; ctx.fillText((SERVICE || 'Service audio luci').toUpperCase(), 0, 8, VH - 50); ctx.restore();
-  // portelloni che si aprono
-  const a = (1 - G.doorsOpen) * Math.PI / 2;
-  ctx.fillStyle = '#dfe1e5'; ctx.strokeStyle = '#9aa0a8'; ctx.lineWidth = 2;
-  const DL = VH / 2 + 8;
-  ctx.save(); ctx.translate(DOOR_X, Y0 - 12); ctx.rotate(a); ctx.fillRect(0, -8, DL, 9); ctx.strokeRect(0, -8, DL, 9); ctx.restore();
-  ctx.save(); ctx.translate(DOOR_X, Y1 + 12); ctx.rotate(-a); ctx.fillRect(0, -1, DL, 9); ctx.strokeRect(0, -1, DL, 9); ctx.restore();
   // rampa in alluminio: su (agganciata al pianale) finché non la tiri giù
   const rk = G.van && G.van.ramp ? 1 : (G.van && G.van.rampK) || 0;
   if (rk > 0) {
     const rw = RAMP.w * rk;
-    ctx.fillStyle = '#8f959e'; ctx.fillRect(RAMP.x, RAMP.y, rw, RAMP.h);
-    ctx.strokeStyle = '#6b7078'; ctx.lineWidth = 2;
-    for (let x = RAMP.x + 6; x < RAMP.x + rw; x += 9) { ctx.beginPath(); ctx.moveTo(x, RAMP.y + 3); ctx.lineTo(x, RAMP.y + RAMP.h - 3); ctx.stroke(); }
+    // lamiera mandorlata, più scura verso terra; lo spessore si vede davanti
+    ctx.fillStyle = mats().plate; ctx.fillRect(RAMP.x, RAMP.y, rw, RAMP.h);
+    const rg = ctx.createLinearGradient(RAMP.x, 0, RAMP.x + rw, 0); rg.addColorStop(0, 'rgba(255,255,255,.12)'); rg.addColorStop(1, 'rgba(0,0,0,.18)');
+    ctx.fillStyle = rg; ctx.fillRect(RAMP.x, RAMP.y, rw, RAMP.h);
+    ctx.fillStyle = '#5f646c'; ctx.fillRect(RAMP.x, RAMP.y + RAMP.h, rw, 4);
     ctx.strokeStyle = '#555a62'; ctx.lineWidth = 4; ctx.strokeRect(RAMP.x, RAMP.y, rw, RAMP.h);
     if (rk === 1) {
       ctx.fillStyle = 'rgba(20,21,25,.55)';
@@ -2766,27 +2989,7 @@ function drawStatics () {
   }
   // bordo del pianale: si cade se si esce fuori dalla rampa
   ctx.fillStyle = '#f2c53d'; ctx.fillRect(DOOR_X - 4, Y0, 4, RAMP.y - Y0); ctx.fillRect(DOOR_X - 4, RAMP.y + RAMP.h, 4, Y1 - RAMP.y - RAMP.h);
-  // muri: recinzione metallica del cortile, muri in cemento della palestra
-  for (const b of G.statics) {
-    if (!b.plugin.draw) continue;
-    const bb = b.bounds, x = bb.min.x, y = bb.min.y, w = bb.max.x - x, h = bb.max.y - y;
-    if (bb.min.x < GYM_X - 20) {
-      ctx.fillStyle = 'rgba(0,0,0,.3)'; ctx.fillRect(x + 3, y + 4, w, h);
-      ctx.strokeStyle = '#6f757e'; ctx.lineWidth = 1;
-      const horiz = w > h;
-      ctx.beginPath();
-      for (let t = 0; t < (horiz ? w : h); t += 8) {
-        if (horiz) { ctx.moveTo(x + t, y); ctx.lineTo(x + t + 6, y + h); } else { ctx.moveTo(x, y + t); ctx.lineTo(x + w, y + t + 6); }
-      }
-      ctx.stroke();
-      ctx.fillStyle = '#9aa0a8';
-      for (let t = 0; t <= (horiz ? w : h); t += 60) horiz ? ctx.fillRect(x + t - 2, y - 2, 5, h + 4) : ctx.fillRect(x - 2, y + t - 2, w + 4, 5);
-    } else {
-      ctx.fillStyle = 'rgba(0,0,0,.35)'; ctx.fillRect(x + 4, y + 5, w, h);
-      ctx.fillStyle = '#50545d'; ctx.fillRect(x, y, w, h);
-      ctx.fillStyle = '#62666f'; ctx.fillRect(x, y, w, Math.min(4, h)); ctx.fillRect(x, y, Math.min(4, w), h);
-    }
-  }
+  // muri, recinto e furgone: vedi sceneSolids (in piedi)
   // ante della porta della palestra, aperte verso l'interno
   ctx.fillStyle = '#7d8590';
   ctx.fillRect(GYM_X + 10, STEP_BAND.y1 - 50, 6, 50); ctx.fillRect(GYM_X + 10, STEP_BAND.y2, 6, 50);
@@ -2796,15 +2999,15 @@ function drawStatics () {
   ctx.fillStyle = '#f2c53d'; ctx.fillRect(GYM_X - 8, STEP_BAND.y1, 16, 100);
   ctx.fillStyle = '#141519'; for (let y = STEP_BAND.y1 - 20; y < STEP_BAND.y2; y += 14) { ctx.beginPath(); ctx.moveTo(GYM_X - 8, y); ctx.lineTo(GYM_X + 8, y + 10); ctx.lineTo(GYM_X + 8, y + 17); ctx.lineTo(GYM_X - 8, y + 7); ctx.fill(); }
   ctx.restore();
-  // sedie impilate
-  ctx.fillStyle = '#26303d'; rr(1640, 170, 100, 50, 4); ctx.fill();
-  ctx.strokeStyle = '#3d4b5e'; ctx.lineWidth = 2; for (let x = 1648; x < 1740; x += 12) { ctx.beginPath(); ctx.moveTo(x, 174); ctx.lineTo(x, 216); ctx.stroke(); }
-  // panchina
-  ctx.fillStyle = '#6a4a2c'; rr(BENCH.x, BENCH.y, 110, 26, 4); ctx.fill();
-  ctx.strokeStyle = '#4b331d'; for (let y = BENCH.y + 6; y < BENCH.y + 24; y += 7) { ctx.beginPath(); ctx.moveTo(BENCH.x + 4, y); ctx.lineTo(BENCH.x + 106, y); ctx.stroke(); }
+  // panchina, sedie e moka: vedi sceneSolids. Qui il cartello per terra
+  const MX = MOKA.x, MY = MOKA.y;
+  ctx.fillStyle = 'rgba(238,233,223,.6)'; ctx.font = '700 12px "Barlow Condensed", sans-serif'; ctx.textAlign = 'center';
+  ctx.fillText(G.coffee.used ? 'MOKA (VUOTA)' : 'MOKA DEL BIDELLO', MX, MY + 3); ctx.textAlign = 'left';
+}
+// la moka sul tavolino (già alzata all'altezza del piano)
+function drawMoka () {
   // tavolino con la moka
   const MX = MOKA.x, MY = MOKA.y;
-  ctx.fillStyle = '#7a6a58'; rr(MX - 30, MY - 57, 60, 28, 4); ctx.fill();
   if (!G.coffee.used) {
     ctx.fillStyle = '#b9bcc2'; ctx.beginPath(); ctx.moveTo(MX - 7, MY - 51); ctx.lineTo(MX + 7, MY - 51); ctx.lineTo(MX + 10, MY - 35); ctx.lineTo(MX - 10, MY - 35); ctx.fill();
     ctx.fillStyle = '#222'; ctx.fillRect(MX - 4, MY - 55, 8, 4);
@@ -2815,15 +3018,115 @@ function drawStatics () {
     ctx.save(); ctx.globalAlpha = 0.6 + 0.4 * Math.sin(performance.now() / 300); ctx.strokeStyle = '#f2a541'; ctx.lineWidth = 3;
     ctx.beginPath(); ctx.arc(MX, MY - 43, 34, 0, Math.PI * 2); ctx.stroke(); ctx.restore();
   }
-  ctx.fillStyle = 'rgba(238,233,223,.6)'; ctx.font = '700 12px "Barlow Condensed", sans-serif'; ctx.textAlign = 'center';
-  ctx.fillText(G.coffee.used ? 'MOKA (VUOTA)' : 'MOKA DEL BIDELLO', MX, MY + 3); ctx.textAlign = 'left';
 }
+/* i solidi della scena, ognuno con la sua y davanti per l'ordine di disegno:
+   furgone, muri, recinto, panchina, sedie, moka, albero */
+function sceneSolids (put) {
+  const X0 = VAN.x1, X1 = DOOR_X, Y0 = VAN.y1, Y1 = VAN.y2;
+  // furgone: parete in fondo e testata alte, la fiancata davanti tagliata
+  // bassa (come in uno spaccato) così il carico si vede; cabina piena
+  put(Y0 - 30, () => {
+    prism(boxPts(X0 - 12, Y0 - 24, X1, Y0), 0, 150, '#f1f2f4', '#c9ccd1', { edge: '#ffffff' });
+    ctx.fillStyle = 'rgba(0,0,0,.07)';   // costole della parete
+    for (let x = X0 + 20; x < X1; x += 38) ctx.fillRect(x, Y0 - 150 * ZK, 3, 150 * ZK);
+  });
+  put(Y0 - 29, () => prism(boxPts(X0 - 12, Y0 - 24, X0, Y1 + 24), 0, 150, '#f1f2f4', '#c9ccd1'));
+  put(Y1 + 25, () => {
+    const C = boxPts(X0 - 160, Y0 - 24, X0 - 12, Y1 + 24);
+    prism(C, 0, 175, '#eceef1', '#d5d8dd', { edge: '#ffffff', gloss: true });
+    // parabrezza sul muso (vetro scuro che riflette il cielo), vetro della portiera
+    const glass = (x, y, w, h) => { const g = ctx.createLinearGradient(x, y, x + w, y + h); g.addColorStop(0, '#5d7286'); g.addColorStop(0.45, '#1f2a35'); g.addColorStop(0.6, '#2c3b4a'); g.addColorStop(1, '#141b22'); ctx.fillStyle = g; ctx.fillRect(x, y, w, h); ctx.strokeStyle = '#111317'; ctx.lineWidth = 2; ctx.strokeRect(x, y, w, h); };
+    glass(X0 - 160, Y0 - 10 - 175 * ZK, 36, Y1 - Y0 + 20);
+    glass(X0 - 150, Y1 + 24 - 160 * ZK, 70, 60 * ZK);
+    ctx.fillStyle = '#9aa0a8'; ctx.fillRect(X0 - 70, Y1 + 24 - 105 * ZK, 14, 3);   // maniglia della portiera
+    ctx.fillStyle = '#c9ccd1'; ctx.fillRect(X0 - 172, Y1 + 18 - 120 * ZK, 12, 22 * ZK);   // specchietto
+    ctx.fillStyle = LIVERY.bg; ctx.beginPath(); ctx.ellipse(X0 - 70, (Y0 + Y1) / 2 - 175 * ZK, 22, 22, 0, 0, Math.PI * 2); ctx.fill();
+    ctx.strokeStyle = LIVERY.fg; ctx.lineWidth = 3; ctx.beginPath(); ctx.ellipse(X0 - 70, (Y0 + Y1) / 2 - 175 * ZK, 15, 15, 0, 0, Math.PI * 2); ctx.stroke();
+    wheel(X0 - 105, Y1 + 24, 30);
+  });
+  put(Y1 + 24, () => {
+    prism(boxPts(X0 - 12, Y1, X1, Y1 + 24), 0, 36, '#f1f2f4', '#e3e5e9', { edge: '#ffffff', gloss: true });
+    // livrea del service sulla fiancata e le ruote che spuntano sotto
+    const fy = Y1 + 24;
+    ctx.fillStyle = LIVERY.bg; ctx.fillRect(X0 - 12, fy - 12 * ZK, X1 - X0 + 12, 6 * ZK);
+    ctx.fillStyle = LIVERY.fg; ctx.fillRect(X0 - 12, fy - 10 * ZK, X1 - X0 + 12, 2 * ZK);
+    ctx.save(); ctx.translate((X0 + X1) / 2 + 2, fy - 23 * ZK); ctx.scale(1, ZK);
+    ctx.fillStyle = LIVERY.bg; ctx.font = 'italic 800 15px "Barlow Condensed", sans-serif'; ctx.textAlign = 'center';
+    ctx.fillText((SERVICE || 'Service audio luci').toUpperCase(), 0, 5, X1 - X0 - 130); ctx.restore();
+    wheel(X0 + 24, fy, 18); wheel(X1 - 26, fy, 18);
+    ctx.fillStyle = '#e0503f'; ctx.fillRect(X1 - 4, fy - 30 * ZK, 6, 14 * ZK);
+  });
+  // portelloni: si aprono fino ad appoggiarsi alle fiancate; aperti si
+  // abbassano come la fiancata davanti, per non coprire la rampa
+  const da = G.doorsOpen, DL = (Y1 - Y0) / 2 + 8, dh = 150 - 114 * da;
+  [[Y0 - 12, 1], [Y1 + 12, -1]].forEach(([hy, sd]) => {
+    const a = sd * (Math.PI / 2 - da * Math.PI * 1.5);
+    const tip = { x: X1 + Math.cos(a) * DL, y: hy + Math.sin(a) * DL };
+    const pts = rectPts({ x: (X1 + tip.x) / 2, y: (hy + tip.y) / 2 }, DL, 8, a);
+    put(frontY(pts), () => prism(pts, 0, dh, '#e6e8eb', '#cdd0d5', { edge: '#9aa0a8', gloss: true }));
+  });
+  // muri e recinto (i pezzi lunghi a fette, per l'ordine di disegno)
+  for (const b of G.statics) {
+    if (!b.plugin.draw) continue;
+    const bb = b.bounds, fence = bb.min.x < GYM_X - 20, horiz = bb.max.x - bb.min.x > bb.max.y - bb.min.y;
+    const near = horiz && bb.min.y > 800;           // il muro davanti: tagliato basso
+    const hgt = fence ? 80 : near ? 24 : 110;
+    const step = horiz ? Infinity : 40;
+    for (let y = bb.min.y; y < bb.max.y; y += step) {
+      const y2 = Math.min(bb.max.y, y + step), pts = boxPts(bb.min.x, y, bb.max.x, y2);
+      put(y2, fence ? () => {
+        // rete a maglia zincata, pali tondi e corrimano
+        if (horiz) { ctx.fillStyle = mats().mesh; ctx.fillRect(bb.min.x, y2 - hgt * ZK, bb.max.x - bb.min.x, hgt * ZK); }
+        prism(pts, hgt - 3, hgt, '#b3b9c1', '#8d939b', { flat: true });
+        const post = x => { const g = ctx.createLinearGradient(x - 2.5, 0, x + 2.5, 0); g.addColorStop(0, '#d9dde2'); g.addColorStop(1, '#6d737b'); ctx.fillStyle = g; ctx.fillRect(x - 2.5, y2 - hgt * ZK, 5, hgt * ZK); };
+        if (horiz) for (let x = bb.min.x; x <= bb.max.x; x += 60) post(x);
+        else ctx.fillRect(bb.min.x, y2 - hgt * ZK, bb.max.x - bb.min.x, 3);
+      } : () => prism(pts, 0, hgt, '#6e727a', '#5a5e66', { edge: '#8a8e96', mat: 'concrete', matA: 0.55 }));
+    }
+  }
+  // sedie impilate, panchina, tavolino con la moka
+  put(220, () => {
+    prism(boxPts(1640, 170, 1740, 220), 0, 95, '#2b3646', '#1d2530');
+    ctx.strokeStyle = '#3d4b5e'; ctx.lineWidth = 2;
+    for (let x = 1648; x < 1740; x += 12) { ctx.beginPath(); ctx.moveTo(x, 220); ctx.lineTo(x, 220 - 95 * ZK); ctx.stroke(); }
+  });
+  put(BENCH.y + 26, () => {
+    prism(boxPts(BENCH.x, BENCH.y, BENCH.x + 110, BENCH.y + 26), 0, 42, '#7a5532', '#4b331d', { mat: 'wood', matA: 0.5 });
+    ctx.strokeStyle = '#4b331d'; ctx.lineWidth = 1.5;
+    for (let y = BENCH.y + 6; y < BENCH.y + 24; y += 7) { ctx.beginPath(); ctx.moveTo(BENCH.x + 4, y - 42 * ZK); ctx.lineTo(BENCH.x + 106, y - 42 * ZK); ctx.stroke(); }
+  });
+  put(MOKA.y - 29, () => { prism(boxPts(MOKA.x - 30, MOKA.y - 57, MOKA.x + 30, MOKA.y - 29), 0, 74, '#8a7660', '#5b4e40', { mat: 'wood', matA: 0.45 }); ctx.save(); lift(74); drawMoka(); ctx.restore(); });
+  put(TREE.y + 6, () => {   // il tronco (la chioma si disegna alla fine, sopra tutto)
+    const g = ctx.createLinearGradient(TREE.x - 8, 0, TREE.x + 8, 0); g.addColorStop(0, '#6b5038'); g.addColorStop(0.5, '#4b3524'); g.addColorStop(1, '#2c1f15');
+    ctx.fillStyle = g; ctx.beginPath(); ctx.moveTo(TREE.x - 10, TREE.y); ctx.lineTo(TREE.x - 6, TREE.y - 170 * ZK); ctx.lineTo(TREE.x + 6, TREE.y - 170 * ZK); ctx.lineTo(TREE.x + 10, TREE.y); ctx.fill();
+    ctx.strokeStyle = 'rgba(20,12,6,.4)'; ctx.lineWidth = 1; for (let k = 0; k < 5; k++) { ctx.beginPath(); ctx.moveTo(TREE.x - 6 + k * 3, TREE.y); ctx.lineTo(TREE.x - 4 + k * 2, TREE.y - 170 * ZK); ctx.stroke(); }
+  });
+}
+// una ruota vista di fianco (in pianta il cerchio va allungato di 1/KY)
+function wheel (x, fy, r) {
+  const cy = fy - r * ZK, el = (k, f) => { ctx.fillStyle = f; ctx.beginPath(); ctx.ellipse(x, cy, r * k, r * k * ZK, 0, 0, Math.PI * 2); ctx.fill(); };
+  el(1, '#141518'); el(0.86, '#24262a');
+  const h = ctx.createRadialGradient(x - r * 0.15, cy - r * 0.12 * ZK, 1, x, cy, r * 0.55);
+  h.addColorStop(0, '#f1f3f6'); h.addColorStop(0.6, '#9aa0a8'); h.addColorStop(1, '#565b63');
+  el(0.55, h); el(0.16, '#3b3f45');
+}
+function drawTreeShadow () {
+  ctx.fillStyle = 'rgba(0,0,0,.25)'; ctx.beginPath(); ctx.ellipse(TREE.x + 70, TREE.y + 40, 66, 50, 0, 0, Math.PI * 2); ctx.fill();
+}
+// la chioma, in alto sopra il tronco: una palla, quindi tonda anche a schermo
 function drawTreeTop () {
-  ctx.save();
-  const X = TREE.x, Y = TREE.y;
-  ctx.fillStyle = 'rgba(0,0,0,.25)'; ctx.beginPath(); ctx.arc(X + 10, Y + 12, 62, 0, Math.PI * 2); ctx.fill();
-  ctx.fillStyle = '#27432f'; ctx.beginPath(); ctx.arc(X, Y, 60, 0, Math.PI * 2); ctx.fill();
-  ctx.fillStyle = '#34583d'; [[-20, -20, 26], [25, -10, 22], [-5, 25, 24]].forEach(([x, y, r]) => { ctx.beginPath(); ctx.arc(X + x, Y + y, r, 0, Math.PI * 2); ctx.fill(); });
+  ctx.save(); lift(190);
+  const X = TREE.x, Y = TREE.y, ball = (x, y, r) => { ctx.beginPath(); ctx.ellipse(X + x, Y + y / KY, r, r / KY, 0, 0, Math.PI * 2); ctx.fill(); };
+  ctx.globalAlpha = 0.97;
+  ctx.fillStyle = '#1d3524'; ball(0, 4, 62);
+  // ciuffi di foglie: più chiari verso il sole (in alto a sinistra)
+  const r = seeded(11);
+  for (let i = 0; i < 70; i++) {
+    const a = r() * Math.PI * 2, d = Math.sqrt(r()) * 52, x = Math.cos(a) * d, y = Math.sin(a) * d, sz = 9 + r() * 12;
+    const lit = clamp(0.5 - (x + y) / 140, 0, 1), g = ctx.createRadialGradient(X + x - sz * 0.3, Y + (y - sz * 0.3) / KY, 1, X + x, Y + y / KY, sz);
+    g.addColorStop(0, `rgb(${70 + lit * 50},${110 + lit * 50},${60 + lit * 25})`); g.addColorStop(1, `rgba(${28 + lit * 20},${54 + lit * 25},${34 + lit * 10},0)`);
+    ctx.fillStyle = g; ball(x, y, sz);
+  }
   ctx.restore();
 }
 // il telo grigio sopra il baule in fondo al furgone (vola via alla sorpresa)
@@ -2840,17 +3143,19 @@ function drawTarp (ce, k) {
 }
 // il carrello a due ruote da facchino, visto dall'alto: pala davanti, due
 // ruote grandi ai lati, telaio e maniglie dietro. I posti pieni in verde.
-function drawHandTruck (w, h, used, glow) {
+function drawHandTruck (w, h, used, glow, s1) {
   ctx.fillStyle = 'rgba(0,0,0,.35)'; rr(-w / 2 + 4, -h / 2 + 5, w, h, 5); ctx.fill();
   ctx.fillStyle = '#0c0d10';
   [-1, 1].forEach(sy => { rr(-w / 2 + 4, sy * (h / 2 - 2) - 7, 22, 14, 6); ctx.fill(); });       // ruote
   ctx.fillStyle = '#5c636c'; ctx.fillRect(-w / 2 + 12, -h / 2 + 7, 6, h - 14);                       // asse
-  ctx.strokeStyle = '#c2353a'; ctx.lineWidth = 5; ctx.lineCap = 'round';
-  [-1, 1].forEach(sy => { ctx.beginPath(); ctx.moveTo(-w / 2 - 6, sy * (h / 2 - 10)); ctx.lineTo(w / 2 - 12, sy * (h / 2 - 10)); ctx.stroke(); });   // telaio
-  ctx.lineWidth = 3;
-  [-0.15, 0.2].forEach(k => { ctx.beginPath(); ctx.moveTo(k * w, -h / 2 + 10); ctx.lineTo(k * w, h / 2 - 10); ctx.stroke(); });
-  ctx.strokeStyle = '#2b2d33'; ctx.lineWidth = 4;                                                      // maniglie
-  [-1, 1].forEach(sy => { ctx.beginPath(); ctx.moveTo(-w / 2 - 6, sy * (h / 2 - 10)); ctx.lineTo(-w / 2 - 12, sy * (h / 2 - 6)); ctx.stroke(); });
+  if (!s1) {   // telaio e maniglie (nella vista S1 stanno in piedi: vedi drawTrolley)
+    ctx.strokeStyle = '#c2353a'; ctx.lineWidth = 5; ctx.lineCap = 'round';
+    [-1, 1].forEach(sy => { ctx.beginPath(); ctx.moveTo(-w / 2 - 6, sy * (h / 2 - 10)); ctx.lineTo(w / 2 - 12, sy * (h / 2 - 10)); ctx.stroke(); });   // telaio
+    ctx.lineWidth = 3;
+    [-0.15, 0.2].forEach(k => { ctx.beginPath(); ctx.moveTo(k * w, -h / 2 + 10); ctx.lineTo(k * w, h / 2 - 10); ctx.stroke(); });
+    ctx.strokeStyle = '#2b2d33'; ctx.lineWidth = 4;                                                      // maniglie
+    [-1, 1].forEach(sy => { ctx.beginPath(); ctx.moveTo(-w / 2 - 6, sy * (h / 2 - 10)); ctx.lineTo(-w / 2 - 12, sy * (h / 2 - 6)); ctx.stroke(); });
+  }
   ctx.fillStyle = '#9aa1ab'; rr(w / 2 - 14, -h / 2 + 2, 14, h - 4, 2); ctx.fill();                     // pala
   ctx.fillStyle = 'rgba(0,0,0,.2)'; for (let y = -h / 2 + 6; y < h / 2 - 4; y += 6) ctx.fillRect(w / 2 - 12, y, 10, 2);
   if (used == null) return;
@@ -2875,57 +3180,69 @@ function drawTrolley () {
   const b = t.body, w = t.def.w, h = t.def.h, S = G.sel;
   // col case scelto e CARRELLO attivo il carrello si illumina
   ctx.save(); ctx.translate(b.position.x, b.position.y); ctx.rotate(b.angle);
-  drawHandTruck(w, h, cartUsed(t), G.mode === 'play' && S.ce && S.cart);
+  drawHandTruck(w, h, cartUsed(t), G.mode === 'play' && S.ce && S.cart, true);
   ctx.restore();
+  // il telaio inclinato: dalla pala per terra alle maniglie all'altezza delle mani
+  const P3 = (x, y, z) => { const q = add(b.position, rot({ x, y }, b.angle)); return [q.x, q.y - z * ZK]; };
+  ctx.lineCap = 'round';
+  [-1, 1].forEach(sy => {
+    const y = sy * (h / 2 - 10);
+    ctx.strokeStyle = '#a3262c'; ctx.lineWidth = 5; ctx.beginPath(); ctx.moveTo(...P3(w / 2 - 12, y, 4)); ctx.lineTo(...P3(-w / 2 - 6, y, 100)); ctx.stroke();
+    ctx.strokeStyle = 'rgba(255,170,170,.55)'; ctx.lineWidth = 1.4; ctx.beginPath(); ctx.moveTo(...P3(w / 2 - 12, y - 1.2, 5)); ctx.lineTo(...P3(-w / 2 - 6, y - 1.2, 101)); ctx.stroke();   // riflesso del tubo
+    ctx.strokeStyle = '#2b2d33'; ctx.lineWidth = 5; ctx.beginPath(); ctx.moveTo(...P3(-w / 2 - 6, y, 100)); ctx.lineTo(...P3(-w / 2 - 12, y, 104)); ctx.stroke();
+  });
+  ctx.strokeStyle = '#c2353a'; ctx.lineWidth = 3;
+  [0.25, 0.6].forEach(k => { const x = w / 2 - 12 - k * (w - 6), z = 4 + k * 96; ctx.beginPath(); ctx.moveTo(...P3(x, -h / 2 + 10, z)); ctx.lineTo(...P3(x, h / 2 - 10, z)); ctx.stroke(); });
 }
 // cinghie tirate attraverso il furgone e freni sulle ruote (P rossa)
 function drawLocks () {
   VAN_STRAPS.forEach((st, i) => {
     if (!G.straps[i]) return;
     const y0 = VAN.y1 - 8, hh = VAN.y2 - VAN.y1 + 16, cy = (VAN.y1 + VAN.y2) / 2;
+    ctx.save(); lift(100);
     ctx.fillStyle = '#f2a541'; ctx.fillRect(st.x - 4, y0, 8, hh);
     ctx.fillStyle = 'rgba(0,0,0,.25)'; for (let y = y0 + 4; y < y0 + hh - 2; y += 10) ctx.fillRect(st.x - 4, y, 8, 2);
     ctx.fillStyle = '#c9ccd1'; rr(st.x - 7, cy - 12, 14, 24, 3); ctx.fill();          // cricchetto
     ctx.fillStyle = '#55585f'; ctx.fillRect(st.x - 4, cy - 6, 8, 3); ctx.fillRect(st.x - 4, cy + 2, 8, 3);
+    ctx.restore();
   });
-  for (const ce of G.cases) {
-    if (!ce.brake || ce.hidden || ce.onTrolley) continue;
-    const b = ce.body, c = add(b.position, rot({ x: ce.def.w / 2 - 6, y: ce.def.h / 2 - 6 }, b.angle));
-    ctx.fillStyle = '#e0503f'; ctx.beginPath(); ctx.arc(c.x, c.y, 8, 0, Math.PI * 2); ctx.fill();
-    ctx.strokeStyle = '#ffd2cb'; ctx.lineWidth = 1.5; ctx.stroke();
-    ctx.fillStyle = '#fff'; ctx.font = '700 10px Inter, sans-serif'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle'; ctx.fillText('P', c.x, c.y + 0.5);
-    ctx.textAlign = 'start'; ctx.textBaseline = 'alphabetic';
-  }
 }
 function drawCase (ce) {
   const b = ce.body, d = ce.def, w = d.w, h = d.h;
-  if (ce.hidden) { drawTarp(ce, 0); return; }
+  if (ce.hidden) { prism(rectPts(b.position, w + 14, h + 12, b.angle), 0, caseH(ce), null, '#3f434b'); ctx.save(); lift(caseH(ce)); drawTarp(ce, 0); ctx.restore(); return; }
   const lifted = !!ce.carrier || G.t < ce.liftUntil || liftedByTwo(ce);
+  const z0 = caseZ(ce), z1 = z0 + caseH(ce), pts = rectPts(b.position, w, h, b.angle);
+  if (!ce.onTrolley) dropShadow(pts.map(p => ({ x: p.x + z0 * 0.35, y: p.y + z0 * 0.22 })), caseH(ce) * 0.5, 0.35);
   ctx.save(); ctx.translate(b.position.x, b.position.y);
-  ctx.save(); ctx.rotate(b.angle);
-  ctx.fillStyle = 'rgba(0,0,0,.4)'; rr(-w / 2 + (lifted ? 8 : 3), -h / 2 + (lifted ? 10 : 4), w, h, 4); ctx.fill();
-  ctx.restore();
-  if (lifted) ctx.translate(-2, -5);
   ctx.rotate(b.angle);
   // ruote che sporgono dagli angoli: le piroettanti girano col moto
-  if (!lifted && (ce.wheel === 'swivel' || ce.wheel === 'fixed')) {
+  if (!lifted && !ce.onTrolley && (ce.wheel === 'swivel' || ce.wheel === 'fixed')) {
     const lv = rot(b.velocity, -b.angle), sw = len(lv) > 0.3 ? Math.atan2(lv.y, lv.x) : 0;
-    ctx.fillStyle = '#0c0d10';
     [[-1, -1], [1, -1], [-1, 1], [1, 1]].forEach(([sx, sy]) => {
       ctx.save(); ctx.translate(sx * (w / 2 - 6), sy * (h / 2 + 1));
       if (ce.wheel === 'swivel') ctx.rotate(sw);
-      rr(-6, -3, 12, 6, 3); ctx.fill(); ctx.restore();
+      ctx.fillStyle = '#0c0d10'; rr(-6, -3.5, 12, 7, 3); ctx.fill();
+      ctx.fillStyle = '#6b7079'; ctx.fillRect(-2, -3.5, 4, 7); ctx.restore();
     });
   }
-  // guscio
-  ctx.fillStyle = '#1b1c20'; rr(-w / 2, -h / 2, w, h, 4); ctx.fill();
-  ctx.fillStyle = '#2b2d33'; rr(-w / 2 + 3, -h / 2 + 3, w - 6, h - 6, 3); ctx.fill();
-  if (d.tall) { ctx.strokeStyle = '#3d4048'; ctx.lineWidth = 2; ctx.strokeRect(-w / 2 + 8, -h / 2 + 8, w - 16, h - 16); }
-  // riflesso sul bordo in alto a sinistra e maniglie incassate sui lati corti
-  ctx.strokeStyle = 'rgba(255,255,255,.12)'; ctx.lineWidth = 1.5;
-  ctx.beginPath(); ctx.moveTo(-w / 2 + 4, h / 2 - 5); ctx.lineTo(-w / 2 + 4, -h / 2 + 4); ctx.lineTo(w / 2 - 5, -h / 2 + 4); ctx.stroke();
+  ctx.restore();
+  // le facce davanti: guscio nero a buccia d'arancia con i profili in alluminio
+  caseFaces(pts, z0, z1, b.position);
+  ctx.save(); ctx.translate(b.position.x, b.position.y - z1 * ZK);
+  ctx.rotate(b.angle);
+  // coperchio: laminato con la grana, profilo in alluminio tutto intorno
+  ctx.fillStyle = mats().shell; rr(-w / 2, -h / 2, w, h, 3); ctx.fill();
+  const sh = ctx.createLinearGradient(-w / 2, -h / 2, w / 2, h / 2);
+  sh.addColorStop(0, 'rgba(255,255,255,.10)'); sh.addColorStop(0.5, 'rgba(255,255,255,.02)'); sh.addColorStop(1, 'rgba(0,0,0,.18)');
+  ctx.fillStyle = sh; rr(-w / 2, -h / 2, w, h, 3); ctx.fill();
+  const al = ctx.createLinearGradient(-w / 2, -h / 2, w / 2, h / 2);
+  al.addColorStop(0, '#eef1f5'); al.addColorStop(0.45, '#9ba1aa'); al.addColorStop(0.55, '#c9ced5'); al.addColorStop(1, '#6f757e');
+  ctx.strokeStyle = al; ctx.lineWidth = 2.6; rr(-w / 2 + 1.3, -h / 2 + 1.3, w - 2.6, h - 2.6, 2.5); ctx.stroke();
+  ctx.strokeStyle = 'rgba(0,0,0,.45)'; ctx.lineWidth = 0.8; rr(-w / 2 + 3, -h / 2 + 3, w - 6, h - 6, 2); ctx.stroke();
+  if (d.tall) { ctx.strokeStyle = 'rgba(0,0,0,.4)'; ctx.lineWidth = 1.5; ctx.strokeRect(-w / 2 + 8, -h / 2 + 8, w - 16, h - 16); ctx.strokeStyle = 'rgba(255,255,255,.08)'; ctx.strokeRect(-w / 2 + 9.5, -h / 2 + 9.5, w - 19, h - 19); }
+  // maniglie incassate sui lati corti: vaschetta d'acciaio col manico
   if (Math.min(w, h) >= 26) {
-    ctx.fillStyle = '#0e0f12'; ctx.strokeStyle = '#6a6e76'; ctx.lineWidth = 1;
+    ctx.fillStyle = '#0e0f12'; ctx.strokeStyle = '#b9bec6'; ctx.lineWidth = 1;
     const hl = Math.min(16, Math.min(w, h) - 14);
     if (w >= h) { [-1, 1].forEach(sx => { rr(sx * (w / 2 - 5) - 2, -hl / 2, 4, hl, 2); ctx.fill(); ctx.stroke(); }); }
     else { [-1, 1].forEach(sy => { rr(-hl / 2, sy * (h / 2 - 5) - 2, hl, 4, 2); ctx.fill(); ctx.stroke(); }); }
@@ -2935,13 +3252,21 @@ function drawCase (ce) {
   const long = w >= h;
   ctx.save(); if (!long) ctx.rotate(Math.PI / 2);
   const L = long ? w : h;
-  ctx.fillStyle = z.color; ctx.fillRect(-L / 2 + 5, -6, L - 10, 12);
+  // nastro telato: bordi un po' irregolari, la trama e un filo di lucido
+  ctx.fillStyle = z.color; ctx.beginPath(); ctx.moveTo(-L / 2 + 5, -6);
+  for (let x = -L / 2 + 5; x <= L / 2 - 5; x += 4) ctx.lineTo(x, -6 + (Math.sin(x * 3.1 + ce.seed) * 0.5));
+  ctx.lineTo(L / 2 - 5, 6); for (let x = L / 2 - 5; x >= -L / 2 + 5; x -= 4) ctx.lineTo(x, 6 + (Math.sin(x * 2.3 + ce.seed) * 0.5)); ctx.closePath(); ctx.fill();
+  ctx.fillStyle = 'rgba(255,255,255,.18)'; ctx.fillRect(-L / 2 + 5, -6, L - 10, 3);
+  ctx.fillStyle = 'rgba(0,0,0,.12)'; for (let x = -L / 2 + 7; x < L / 2 - 5; x += 3) ctx.fillRect(x, -6, 0.6, 12);
   ctx.fillStyle = '#141519'; ctx.font = '700 10px "Barlow Condensed", sans-serif'; ctx.textAlign = 'center';
   ctx.fillText(d.short, 0, 4, L - 14);
   ctx.restore();
-  // angolari
-  ctx.fillStyle = '#a9adb4';
-  [[-1, -1], [1, -1], [-1, 1], [1, 1]].forEach(([sx, sy]) => ctx.fillRect(sx * w / 2 - (sx > 0 ? 7 : 0), sy * h / 2 - (sy > 0 ? 7 : 0), 7, 7));
+  // angolari a sfera cromati
+  [[-1, -1], [1, -1], [-1, 1], [1, 1]].forEach(([sx, sy]) => {
+    const x = sx * (w / 2 - 3.5), y = sy * (h / 2 - 3.5), g = ctx.createRadialGradient(x - 1.2, y - 1.4, 0.4, x, y, 4.6);
+    g.addColorStop(0, '#ffffff'); g.addColorStop(0.35, '#c9ced5'); g.addColorStop(1, '#4f545c');
+    ctx.fillStyle = g; ctx.beginPath(); ctx.arc(x, y, 4.4, 0, Math.PI * 2); ctx.fill();
+  });
   // graffi secondo il danno
   const n = Math.floor((100 - ce.integrity) / 7);
   if (n > 0) {
@@ -2964,78 +3289,61 @@ function drawCase (ce) {
   if (bf && bf.until > G.t && bf.ce === ce) { ctx.strokeStyle = 'rgba(224,80,63,.8)'; ctx.lineWidth = 3; ctx.setLineDash([5, 4]); rr(-w / 2 - 3, -h / 2 - 3, w + 6, h + 6, 5); ctx.stroke(); ctx.setLineDash([]); }
   if (ce.flash > 0) { ctx.fillStyle = 'rgba(224,80,63,' + (ce.flash * 0.9) + ')'; rr(-w / 2, -h / 2, w, h, 4); ctx.fill(); }
   ctx.restore();
+  if (ce.brake && !ce.onTrolley) {   // freno tirato: la P rossa sull'angolo del coperchio
+    const c = add(b.position, rot({ x: w / 2 - 6, y: h / 2 - 6 }, b.angle));
+    ctx.save(); ctx.translate(c.x, c.y - z1 * ZK); ctx.scale(1, 1 / KY);
+    ctx.fillStyle = '#e0503f'; ctx.beginPath(); ctx.arc(0, 0, 8, 0, Math.PI * 2); ctx.fill();
+    ctx.strokeStyle = '#ffd2cb'; ctx.lineWidth = 1.5; ctx.stroke();
+    ctx.fillStyle = '#fff'; ctx.font = '700 10px Inter, sans-serif'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle'; ctx.fillText('P', 0, 0.5);
+    ctx.restore();
+  }
 }
 function drawWorker (w) {
   const p = w.body.position, r = w.r;
-  // braccia verso il case
-  if (w.grab) {
-    const ce = w.grab;
-    const tgt = ce.kind === 'case' ? surface(ce, p).world : add(p, mul({ x: Math.cos(w.facing), y: Math.sin(w.facing) }, w.hold ? w.hold.off.x - 22 : 20));
-    const side = { x: -Math.sin(w.facing), y: Math.cos(w.facing) };
-    ctx.strokeStyle = w.skin; ctx.lineWidth = 5; ctx.lineCap = 'round';
-    [-1, 1].forEach(s => { ctx.beginPath(); ctx.moveTo(p.x + side.x * r * 0.75 * s, p.y + side.y * r * 0.75 * s); ctx.lineTo(tgt.x + side.x * 9 * s, tgt.y + side.y * 9 * s); ctx.stroke(); });
-  }
-  ctx.save(); ctx.translate(p.x, p.y);
-  ctx.fillStyle = 'rgba(0,0,0,.35)'; ctx.beginPath(); ctx.ellipse(3, 4, r * 1.05, r * 1.05, 0, 0, Math.PI * 2); ctx.fill();
-  ctx.rotate(w.facing);
-  // passo: i piedi escono avanti e indietro, le mani ondeggiano al contrario
+  ctx.fillStyle = 'rgba(0,0,0,.35)'; ctx.beginPath(); ctx.ellipse(p.x + 6, p.y + 4, r * 1.15, r * 0.85, 0, 0, Math.PI * 2); ctx.fill();
+  // passo: un saltello; braccia avanti alle maniglie, sotto il case in mano
   const moving = w.spd > 0.25, ph = Math.sin((w.stride || 0) * 0.28) * (moving ? 1 : 0);
-  ctx.fillStyle = '#17181c';
-  [-1, 1].forEach(sd => { ctx.beginPath(); ctx.ellipse(ph * sd * r * 0.55 + 1, sd * r * 0.38, r * 0.34, r * 0.2, 0, 0, Math.PI * 2); ctx.fill(); });
-  if (!w.grab) {
-    ctx.fillStyle = w.skin;
-    [-1, 1].forEach(sd => { ctx.beginPath(); ctx.arc(-ph * sd * r * 0.45, sd * r * 1.02, r * 0.22, 0, Math.PI * 2); ctx.fill(); });
-  }
-  ctx.fillStyle = w.tee; ctx.beginPath(); ctx.ellipse(-2, 0, r * 0.62, r * 1.02, 0, 0, Math.PI * 2); ctx.fill();
-  ctx.strokeStyle = w.trim; ctx.lineWidth = 2; ctx.stroke();
-  ctx.fillStyle = w.skin; ctx.beginPath(); ctx.arc(2, 0, r * 0.5, 0, Math.PI * 2); ctx.fill();
-  ctx.fillStyle = 'rgba(255,255,255,.18)'; ctx.beginPath(); ctx.arc(0, -r * 0.18, r * 0.2, 0, Math.PI * 2); ctx.fill();
-  if (w === G.player) { // cappellino
-    ctx.fillStyle = '#141519'; ctx.beginPath(); ctx.arc(1, 0, r * 0.46, Math.PI * 0.5, Math.PI * 1.5); ctx.fill();
-    ctx.fillStyle = w.trim; ctx.fillRect(r * 0.35, -r * 0.3, r * 0.3, r * 0.6);
-  } else { // Macio: pelato coi baffi
-    ctx.strokeStyle = '#8a8d93'; ctx.lineWidth = 3; ctx.beginPath(); ctx.arc(2, 0, r * 0.45, Math.PI * 0.65, Math.PI * 1.35); ctx.stroke();
-    ctx.strokeStyle = '#3a2a1e'; ctx.lineWidth = 3; ctx.beginPath(); ctx.moveTo(r * 0.45, -r * 0.22); ctx.lineTo(r * 0.45, r * 0.22); ctx.stroke();
-  }
-  ctx.restore();
-  if (w === G.macio && w.ai.state === 'phone') { ctx.fillStyle = '#eee9df'; ctx.fillRect(p.x + 10, p.y - 18, 7, 12); }
+  const ce = w.grab, arms = !ce ? 'giu' : ce.carrier === w || liftedByTwo(ce) ? 'porta' : 'avanti';
+  const who = w === G.player ? 'topsy' : 'macio';
+  drawFigure(p, who, w === G.player ? 176 : 168, { back: Math.sin(w.facing) < -0.6, flip: Math.cos(w.facing) < -0.2, arms, step: Math.round(ph), bob: Math.abs(ph) * 0.02, tee: w.tee, skin: w.skin });
+  const hd = worldToScreen(p, 175), sc = G.cam.scale;
+  ctx.save(); ctx.setTransform(DPR, 0, 0, DPR, 0, 0);
+  if (w === G.macio && w.ai.state === 'phone') { ctx.fillStyle = '#eee9df'; ctx.fillRect(hd.x + 12 * sc, hd.y + 14 * sc, 7 * sc, 12 * sc); }
   // gocce di sudore: col case da due, ad aspettare il collega
-  if (w.grab && w.grab.kind === 'case' && w.grab.def.heavy2 && w.grab.grabbers.length < 2) {
+  if (ce && ce.kind === 'case' && ce.def.heavy2 && ce.grabbers.length < 2) {
     const tt = (performance.now() / 500) % 1;
     ctx.fillStyle = 'rgba(122,211,255,' + (1 - tt) + ')';
-    ctx.beginPath(); ctx.arc(p.x - 10, p.y - 18 - tt * 10, 2.5, 0, Math.PI * 2); ctx.fill();
-    ctx.beginPath(); ctx.arc(p.x + 9, p.y - 14 - ((tt + 0.5) % 1) * 10, 2, 0, Math.PI * 2); ctx.fill();
+    ctx.beginPath(); ctx.arc(hd.x - 14 * sc, hd.y + 6 * sc - tt * 10, 2.5, 0, Math.PI * 2); ctx.fill();
+    ctx.beginPath(); ctx.arc(hd.x + 13 * sc, hd.y + 10 * sc - ((tt + 0.5) % 1) * 10, 2, 0, Math.PI * 2); ctx.fill();
   }
+  ctx.restore();
 }
 function drawKid (k) {
   const p = k.body.position;
-  ctx.save(); ctx.translate(p.x, p.y);
-  ctx.fillStyle = 'rgba(0,0,0,.3)'; ctx.beginPath(); ctx.arc(2, 3, 11, 0, Math.PI * 2); ctx.fill();
-  ctx.rotate(k.facing);
+  ctx.fillStyle = 'rgba(0,0,0,.3)'; ctx.beginPath(); ctx.ellipse(p.x + 4, p.y + 3, 12, 9, 0, 0, Math.PI * 2); ctx.fill();
   const kph = Math.sin((k.stride || 0) * 0.4) * (speedOf(k.body) > 0.2 ? 1 : 0);
-  ctx.fillStyle = '#2a2b30';
-  [-1, 1].forEach(sd => { ctx.beginPath(); ctx.ellipse(kph * sd * 5 + 1, sd * 4, 3.5, 2.2, 0, 0, Math.PI * 2); ctx.fill(); });
-  ctx.fillStyle = k.tee; ctx.beginPath(); ctx.ellipse(-1, 0, 7, 11, 0, 0, Math.PI * 2); ctx.fill();
-  ctx.fillStyle = '#e8c09a'; ctx.beginPath(); ctx.arc(2, 0, 6, 0, Math.PI * 2); ctx.fill();
-  ctx.fillStyle = '#5a3a22'; ctx.beginPath(); ctx.arc(1, 0, 5.5, Math.PI * 0.5, Math.PI * 1.5); ctx.fill();
-  ctx.restore();
+  drawFigure(p, k.tee === '#7ad3ff' ? 'kid2' : 'kid', 125, { back: Math.sin(k.facing) < -0.6, step: Math.round(kph), bob: Math.abs(kph) * 0.03, tee: k.tee, skin: '#e2b08c' });
+}
+// Gerry, il bidello, dietro al suo carrello delle pulizie
+function cartPts () { return rectPts(G.cart.body.position, 56, 80, 0); }
+function drawGerry () {
+  if (!G.cart) return;
+  const p = G.cart.body.position;
+  drawFigure({ x: p.x, y: p.y - 52 }, 'gerry', 176, { arms: 'avanti', tee: '#2f5d8a', skin: '#e8a883' });
 }
 function drawCart () {
   if (!G.cart) return;
-  const p = G.cart.body.position;
-  ctx.save(); ctx.translate(p.x, p.y);
-  ctx.fillStyle = 'rgba(0,0,0,.3)'; ctx.fillRect(-25, -36, 56, 80);
-  ctx.fillStyle = '#2f6fb0'; rr(-28, -40, 56, 80, 6); ctx.fill();
-  ctx.fillStyle = '#f2c53d'; ctx.beginPath(); ctx.arc(-8, -12, 13, 0, Math.PI * 2); ctx.fill();
-  ctx.fillStyle = '#9fb7cc'; ctx.fillRect(4, 4, 18, 26);
-  // Gerry, il bidello, dietro al carrello: spalle larghe nel camice blu,
-  // testone pelato con la corona di capelli grigi dietro e ai lati, nasone
-  ctx.fillStyle = '#2f5d8a'; ctx.beginPath(); ctx.ellipse(0, -58, 22, 12, 0, 0, Math.PI * 2); ctx.fill();
-  ctx.fillStyle = '#e8a883'; ctx.beginPath(); ctx.arc(0, -57, 9.5, 0, Math.PI * 2); ctx.fill();
-  ctx.fillStyle = '#d6926c'; ctx.beginPath(); ctx.arc(0, -47.5, 2.6, 0, Math.PI * 2); ctx.fill();
-  ctx.strokeStyle = '#7d7570'; ctx.lineWidth = 4; ctx.beginPath(); ctx.arc(0, -57, 8, Math.PI * 0.9, Math.PI * 2.1); ctx.stroke();
-  ctx.fillStyle = '#f4c7a4'; ctx.beginPath(); ctx.arc(-2, -59, 3, 0, Math.PI * 2); ctx.fill();
+  const p = G.cart.body.position, pts = cartPts();
+  dropShadow(pts, 70, 0.3);
+  prism(pts, 4, 74, '#3b7fc2', '#2f6fb0');
+  ctx.fillStyle = '#111214'; [[-22, 38], [22, 38]].forEach(([x, y]) => { ctx.beginPath(); ctx.ellipse(p.x + x, p.y + y, 5, 5 * ZK, 0, 0, Math.PI * 2); ctx.fill(); });
+  // secchio giallo e spazzolone
+  ctx.save(); lift(74);
+  ctx.fillStyle = '#f2c53d'; ctx.beginPath(); ctx.ellipse(p.x - 8, p.y - 12, 14, 12, 0, 0, Math.PI * 2); ctx.fill();
+  ctx.fillStyle = '#c99a1c'; ctx.beginPath(); ctx.ellipse(p.x - 8, p.y - 12, 10, 8, 0, 0, Math.PI * 2); ctx.fill();
+  ctx.fillStyle = '#9fb7cc'; ctx.fillRect(p.x + 4, p.y + 4, 18, 26);
   ctx.restore();
+  ctx.strokeStyle = '#a07a45'; ctx.lineWidth = 3; ctx.beginPath(); ctx.moveTo(p.x + 16, p.y + 10 - 74 * ZK); ctx.lineTo(p.x + 22, p.y - 2 - 190 * ZK); ctx.stroke();
 }
 
 /* effetti: polvere negli urti, scintille nei danni, onda alle consegne */
@@ -3058,10 +3366,11 @@ function drawFx () {
       ctx.fillStyle = f.color + (0.55 * (1 - k)).toFixed(3) + ')';
       ctx.beginPath(); ctx.arc(x, y, f.r * (0.6 + k), 0, Math.PI * 2); ctx.fill();
     } else if (f.kind === 'text') {
-      ctx.save(); ctx.globalAlpha = k < 0.7 ? 1 : (1 - k) / 0.3;
+      const sp = worldToScreen(f, 60), sc = G.cam.scale;
+      ctx.save(); ctx.setTransform(DPR * sc, 0, 0, DPR * sc, DPR * sp.x, DPR * sp.y); ctx.globalAlpha = k < 0.7 ? 1 : (1 - k) / 0.3;
       ctx.font = '700 17px "Barlow Condensed", sans-serif'; ctx.textAlign = 'center';
-      ctx.lineWidth = 4; ctx.strokeStyle = 'rgba(12,13,16,.85)'; ctx.strokeText(f.text, f.x, f.y - k * 34);
-      ctx.fillStyle = f.color; ctx.fillText(f.text, f.x, f.y - k * 34);
+      ctx.lineWidth = 4; ctx.strokeStyle = 'rgba(12,13,16,.85)'; ctx.strokeText(f.text, 0, -k * 34);
+      ctx.fillStyle = f.color; ctx.fillText(f.text, 0, -k * 34);
       ctx.restore();
     } else {
       ctx.strokeStyle = f.color; ctx.globalAlpha = 1 - k; ctx.lineWidth = 4 * (1 - k) + 1;
@@ -3092,16 +3401,30 @@ function drawOrders () {
   const p = S.who.body.position;
   ctx.save(); ctx.strokeStyle = '#f2a541'; ctx.lineWidth = 3; ctx.globalAlpha = 0.6 + 0.4 * pulse;
   ctx.beginPath(); ctx.arc(p.x, p.y, S.who.r + 7, 0, Math.PI * 2); ctx.stroke(); ctx.restore();
-  for (const ce of [S.ce, S.top]) {
-    if (!ce) continue;
-    const v = ce.body.vertices;
-    ctx.save(); ctx.strokeStyle = 'rgba(242,165,65,' + pulse + ')'; ctx.lineWidth = 4;
-    ctx.beginPath(); v.forEach((q, i) => i ? ctx.lineTo(q.x, q.y) : ctx.moveTo(q.x, q.y)); ctx.closePath(); ctx.stroke(); ctx.restore();
-  }
   // il case scelto: la sua zona si accende
   if (S.ce) { const z = ZONES[S.ce.def.zone]; ctx.save(); ctx.fillStyle = z.color; ctx.globalAlpha = 0.1 + 0.08 * pulse; ctx.fillRect(z.x, z.y, z.w, z.h); ctx.restore(); }
 }
-function worldToScreen (p) { return { x: (p.x - G.cam.x) * G.cam.scale + W / 2, y: (p.y - G.cam.y) * G.cam.scale + H / 2 }; }
+// il case scelto (e quello da mettere sopra): contorno del coperchio e delle facce
+function drawPicks () {
+  if (G.mode !== 'play') return;
+  const S = G.sel, pulse = 0.55 + 0.45 * Math.sin(performance.now() / 160);
+  for (const ce of [S.ce, S.top]) {
+    if (!ce || ce.hidden) continue;
+    const pts = rectPts(ce.body.position, ce.def.w, ce.def.h, ce.body.angle), z0 = caseZ(ce), z1 = z0 + caseH(ce);
+    ctx.save(); ctx.strokeStyle = 'rgba(242,165,65,' + pulse + ')'; ctx.lineWidth = 4; ctx.lineJoin = 'round';
+    ctx.beginPath(); pts.forEach((q, i) => i ? ctx.lineTo(q.x, q.y - z1 * ZK) : ctx.moveTo(q.x, q.y - z1 * ZK)); ctx.closePath();
+    // le facce che si vedono: quelle col lato rivolto in giù sullo schermo
+    const c = ce.body.position;
+    pts.forEach((a, i) => {
+      const b = pts[(i + 1) % 4], m = { x: (a.x + b.x) / 2 - c.x, y: (a.y + b.y) / 2 - c.y };
+      if (m.y <= 0.5) return;
+      ctx.moveTo(a.x, a.y - z1 * ZK); ctx.lineTo(a.x, a.y - z0 * ZK); ctx.lineTo(b.x, b.y - z0 * ZK); ctx.lineTo(b.x, b.y - z1 * ZK);
+    });
+    ctx.stroke(); ctx.restore();
+  }
+}
+// dalla pianta (e da un'altezza z) allo schermo, e ritorno (a quell'altezza)
+function worldToScreen (p, z) { return { x: (p.x - G.cam.x) * G.cam.scale + W / 2, y: ((p.y - G.cam.y) * KY - (z || 0) * KZ) * G.cam.scale + H / 2 }; }
 function entPos (e) { return e.body ? e.body.position : e; }
 
 function drawScreenUI () {
@@ -3109,13 +3432,13 @@ function drawScreenUI () {
   // il case scelto: la sua scheda (nome, peso, dove va, cosa serve)
   const S = G.sel, ce = G.mode === 'play' && S.ce;
   if (ce) {
-    const s = worldToScreen(ce.body.position), tags = [];
+    const s = worldToScreen(ce.body.position, caseZ(ce) + caseH(ce)), tags = [];
     if (ce.def.heavy2) tags.push(['⚠ 2 PERSONE', '#f2a541']);
     if (FRAGILE(ce.def)) tags.push(['⚠ FRAGILE', '#e0503f']);
     if (ce.brake) tags.unshift(['FRENO TIRATO', '#e0503f']);
     if (!S.pickTop && busy(S.who)) tags.push(['DOPO L\'ORDINE IN CORSO', '#8fa3b8']);
     const sub = S.pickTop ? 'tocca il case da mettere sopra' : whoName(S.who).toUpperCase() + ' · ' + (S.cart ? 'col carrello' + (S.top ? ' con ' + S.top.def.short : '') : weightClass(ce.def)) + ' · va in ' + ZONES[ce.def.zone].name.toUpperCase();
-    label(s.x, s.y - ce.def.h * G.cam.scale / 2 - 16, ce.def.name.toUpperCase() + ' — ' + ce.def.what, sub, ZONES[ce.def.zone].color, tags);
+    label(s.x, s.y - ce.def.h * KY * G.cam.scale / 2 - 16, ce.def.name.toUpperCase() + ' — ' + ce.def.what, sub, ZONES[ce.def.zone].color, tags);
   }
   // freccia verso la zona dove sta andando chi è scelto
   const j = S.who.job, jz = j && j.dest && j.dest.zone;
@@ -3123,7 +3446,7 @@ function drawScreenUI () {
   // i PAR rimasti nel loro case: quattro lucine (il danno si vede sul case)
   for (const ce of G.cases) {
     if (ce.def.id !== 'par' || ce.hidden || ce.onTrolley || ce.pars === 4) continue;
-    const s = worldToScreen({ x: ce.body.position.x, y: ce.body.bounds.min.y });
+    const s = worldToScreen({ x: ce.body.position.x, y: ce.body.bounds.min.y }, caseZ(ce) + caseH(ce));
     for (let i = 0; i < 4; i++) { ctx.fillStyle = i < ce.pars ? '#eaff2b' : '#5a2a24'; ctx.fillRect(Math.round(s.x - 14 + i * 7), Math.round(s.y - 12), 5, 6); }
   }
   // chi ha un ordine ed è fermo: perché (sopra la testa, piccolo)
@@ -3134,17 +3457,19 @@ function drawScreenUI () {
     const failed = !w.job && G.t - (w.failT || -9) < 2.5;
     const why = failed ? '✕ non si può' : (w.stillT || 0) >= 0.6 && waitWhy(w); if (!why) continue;
     const col = failed ? '#e0503f' : '#f2c53d';
-    const s = worldToScreen(w.body.position), t = why.toUpperCase(), tw = ctx.measureText(t).width + 12;
-    const x = clamp(s.x - tw / 2, 6, W - tw - 6), y = Math.max(64, s.y - w.r * G.cam.scale - 24);
+    const s = worldToScreen(w.body.position, 185), t = why.toUpperCase(), tw = ctx.measureText(t).width + 12;
+    const x = clamp(s.x - tw / 2, 6, W - tw - 6), y = Math.max(64, s.y - 20);
     ctx.fillStyle = 'rgba(28,29,34,.92)'; ctx.strokeStyle = col; ctx.lineWidth = 1; rr(x, y, tw, 17, 5); ctx.fill(); ctx.stroke();
     ctx.fillStyle = col; ctx.fillText(t, x + 6, y + 13);
   }
   // nuvolette
   ctx.font = '600 13px Inter, system-ui, sans-serif';
   for (const b of G.bubbles) {
-    const s = worldToScreen(entPos(b.ent));
+    // sopra la testa di chi parla (o sopra il case)
+    const e = b.ent, ep = entPos(e);
+    const s = e === G.cart ? worldToScreen({ x: ep.x, y: ep.y - 52 }, 190) : worldToScreen(ep, e.kind === 'worker' ? 185 : e.kind === 'kid' ? 130 : e.kind === 'case' ? caseZ(e) + caseH(e) : 0);
     const tw = Math.min(ctx.measureText(b.text).width, 220), bw = tw + 18, bh = 26;
-    let x = clamp(s.x - bw / 2, 8, W - bw - 8), y = s.y - 34 * Math.max(G.cam.scale, 0.8) - bh;
+    let x = clamp(s.x - bw / 2, 8, W - bw - 8), y = s.y - 10 - bh;
     y = Math.max(64, y);
     ctx.fillStyle = '#f4f1ea'; ctx.strokeStyle = '#141519'; ctx.lineWidth = 2;
     rr(x, y, bw, bh, 9); ctx.fill(); ctx.stroke();
@@ -3204,7 +3529,7 @@ function camFocus () {
 function render () {
   // camera: segue il giocatore; su telefono si vede meno mondo ma più grande
   const wv = G.mode === 'wrap' || (G.mode === 'end' && G.wrap) ? wrapView() : null;
-  const want = wv ? clamp(Math.min(W / wv.fit, (H - 60) / wv.fit), 0.35, 1.4) : clamp(Math.min(W / 680, (H - 60) / 520), 0.5, 1.4);
+  const want = wv ? clamp(Math.min(W / wv.fit, (H - 60) / wv.fit), 0.35, 1.4) : clamp(Math.min(W / (W < 600 ? 430 : 680), (H - 60) / (520 * KY)), 0.5, 1.4);
   // la scena finisce sopra la barra d'aiuto (e sopra i pulsanti, sul telefono)
   // la telecamera segue chi è scelto; trascinando si guarda altrove
   const man = !wv && G.mode === 'play' && G.cam.manual;
@@ -3214,27 +3539,35 @@ function render () {
   G.cam.scale += (want - G.cam.scale) * (wv ? 0.05 : 1);
   const scale = G.cam.scale;
   G.cam.x += (target.x - G.cam.x) * k; G.cam.y += (target.y - G.cam.y) * k;
-  const hw = W / 2 / scale, hh = H / 2 / scale;
+  const hw = W / 2 / scale, hh = H / 2 / (scale * KY);
   G.cam.x = WORLD.x2 - WORLD.x1 > hw * 2 ? clamp(G.cam.x, WORLD.x1 + hw, WORLD.x2 - hw) : (WORLD.x1 + WORLD.x2) / 2;
   G.cam.y = WORLD.y2 - WORLD.y1 > hh * 2 ? clamp(G.cam.y, WORLD.y1 + hh - 50 / scale, WORLD.y2 - hh + 60 / scale) : (WORLD.y1 + WORLD.y2) / 2;
   if (man) G.cam.manual = { x: G.cam.x, y: G.cam.y };
 
   ctx.setTransform(1, 0, 0, 1, 0, 0);
   ctx.fillStyle = '#141519'; ctx.fillRect(0, 0, cv.width, cv.height);
-  ctx.setTransform(DPR * scale, 0, 0, DPR * scale, DPR * (W / 2 - G.cam.x * scale), DPR * (H / 2 - G.cam.y * scale));
-  drawGround(); drawZones(); drawStatics();
-  const up = c => c.carrier || G.t < c.liftUntil || liftedByTwo(c);
-  const ground = G.cases.filter(c => !up(c) && !c.onTrolley).sort((a, b) => a.body.position.y - b.body.position.y);
-  ground.forEach(drawCase);
-  drawLocks();
-  drawTrolley();
-  if (G.trolley) G.trolley.load.forEach(drawCase);
-  if (G.tarp && G.t - G.tarp < 1.2) drawTarp(G.cases.find(c => c.def.surprise), (G.t - G.tarp) / 1.2);
-  G.kids.forEach(drawKid);
-  drawCart();
+  ctx.setTransform(DPR * scale, 0, 0, DPR * scale * KY, DPR * (W / 2 - G.cam.x * scale), DPR * (H / 2 - G.cam.y * scale * KY));
+  // per terra: cortile, zone, pianale, rampa, gli ordini
+  drawGround();
+  // la luce del pomeriggio: calda da in alto a sinistra, più fresca in basso a destra
+  const sun = ctx.createLinearGradient(VAN.x1, WORLD.y1, GYM_X + 400, WORLD.y2);
+  sun.addColorStop(0, 'rgba(255,214,150,.10)'); sun.addColorStop(0.6, 'rgba(255,214,150,0)'); sun.addColorStop(1, 'rgba(40,60,90,.12)');
+  ctx.fillStyle = sun; ctx.fillRect(WORLD.x1 - 400, WORLD.y1 - 400, 3000, 1800);
+  drawZones(); drawStatics(); drawTreeShadow();
   drawOrders();
-  G.workers.forEach(drawWorker);
-  G.cases.filter(up).forEach(drawCase);
+  // in piedi: dal fondo verso chi guarda (y della faccia davanti)
+  const L = [], put = (y, f) => L.push({ y, f });
+  sceneSolids(put);
+  for (const ce of G.cases) if (!ce.onTrolley) put(frontY(rectPts(ce.body.position, ce.def.w, ce.def.h, ce.body.angle)), () => drawCase(ce));
+  if (G.trolley) put(frontY(rectPts(G.trolley.body.position, G.trolley.def.w, G.trolley.def.h, G.trolley.body.angle)), () => { drawTrolley(); G.trolley.load.forEach(drawCase); });
+  else put(VAN.y1 + 40, drawTrolley);
+  put(VAN.y2 + 1, drawLocks);
+  G.kids.forEach(k => put(k.body.position.y + 8, () => drawKid(k)));
+  if (G.cart) { put(G.cart.body.position.y - 44, drawGerry); put(G.cart.body.position.y + 40, drawCart); }
+  G.workers.forEach(w => put(w.body.position.y + w.r * 0.6, () => drawWorker(w)));
+  L.sort((a, b) => a.y - b.y).forEach(o => o.f());
+  if (G.tarp && G.t - G.tarp < 1.2) { ctx.save(); lift(60); drawTarp(G.cases.find(c => c.def.surprise), (G.t - G.tarp) / 1.2); ctx.restore(); }
+  drawPicks();
   drawFx();
   drawTreeTop();
   // un filo di vignettatura: il centro dello schermo resta più luminoso
@@ -3464,14 +3797,15 @@ window.addEventListener('keydown', e => {
     if (!down || e.pointerId !== down.id || !G) return;
     const dx = e.clientX - down.x, dy = e.clientY - down.y;
     if (!down.pan && Math.hypot(dx, dy) > 12) down.pan = true;
-    if (down.pan) G.cam.manual = { x: down.cx - dx / G.cam.scale, y: down.cy - dy / G.cam.scale };
+    if (down.pan) G.cam.manual = { x: down.cx - dx / G.cam.scale, y: down.cy - dy / (G.cam.scale * KY) };
   });
   cv.addEventListener('pointerup', e => {
     if (!down || e.pointerId !== down.id) return;
     const d = down; down = null;
     if (d.pan || !G) return;
     const r = cv.getBoundingClientRect();
-    tapAt(screenToWorld({ x: e.clientX - r.left, y: e.clientY - r.top }));
+    const sp = { x: e.clientX - r.left, y: e.clientY - r.top };
+    tapAt(screenToWorld(sp), sp);
   });
   cv.addEventListener('pointercancel', () => { down = null; });
 })();

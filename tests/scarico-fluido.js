@@ -26,7 +26,7 @@ const path = require('path');
   };
   const toScreen = (p, w) => p.evaluate(w => {
     const r = document.querySelector('canvas').getBoundingClientRect();
-    return { x: r.left + (w.x - G.cam.x) * G.cam.scale + W / 2, y: r.top + (w.y - G.cam.y) * G.cam.scale + H / 2 };
+    const s = worldToScreen(w); return { x: r.left + s.x, y: r.top + s.y };
   }, w);
   const waitIdle = (p, ms) => p.waitForFunction(() => !busy(G.player) && !busy(G.macio) && !G.van.anim, null, { timeout: ms || 30000 });
 

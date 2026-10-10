@@ -24,7 +24,7 @@ const path = require('path');
   // dove sta sullo schermo un punto del cortile
   const toScreen = (p, w) => p.evaluate(w => {
     const r = document.querySelector('canvas').getBoundingClientRect();
-    return { x: r.left + (w.x - G.cam.x) * G.cam.scale + W / 2, y: r.top + (w.y - G.cam.y) * G.cam.scale + H / 2 };
+    const s = worldToScreen(w); return { x: r.left + s.x, y: r.top + s.y };
   }, w);
   // la telecamera sul case (come trascinando la scena), poi dove sta sullo schermo
   const caseAtScreen = async (p, id) => { await p.evaluate(id => { const c = G.cases.find(x => x.def.id === id).body.position; G.cam.manual = { x: c.x, y: c.y }; }, id); await p.waitForTimeout(700); return caseAt0(p, id); };
