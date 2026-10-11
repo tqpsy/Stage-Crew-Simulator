@@ -2559,9 +2559,7 @@ function tapAt (p, sp) {
   }
   wd = Math.max(0, wd);
   // chi è già scelto non si riprende: se lì vicino c'è un case, vale il case
-  // se a schermo si sovrappongono, vale chi è disegnato davanti
-  const front = who && hit && wd === 0 && hit.d === 0 && dep(who.body.position) + who.r * 0.6 > frontY(rectPts(hit.ce.body.position, hit.ce.def.w, hit.ce.def.h, hit.ce.body.angle));
-  if (who && (!hit || (who !== G.sel.who && (wd < hit.d || (wd === 0 && (hit.d > 0 || front)))))) { selectWorker(who); return; }
+  if (who && (!hit || (who !== G.sel.who && (wd < hit.d || (wd === 0 && hit.d > 0))))) { selectWorker(who); return; }
   const ce = hit && hit.ce;
   if (ce) { selectCase(ce); return; }
   if (G.trolley && Bounds.contains(G.trolley.body.bounds, p)) { if (G.sel.ce) toggleCart(); else toast('Il carrello: scegli un case, poi CARRELLO e la zona.'); return; }
@@ -2727,26 +2725,68 @@ function texture (w, h, paint) {
 function specks (g, r, w, h, n, cols, s0, s1) {
   for (let i = 0; i < n; i++) { g.fillStyle = cols[Math.floor(r() * cols.length)]; const s = s0 + r() * (s1 - s0); g.fillRect(r() * w, r() * h, s, s); }
 }
+/* rumore che si ripete senza cuciture (per le grane vere: bitume, cemento,
+   venatura del legno): valori a caso su una griglia, interpolati morbidi */
+function tileNoise (seed) {
+  const r = seeded(seed), V = new Float32Array(256 * 256);
+  for (let i = 0; i < V.length; i++) V[i] = r();
+  const sm = t => t * t * (3 - 2 * t);
+  return (x, y, px, py) => {   // x, y in celle; si ripete ogni px, py celle
+    const xi = Math.floor(x), yi = Math.floor(y), fx = sm(x - xi), fy = sm(y - yi);
+    const v = (a, b) => V[(((a % px) + px) % px) * 256 + (((b % py) + py) % py)];
+    const a = v(xi, yi) + (v(xi + 1, yi) - v(xi, yi)) * fx, b = v(xi, yi + 1) + (v(xi + 1, yi + 1) - v(xi, yi + 1)) * fx;
+    return a + (b - a) * fy;
+  };
+}
+// una grana dipinta pixel per pixel: paint(u, v, rnd) → [r, g, b] (u, v in cm)
+function grain (w, h, seed, paint) {
+  const c = document.createElement('canvas'); c.width = w * 2; c.height = h * 2;
+  const g = c.getContext('2d'), im = g.createImageData(c.width, c.height), d = im.data, r = seeded(seed);
+  for (let y = 0; y < c.height; y++) for (let x = 0; x < c.width; x++) {
+    const p = paint(x / 2, y / 2, r), i = (y * c.width + x) * 4;
+    d[i] = p[0]; d[i + 1] = p[1]; d[i + 2] = p[2]; d[i + 3] = 255;
+  }
+  g.putImageData(im, 0, 0); return c;
+}
+function fbm (n, u, v, w, h, cells, oct) {
+  let s = 0, a = 0.5, t = 0;
+  for (let o = 0; o < oct; o++) { const k = cells * (1 << o); s += a * n(u / w * k, v / h * k, k, k); t += a; a *= 0.5; }
+  return s / t;
+}
 function mats () {
   if (MAT.ok) return MAT;
   const T = {
     // asfalto: ghiaietto chiaro e scuro nel bitume
-    asphalt: texture(160, 160, (g, r) => { g.fillStyle = '#33363b'; g.fillRect(0, 0, 160, 160); specks(g, r, 160, 160, 2600, ['#3d4046', '#2a2c30', '#45484e', '#26282c', '#4c4f55'], 0.5, 1.6); specks(g, r, 160, 160, 90, ['#55585e', '#1f2125'], 1.5, 2.6); }),
+    asphalt: (() => { const n = tileNoise(11), m = tileNoise(12); return grain(160, 160, 5, (u, v, r) => {
+      // bitume grigio con ghiaietto: chiazze larghe, sassolini chiari e scuri
+      let k = 0.24 + (fbm(n, u, v, 160, 160, 4, 3) - 0.5) * 0.07 + (r() - 0.5) * 0.07;
+      const st = m(u / 160 * 64, v / 160 * 64, 64, 64);
+      if (st > 0.78) k += (st - 0.78) * 0.9; else if (st < 0.16) k -= (0.16 - st) * 0.6;
+      if (r() < 0.012) k += 0.12;
+      const c = clamp(k * 255, 0, 255); return [c * 0.98, c, c * 1.03];
+    }); })(),
     // cemento lisciato con le macchie
-    concrete: texture(120, 120, (g, r) => { g.fillStyle = '#5a5d64'; g.fillRect(0, 0, 120, 120); specks(g, r, 120, 120, 1400, ['#62656c', '#53565c', '#676a71', '#4d5056'], 0.4, 1.2); for (let i = 0; i < 6; i++) { g.fillStyle = 'rgba(0,0,0,.05)'; g.beginPath(); g.arc(r() * 120, r() * 120, 8 + r() * 18, 0, 7); g.fill(); } }),
+    concrete: (() => { const n = tileNoise(21); return grain(120, 120, 6, (u, v, r) => {
+      // cemento lisciato: nuvole chiare e scure, pori fini
+      let k = 0.44 + (fbm(n, u, v, 120, 120, 3, 4) - 0.5) * 0.1 + (r() - 0.5) * 0.035;
+      if (r() < 0.006) k -= 0.12;
+      const c = clamp(k * 255, 0, 255); return [c * 1.01, c, c * 0.97];
+    }); })(),
     // parquet della palestra: listoni di tono diverso, con la venatura
-    wood: texture(216, 144, (g, r) => {
-      // listoni da 9 cm, lunghi, sfalsati, di tono appena diverso
-      g.fillStyle = '#6c4a2d'; g.fillRect(0, 0, 216, 144);
-      for (let y = 0; y < 144; y += 9) for (let x = -r() * 120; x < 216; ) {
-        const L = 110 + r() * 90, t = r();
-        g.fillStyle = `rgb(${100 + t * 14},${70 + t * 10},${42 + t * 7})`; g.fillRect(x, y, L, 9);
-        g.strokeStyle = 'rgba(50,30,14,.13)'; g.lineWidth = 0.5;
-        for (let k = 0; k < 3; k++) { g.beginPath(); const yy = y + 1.5 + r() * 6; g.moveTo(x, yy); g.bezierCurveTo(x + L * 0.3, yy + r() * 2 - 1, x + L * 0.7, yy + r() * 2 - 1, x + L, yy); g.stroke(); }
-        g.fillStyle = 'rgba(0,0,0,.22)'; g.fillRect(x, y, 0.6, 9); x += L;
-      }
-      g.fillStyle = 'rgba(0,0,0,.2)'; for (let y = 0; y < 144; y += 9) g.fillRect(0, y, 216, 0.5);
-    }),
+    wood: (() => {
+      // parquet di acero della palestra: listoni da 7 cm sfalsati, ognuno del
+      // suo tono, venatura allungata, fughe sottili; la vernice è sopra
+      const n = tileNoise(31), rr2 = seeded(32), rows = [];
+      for (let y = 0; y < 144 / 7; y++) { const ends = [], tones = []; let x = -rr2() * 150; while (x < 216) { ends.push(x); tones.push(rr2()); x += 70 + rr2() * 120; } ends.push(x); rows.push({ ends, tones }); }
+      return grain(216, 144, 7, (u, v, r) => {
+        const row = rows[Math.floor(v / 7)], fy = v % 7;
+        let i = 0; while (row.ends[i + 1] <= u) i++;
+        const t = row.tones[i], gr = n(u / 216 * 18, v / 144 * 240, 18, 240), fl = n(u / 216 * 6 + t * 50, v / 144 * 40, 6, 40);
+        let k = 0.86 + t * 0.12 + (gr - 0.5) * 0.12 + (fl - 0.5) * 0.08 + (r() - 0.5) * 0.03;
+        if (fy < 0.5 || u - row.ends[i] < 0.5) k *= 0.62;
+        return [clamp(200 * k, 0, 255), clamp(164 * k, 0, 255), clamp(122 * k, 0, 255)];
+      });
+    })(),
     // guscio dei flight case: laminato nero a buccia d'arancia
     shell: texture(40, 40, (g, r) => { g.fillStyle = '#1b1c20'; g.fillRect(0, 0, 40, 40); specks(g, r, 40, 40, 700, ['#24252a', '#151619', '#2a2b30'], 0.4, 1.1); }),
     // lamiera mandorlata della rampa
@@ -2768,6 +2808,7 @@ function prism (pts, z0, z1, top, side, o) {
   o = o || {};
   const M = mats(), pat = o.mat && M[o.mat];
   facesOf(pts, (a, b, sx, sy) => {
+    if (o.keep && !o.keep(a, b)) return;
     onFace(a, b, L => {
       ctx.fillStyle = shade(side, -sx * 0.14 - (1 - sy) * 0.12); ctx.fillRect(0, -z1, L, z1 - z0);   // luce da sinistra
       if (pat) { ctx.save(); ctx.globalAlpha = o.matA || 0.9; ctx.fillStyle = pat; ctx.fillRect(0, -z1, L, z1 - z0); ctx.restore(); }
@@ -3029,8 +3070,20 @@ function drawGround () {
   ctx.fillStyle = 'rgba(8,9,11,.25)'; ctx.fillRect(VAN.x1 - 200, VAN.y1 - 80, DOOR_X - VAN.x1 + 200, VAN.y2 - VAN.y1 + 160);
   // cortile in asfalto, più chiaro al sole, con le toppe di catrame
   ctx.fillStyle = M.asphalt; ctx.fillRect(DOOR_X, 88, GYM_X - DOOR_X, 826);
+  {   // chiazze larghe (usura, sole, pioggia) che non si ripetono come la grana
+    const n = tileNoise(41), c = document.createElement('canvas'); c.width = 96; c.height = 60;
+    const g = c.getContext('2d'), im = g.createImageData(96, 60);
+    for (let y = 0; y < 60; y++) for (let x = 0; x < 96; x++) { const k = fbm(n, x, y, 96, 60, 6, 4), i = (y * 96 + x) * 4; im.data[i] = im.data[i + 1] = im.data[i + 2] = k > 0.5 ? 255 : 0; im.data[i + 3] = Math.abs(k - 0.5) * 120; }
+    g.putImageData(im, 0, 0);
+    ctx.save(); ctx.imageSmoothingEnabled = true; ctx.drawImage(c, WORLD.x1 - 300, WORLD.y1 - 160, 2600, 1360); ctx.restore();
+    // macchie d'olio dove parcheggiano i furgoni
+    [[DOOR_X - 140, VAN.y1 + 60, 60], [DOOR_X - 380, VAN.y1 + 120, 46], [DOOR_X + 40, VAN.y2 + 160, 28]].forEach(([x, y, rad]) => {
+      const og = ctx.createRadialGradient(x, y, 2, x, y, rad); og.addColorStop(0, 'rgba(10,10,12,.35)'); og.addColorStop(1, 'rgba(10,10,12,0)');
+      ctx.fillStyle = og; ctx.beginPath(); ctx.ellipse(x, y, rad, rad * 0.7, 0.4, 0, Math.PI * 2); ctx.fill();
+    });
+  }
   const r = seeded(7);
-  for (let i = 0; i < 9; i++) { ctx.fillStyle = 'rgba(14,15,18,' + (0.12 + r() * 0.12) + ')'; ctx.beginPath(); ctx.ellipse(DOOR_X + 40 + r() * 300, 140 + r() * 720, 20 + r() * 50, 12 + r() * 30, r() * 3, 0, Math.PI * 2); ctx.fill(); }
+  for (let i = 0; i < 5; i++) { ctx.fillStyle = 'rgba(14,15,18,' + (0.18 + r() * 0.1) + ')'; const x = DOOR_X + 40 + r() * 300, y = 140 + r() * 720, w = 30 + r() * 60, h = 20 + r() * 40; ctx.beginPath(); ctx.moveTo(x, y); for (let k = 1; k < 9; k++) { const a = k / 8 * Math.PI * 2; ctx.lineTo(x + Math.cos(a) * w * (0.8 + r() * 0.3) / 2, y + Math.sin(a) * h * (0.8 + r() * 0.3) / 2); } ctx.fill(); }
   // cordolo in cemento lungo il recinto
   ctx.fillStyle = M.concrete; ctx.fillRect(DOOR_X + 4, 92, GYM_X - DOOR_X - 14, 14); ctx.fillRect(DOOR_X + 4, 894, GYM_X - DOOR_X - 14, 14);
   // strisce del parcheggio accanto al furgone, tombino, crepe e foglie
@@ -3040,9 +3093,12 @@ function drawGround () {
   ctx.fillStyle = '#26282d'; ctx.beginPath(); ctx.arc(MH.x, MH.y, 20, 0, Math.PI * 2); ctx.fill();
   ctx.strokeStyle = '#3c3f46'; ctx.lineWidth = 2; ctx.beginPath(); ctx.arc(MH.x, MH.y, 20, 0, Math.PI * 2); ctx.stroke();
   for (let i = -12; i <= 12; i += 6) { ctx.beginPath(); ctx.moveTo(MH.x + i, MH.y - 17); ctx.lineTo(MH.x + i, MH.y + 17); ctx.stroke(); }
-  ctx.strokeStyle = 'rgba(15,16,19,.6)'; ctx.lineWidth = 1.5;
+  ctx.strokeStyle = 'rgba(12,13,15,.55)'; ctx.lineWidth = 0.8;
+  const cr = seeded(9);
   [[[815, 230], [845, 242], [859, 270], [895, 280]], [[1000, 520], [1025, 540], [1030, 575]], [[800, 860], [830, 850], [790, 885]]].forEach(pts => {
-    ctx.beginPath(); pts.forEach(([x, y], i) => i ? ctx.lineTo(x, y) : ctx.moveTo(x, y)); ctx.stroke();
+    ctx.beginPath(); ctx.moveTo(pts[0][0], pts[0][1]);
+    for (let i = 1; i < pts.length; i++) { const [x0, y0] = pts[i - 1], [x1, y1] = pts[i]; for (let t = 0.2; t <= 1.001; t += 0.2) ctx.lineTo(x0 + (x1 - x0) * t + (cr() - 0.5) * 4, y0 + (y1 - y0) * t + (cr() - 0.5) * 4); }
+    ctx.stroke();
   });
   const lf = seeded(3);
   for (let i = 0; i < 26; i++) {
@@ -3051,20 +3107,17 @@ function drawGround () {
     ctx.beginPath(); ctx.ellipse(TREE.x + Math.cos(a) * d, TREE.y + 2 + Math.sin(a) * d, 4, 2.2, a, 0, Math.PI * 2); ctx.fill();
   }
   // campetto e campana disegnati per terra
-  ctx.strokeStyle = 'rgba(238,233,223,.14)'; ctx.lineWidth = 3;
+  ctx.strokeStyle = 'rgba(226,222,212,.22)'; ctx.lineWidth = 5; ctx.setLineDash([40, 3, 22, 2]);
   ctx.strokeRect(810, 610, 250, 220); ctx.beginPath(); ctx.arc(935, 720, 40, 0, Math.PI * 2); ctx.stroke();
   ctx.beginPath(); ctx.moveTo(935, 610); ctx.lineTo(935, 830); ctx.stroke();
-  ctx.strokeStyle = 'rgba(242,197,61,.35)';
+  ctx.setLineDash([]); ctx.strokeStyle = 'rgba(214,180,70,.28)'; ctx.lineWidth = 4;
   [[1110, 800], [1110, 760], [1090, 720], [1130, 720], [1110, 680], [1090, 640], [1130, 640]].forEach(([x, y]) => ctx.strokeRect(x - 18, y - 18, 36, 36));
-  // scritta della scuola
-  ctx.save(); ctx.fillStyle = 'rgba(238,233,223,.07)'; ctx.font = '700 64px "Barlow Condensed", sans-serif'; ctx.textAlign = 'center';
-  ctx.fillText('I.C. GALILEI', (DOOR_X + GYM_X) / 2, 420); ctx.restore();
   // palestra: parquet
   ctx.fillStyle = mats().wood; ctx.fillRect(GYM_X, 140, 700, 720);
   ctx.fillStyle = 'rgba(255,214,150,.06)'; ctx.fillRect(GYM_X, 140, 700, 720);   // vernice lucida del parquet
   ctx.strokeStyle = 'rgba(0,0,0,.18)'; ctx.lineWidth = 1;
 
-  ctx.strokeStyle = 'rgba(255,220,160,.12)'; ctx.lineWidth = 3;
+  ctx.strokeStyle = 'rgba(30,90,170,.45)'; ctx.lineWidth = 5;
   ctx.strokeRect(1200, 190, 620, 620); ctx.beginPath(); ctx.arc(1510, 500, 70, 0, Math.PI * 2); ctx.stroke();
   // luce delle finestrone sul parquet
   ctx.fillStyle = 'rgba(255,236,190,.05)';
@@ -3076,15 +3129,17 @@ function drawGround () {
   // il palco già montato (come al montaggio): pedana con la striscia di luce
   const S = STAGE, sw = S.x2 - S.x1, sh = S.y2 - S.y1;
   ctx.fillStyle = 'rgba(0,0,0,.4)'; ctx.fillRect(S.x1 + 6, S.y1 + 6, sw, sh);
-  ctx.fillStyle = '#2f2a26'; ctx.fillRect(S.x1, S.y1, sw, sh);
-  ctx.strokeStyle = 'rgba(0,0,0,.3)'; ctx.lineWidth = 1;
-  for (let y = S.y1 + 20; y < S.y2; y += 22) { ctx.beginPath(); ctx.moveTo(S.x1 + 2, y); ctx.lineTo(S.x2 - 2, y); ctx.stroke(); }
+  // pedane da palco 2 × 1 m: piano nero antiscivolo, bordo d'alluminio
+  ctx.fillStyle = '#232220'; ctx.fillRect(S.x1, S.y1, sw, sh);
+  ctx.save(); ctx.globalAlpha = 0.6; ctx.fillStyle = mats().asphalt; ctx.fillRect(S.x1, S.y1, sw, sh); ctx.restore();
+  ctx.fillStyle = 'rgba(20,19,18,.55)'; ctx.fillRect(S.x1, S.y1, sw, sh);
+  ctx.strokeStyle = '#8a9099'; ctx.lineWidth = 1.5;
+  for (let x = S.x1; x < S.x2; x += 100) for (let y = S.y1; y < S.y2; y += 200) ctx.strokeRect(x + 0.75, y + 0.75, Math.min(100, S.x2 - x) - 1.5, Math.min(200, S.y2 - y) - 1.5);
   ctx.fillStyle = '#f2a541'; ctx.globalAlpha = 0.45; ctx.fillRect(S.x2 - 3, S.y1, 3, sh); ctx.globalAlpha = 1;
   ctx.fillStyle = '#6e1f24'; ctx.fillRect(S.x1, S.y1, 8, sh);                       // fondale verso il backstage
   ctx.fillStyle = 'rgba(0,0,0,.25)'; for (let y = S.y1 + 4; y < S.y2; y += 14) ctx.fillRect(S.x1, y, 8, 4);
   ctx.fillStyle = '#4a3d33'; for (let i = 0; i < 3; i++) ctx.fillRect(S.x2 - 30 + i * 9, S.y2, 8, 22);   // scaletta
   ctx.save(); ctx.fillStyle = 'rgba(238,233,223,.35)'; ctx.font = '700 30px "Barlow Condensed", sans-serif'; ctx.textAlign = 'center';
-  ctx.fillText('PALCO', (S.x1 + S.x2) / 2, (S.y1 + S.y2) / 2 + 10);
   ctx.fillStyle = 'rgba(238,233,223,.12)'; ctx.font = '700 34px "Barlow Condensed", sans-serif';
   ctx.fillText('PLATEA', 1690, 520);
   ctx.font = '700 22px "Barlow Condensed", sans-serif'; ctx.fillText('FOH', 1808, 520);
@@ -3112,8 +3167,8 @@ function drawStatics () {
   // furgone: guscio, pianale a costole, cabina (vano 2,1 × 2 m, senza la colonna dei generici)
   const X0 = VAN.x1, X1 = DOOR_X, Y0 = VAN.y1, Y1 = VAN.y2, VH = Y1 - Y0;
   // ombra del furgone, sotto la scocca, e il pianale di compensato antiscivolo
-  ctx.fillStyle = 'rgba(0,0,0,.4)'; rr(X0 - 160, Y0 - 18, X1 - X0 + 172, VH + 60, 18); ctx.fill();
-  ctx.fillStyle = '#d9dce0'; ctx.fillRect(X0 - 12, Y0 - 24, X1 - X0 + 12, VH + 48);
+  ctx.fillStyle = 'rgba(0,0,0,.4)'; rr(X0 - 316, Y0 - 2, X1 - X0 + 326, VH + 26, 18); ctx.fill();
+  ctx.fillStyle = '#d9dce0'; ctx.fillRect(X0 - 122, Y0 - 6, X1 - X0 + 122, VH + 12);
   ctx.fillStyle = '#4a3c30'; ctx.fillRect(X0, Y0, X1 - X0, VH);
   ctx.save(); ctx.globalAlpha = 0.5; ctx.fillStyle = mats().shell; ctx.fillRect(X0, Y0, X1 - X0, VH); ctx.restore();
   ctx.fillStyle = 'rgba(0,0,0,.18)'; for (let x = X0 + 122; x < X1; x += 122) ctx.fillRect(x, Y0, 1, VH);
@@ -3174,13 +3229,14 @@ function drawMoka () {
    furgone, muri, recinto, panchina, sedie, moka, albero */
 const BACK = -1e9;   // dietro a tutto (pareti in fondo al furgone, cabina)
 function sceneSolids (put) {
-  const X0 = VAN.x1, X1 = DOOR_X, Y0 = VAN.y1, Y1 = VAN.y2, YN = Y0 - 24, YS = Y1 + 24, HV = 210;
-  // furgone bianco a tetto alto, come la foto: cabina piena; del vano si
-  // vedono la parete in fondo e la paratia (rivestite di compensato), la
-  // fiancata davanti e il tetto sono trasparenti, così i case si vedono
+  // furgone bianco a tetto alto, lungo e stretto come la foto (circa 5,4 ×
+  // 2,1 m): cabina col cofano, paratia, scaffale fisso e il vano del carico.
+  // La fiancata davanti e il tetto sono trasparenti, così i case si vedono
+  const X0 = VAN.x1, X1 = DOOR_X, Y0 = VAN.y1, Y1 = VAN.y2, YN = Y0 - 6, YS = Y1 + 6, HV = 215;
+  const CB = X0 - 122, CL = 198;                        // retro della cabina, lunghezza cabina
   put(BACK, () => {
     // la cabina, di profilo: tetto, parabrezza, cofano, muso
-    const P = [[X0 - 12, 178], [X0 - 70, 176], [X0 - 122, 122], [X0 - 150, 106], [X0 - 160, 92], [X0 - 163, 40], [X0 - 160, 14]];
+    const P = [[CB, 186], [CB - 72, 184], [CB - 130, 128], [CB - 178, 108], [CB - CL + 4, 94], [CB - CL, 42], [CB - CL + 4, 14]];
     for (let i = P.length - 3; i >= 0; i--) {   // dal muso (lontano) verso il tetto
       const [xa, za] = P[i + 1], [xb, zb] = P[i];
       const q = [zp({ x: xa, y: YN }, za), zp({ x: xb, y: YN }, zb), zp({ x: xb, y: YS }, zb), zp({ x: xa, y: YS }, za)];
@@ -3192,70 +3248,92 @@ function sceneSolids (put) {
         const g = ctx.createLinearGradient(q[0].x, q[0].y, q[2].x, q[2].y);
         g.addColorStop(0, i ? '#e4e7eb' : '#f6f7f9'); g.addColorStop(1, i ? '#cfd3d8' : '#e2e5e9');
         ctx.fillStyle = g; ctx.fill();
+        if (i === 3) { ctx.fillStyle = '#1c1d20'; [0.3, 0.7].forEach(t => { const c = zp({ x: (xa + xb) / 2, y: YN + (YS - YN) * t }, (za + zb) / 2); ctx.fillRect(c.x - 8, c.y - 3, 16, 6); }); }   // prese d'aria del cofano
       }
     }
     // fianco della cabina: portiera col finestrino, specchietto, maniglia, ruota
-    onFace({ x: X0 - 165, y: YS }, { x: X0 - 12, y: YS }, () => {
-      const u = x => x - (X0 - 165);
-      ctx.beginPath(); ctx.moveTo(u(X0 - 12), 0); P.slice().reverse().forEach(([x, z]) => ctx.lineTo(u(x), -z)); ctx.lineTo(u(X0 - 12), -178); ctx.closePath();
-      const g = ctx.createLinearGradient(0, -178, 0, 0); g.addColorStop(0, '#f7f8fa'); g.addColorStop(0.6, '#e7e9ed'); g.addColorStop(1, '#c9cdd3');
+    onFace({ x: CB - CL, y: YS }, { x: CB, y: YS }, () => {
+      const u = d => CL - d;                              // d = distanza dal retro della cabina
+      ctx.beginPath(); ctx.moveTo(u(0), 0); P.slice().reverse().forEach(([x, z]) => ctx.lineTo(u(CB - x), -z)); ctx.lineTo(u(0), -186); ctx.closePath();
+      const g = ctx.createLinearGradient(0, -186, 0, 0); g.addColorStop(0, '#f7f8fa'); g.addColorStop(0.6, '#e7e9ed'); g.addColorStop(1, '#c9cdd3');
       ctx.fillStyle = g; ctx.fill();
-      const gl = ctx.createLinearGradient(u(X0 - 100), -160, u(X0 - 30), -118); gl.addColorStop(0, '#6f8598'); gl.addColorStop(0.55, '#202a33'); gl.addColorStop(1, '#2f3d4b');
-      ctx.fillStyle = gl; ctx.beginPath(); ctx.moveTo(u(X0 - 24), -164); ctx.lineTo(u(X0 - 76), -164); ctx.lineTo(u(X0 - 112), -126); ctx.lineTo(u(X0 - 24), -122); ctx.closePath(); ctx.fill();
+      const gl = ctx.createLinearGradient(u(100), -168, u(20), -124); gl.addColorStop(0, '#6f8598'); gl.addColorStop(0.55, '#202a33'); gl.addColorStop(1, '#2f3d4b');
+      ctx.fillStyle = gl; ctx.beginPath(); ctx.moveTo(u(14), -170); ctx.lineTo(u(76), -170); ctx.lineTo(u(120), -130); ctx.lineTo(u(14), -126); ctx.closePath(); ctx.fill();
       ctx.strokeStyle = '#121316'; ctx.lineWidth = 2.5; ctx.stroke();
-      ctx.strokeStyle = 'rgba(0,0,0,.18)'; ctx.lineWidth = 1;   // le fessure della portiera
-      ctx.beginPath(); ctx.moveTo(u(X0 - 18), -170); ctx.lineTo(u(X0 - 18), -24); ctx.moveTo(u(X0 - 118), -124); ctx.lineTo(u(X0 - 120), -60); ctx.stroke();
-      ctx.fillStyle = '#16171a'; ctx.fillRect(u(X0 - 42), -102, 16, 3.5);                    // maniglia
-      ctx.fillStyle = '#16171a'; rr(u(X0 - 118), -142, 12, 24, 3); ctx.fill();               // specchietto
-      ctx.fillStyle = '#2b2d31'; ctx.fillRect(u(X0 - 116), -138, 3, 16);
-      ctx.fillStyle = '#4a4f57'; rr(u(X0 - 163), -94, 12, 12, 3); ctx.fill();               // il faro dal fianco
-      ctx.fillStyle = '#1a1b1e'; ctx.fillRect(u(X0 - 165), -44, 28, 32);                     // paraurti nero
-      ctx.fillRect(u(X0 - 137), -40, 125, 12);                                               // listello
-      ctx.fillStyle = LIVERY.bg; ctx.beginPath(); ctx.arc(u(X0 - 60), -74, 13, 0, Math.PI * 2); ctx.fill();
-      ctx.strokeStyle = LIVERY.fg; ctx.lineWidth = 2.5; ctx.beginPath(); ctx.arc(u(X0 - 60), -74, 8, 0, Math.PI * 2); ctx.stroke();
-      wheel(u(X0 - 118), 34);
+      ctx.strokeStyle = 'rgba(0,0,0,.2)'; ctx.lineWidth = 1;   // le fessure della portiera
+      ctx.beginPath(); ctx.moveTo(u(8), -178); ctx.lineTo(u(8), -26); ctx.moveTo(u(126), -128); ctx.lineTo(u(128), -62); ctx.stroke();
+      ctx.fillStyle = '#16171a'; ctx.fillRect(u(34), -106, 16, 3.5);                         // maniglia
+      rr(u(126), -146, 12, 24, 3); ctx.fill();                                               // specchietto
+      ctx.fillStyle = '#2b2d31'; ctx.fillRect(u(124), -142, 3, 16);
+      ctx.fillStyle = '#4a4f57'; rr(u(CL - 2), -96, 12, 12, 3); ctx.fill();                 // il faro dal fianco
+      ctx.fillStyle = '#1a1b1e'; ctx.fillRect(u(CL), -46, 30, 34);                           // paraurti nero
+      ctx.fillRect(u(CL - 30), -40, CL - 30, 12);                                            // listello
+      ctx.fillStyle = LIVERY.bg; ctx.beginPath(); ctx.arc(u(52), -78, 13, 0, Math.PI * 2); ctx.fill();
+      ctx.strokeStyle = LIVERY.fg; ctx.lineWidth = 2.5; ctx.beginPath(); ctx.arc(u(52), -78, 8, 0, Math.PI * 2); ctx.stroke();
+      wheel(u(138), 34);
     });
   });
-  // il vano: parete in fondo e paratia dietro la cabina, rivestite di compensato
+  // il vano: parete in fondo e paratia dietro la cabina, rivestite di
+  // compensato; contro la paratia lo scaffale fisso con cavi e minuteria
   put(BACK + 1, () => {
-    prism(boxPts(X0 - 12, YN, X0, YS), 0, HV, '#f4f5f7', '#dfe2e6');
-    prism(boxPts(X0 - 12, YN, X1, Y0), 0, HV, '#f4f5f7', '#dfe2e6', { edge: '#ffffff' });
-    const ply = L => {
+    prism(boxPts(CB, YN, CB + 6, YS), 0, HV, '#f4f5f7', '#dfe2e6');
+    prism(boxPts(CB, YN, X1, Y0), 0, HV, '#f4f5f7', '#dfe2e6', { edge: '#ffffff' });
+    onFace({ x: CB + 6, y: Y0 }, { x: X1, y: Y0 }, L => {
       ctx.fillStyle = '#c29b68'; ctx.fillRect(0, -120, L, 120);
       ctx.save(); ctx.globalAlpha = 0.35; ctx.fillStyle = mats().wood; ctx.fillRect(0, -120, L, 120); ctx.restore();
       ctx.fillStyle = 'rgba(60,40,20,.35)'; for (let x = 122; x < L; x += 122) ctx.fillRect(x, -120, 1, 120);
       ctx.fillStyle = 'rgba(0,0,0,.25)'; ctx.fillRect(0, -121, L, 1.5);
       ctx.fillStyle = 'rgba(0,0,0,.08)'; for (let x = 30; x < L; x += 40) ctx.fillRect(x, -HV, 2.5, HV - 121);   // costole
       ctx.fillStyle = '#7f858d'; for (const z of [40, 90]) ctx.fillRect(0, -z - 1.5, L, 3);                    // binari per le cinghie
-    };
-    onFace({ x: X0, y: Y0 }, { x: X1, y: Y0 }, ply);
-    onFace({ x: X0, y: Y1 }, { x: X0, y: Y0 }, ply);
+    });
+    // scaffale: montanti forati, ripiani con bobine, cassette e ciabatte
+    const SH = boxPts(CB + 6, Y0, X0, Y1), sz = 128;
+    prism(SH, 0, sz, '#9aa0a8', '#6b7079', { flat: true });
+    facesOf(SH, (a, b, sx) => onFace(a, b, L => {
+      ctx.fillStyle = sx > 0 ? 'rgba(0,0,0,.25)' : 'rgba(0,0,0,0)'; ctx.fillRect(0, -sz, L, sz);
+      ctx.fillStyle = '#2a2c31'; ctx.fillRect(4, -sz + 4, L - 8, sz - 8);
+      const r = seeded(Math.round(L));
+      [6, 46, 86].forEach((z0, k) => {
+        for (let x = 8; x < L - 16; ) {   // la roba sul ripiano
+          const t = r(), w = 14 + r() * 22;
+          if (x + w > L - 8) break;
+          if (t < 0.4) { ctx.fillStyle = ['#1d1e22', '#26282c', '#1a1b1e', '#3a3c40'][Math.floor(r() * 4)]; ctx.beginPath(); ctx.ellipse(x + w / 2, -z0 - 15, w / 2, 15, 0, 0, Math.PI * 2); ctx.fill(); ctx.fillStyle = 'rgba(0,0,0,.45)'; ctx.beginPath(); ctx.ellipse(x + w / 2, -z0 - 15, w / 5, 6, 0, 0, Math.PI * 2); ctx.fill(); }
+          else if (t < 0.8) { ctx.fillStyle = ['#3a3d44', '#1f2a3a', '#4b3a2a', '#2f3a2f'][Math.floor(r() * 4)]; ctx.fillRect(x, -z0 - 26, w, 26); ctx.fillStyle = 'rgba(255,255,255,.12)'; ctx.fillRect(x, -z0 - 26, w, 2); ctx.fillStyle = '#e9e5da'; ctx.fillRect(x + w / 2 - 4, -z0 - 18, 8, 5); }
+          else { ctx.fillStyle = '#2c2e33'; ctx.fillRect(x, -z0 - 8, w, 8); ctx.fillStyle = '#c9a43a'; ctx.fillRect(x + 2, -z0 - 6, 4, 3); }
+          x += w + 3;
+        }
+        const g = ctx.createLinearGradient(0, -z0 - 3, 0, -z0); g.addColorStop(0, '#c8cdd3'); g.addColorStop(1, '#7c828a');
+        ctx.fillStyle = g; ctx.fillRect(0, -z0 - 3, L, 3);   // ripiano
+      });
+      [0, L - 4].forEach(x => { ctx.fillStyle = '#9aa0a8'; ctx.fillRect(x, -sz, 4, sz); ctx.fillStyle = '#2a2c31'; for (let z = 6; z < sz; z += 6) ctx.fillRect(x + 1.3, -z, 1.4, 2.5); });
+    }));
   });
   // la ruota dietro sul lato vicino: sotto il pianale, dietro ai case
-  put(BACK + 3, () => onFace({ x: X0 - 12, y: YS }, { x: X1, y: YS }, L => wheel(L - 58, 34)));
+  put(BACK + 3, () => onFace({ x: CB, y: YS }, { x: X1, y: YS }, L => wheel(L - 70, 34)));
   // fiancata vicina e tetto trasparenti: solo il profilo, il listello nero in
   // basso e il montante dietro col fanale
-  const NW = boxPts(X0 - 12, Y1, X1, YS);
+  const NW = boxPts(CB, Y1, X1, YS);
   put(frontY(NW), () => {
-    onFace({ x: X0 - 12, y: YS }, { x: X1, y: YS }, L => {
+    onFace({ x: CB, y: YS }, { x: X1, y: YS }, L => {
       ctx.fillStyle = 'rgba(255,255,255,.05)'; ctx.fillRect(0, -HV, L, HV);
       ctx.fillStyle = '#eef0f3'; ctx.fillRect(0, -18, L, 18);
       ctx.fillStyle = '#1a1b1e'; ctx.fillRect(0, -15, L - 4, 9);
       ctx.strokeStyle = 'rgba(255,255,255,.6)'; ctx.lineWidth = 1.6; ctx.strokeRect(0, -HV, L, HV - 18);
-      ctx.strokeStyle = 'rgba(255,255,255,.25)'; ctx.lineWidth = 1; ctx.strokeRect(14, -HV + 30, L - 28, HV - 70);   // la nervatura del pannello
+      ctx.strokeStyle = 'rgba(255,255,255,.22)'; ctx.lineWidth = 1;   // le nervature dei pannelli e la porta scorrevole
+      ctx.strokeRect(14, -HV + 30, L * 0.42 - 20, HV - 70); ctx.strokeRect(L * 0.42 + 6, -HV + 30, L * 0.58 - 20, HV - 70);
     });
-    const tp = [zp({ x: X0 - 12, y: YS }, HV), zp({ x: X1, y: YS }, HV), zp({ x: X1, y: YN }, HV)];
+    const tp = [zp({ x: CB, y: YS }, HV), zp({ x: X1, y: YS }, HV), zp({ x: X1, y: YN }, HV)];
     ctx.strokeStyle = 'rgba(255,255,255,.6)'; ctx.lineWidth = 1.6; ctx.beginPath(); tp.forEach((p, i) => i ? ctx.lineTo(p.x, p.y) : ctx.moveTo(p.x, p.y)); ctx.stroke();
-    prism(boxPts(X1 - 7, YS - 7, X1, YS), 0, HV, '#f4f5f7', '#e1e4e8');
-    onFace({ x: X1, y: YS - 7 }, { x: X1, y: YS }, () => { ctx.fillStyle = '#c8322a'; ctx.fillRect(0, -150, 7, 46); ctx.fillStyle = '#f0a33a'; ctx.fillRect(0, -104, 7, 8); });
+    prism(boxPts(X1 - 6, YS - 6, X1, YS), 0, HV, '#f4f5f7', '#e1e4e8');
+    onFace({ x: X1, y: YS - 6 }, { x: X1, y: YS }, () => { ctx.fillStyle = '#c8322a'; ctx.fillRect(0, -150, 6, 46); ctx.fillStyle = '#f0a33a'; ctx.fillRect(0, -104, 6, 8); });
   });
   // portelloni: si aprono fino ad appoggiarsi alle fiancate; quello vicino,
   // aperto, si fa basso come la fiancata trasparente, per non coprire i case
-  const da = G.doorsOpen, DL = (Y1 - Y0) / 2 + 8;
-  [[Y0 - 12, 1], [Y1 + 12, -1]].forEach(([hy, sd]) => {
+  const da = G.doorsOpen, DL = (Y1 - Y0) / 2 + 6;
+  [[Y0 - 3, 1], [Y1 + 3, -1]].forEach(([hy, sd]) => {
     const a = sd * (Math.PI / 2 - da * Math.PI * 1.5), dh = sd > 0 ? HV - 4 : HV - 4 - (HV - 22) * da;
     const tip = { x: X1 + Math.cos(a) * DL, y: hy + Math.sin(a) * DL };
-    const pts = rectPts({ x: (X1 + tip.x) / 2, y: (hy + tip.y) / 2 }, DL, 6, a);
+    const pts = rectPts({ x: (X1 + tip.x) / 2, y: (hy + tip.y) / 2 }, DL, 5, a);
     put(sd > 0 && da > 0.5 ? BACK + 2 : frontY(pts), () => {
       prism(pts, 0, dh, '#f2f3f5', '#dcdfe3', { edge: '#ffffff', gloss: true });
       if (dh > 60) facesOf(pts, (p, q) => onFace(p, q, L => { ctx.fillStyle = 'rgba(0,0,0,.08)'; ctx.fillRect(10, -dh + 24, L - 20, 2); ctx.fillRect(10, -40, L - 20, 2); ctx.fillStyle = '#1a1b1e'; ctx.fillRect(0, -15, L, 9); }));
@@ -3267,6 +3345,8 @@ function sceneSolids (put) {
     if (!b.plugin.draw) continue;
     const bb = b.bounds, fence = bb.min.x < GYM_X - 20, horiz = bb.max.x - bb.min.x > bb.max.y - bb.min.y;
     const hgt = fence ? 80 : horiz ? (bb.min.y > 800 ? 24 : 110) : bb.min.x > 1800 ? 24 : 50;
+    // tra un pezzo e l'altro dello stesso muro non c'è faccia: si vede solo il muro intero
+    const outer = (a, c) => (a.x === c.x && (a.x === bb.min.x || a.x === bb.max.x)) || (a.y === c.y && (a.y === bb.min.y || a.y === bb.max.y));
     for (let x = bb.min.x; x < bb.max.x; x += 40) for (let y = bb.min.y; y < bb.max.y; y += 40) {
       const pts = boxPts(x, y, Math.min(bb.max.x, x + 40), Math.min(bb.max.y, y + 40));
       put(frontY(pts), fence ? () => {
@@ -3277,7 +3357,7 @@ function sceneSolids (put) {
           for (let u = u0; u <= L; u += 60) { const g = ctx.createLinearGradient(u - 2.5, 0, u + 2.5, 0); g.addColorStop(0, '#d9dde2'); g.addColorStop(1, '#6d737b'); ctx.fillStyle = g; ctx.fillRect(u - 2.5, -hgt, 5, hgt); }
         }));
         prism(pts, hgt - 3, hgt, '#b3b9c1', '#8d939b', { flat: true });
-      } : () => prism(pts, 0, hgt, '#6e727a', '#5a5e66', { edge: '#8a8e96', mat: 'concrete', matA: 0.55 }));
+      } : () => prism(pts, 0, hgt, '#6e727a', '#5a5e66', { edge: '#9a9ea6', keep: outer }));
     }
   }
   // sedie impilate, panchina, tavolino con la moka
