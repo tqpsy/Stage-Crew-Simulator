@@ -1791,7 +1791,7 @@ const SAVE_FILE_KIND = 'stage-crew-simulator';   // firma del file esportato
 const SHARED_KEYS = ['settings', 'records', 'usedServices'];
 
 function defaultProfile () {
-  return { v: SAVE_VERSION, player: '', service: '', serviceInfo: null, usedServices: [], settings: { volume: 0.8, reducedFx: false, skipShow: false, skipScarico: false, testMusic: true, bossTips: true, tapeMarks: true, traceSignal: true }, tutorSeen: {}, logo: null, level: null, scarico: null, scaricoPlayed: false, cavi: null, preside: null, cambioDj: null, dj: null, karaoke: null, carico: null, collaudo: null, serata: null, beers: 0, coffees: 0, assistant: defaultAssistant(), fatigue: 0, records: {}, reputation: { total: 0, earned: {}, log: [] }, levelsSeen: 1, savedAt: 0 };
+  return { v: SAVE_VERSION, player: '', character: 'topsy', service: '', serviceInfo: null, usedServices: [], settings: { volume: 0.8, reducedFx: false, skipShow: false, skipScarico: false, testMusic: true, bossTips: true, tapeMarks: true, traceSignal: true }, tutorSeen: {}, logo: null, level: null, scarico: null, scaricoPlayed: false, cavi: null, preside: null, cambioDj: null, dj: null, karaoke: null, carico: null, collaudo: null, serata: null, beers: 0, coffees: 0, assistant: defaultAssistant(), fatigue: 0, records: {}, reputation: { total: 0, earned: {}, log: [] }, levelsSeen: 1, savedAt: 0 };
 }
 // l'assistente della serata (dal livello 2, vedi ASSISTANTS): chi è e
 // quanti favori ha già fatto nel set in corso. Le partite salvate prima
@@ -1903,7 +1903,7 @@ function readSlotFile (text) {
   const key = (k, set) => typeof k === 'string' && (k === 'iniziali' || k in set) ? k : undefined;
   const info = slot.serviceInfo && typeof slot.serviceInfo === 'object' ? slot.serviceInfo : null;
   const as = slot.assistant && typeof slot.assistant === 'object' ? slot.assistant : null;
-  slot = { ...slot, player: String(slot.player || '').slice(0, NAME_MAX), service: String(slot.service || '').slice(0, SERVICE_NAME_MAX),
+  slot = { ...slot, player: String(slot.player || '').slice(0, NAME_MAX), character: CHARACTERS[slot.character] ? slot.character : 'topsy', service: String(slot.service || '').slice(0, SERVICE_NAME_MAX),
     logo: lg ? JSON.parse(JSON.stringify({ shape: key(lg.shape, LOGO_SHAPES), icon: key(lg.icon, LOGO_ICONS), bg: color(lg.bg), fg: color(lg.fg), style: key(lg.style, BRAND_STYLES) })) : null,
     serviceInfo: info ? { kind: key(info.kind, SERVICE_KINDS) || null, boss: String(info.boss || '').slice(0, NAME_MAX * 2) } : null,
     assistant: as ? { id: typeof as.id === 'string' ? as.id.slice(0, NAME_MAX) : null, favors: Number.isInteger(as.favors) && as.favors >= 0 ? as.favors : 0 } : undefined,
@@ -1978,6 +1978,9 @@ const settings = () => Profile.data.settings;
 const reducedFx = () => !!settings().reducedFx;
 const serviceName = () => Profile.data.service || 'Il service';
 const playerName = () => Profile.data.player || 'Tecnico';
+// chi si gioca: si sceglie a inizio partita (le partite di prima sono di Topsy)
+const CHARACTERS = { topsy: 'Topsy', sissi: 'La Sissi' };
+const playerCharacter = () => CHARACTERS[Profile.data.character] ? Profile.data.character : 'topsy';
 
 /* ---------------- logo del service ----------------
    Ogni service proposto a inizio partita ha il suo logo, inventato dal
@@ -2805,7 +2808,7 @@ function whenScene (fn) {
   if (window.__scene) fn(window.__scene); else setTimeout(() => whenScene(fn), 50);
 }
 // nuova partita in preparazione: nome del tecnico, le tre offerte e quella scelta
-let draft = { player: '', offers: [], pick: null };
+let draft = { player: '', offers: [], pick: null, character: 'topsy' };
 
 function showMenuPage (page, keep) {
   document.querySelectorAll('#menu-modal .menu-page').forEach(p => { p.hidden = p.dataset.page !== page; });
@@ -2828,7 +2831,7 @@ function showMenuPage (page, keep) {
     el('#new-warning').textContent = replay ? 'Si rigioca la serata nello slot ' + (newSlot + 1) + ': la partita finita lascia il posto alla nuova, la sua valutazione resta nei record. Il tecnico riparte da reputazione 0.'
       : 'La nuova partita va nello slot ' + (newSlot + 1) + ' e il nuovo tecnico parte da reputazione 0. '
       + (others === 1 ? 'L\'altra partita resta salvata' : 'Le altre partite restano salvate') + '; impostazioni e record sono comuni a tutte.';
-    draft = { player: Profile.data.player, offers: serviceOffers(Profile.data.usedServices), pick: null };
+    draft = { player: Profile.data.player, offers: serviceOffers(Profile.data.usedServices), pick: null, character: playerCharacter() };
     const i = el('#player-input');
     i.value = draft.player; setTimeout(() => i.focus(), 30);
     renderOffers();
@@ -2868,6 +2871,7 @@ function renderOffers () {
 }
 function updateNewForm () {
   document.querySelectorAll('#service-offers .offer-card').forEach(b => b.classList.toggle('sel', +b.dataset.offer === draft.pick));
+  document.querySelectorAll('#char-pick .char-card').forEach(b => b.classList.toggle('sel', b.dataset.char === (draft.character || 'topsy')));
   el('#new-start').disabled = !cleanName(draft.player) || draft.pick == null;
 }
 function openMenu (page) {
@@ -2888,13 +2892,14 @@ const cleanName = s => String(s || '').replace(/\s+/g, ' ').trim().slice(0, NAME
 
 // nuovo tecnico: reputazione da costruire, al lavoro per il service scelto;
 // i nomi delle tre offerte non verranno più proposti
-function startNewGame (player, offer, offers) {
+function startNewGame (player, offer, offers, character) {
   // nello slot scelto (vuoto): la partita in corso resta salvata nel suo
   // (o nello slot della serata finita che si rigioca)
   const slot = newSlot != null && (!Profile.slots()[newSlot] || newSlot === replaySlot) ? newSlot : Profile.firstFree();
   if (slot >= 0 && slot !== Profile.active) { saveLevel(); Profile.select(slot); }
   newSlot = null; replaySlot = null;
   Profile.data.player = cleanName(player);
+  Profile.data.character = CHARACTERS[character] ? character : 'topsy';
   Profile.data.service = offer.name;
   Profile.data.logo = { ...offer.logo };
   Profile.data.serviceInfo = { kind: offer.kind, boss: offer.boss };
@@ -3205,7 +3210,7 @@ function openScarico () {
   f.id = 'scarico-frame';
   f.title = 'Lo scarico';
   const logo = serviceLogo();
-  f.src = 'scarico.html?embed=1&service=' + encodeURIComponent(serviceName()) + '&bg=' + encodeURIComponent(logo.bg) + '&fg=' + encodeURIComponent(logo.fg) + minigameQuery() + (scaricoPlayed() ? '' : '&first=1');
+  f.src = 'scarico.html?embed=1&service=' + encodeURIComponent(serviceName()) + '&bg=' + encodeURIComponent(logo.bg) + '&fg=' + encodeURIComponent(logo.fg) + minigameQuery() + '&chi=' + playerCharacter() + (scaricoPlayed() ? '' : '&first=1');
   f.addEventListener('load', () => { try { f.contentWindow.focus(); } catch (e) { /* niente fuoco: si clicca */ } });
   document.body.appendChild(f);
 }
@@ -4257,9 +4262,10 @@ el('#new-cancel').addEventListener('click', () => { SFX.button(); replaySlot = n
 el('#new-form').addEventListener('submit', ev => {
   ev.preventDefault();
   if (el('#new-start').disabled) return;
-  SFX.button(); startNewGame(draft.player, draft.offers[draft.pick], draft.offers);
+  SFX.button(); startNewGame(draft.player, draft.offers[draft.pick], draft.offers, draft.character);
 });
 el('#player-input').addEventListener('input', ev => { draft.player = ev.target.value; updateNewForm(); });
+document.querySelectorAll('#char-pick .char-card').forEach(b => b.addEventListener('click', () => { SFX.button(); draft.character = b.dataset.char; updateNewForm(); }));
 el('#settings-back').addEventListener('click', () => { SFX.button(); Profile.flush(); showMenuPage('main'); });
 el('#set-volume').addEventListener('input', ev => { settings().volume = ev.target.value / 100; SFX.setVolume(settings().volume); Profile.save(); });
 el('#set-volume').addEventListener('change', () => SFX.button());

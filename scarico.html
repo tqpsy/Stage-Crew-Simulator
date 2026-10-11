@@ -249,6 +249,7 @@
 const QS = new URLSearchParams(location.search);
 const EMBED = QS.has('embed');
 const SERVICE = (QS.get('service') || '').slice(0, 28);
+const PLAYER_FIG = QS.get('chi') === 'sissi' ? 'sissi' : 'topsy';   // il personaggio scelto a inizio partita
 // colori del marchio del service (livrea del furgone); solo #rgb/#rrggbb
 const hexOr = (v, d) => /^#[0-9a-f]{3,6}$/i.test(v || '') ? v : d;
 const LIVERY = { bg: hexOr(QS.get('bg'), '#1c1d22'), fg: hexOr(QS.get('fg'), '#f2a541') };
@@ -3288,7 +3289,7 @@ function figAtlas (who) {
   return f.ready ? f : null;
 }
 // si caricano subito tutte, così nessuno compare in ritardo
-if (window.FIG_ATLAS) Object.keys(FIG_ATLAS.figs).forEach(figAtlas);
+if (window.FIG_ATLAS) Object.keys(FIG_ATLAS.figs).filter(k => !(k in { topsy: 1, sissi: 1 }) || k === PLAYER_FIG).forEach(figAtlas);   // del giocatore solo quello scelto
 // Macio: maglia e logo coi colori del service. Sono grigi chiari nell'atlante;
 // la maschera (sotto l'atlante: maglia, poi logo) dice dove: lì grigio × colore
 function tintFig (f) {
@@ -3345,7 +3346,7 @@ function drawFigure (p, who, hU, o) {
   if (fa) return drawAtlas(fa, p, o);
   const s = worldToScreen(p), sc = G.cam.scale, hpx = hU * sc * KZ * 1.1;
   const photo = who === 'topsy' && TOPSY_IMG.complete && TOPSY_IMG.naturalWidth ? TOPSY_IMG : null;
-  const im = photo || figImg(who, o);
+  const im = photo || (who === 'sissi' ? null : figImg(who, o));   // La Sissi non ha la caricatura: finché l'atlante carica, la sagoma
   ctx.save(); ctx.setTransform(DPR, 0, 0, DPR, 0, 0);
   ctx.translate(s.x, s.y - (o.bob || 0) * hpx);
   if (!im) {   // sagoma: gambe, maglia, testa
@@ -4278,12 +4279,12 @@ function drawWorker (w) {
   // passo: un saltello; braccia avanti alle maniglie, sotto il case in mano
   // il passo è legato ai cm percorsi con la misura del modello (cycle: due
   // passi): il piede d'appoggio resta dov'è
-  const fa = figAtlas(w === G.player ? 'topsy' : 'macio'), cyc = fa && fa.A.cycle || 130;
+  const fa = figAtlas(w === G.player ? PLAYER_FIG : 'macio'), cyc = fa && fa.A.cycle || 130;
   if (w.spd > 0.04) w.walkT = G.t;
   const moving = G.t - (w.walkT || -9) < 0.12, ph = Math.sin((w.stride || 0) * 0.28) * (moving ? 1 : 0);
   const ce = w.grab;
   const arms = !ce ? vanPose(w) || 'giu' : ce.carrier === w || liftedByTwo(ce) ? 'porta' : 'avanti';
-  const who = w === G.player ? 'topsy' : 'macio';
+  const who = w === G.player ? PLAYER_FIG : 'macio';
   drawFigure(p, who, w === G.player ? 176 : 168, { facing: w.facing, phase: moving ? (w.stride || 0) / cyc : null, back: Math.cos(w.facing) * SA + Math.sin(w.facing) * CA < -0.6, flip: Math.cos(w.facing) * CA - Math.sin(w.facing) * SA < -0.2, arms, step: Math.round(ph), bob: Math.abs(ph) * 0.02, tee: w.tee, skin: w.skin });
   const hd = worldToScreen(p, 175), sc = G.cam.scale;
   ctx.save(); ctx.setTransform(DPR, 0, 0, DPR, 0, 0);

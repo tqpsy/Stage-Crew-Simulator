@@ -1,10 +1,11 @@
 /* Genera gli atlanti delle figure dello scarico, già nella vista del gioco
    (dall'alto a 38°, mondo girato di 45°): 8 direzioni, fermo + 6 passi, per
-   ogni posa delle braccia. Topsy, Macio e Gerry vengono dal loro modello 3D;
+   ogni posa delle braccia. Topsy, Macio, Gerry e La Sissi vengono dal loro modello 3D
+   (La Sissi solo se chiesta per nome: nessuna scena la usa ancora);
    i bambini dalle miniature di manichini.js finché non hanno la loro figura.
 
    Uso:
-     node strumenti/figure/genera.js --three three.min.js --topsy topsy3d.js --macio macio3d.js --gerry gerry3d.js --rig topsy-rig.js [solo...]
+     node strumenti/figure/genera.js --three three.min.js --topsy topsy3d.js --macio macio3d.js --gerry gerry3d.js --sissi sissi3d.js --rig topsy-rig.js [solo...]
    Scrive img/personaggi/<chi>-atlante.webp e personaggi-atlante.js con le
    celle. Se un modello cambia basta rifarlo: il gioco non cambia. Senza il suo
    file 3D, Macio torna alla miniatura (con la maglia da tingere). Richiede Playwright. */
@@ -15,7 +16,7 @@ const ROOT = path.join(__dirname, '..', '..'), HERE = __dirname;
 const only = process.argv.slice(2).filter((a, i, A) => !a.startsWith('--') && !(A[i - 1] || '').startsWith('--'));
 const WHO = only.length ? only : ['topsy', 'macio', 'gerry', 'kid', 'kid2'];
 (async () => {
-  const files = { 'three.min.js': arg('three'), 'topsy3d.js': arg('topsy'), 'topsy-rig.js': arg('rig'), 'macio3d.js': arg('macio'), 'gerry3d.js': arg('gerry') };
+  const files = { 'three.min.js': arg('three'), 'topsy3d.js': arg('topsy'), 'topsy-rig.js': arg('rig'), 'macio3d.js': arg('macio'), 'gerry3d.js': arg('gerry'), 'sissi3d.js': arg('sissi') };
   const b = await chromium.launch({ args: ['--use-gl=swiftshader', '--enable-unsafe-swiftshader'] });
   const p = await b.newPage();
   p.on('pageerror', e => console.log('ERR', e.message)); p.on('console', m => { if (m.type() === 'error') console.log('CONSOLE', m.text()); });

@@ -802,6 +802,9 @@
     padding:4px 6px 7px; cursor:pointer; color:var(--text-main); font-family:var(--font-ui);
   }
   .offer-card:hover{ border-color:var(--text-muted); }
+  .char-list{ display:grid; grid-template-columns:1fr 1fr; gap:8px; }
+  .char-card{ align-items:center; text-align:center; }
+  .char-card img{ height:98px; width:auto; object-fit:contain; }
   .offer-card.sel{ border-color:var(--amber); box-shadow:0 0 0 2px rgba(242,165,65,.25); }
   .offer-card .logo-preview{ padding:2px 0; }
   .offer-kind{ font-size:13px; font-weight:600; padding:0 4px; }
