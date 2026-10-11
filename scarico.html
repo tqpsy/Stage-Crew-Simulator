@@ -2727,7 +2727,7 @@ function selectWorker (w) {
   if (w === G.macio && w.ai.state === 'phone') toast('Macio è al telefono: l\'ordine lo fa appena ha finito.');
   cmdDirty = true;
 }
-function cancelSel () { Object.assign(G.sel, { ce: null, cart: false, top: null, pickTop: false }); G.plan = null; cmdDirty = true; }
+function cancelSel () { if (G.sel.ce) unfitTrace(); Object.assign(G.sel, { ce: null, cart: false, top: null, pickTop: false }); G.plan = null; cmdDirty = true; }
 function whoName (w) { return w === G.player ? 'Tu' : 'Macio'; }
 function vanPending () { return !G.van.open ? 'doors' : !G.van.ramp ? 'ramp' : G.straps[0] ? 'strap' : null; }
 const VAN_LABEL = { doors: 'APRI IL PORTELLONE', ramp: 'TIRA GIÙ LA RAMPA', strap: 'SGANCIA LA CINGHIA' };
@@ -2765,6 +2765,7 @@ function selectCase (ce) {
   if (S.who === G.macio && delicate(ce)) { macioNo(ce); S.who = G.player; cmdDirty = true; }
   Object.assign(S, { ce, cart: false, top: null, pickTop: false });
   learnFrom(ce);
+  fitForTrace(ce);
   once('trace', 'Novità: puoi anche trascinare dal case e disegnare tu la strada fino alla zona.');
   cmdDirty = true;
 }
@@ -4453,6 +4454,26 @@ function drawFx () {
 /* gli ordini sulla scena: chi è scelto (anello), il case scelto, la strada
    che sta facendo ognuno e il posto dove poserà il case */
 // il dito che disegna: un punto nuovo ogni 12 cm; vicino al bordo la scena scorre
+// scelto un case la scena si allarga (mai si stringe) finché si vedono il case e tutte le zone:
+// la strada si disegna senza dover spostare la vista. Finito l'ordine (o annullato) si torna com'era.
+function fitForTrace (ce) {
+  const pts = [ce.body.position];
+  for (const k in ZONES) { const z = ZONES[k]; pts.push({ x: z.x, y: z.y }, { x: z.x + z.w, y: z.y }, { x: z.x, y: z.y + z.h }, { x: z.x + z.w, y: z.y + z.h }); }
+  const us = pts.map(q => q.x * CA - q.y * SA), vs = pts.map(q => (q.x * SA + q.y * CA) * KY);
+  const u1 = Math.min(...us), u2 = Math.max(...us), v1 = Math.min(...vs) - 160 * KZ, v2 = Math.max(...vs);
+  const r = cv.getBoundingClientRect(), top = $('.hud').getBoundingClientRect().bottom - r.top + 10, bot = ($('#hintbar').getBoundingClientRect().top || r.bottom) - r.top - 10;
+  const sc = Math.min((W - 40) / (u2 - u1), (bot - top) / (v2 - v1));
+  if (G.sel.zoom0 === undefined) G.sel.zoom0 = G.cam.zoom;
+  const z = clamp(sc / baseScale(), ZOOM_MIN, G.sel.zoom0);
+  G.cam.zoom = z;
+  // il centro della scatola nel mezzo della parte di scena che si vede
+  const k = baseScale() * z, uc = (u1 + u2) / 2, vc = ((v1 + v2) / 2 - ((top + bot) / 2 - H / 2) / k) / KY;
+  G.cam.manual = { x: uc * CA + vc * SA, y: -uc * SA + vc * CA };
+}
+function unfitTrace () {
+  if (G.sel.zoom0 === undefined) return;
+  setZoom(G.sel.zoom0); delete G.sel.zoom0; G.cam.manual = null;
+}
 function traceAdd () {
   const tr = G.trace, q = screenToWorld(tr.sp), l = tr.pts[tr.pts.length - 1];
   if (Math.hypot(q.x - l.x, q.y - l.y) * G.cam.scale > 5) tr.pts.push(q);
