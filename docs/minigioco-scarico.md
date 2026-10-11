@@ -123,7 +123,7 @@ aveva comunque). In `scarico.html`, sezione *ORDINI*.
   TIRA GIÙ LA RAMPA, SGANCIA LA CINGHIA (uno per volta); scelto un case,
   CARRELLO, + SOPRA, le quattro zone (prima quella del nastro, con ✓) e ✕.
   Sulla scena si tocca/clicca un personaggio, un case, il carrello o una
-  zona; trascinando si sposta la vista. Tasti: 1/2, C, Esc, P.
+  zona; trascinando si sposta la vista, con + e − (o due dita) si zooma. Tasti: 1/2, C, Esc, P, +, −.
 - **Un ordine = una fila di passi** (`buildSteps`): a mano raggiungi →
   prendi → porta → posa; col carrello, se il case è nel furgone lo si posa
   prima a terra accanto alla rampa, poi maniglie → pala sotto il case
@@ -176,6 +176,12 @@ mirati sullo scarico a ordini, senza cambiarne la struttura:
 - **Telecamera**: sul case scelto; dato l'ordine torna sul furgone, dove c'è
   il prossimo case (prima seguiva chi lavorava fino in palestra e bisognava
   trascinare la scena a ogni ordine); scelto un collega, va su di lui.
+- **Zoom**: a zoom 1 (pulsante 1:1) la scena ha la stessa scala della vista
+  intera del montaggio sullo stesso schermo (stessi pixel per metro, `baseScale`).
+  Si regola da 0,6 a 4,5 con + e − sulla destra, la rotellina, due dita o i
+  tasti + e −; il punto sotto il dito resta fermo (`setZoom`).
+  Sotto 0,6 px/cm (`CROWD_SCALE`) un tocco fra più cose vicine non sceglie:
+  la scena si avvicina lì, come nel montaggio, e il tocco dopo prende quella giusta.
 - **Macio e l'elettronica**: con Macio scelto, toccando PC o PAR lui dice
   subito di no e l'ordine passa a TU (prima lo diceva solo alla fine).
 - **Perché è fermo**: sopra la testa (e sul pulsante) una scritta breve
@@ -269,6 +275,7 @@ Dal 2026-10-10 lo scarico va a ordini (vedi sopra).
 | Dove | tocco su una zona (pulsante o scena) | — |
 | Annulla / pausa | ✕ / ⏸ | Esc / P |
 | Spostare la vista | trascinare la scena | — |
+| Zoom | + / − / 1:1, rotellina, due dita | + / − |
 
 ### Peso e inerzia
 

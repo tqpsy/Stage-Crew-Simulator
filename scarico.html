@@ -54,6 +54,10 @@
   .end-btn{border:1px solid var(--green);background:#1d3324;color:#bff0cd;border-radius:8px;padding:6px 10px;font-weight:700;font-size:12px;white-space:nowrap}
 
   /* barra d'aiuto: avvisi e obiettivo, in basso fuori dalla scena, con la X */
+  .zoom{position:absolute;right:8px;bottom:calc(var(--pad-h) + 56px);z-index:3;display:flex;flex-direction:column;background:var(--bg-panel);border:1px solid var(--hairline);border-radius:8px;overflow:hidden}
+  .zoom button{width:38px;height:38px;border:0;background:none;color:inherit;font-size:19px;font-weight:700}
+  .zoom button + button{border-top:1px solid var(--hairline)}
+  .zoom #zoom-reset{font-size:11px}
   #hintbar{position:absolute;left:0;right:0;bottom:var(--pad-h);height:46px;z-index:3;display:flex;align-items:center;gap:10px;padding:0 8px 0 16px;background:var(--bg-panel);border-top:1px solid var(--hairline)}
   #hint{flex:1;min-width:0;display:flex;align-items:center;gap:8px;font-size:14px;font-weight:600;line-height:1.25;color:var(--muted);border-left:4px solid transparent;padding-left:8px;transition:color .2s,border-color .2s}
   #hint span{overflow:hidden;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical}
@@ -199,6 +203,12 @@
       <span><kbd>C</kbd> carrello</span>
       <span><kbd>Esc</kbd> annulla</span>
     </div>
+  </div>
+
+  <div class="zoom" id="zoom" aria-label="Zoom">
+    <button id="zoom-in" title="Avvicina" aria-label="Avvicina">+</button>
+    <button id="zoom-out" title="Allontana" aria-label="Allontana">−</button>
+    <button id="zoom-reset" title="Scala del montaggio" aria-label="Scala del montaggio">1:1</button>
   </div>
 
   <div id="cmd" hidden>
@@ -450,7 +460,7 @@ function newGame () {
     // non sempre allo stesso secondo, e il cavo s'incastra in uno dei due bauli
     at: { passante1: rand(20, 40), bidello: rand(80, 115), telefono: rand(135, 170), passante2: rand(195, 230) },
     // il SEGNALE è la sorpresa finale: il cavo s'incastra nel CORRENTE
-    cam: { x: DOOR_X + 20, y: 500, scale: 1, focus: 'van' }, doorsOpen: 0, flashes: [], fx: [],
+    cam: { x: DOOR_X + 20, y: 500, scale: 1, zoom: 1, focus: 'van' }, doorsOpen: 0, flashes: [], fx: [],
     // tutorial che si gioca: comandi e strumenti compaiono quando servono
     unlock: { help: false, lift: false, stop: false, cart: false, eff: false },
     seen: {}, team: false, trolley: null, van: { open: false, ramp: false, anim: null }, straps: VAN_STRAPS.map(() => true), surprise: null, blockFlash: null, tarp: 0,
@@ -2534,31 +2544,45 @@ function caseAt (p, m) {
 }
 // il case sotto un punto dello schermo: si prova il punto a ogni altezza del
 // case (coperchio e facce davanti); a parità vince quello disegnato sopra
+function caseScreenDist (ce, sp) {
+  const z0 = caseZ(ce), z1 = z0 + caseH(ce);
+  let d = Infinity;
+  for (let z = z0; z <= z1 + 0.1; z += Math.max(4, (z1 - z0) / 12)) d = Math.min(d, Math.max(0, surface(ce, screenToWorld(sp, z)).dist));
+  return d;
+}
 function caseAtScreen (sp, m) {
   let best = null, bd = Infinity, bk = -Infinity;
   for (const ce of G.cases) {
     if (ce.hidden) continue;
-    const z0 = caseZ(ce), z1 = z0 + caseH(ce);
-    let d = Infinity;
-    for (let z = z0; z <= z1 + 0.1; z += Math.max(4, (z1 - z0) / 12)) d = Math.min(d, Math.max(0, surface(ce, screenToWorld(sp, z)).dist));
+    const z0 = caseZ(ce), d = caseScreenDist(ce, sp);
     if (d > m) continue;
     const k = frontY(rectPts(ce.body.position, ce.def.w, ce.def.h, ce.body.angle)) + z0 * 0.01;
     if (d < bd - 0.5 || (Math.abs(d - bd) <= 0.5 && k > bk)) { bd = d; bk = k; best = ce; }
   }
   return best && { ce: best, d: bd };
 }
+// sotto questa scala (pixel per cm) un tocco fra più cose vicine non sceglie:
+// la scena si avvicina lì, come nel montaggio, e il tocco dopo prende quella giusta
+const CROWD_SCALE = 0.6;
 function tapAt (p, sp) {
   if (!G || G.mode !== 'play') return;
   const m = Math.max(6, TAP_PX / G.cam.scale), hit = sp ? caseAtScreen(sp, m) : caseAt(p, m);
   let who = null, wd = Infinity;
+  const ds = [];   // quanto dista dal dito ogni cosa a portata
   for (const w of G.workers) {
     // le persone in piedi: dai piedi alla testa
     // (se due si sovrappongono a schermo vale chi è più centrato sotto il dito)
     let d = Infinity;
     for (let z = 0; z <= 160; z += 10) d = Math.min(d, len(sub(sp ? screenToWorld(sp, z) : p, w.body.position)) - w.r);
+    if (d <= m) ds.push(Math.max(0, d));
     if (d <= m && d < wd) { wd = d; who = w; }
   }
   wd = Math.max(0, wd);
+  // sopra una cosa vale quella (la più davanti); se il dito è fra più cose la scena si avvicina
+  if (sp && G.cam.scale < CROWD_SCALE) {
+    for (const ce of G.cases) if (!ce.hidden) { const d = caseScreenDist(ce, sp); if (d <= m) ds.push(d); }
+    if (ds.length > 1 && Math.min(...ds) > 0) { setZoom(CROWD_SCALE / baseScale(), sp); return; }
+  }
   // chi è già scelto non si riprende: se lì vicino c'è un case, vale il case
   if (who && (!hit || (who !== G.sel.who && (wd < hit.d || (wd === 0 && hit.d > 0))))) { selectWorker(who); return; }
   const ce = hit && hit.ce;
@@ -4073,10 +4097,33 @@ function camFocus () {
   if (G.cam.focus === 'van' && G.cases.some(c => !c.hidden && !c.job && !c.onTrolley && c.zone !== c.def.zone && c.body.position.x < GYM_X)) return VAN_VIEW;
   return S.who.body.position;
 }
+/* Zoom. A zoom 1 la scena ha la scala della vista intera del montaggio su
+   questo schermo: gli stessi pixel per metro (lì una cella da 1 m è larga
+   102 in diagonale e la palestra intera, 1224×1010, sta nello spazio libero;
+   qui la diagonale di 1 m è 141 cm). Poi si regola con − / +, la rotellina,
+   due dita o i tasti + e −. */
+const ZOOM_MIN = 0.6, ZOOM_MAX = 4.5;
+let baseK = null;
+function baseScale () {
+  if (baseK && baseK.w === W && baseK.h === H) return baseK.v;
+  const top = $('.hud').getBoundingClientRect().bottom, bot = $('#hintbar').getBoundingClientRect().top || H;
+  const k = Math.min((W - 16) / 1224, Math.max(120, bot - top - 16) / 1010);
+  baseK = { w: W, h: H, v: k * 102 / (100 * Math.SQRT2) };
+  return baseK.v;
+}
+// cambia lo zoom tenendo fermo sotto il dito (o il puntatore) il punto s dello schermo
+function setZoom (z, s) {
+  if (!G) return;
+  z = clamp(z, ZOOM_MIN, ZOOM_MAX);
+  if (z === G.cam.zoom) return;
+  const p = s && screenToWorld(s);
+  G.cam.zoom = z; G.cam.scale = baseScale() * z;
+  if (p) { const q = screenToWorld(s); G.cam.manual = { x: G.cam.x + p.x - q.x, y: G.cam.y + p.y - q.y }; G.cam.x = G.cam.manual.x; G.cam.y = G.cam.manual.y; }
+}
 function render () {
-  // camera: segue il giocatore; su telefono si vede meno mondo ma più grande
+  // camera: segue chi è scelto, alla scala del montaggio per lo zoom scelto
   const wv = G.mode === 'wrap' || (G.mode === 'end' && G.wrap) ? wrapView() : null;
-  const want = wv ? clamp(Math.min(W / wv.fit, (H - 60) / wv.fit), 0.35, 1.4) : clamp(Math.min(W / (W < 600 ? 430 : 680), (H - 60) / 560), 0.5, 1.4);
+  const want = wv ? clamp(Math.min(W / wv.fit, (H - 60) / wv.fit), 0.35, 1.4) : baseScale() * G.cam.zoom;
   // la scena finisce sopra la barra d'aiuto (e sopra i pulsanti, sul telefono)
   // la telecamera segue chi è scelto; trascinando si guarda altrove
   const man = !wv && G.mode === 'play' && G.cam.manual;
@@ -4329,24 +4376,36 @@ window.addEventListener('keydown', e => {
   if (e.code === 'KeyC') toggleCart();
   if (e.code === 'Escape') { if (G.sel.ce || G.sel.pickTop) cancelSel(); else togglePause(); }
   if (e.code === 'KeyP') togglePause();
+  if (e.key === '+' || e.code === 'NumpadAdd') setZoom(G.cam.zoom * 1.25);
+  if (e.key === '-' || e.code === 'NumpadSubtract') setZoom(G.cam.zoom / 1.25);
 });
 
 /* la scena: un tocco (o un clic) sceglie; trascinando si guarda in giro */
 (() => {
-  let down = null;
+  let down = null, pinch = null;
+  const pts = new Map(), at = e => { const r = cv.getBoundingClientRect(); return { x: e.clientX - r.left, y: e.clientY - r.top }; };
+  const two = () => { const [a, b] = [...pts.values()]; return { d: Math.hypot(a.x - b.x, a.y - b.y), m: { x: (a.x + b.x) / 2, y: (a.y + b.y) / 2 } }; };
   cv.addEventListener('pointerdown', e => {
     skipWrap();
     if (!G) return;
-    down = { id: e.pointerId, x: e.clientX, y: e.clientY, cx: G.cam.x, cy: G.cam.y, pan: false };
+    pts.set(e.pointerId, at(e));
     try { cv.setPointerCapture(e.pointerId); } catch (x) {}
+    // due dita: si allarga o si stringe la scena, niente tocco né trascinamento
+    if (pts.size === 2) { down = null; const t = two(); pinch = { d: Math.max(20, t.d), z: G.cam.zoom }; return; }
+    if (pts.size > 2) return;
+    down = { id: e.pointerId, x: e.clientX, y: e.clientY, cx: G.cam.x, cy: G.cam.y, pan: false };
   });
   cv.addEventListener('pointermove', e => {
+    if (pts.has(e.pointerId)) pts.set(e.pointerId, at(e));
+    if (pinch && pts.size === 2 && G) { const t = two(); setZoom(pinch.z * t.d / pinch.d, t.m); return; }
     if (!down || e.pointerId !== down.id || !G) return;
     const dx = e.clientX - down.x, dy = e.clientY - down.y;
     if (!down.pan && Math.hypot(dx, dy) > 12) down.pan = true;
     if (down.pan) { const u = dx / G.cam.scale, v = dy / (G.cam.scale * KY); G.cam.manual = { x: down.cx - (u * CA + v * SA), y: down.cy - (-u * SA + v * CA) }; }
   });
+  const lift = e => { pts.delete(e.pointerId); if (pts.size < 2) pinch = null; };
   cv.addEventListener('pointerup', e => {
+    lift(e);
     if (!down || e.pointerId !== down.id) return;
     const d = down; down = null;
     if (d.pan || !G) return;
@@ -4354,7 +4413,8 @@ window.addEventListener('keydown', e => {
     const sp = { x: e.clientX - r.left, y: e.clientY - r.top };
     tapAt(screenToWorld(sp), sp);
   });
-  cv.addEventListener('pointercancel', () => { down = null; });
+  cv.addEventListener('pointercancel', e => { lift(e); down = null; });
+  cv.addEventListener('wheel', e => { e.preventDefault(); if (G) setZoom(G.cam.zoom * Math.pow(1.0015, -e.deltaY), at(e)); }, { passive: false });
 })();
 
 /* la barra degli ordini: chi lavora, e per il case scelto zone e carrello */
@@ -4440,6 +4500,9 @@ function togglePause (force) {
   $('#pause').hidden = !paused;
 }
 $('#btn-pause').addEventListener('click', () => togglePause(true));
+$('#zoom-in').addEventListener('click', () => setZoom(G.cam.zoom * 1.4));
+$('#zoom-out').addEventListener('click', () => setZoom(G.cam.zoom / 1.4));
+$('#zoom-reset').addEventListener('click', () => { if (G) { G.cam.zoom = 1; G.cam.manual = null; } });
 $('#btn-resume').addEventListener('click', () => togglePause(false));
 $('#btn-restart').addEventListener('click', () => { togglePause(false); startGame(); });
 $('#btn-close').addEventListener('click', () => endGame('manuale'));
