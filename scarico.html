@@ -3301,8 +3301,9 @@ function figShadow (p, h, r) {
 function drawAtlas (f, p, o) {
   const P = f.A.poses, pose = P[o.arms] ? o.arms : P.giu ? 'giu' : Object.keys(P)[0];
   const d = ((Math.round(((o.facing || 0) + (TH - Math.PI / 4)) / (Math.PI / 4)) % 8) + 8) % 8;   // l'atlante è fatto con la vista di prima (TH 45°): qui il mondo è girato di 90°
-  const k = o.phase == null ? 0 : 1 + (Math.floor(o.phase * FIG_ATLAS.WALK) % FIG_ATLAS.WALK + FIG_ATLAS.WALK) % FIG_ATLAS.WALK;
-  const [x, y, w, h, ax, ay] = P[pose][d][k], s = worldToScreen(p), q = G.cam.scale / FIG_ATLAS.RES;
+  const row = P[pose][d], nw = row.length - 1;
+  const k = o.phase == null ? 0 : 1 + (Math.floor(o.phase * nw) % nw + nw) % nw;
+  const [x, y, w, h, ax, ay] = row[k], s = worldToScreen(p), q = G.cam.scale / FIG_ATLAS.RES;
   ctx.save(); ctx.setTransform(DPR, 0, 0, DPR, 0, 0); ctx.translate(s.x, s.y);
   if (w < 0) { ctx.scale(-1, 1); ctx.drawImage(f.img, x, y, -w, h, -(-w - ax) * q, -ay * q, -w * q, h * q); }
   else ctx.drawImage(f.img, x, y, w, h, -ax * q, -ay * q, w * q, h * q);
@@ -4220,11 +4221,15 @@ function drawWorker (w) {
   const p = w.body.position, r = w.r;
   figShadow(p, w === G.player ? 180 : 168, r * 1.05);
   // passo: un saltello; braccia avanti alle maniglie, sotto il case in mano
-  const moving = w.spd > 0.25, ph = Math.sin((w.stride || 0) * 0.28) * (moving ? 1 : 0);
+  // il passo è legato ai cm percorsi con la misura del modello (cycle: due
+  // passi): il piede d'appoggio resta dov'è
+  const fa = figAtlas(w === G.player ? 'topsy' : 'macio'), cyc = fa && fa.A.cycle || 130;
+  if (w.spd > 0.04) w.walkT = G.t;
+  const moving = G.t - (w.walkT || -9) < 0.12, ph = Math.sin((w.stride || 0) * 0.28) * (moving ? 1 : 0);
   const ce = w.grab;
   const arms = !ce ? vanPose(w) || 'giu' : ce.carrier === w || liftedByTwo(ce) ? 'porta' : 'avanti';
   const who = w === G.player ? 'topsy' : 'macio';
-  drawFigure(p, who, w === G.player ? 176 : 168, { facing: w.facing, phase: moving ? (w.stride || 0) / 150 : null, back: Math.cos(w.facing) * SA + Math.sin(w.facing) * CA < -0.6, flip: Math.cos(w.facing) * CA - Math.sin(w.facing) * SA < -0.2, arms, step: Math.round(ph), bob: Math.abs(ph) * 0.02, tee: w.tee, skin: w.skin });
+  drawFigure(p, who, w === G.player ? 176 : 168, { facing: w.facing, phase: moving ? (w.stride || 0) / cyc : null, back: Math.cos(w.facing) * SA + Math.sin(w.facing) * CA < -0.6, flip: Math.cos(w.facing) * CA - Math.sin(w.facing) * SA < -0.2, arms, step: Math.round(ph), bob: Math.abs(ph) * 0.02, tee: w.tee, skin: w.skin });
   const hd = worldToScreen(p, 175), sc = G.cam.scale;
   ctx.save(); ctx.setTransform(DPR, 0, 0, DPR, 0, 0);
   if (w === G.macio && w.ai.state === 'phone') { ctx.fillStyle = '#eee9df'; ctx.fillRect(hd.x + 12 * sc, hd.y + 14 * sc, 7 * sc, 12 * sc); }
