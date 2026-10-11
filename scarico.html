@@ -268,7 +268,7 @@ if (EMBED) {
 <script>
 'use strict';
 // senza rete Matter.js non arriva: si può solo saltare (vedi in fondo)
-const { Engine, Bodies, Body, Composite, Collision, Bounds, Query } = window.Matter || {};
+const { Engine, Bodies, Body, Composite, Collision, Bounds, Query, Vertices } = window.Matter || {};
 
 /* ---------------------------------------------------------------------
    COSTANTI — valori di partenza da tarare giocando (vedi il documento).
@@ -475,7 +475,7 @@ function newGame () {
   const world = engine.world;
   G = {
     engine, world, t: 0, introT: 0, mode: 'intro', cases: [], workers: [], kids: [], statics: [],
-    cart: null, toasts: [], bubbles: [], qte: null, stowed: [], spots: [],
+    cart: null, toasts: [], bubbles: [], qte: null, stowed: [], spots: [], orders: [], trace: null,
     // gli ordini: chi è scelto, il case scelto, col carrello, il case sopra
     sel: { who: null, ce: null, cart: false, top: null, pickTop: false },
     coffee: { used: false, until: 0, pauseUntil: 0 }, kidHits: 0, events: {}, endDelay: 0,
@@ -2049,7 +2049,9 @@ function travel (w, s, goals, dt, aside) {
     const g = groupOf(w);
     const list = typeof goals === 'function' ? goals() : goals;
     let res = null;
-    for (const gl of list.slice(0, 6)) { res = plan(g, gl, s.avoid); if (res) { s.goal = gl; break; } }
+    // la strada disegnata col dito: si passa dai suoi punti, poi al posto
+    if (s.via && s.via.length && !aside) { res = planVia(g, s, list); if (!res) s.via = null; }
+    if (!res) for (const gl of list.slice(0, 6)) { res = plan(g, gl, s.avoid); if (res) { s.goal = gl; break; } }
     if (!res && s.avoid) { s.avoid = false; return 'run'; }
     if (!res) return 'fail';
     s.path = res.path; s.pi = 0; s.v = 0; s.blockT = 0; s.allow0 = null; s.stP = null; s.dwell = 0;
@@ -2128,6 +2130,74 @@ function travel (w, s, goals, dt, aside) {
     }
   }
   return 'run';
+}
+
+/* LA STRADA DISEGNATA — col case scelto si trascina il dito dal case fin
+   dove va: la linea è la strada. Chi porta passa dai suoi punti (uno ogni
+   metro e mezzo, a 30 cm di tolleranza) e poi va al posto come sempre.
+   Un punto dentro un muro o un case si salta. Fermati o bloccati, si
+   riparte dal punto della linea più vicino, senza tornare indietro. */
+const VIA_STEP = 150, VIA_TOL = 30;
+function planVia (g, s, list) {
+  const p0 = poseOf(g), r0 = g.ent ? refAt(g, p0.x, p0.y, p0.f) : p0;
+  let i0 = 0, bd = Infinity;
+  s.via.forEach((v, i) => { const d = Math.hypot(v.x - r0.x, v.y - r0.y); if (d < bd) { bd = d; i0 = i; } });
+  s.via = s.via.slice(bd < VIA_STEP * 0.6 ? i0 + 1 : i0);
+  const path = [], wf = g.w.facing;
+  let res = null;
+  try {
+    for (const v of s.via) {
+      const r = plan(g, { x: v.x, y: v.y, tol: VIA_TOL }, s.avoid);
+      if (!r) continue;
+      path.push(...r.path);
+      const m = [...r.path].reverse().find(q => q.t === 'move'), q = m || poseOf(g);
+      g.w.facing = r.f; setPose(g, q.x, q.y, r.f);
+    }
+    for (const gl of list.slice(0, 6)) { res = plan(g, gl, s.avoid); if (res) { s.goal = gl; break; } }
+  } finally { g.w.facing = wf; setPose(g, p0.x, p0.y, p0.f); }
+  if (!res) return null;
+  path.push(...res.path);
+  return { path, f: res.f };
+}
+// la linea del dito: un punto ogni VIA_STEP, quelli dentro un muro (o un case fermo) no
+function traceVia (pts) {
+  const out = [];
+  let acc = 0;
+  for (let i = 1; i < pts.length; i++) {
+    const a = pts[i - 1], b = pts[i], d = Math.hypot(b.x - a.x, b.y - a.y);
+    let t = VIA_STEP - acc;
+    while (t <= d) { out.push({ x: a.x + (b.x - a.x) * t / d, y: a.y + (b.y - a.y) * t / d }); t += VIA_STEP; }
+    acc = (acc + d) % VIA_STEP;
+  }
+  for (const v of out) v.bad = traceBlocked(v);
+  return out;
+}
+function traceBlocked (v) {
+  if (v.x < NAVB.x1 || v.x > NAVB.x2 || v.y < NAVB.y1 || v.y > NAVB.y2) return true;
+  for (const b of G.statics) if (b !== G.stepBody && Bounds.contains(b.bounds, v) && Vertices.contains(b.vertices, v)) return true;
+  for (const c of G.cases) if (!c.hidden && c !== G.sel.ce && !c.job && Vertices.contains(c.body.vertices, v)) return true;
+  return false;
+}
+const traceLen = pts => pts.reduce((a, q, i) => i ? a + Math.hypot(q.x - pts[i - 1].x, q.y - pts[i - 1].y) : 0, 0);
+// fine del disegno: dove si è alzato il dito è la meta (una zona o un punto a terra)
+function endTrace (tr) {
+  const S = G.sel, ce = S.ce, pts = tr.pts, end = pts[pts.length - 1];
+  if (!ce || pts.length < 2 || traceLen(pts) < 120) return false;
+  const z = zoneAt(end), via = traceVia(pts);
+  // l'ultimo pezzo lo fa il gioco (il posto giusto nella zona)
+  while (via.length && Math.hypot(via[via.length - 1].x - end.x, via[via.length - 1].y - end.y) < VIA_STEP * 0.7) via.pop();
+  const mine = traceLen(pts), from = ce.body.position;
+  // la strada più corta a piedi, attorno a muri e case, per confronto
+  const fld = distField({ x: end.x, y: end.y, tol: 0 }, G.statics.filter(b => b !== G.stepBody));
+  const best = fld.d(from.x, from.y, true);
+  const bad = via.filter(v => v.bad).length;
+  const n = G.orders.length;
+  sendTo(z ? { zone: z, near: end } : { point: end }, { via: via.filter(v => !v.bad), pts, mine, best });
+  if (G.orders.length === n) return true;
+  const m = x => (x / 100).toFixed(1).replace('.', ',') + ' m';
+  const extra = best < Infinity ? Math.round((mine / best - 1) * 100) : 0;
+  toast('La tua strada: ' + m(mine) + (best < Infinity ? ' · la più corta ' + m(best) + (extra > 8 ? ' (+' + extra + '%)' : ' ✓') : '') + (bad ? ' · ' + bad + ' punt' + (bad > 1 ? 'i' : 'o') + ' dentro un ostacolo: li salto' : ''), extra > 30 || bad ? 'warn' : '');
+  return true;
 }
 
 /* DOVE SI APPOGGIA — un posto libero nella zona scelta, con un po' di
@@ -2449,6 +2519,7 @@ const STEPS = {
     const ce = s.ce;
     if (w.grab !== ce) { s.why = ce.def.name + ': l\'ho perso.'; return 'fail'; }
     const g = groupOf(w);
+    if (s.via === undefined) s.via = j.trace ? j.trace.via.slice() : null;
     const r = travel(w, s, () => dropSpots(ce, s.dest).map(sp => ({ x: sp.x, y: sp.y, exact: true, tol: NAV.cell * 0.9, fOk: f => sameAxis(refAngle(g, f), sp.a), sp })), dt);
     if (r === 'fail' && retry(s, dt)) return 'run';
     if (r === 'fail') { s.why = s.stage ? ce.def.name + ': non trovo un posto a terra per caricarlo.' : ce.def.name + ': da qui non passa o ' + (s.dest.zone ? 'in ' + ZONES[s.dest.zone].name + ' non c\'è posto' : 'lì non ci si arriva') + '. Libera il passaggio.'; s.line = 'Da qui non ci arrivo, spostalo un po\'!'; }
@@ -2540,6 +2611,7 @@ const STEPS = {
     const t = G.trolley;
     if (w.grab !== t || !t.load.length) { s.why = 'Il carrello è vuoto.'; return 'fail'; }
     const g = groupOf(w), base = t.load[0], top = t.load[1] || null;
+    if (s.via === undefined) s.via = j.trace ? j.trace.via.slice() : null;
     const r = travel(w, s, () => dropSpots(base, s.dest, top).map(sp => ({ x: sp.x, y: sp.y, exact: true, tol: NAV.cell * 0.9, fOk: f => sameAxis(refAngle(g, f), sp.a), sp })), dt);
     if (r === 'fail' && retry(s, dt)) return 'run';
     if (r === 'run' && s.goal && s.reserved !== s.goal) { s.reserved = s.goal; reserveSpot(j, base, s.goal.sp); }
@@ -2678,6 +2750,7 @@ function selectCase (ce) {
   if (S.who === G.macio && delicate(ce)) { macioNo(ce); S.who = G.player; cmdDirty = true; }
   Object.assign(S, { ce, cart: false, top: null, pickTop: false });
   learnFrom(ce);
+  once('trace', 'Novità: puoi anche trascinare dal case e disegnare tu la strada fino alla zona.');
   cmdDirty = true;
 }
 function toggleCart () {
@@ -2694,7 +2767,7 @@ function orderBubble (w, what) {
   w.reply = { at: G.t + 0.7, text: w.ai.state === 'phone' ? 'Un attimo, capo!' : 'Eccomi, capo!' };
 }
 function macioNo (ce) { bubble(G.macio, ce.def.id === 'par' ? 'I PAR? No no, quelli li porti tu, capo.' : 'La valigetta del PC? No no, quella la porti tu, capo.', 2.4); }
-function sendTo (dest) {
+function sendTo (dest, trace) {
   const S = G.sel, ce = S.ce, w = S.who;
   if (!ce) return;
   if (dest.zone === undefined && dest.point && (dest.point.x < DOOR_X + 20)) { toast('Lì non si appoggia: fuori dal furgone, in cortile o in palestra.'); return; }
@@ -2703,7 +2776,8 @@ function sendTo (dest) {
   if (S.cart && !cartFree(w)) { toggleCart(); return; }
   // nella zona non c'è proprio più posto (neanche finiti gli altri ordini): si dice subito
   if (dest.zone) { const res = G.spots; G.spots = []; const none = !dropSpots(ce, dest, S.cart ? S.top : null).length; G.spots = res; if (none) { toast('In ' + ZONES[dest.zone].name + ' non c\'è più posto per ' + ce.def.short + (S.cart ? ' col carrello' : '') + ': fai spazio o scegli un\'altra zona.', 'warn'); AU.locked(); return; } }
-  const j = { kind: S.cart ? 'cart' : 'move', who: w, ce, top: S.cart ? S.top : null, dest };
+  const j = { kind: S.cart ? 'cart' : 'move', who: w, ce, top: S.cart ? S.top : null, dest, trace: trace || null };
+  G.orders.push(j);
   ce.job = j; if (j.top) j.top.job = j;
   if (j.kind === 'cart') G.trolley.job = j;
   w.jobs.push(j);
@@ -4363,9 +4437,67 @@ function drawFx () {
 
 /* gli ordini sulla scena: chi è scelto (anello), il case scelto, la strada
    che sta facendo ognuno e il posto dove poserà il case */
+// il dito che disegna: un punto nuovo ogni 12 cm; vicino al bordo la scena scorre
+function traceAdd () {
+  const tr = G.trace, q = screenToWorld(tr.sp), l = tr.pts[tr.pts.length - 1];
+  if (Math.hypot(q.x - l.x, q.y - l.y) > 12) tr.pts.push(q);
+}
+// cominciando a disegnare la scena si allontana finché si vedono il case e tutte le zone
+function traceFit () {
+  const pts = [G.sel.ce.body.position];
+  for (const k in ZONES) { const z = ZONES[k]; pts.push({ x: z.x, y: z.y }, { x: z.x + z.w, y: z.y }, { x: z.x, y: z.y + z.h }, { x: z.x + z.w, y: z.y + z.h }); }
+  const us = pts.map(q => q.x * CA - q.y * SA), vs = pts.map(q => (q.x * SA + q.y * CA) * KY);
+  const u1 = Math.min(...us), u2 = Math.max(...us), v1 = Math.min(...vs), v2 = Math.max(...vs);
+  const top = $('.hud').getBoundingClientRect().bottom - cv.getBoundingClientRect().top + 12;
+  const sc = Math.min((W - 40) / (u2 - u1), (H - top - 24) / (v2 - v1));
+  const z = clamp(sc / baseScale(), ZOOM_MIN, G.cam.zoom);
+  G.cam.zoom = z; G.cam.scale = baseScale() * z;
+  const uc = (u1 + u2) / 2, vc = ((v1 + v2) / 2 - (top - 12) / 2 / G.cam.scale) / KY;
+  G.cam.manual = { x: uc * CA + vc * SA, y: -uc * SA + vc * CA }; G.cam.x = G.cam.manual.x; G.cam.y = G.cam.manual.y;
+}
+function traceEdge () {
+  const tr = G.trace; if (!tr || !tr.sp) return;
+  const E = 56, ex = tr.sp.x < E ? -1 : tr.sp.x > W - E ? 1 : 0, ey = tr.sp.y < E + 50 ? -1 : tr.sp.y > H - E ? 1 : 0;
+  if (!ex && !ey) return;
+  const v = 4 / G.cam.scale, du = ex * v, dv = ey * v / KY;
+  G.cam.manual = { x: G.cam.x + du * CA + dv * SA, y: G.cam.y - du * SA + dv * CA };
+  G.cam.x = G.cam.manual.x; G.cam.y = G.cam.manual.y;
+  traceAdd();
+}
+function drawTrail (pts, col, alpha, via) {
+  if (pts.length < 2) return;
+  ctx.save(); ctx.lineCap = ctx.lineJoin = 'round';
+  // grossa uguale a ogni zoom (in pixel di schermo, non in cm)
+  const k = 1 / G.cam.scale, A = 14 * k;
+  ctx.strokeStyle = 'rgba(0,0,0,.45)'; ctx.lineWidth = 8 * k; ctx.globalAlpha = alpha;
+  ctx.beginPath(); pts.forEach((q, i) => i ? ctx.lineTo(q.x, q.y) : ctx.moveTo(q.x, q.y)); ctx.stroke();
+  ctx.strokeStyle = col; ctx.lineWidth = 4.5 * k; ctx.stroke();
+  for (const v of via || []) { ctx.fillStyle = v.bad ? '#e0503f' : col; ctx.beginPath(); ctx.arc(v.x, v.y, (v.bad ? 7 : 4) * k, 0, Math.PI * 2); ctx.fill(); }
+  // la punta: una freccia
+  const a = pts[Math.max(0, pts.length - 4)], b = pts[pts.length - 1], an = Math.atan2(b.y - a.y, b.x - a.x);
+  ctx.fillStyle = col; ctx.beginPath(); ctx.moveTo(b.x + Math.cos(an) * A, b.y + Math.sin(an) * A);
+  ctx.lineTo(b.x + Math.cos(an + 2.5) * A, b.y + Math.sin(an + 2.5) * A); ctx.lineTo(b.x + Math.cos(an - 2.5) * A, b.y + Math.sin(an - 2.5) * A); ctx.fill();
+  ctx.restore();
+}
 function drawOrders () {
   if (G.mode !== 'play') return;
   const S = G.sel, pulse = 0.55 + 0.45 * Math.sin(performance.now() / 160);
+  // la strada che si sta disegnando (rossi i punti dentro un ostacolo)
+  if (G.trace) { const end = G.trace.pts[G.trace.pts.length - 1], z = zoneAt(end); drawTrail(G.trace.pts, z ? ZONES[z].color : '#f2a541', 0.95, traceVia(G.trace.pts)); }
+  // le strade disegnate degli ordini: quello che resta da fare
+  for (const j of G.orders) {
+    if (!j.trace || (j.who.job !== j && !j.who.jobs.includes(j))) continue;
+    const s = j.who.job === j && j.steps[j.si], col = j.dest.zone ? ZONES[j.dest.zone].color : '#f2a541';
+    let pts = j.trace.pts;
+    if (s && (s.k === 'haul' || s.k === 'cartHaul')) {
+      // da dove è arrivato il case in poi
+      const c = (j.kind === 'cart' ? G.trolley.load[0] || j.ce : j.ce).body.position;
+      let bi = 0, bd = Infinity; pts.forEach((q, i) => { const d = Math.hypot(q.x - c.x, q.y - c.y); if (d < bd) { bd = d; bi = i; } });
+      pts = [{ x: c.x, y: c.y }, ...pts.slice(bi + 1)];
+    }
+    drawTrail(pts, col, 0.5);
+  }
+  G.orders = G.orders.filter(j => j.who.job === j || j.who.jobs.includes(j));
   for (const w of G.workers) {
     const j = w.job, s = j && j.steps && j.steps[j.si];
     if (s && s.path) {
@@ -4538,6 +4670,7 @@ function render () {
   const want = wv ? clamp(Math.min(W / wv.fit, (H - 60) / wv.fit), 0.35, 1.4) : baseScale() * G.cam.zoom;
   // la scena finisce sopra la barra d'aiuto (e sopra i pulsanti, sul telefono)
   // la telecamera segue chi è scelto; trascinando si guarda altrove
+  traceEdge();
   const man = !wv && G.mode === 'play' && G.cam.manual;
   const pp = wv || man || (G.mode === 'intro' || G.mode === 'end' && !G.wrap ? VAN_VIEW : camFocus());
   const target = { x: pp.x, y: pp.y };
@@ -4813,12 +4946,20 @@ window.addEventListener('keydown', e => {
     if (pts.size === 2) { down = null; const t = two(); pinch = { d: Math.max(20, t.d), z: G.cam.zoom }; return; }
     if (pts.size > 2) return;
     down = { id: e.pointerId, x: e.clientX, y: e.clientY, cx: G.cam.x, cy: G.cam.y, pan: false };
+    // col case scelto, partendo dal case: si disegna la strada invece di guardare in giro
+    const S = G.sel, sp = at(e);
+    if (G.mode === 'play' && S.ce && !S.pickTop && !S.ce.hidden && caseScreenDist(S.ce, sp) <= Math.max(10, 24 / G.cam.scale)) down.draw = true;
   });
   cv.addEventListener('pointermove', e => {
     if (pts.has(e.pointerId)) pts.set(e.pointerId, at(e));
     if (pinch && pts.size === 2 && G) { const t = two(); setZoom(pinch.z * t.d / pinch.d, t.m); return; }
     if (!down || e.pointerId !== down.id || !G) return;
     const dx = e.clientX - down.x, dy = e.clientY - down.y;
+    if (down.draw) {
+      if (!G.trace && Math.hypot(dx, dy) > 12) { G.trace = { pts: [{ x: G.sel.ce.body.position.x, y: G.sel.ce.body.position.y }], zoom0: G.cam.zoom }; traceFit(); }
+      if (G.trace) { G.trace.sp = at(e); traceAdd(); }
+      return;
+    }
     if (!down.pan && Math.hypot(dx, dy) > 12) down.pan = true;
     if (down.pan) { const u = dx / G.cam.scale, v = dy / (G.cam.scale * KY); G.cam.manual = { x: down.cx - (u * CA + v * SA), y: down.cy - (-u * SA + v * CA) }; }
   });
@@ -4827,12 +4968,13 @@ window.addEventListener('keydown', e => {
     lift(e);
     if (!down || e.pointerId !== down.id) return;
     const d = down; down = null;
+    if (d.draw && G && G.trace) { const tr = G.trace; G.trace = null; setZoom(tr.zoom0); if (endTrace(tr)) return; }
     if (d.pan || !G) return;
     const r = cv.getBoundingClientRect();
     const sp = { x: e.clientX - r.left, y: e.clientY - r.top };
     tapAt(screenToWorld(sp), sp);
   });
-  cv.addEventListener('pointercancel', e => { lift(e); down = null; });
+  cv.addEventListener('pointercancel', e => { lift(e); down = null; if (G && G.trace) { setZoom(G.trace.zoom0); G.trace = null; } });
   cv.addEventListener('wheel', e => { e.preventDefault(); if (G) setZoom(G.cam.zoom * Math.pow(1.0015, -e.deltaY), at(e)); }, { passive: false });
 })();
 
