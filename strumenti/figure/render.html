@@ -1,0 +1,144 @@
+<!doctype html><meta charset="utf-8"><title>Atlanti delle figure</title>
+<!-- Genera gli atlanti delle figure dello scarico (vedi genera.js). three.js,
+     il Topsy 3D e il rig arrivano da genera.js: qui c'è solo il rendering. -->
+<script src="three.min.js"></script>
+<script src="topsy3d.js"></script>
+<script src="topsy-rig.js"></script>
+<script src="manichini.js"></script>
+<body style="margin:0;background:#888">
+<script>
+/* La telecamera dello scarico: dall'alto a 38°, mondo girato di 45° (vedi
+   EL e TH in scarico.html). Pianta (x, y) = three (X, Z), altezza = Y.
+   Le figure sono già illuminate come la scena: luce morbida dall'alto a
+   sinistra dello schermo, più un filo di controluce sui bordi. */
+const EL = 38 * Math.PI / 180, TH = Math.PI / 4, SA = Math.sin(TH), CA = Math.cos(TH);
+const RES = 1.45, SS = 2;                       // pixel per cm nell'atlante; sovracampionamento
+const FW = 120, TOP = 178, BOT = 40;           // cornice in cm di schermo: larghezza, sopra e sotto i piedi
+const DIRS = 8, WALK = 6;
+const fw = Math.round(FW * RES), fh = Math.round((TOP + BOT) * RES);
+const ren = new THREE.WebGLRenderer({ alpha: true, antialias: true, preserveDrawingBuffer: true });
+ren.setPixelRatio(1); ren.setSize(fw * SS, fh * SS); ren.setClearColor(0x000000, 0);
+document.body.appendChild(ren.domElement);
+const cam = new THREE.OrthographicCamera(-FW / 2, FW / 2, TOP, -BOT, 1, 5000);
+const toCam = new THREE.Vector3(SA * Math.cos(EL), Math.sin(EL), CA * Math.cos(EL));
+cam.position.copy(toCam).multiplyScalar(2000); cam.up.set(0, 1, 0); cam.lookAt(0, 0, 0);
+// la luce: dall'alto a sinistra dello schermo e un po' verso chi guarda
+const right = new THREE.Vector3(CA, 0, -SA);
+function lights (scene) {
+  scene.add(new THREE.HemisphereLight(0xfff4e6, 0x3c3a40, 0.75));
+  const key = new THREE.DirectionalLight(0xfff0dc, 1.05);
+  key.position.copy(right.clone().multiplyScalar(-0.55).add(new THREE.Vector3(0, 0.75, 0)).add(toCam.clone().multiplyScalar(0.45)).normalize().multiplyScalar(500));
+  scene.add(key);
+  const fill = new THREE.DirectionalLight(0xdfe8ff, 0.25); fill.position.copy(toCam).multiplyScalar(500); scene.add(fill);
+}
+// un fotogramma: dal canvas WebGL a una cornice 2D, con il controluce sul bordo in alto a sinistra
+const frameCv = document.createElement('canvas'); frameCv.width = fw; frameCv.height = fh;
+const fc = frameCv.getContext('2d', { willReadFrequently: true });
+function grab (rim, full) {
+  fc.clearRect(0, 0, fw, fh); fc.imageSmoothingQuality = 'high'; fc.drawImage(ren.domElement, 0, 0, fw, fh);
+  const im = fc.getImageData(0, 0, fw, fh), d = im.data;
+  if (rim) {
+    const a = new Float32Array(fw * fh); for (let i = 0; i < fw * fh; i++) a[i] = d[i * 4 + 3] / 255;
+    for (let y = 0; y < fh; y++) for (let x = 0; x < fw; x++) {
+      const i = y * fw + x; if (a[i] < 0.5) continue;
+      let out = 0; for (let k = 1; k <= 2; k++) { const xx = x - k, yy = y - k; out = Math.max(out, xx < 0 || yy < 0 ? 1 : 1 - a[yy * fw + xx]); }
+      const t = out * 0.22; if (!t) continue;
+      d[i * 4] += (255 - d[i * 4]) * t; d[i * 4 + 1] += (238 - d[i * 4 + 1]) * t; d[i * 4 + 2] += (214 - d[i * 4 + 2]) * t;
+    }
+  }
+  if (full) { const c = document.createElement('canvas'); c.width = fw; c.height = fh; c.getContext('2d').putImageData(im, 0, 0); return { c }; }
+  // ritaglio stretto
+  let x0 = fw, y0 = fh, x1 = -1, y1 = -1;
+  for (let y = 0; y < fh; y++) for (let x = 0; x < fw; x++) if (d[(y * fw + x) * 4 + 3] > 6) { if (x < x0) x0 = x; if (x > x1) x1 = x; if (y < y0) y0 = y; if (y > y1) y1 = y; }
+  if (x1 < 0) { x0 = y0 = 0; x1 = y1 = 1; }
+  x0 = Math.max(0, x0 - 1); y0 = Math.max(0, y0 - 1); x1 = Math.min(fw - 1, x1 + 1); y1 = Math.min(fh - 1, y1 + 1);
+  const w = x1 - x0 + 1, h = y1 - y0 + 1, c = document.createElement('canvas'); c.width = w; c.height = h;
+  c.getContext('2d').putImageData(im, -x0, -y0, x0, y0, w, h);
+  return { c, ax: fw / 2 - x0, ay: TOP * RES - y0, x0, y0 };
+}
+// impacchetta i fotogrammi a scaffali in un atlante largo al massimo 2048
+function pack (frames) {
+  const order = frames.map((f, i) => i).sort((a, b) => frames[b].c.height - frames[a].c.height);
+  const MAXW = 2048; let x = 0, y = 0, rowH = 0, W = 0;
+  const pos = [];
+  for (const i of order) { const f = frames[i]; if (x + f.c.width > MAXW) { x = 0; y += rowH + 1; rowH = 0; } pos[i] = [x, y]; x += f.c.width + 1; rowH = Math.max(rowH, f.c.height); W = Math.max(W, x); }
+  const H = y + rowH, at = document.createElement('canvas'); at.width = W; at.height = H;
+  const g = at.getContext('2d');
+  frames.forEach((f, i) => g.drawImage(f.c, pos[i][0], pos[i][1]));
+  return { at, cells: frames.map((f, i) => [pos[i][0], pos[i][1], f.c.width, f.c.height, Math.round(f.ax * 10) / 10, Math.round(f.ay * 10) / 10]) };
+}
+const POSES = { topsy: ['giu', 'avanti', 'porta'], macio: ['giu', 'avanti', 'porta'], gerry: ['avanti'], kid: ['giu'], kid2: ['giu'] };
+// le mani sui punti, davanti al busto (cm, nel riferimento della figura)
+const HANDS = { avanti: [[-19, 92, 42], [19, 92, 42]], porta: [[-21, 104, 27], [21, 104, 27]] };
+function render (scene, setPose, root, poses, maskFn, mirror) {
+  const out = { frames: [], idx: {} }, masks = maskFn ? [[], []] : null;
+  for (const ps of poses) {
+    out.idx[ps] = [];
+    for (let d = 0; d < DIRS; d++) {
+      // le figure simmetriche: a schermo la 2 è la 0 allo specchio, la 6 la 4, la 7 la 3 (cella con larghezza negativa)
+      const md = (DIRS + 2 - d) % DIRS;
+      if (mirror && md < d) { out.idx[ps].push(out.idx[ps][md].map(i => -1 - i)); continue; }
+      const f = d * Math.PI / 4; root.rotation.y = Math.PI / 2 - f; root.updateMatrixWorld(true);
+      const row = [];
+      for (let k = 0; k <= WALK; k++) {
+        setPose(ps, k ? (k - 1) / WALK * Math.PI * 2 : null);
+        ren.render(scene, cam); row.push(out.frames.length); out.frames.push(grab(true));
+        if (masks) for (let m = 0; m < 2; m++) { maskFn(m); ren.render(scene, cam); const g = grab(false, true); masks[m].push(g); maskFn(-1); }
+      }
+      out.idx[ps].push(row);
+    }
+  }
+  out.masks = masks;
+  return out;
+}
+function finish (name, R) {
+  const P = pack(R.frames), res = { name, w: P.at.width, h: P.at.height, data: P.at.toDataURL('image/webp', 0.86), poses: {} };
+  const mir = c => [c[0], c[1], -c[2], c[3], c[2] - c[4], c[5]];
+  for (const ps in R.idx) res.poses[ps] = R.idx[ps].map(row => row.map(i => i < 0 ? mir(P.cells[-1 - i]) : P.cells[i]));
+  if (R.masks) {   // le maschere (maglia, logo) con lo stesso impacchettamento, una sotto l'altra
+    const c = document.createElement('canvas'); c.width = P.at.width; c.height = P.at.height * 2; const g = c.getContext('2d');
+    R.masks.forEach((ms, m) => ms.forEach((f, i) => {
+      const cell = P.cells[i], fr = R.frames[i], oy = m * P.at.height;
+      g.save(); g.beginPath(); g.rect(cell[0], cell[1] + oy, cell[2], cell[3]); g.clip(); g.drawImage(f.c, cell[0] - fr.x0, cell[1] + oy - fr.y0); g.restore();
+    }));
+    res.mask = c.toDataURL('image/webp', 0.7);
+  }
+  return res;
+}
+window.renderTopsy = () => new Promise(done => {
+  const scene = new THREE.Scene(); lights(scene);
+  TopsyRig.create(THREE, TOPSY3D, rig => {
+    scene.add(rig.root);
+    // il passo a velocità di cammino, poi la fase fissata a mano
+    for (let i = 0; i < 120; i++) rig.update(1 / 60, { speed: 1.25 });
+    const walkA = rig.state.walkA;
+    const setPose = (ps, ph) => {
+      const moving = ph !== null, st = rig.state;
+      st.idleT = 0; st.shiftTgt = 0; st.shift = 0; st.t = 0; st.pitch.x = 0; st.pitch.v = 0; st.roll = 0; st.turnStep = 0; st.crouch = 0; st.run = 0;
+      st.speed = moving ? 1.25 : 0; st.walkA = moving ? walkA : 0; st.phase = moving ? ph : 0;
+      const hands = HANDS[ps] ? HANDS[ps].map(([x, y, z]) => rig.root.localToWorld(new THREE.Vector3(x, y, z))) : null;
+      rig.update(1e-5, { speed: moving ? 1.25 : 0, hands, grip: hands ? 1 : 0 });
+      if (hands) for (let i = 0; i < 4; i++) rig.update(1e-5, { speed: moving ? 1.25 : 0, hands, grip: 1 });
+    };
+    done(finish('topsy', render(scene, setPose, rig.root, POSES.topsy)));
+  });
+});
+window.renderManichino = who => {
+  const scene = new THREE.Scene(); lights(scene);
+  const F = MANICHINI.build(THREE, who); scene.add(F.root);
+  const setPose = (ps, ph) => F.pose(ph === null ? 0 : ph, ph === null ? 0 : 1, ps);
+  let maskFn = null;
+  if (who === 'macio') {   // la maglia e il logo si tingono nel gioco coi colori del service
+    // maschera: bianco dove si vede la maglia (o il logo), trasparente altrove; gli altri pezzi coprono ma non si disegnano
+    const keep = new Map(), white = new THREE.MeshBasicMaterial({ color: 0xffffff }), black = new THREE.MeshBasicMaterial({ colorWrite: false });
+    maskFn = m => F.root.traverse(o => {
+      if (!o.isMesh) return;
+      if (m < 0) { if (keep.has(o)) o.material = keep.get(o); return; }
+      if (!keep.has(o)) keep.set(o, o.material);
+      o.material = o.userData.mat === (m ? 'logo' : 'tee') ? white : black;
+    });
+  }
+  return finish(who, render(scene, setPose, F.root, POSES[who], maskFn, true));
+};
+window.ATLAS_INFO = { RES, DIRS, WALK, TOP, BOT, FW };
+</script>
