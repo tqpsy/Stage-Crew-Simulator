@@ -179,7 +179,7 @@ const path = require('path');
       selectWorker(P); selectCase(C('stativi')); sendTo({ zone: 'pit' }); run(60 * 60, () => !busy(P));
       const reopened = C('stativi').zone;
       // il passante si ferma in fondo alla rampa: permesso!, poi si passa
-      passante(G.kids[0]); run(120);
+      passante(G.kids[0]); G.kids[0].block = G.t + 40; G.kids[0].target.y = 532; run(600, () => Math.hypot(G.kids[0].body.position.x - G.kids[0].target.x, G.kids[0].body.position.y - G.kids[0].target.y) < 12);   // (le ante aperte: ci gira attorno)
       let asked = false; const _b = bubble; window.bubble = (e, m, d) => { if (m === 'Permesso!') asked = true; return _b(e, m, d); };
       selectWorker(P); selectCase(C('par')); sendTo({ zone: 'pit' }); run(60 * 60, () => !busy(P));
       const kidOk = { asked, zone: C('par').zone };

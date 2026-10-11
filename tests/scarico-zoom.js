@@ -1,4 +1,4 @@
-/* Zoom dello scarico: a zoom 1 la scena ha la scala della vista intera del
+/* Zoom dello scarico: si parte più vicini; a zoom 1 la scena ha la scala della vista intera del
    montaggio sullo stesso schermo (stessi pixel per metro); i pulsanti + − 1:1,
    la rotellina e due dita lo regolano. Prova anche che col dito o il
    puntatore il punto sotto resta fermo e che a ogni zoom un tocco sceglie
@@ -25,6 +25,10 @@ const path = require('path');
     await p.waitForFunction(() => G && G.mode === 'play');
     await p.waitForTimeout(400);
     const sc = () => p.evaluate(() => G.cam.scale);
+    // si parte più vicini (ZOOM0); 1:1 porta alla scala del montaggio
+    const zs = await p.evaluate(() => G.cam.zoom);
+    check(zs > 1.4, name + ': all\'inizio la scena non è più vicina della vista del montaggio (zoom ' + zs + ')');
+    await p.click('#zoom-reset', { force: true }); await p.waitForTimeout(150);
 
     // 1. zoom 1 = scala del montaggio (entro il 6%)
     const s1 = await sc();

@@ -471,7 +471,7 @@ function newGame () {
     // non sempre allo stesso secondo, e il cavo s'incastra in uno dei due bauli
     at: { passante1: rand(20, 40), bidello: rand(80, 115), telefono: rand(135, 170), passante2: rand(195, 230) },
     // il SEGNALE è la sorpresa finale: il cavo s'incastra nel CORRENTE
-    cam: { x: DOOR_X + 20, y: 500, scale: 1, zoom: 1, focus: 'van' }, doorsOpen: 0, flashes: [], fx: [],
+    cam: { x: DOOR_X + 20, y: 500, scale: 1, zoom: ZOOM0, focus: 'van' }, doorsOpen: 0, flashes: [], fx: [],
     // tutorial che si gioca: comandi e strumenti compaiono quando servono
     unlock: { help: false, lift: false, stop: false, cart: false, eff: false },
     seen: {}, team: false, trolley: null, van: { open: false, ramp: false, anim: null }, straps: VAN_STRAPS.map(() => true), surprise: null, blockFlash: null, tarp: 0,
@@ -683,27 +683,45 @@ function refreshFilter (ce) {
    --------------------------------------------------------------------- */
 function strapOn (ce) { return ce.strap >= 0 && G.straps[ce.strap]; }
 function locked (ce) { return ce.kind === 'case' && (strapOn(ce) || !!ce.brake); }
-/* Il furgone si apre a mano, con i suoi tempi. PORTELLONE: chi apre gira
-   la maniglia (le aste di chiusura scattano), tira l'anta destra e poi la
-   sinistra, che sbattono contro le fiancate e restano agganciate. RAMPA: sta
-   in piedi nel vano; si sganciano i fermi e la si accompagna giù tenendola
-   per il bordo, camminando all'indietro (in due se l'altro è libero), poi
-   tocca terra con un colpo. CINGHIA: si apre il cricchetto e la cinghia
-   cede. Finché un'animazione non finisce il passo dopo non si fa. */
+/* Il furgone si apre a mano, con i suoi tempi. PORTELLONE: un'anta alla
+   volta. Chi apre gira la maniglia (le aste di chiusura scattano), poi tiene
+   l'anta per il bordo e la accompagna camminando lungo il suo giro fino a
+   90°, dove resta ferma sul fermo (il recinto del cortile non la lascia
+   aprire di più); fa il giro dell'anta aperta e apre l'altra. Le ante aperte
+   sono un ostacolo vero. RAMPA: sta in piedi dentro il vano; si sganciano i
+   fermi, la si tira fuori fino al bordo del pianale e la si accompagna giù
+   tenendola per il bordo, camminando all'indietro (in due se l'altro è
+   libero), poi tocca terra con un colpo. CINGHIA: si apre il cricchetto e
+   la cinghia cede. Finché un'animazione non finisce il passo dopo non si fa. */
 const ease = u => u <= 0 ? 0 : u >= 1 ? 1 : u * u * (3 - 2 * u);
-// l'anta che arriva in fondo: rimbalza un poco contro la fiancata
-const doorK = u => u <= 0 ? 0 : u < 1 ? 1 - Math.pow(1 - u, 3) : 1 - 0.05 * Math.exp(-(u - 1) * 7) * Math.abs(Math.sin((u - 1) * 14));
+// l'anta che arriva sul fermo: un piccolo rimbalzo
+const doorK = u => u <= 0 ? 0 : u < 1 ? ease(u) : 1 - 0.04 * Math.exp(-(u - 1) * 8) * Math.abs(Math.sin((u - 1) * 16));
 const RAMP_ANG = Math.PI / 2;      // la rampa in piedi nel vano (90°)
-function openDoors (w) {
+const DOOR_L = (VAN.y2 - VAN.y1) / 2 + 6;   // un'anta: metà del vano più la battuta
+// l'anta i (0 verso VAN.y1, 1 verso VAN.y2) aperta di k (0 chiusa, 1 a 90°):
+// cerniera, direzione dell'anta, punta e normale della faccia di fuori
+function doorGeo (i, k) {
+  const sd = i ? -1 : 1, hinge = { x: DOOR_X, y: i ? VAN.y2 + 3 : VAN.y1 - 3 };
+  const a = sd * (Math.PI / 2 - k * Math.PI / 2), dir = { x: Math.cos(a), y: Math.sin(a) };
+  return { sd, a, hinge, dir, tip: add(hinge, mul(dir, DOOR_L)), n: { x: dir.y * sd, y: -dir.x * sd } };
+}
+// dove sta chi tiene l'anta per il bordo, dalla parte di fuori
+function doorHold (i, k, r) { const d = doorGeo(i, k); return add(add(d.hinge, mul(d.dir, DOOR_L - 10)), mul(d.n, r + 11)); }
+function openDoor (w, i) {
   if (G.van.open || G.van.anim) return;
-  w = w || G.player;
-  G.van.anim = { what: 'doors', t: 0, who: w, from: { x: w.body.position.x, y: w.body.position.y } };
-  bubble(w, 'Apro!', 0.8);
+  G.van.anim = { what: 'door', i, t: 0, who: w };
+  if (i === 0) bubble(w, 'Apro!', 0.8);
+}
+// l'anta aperta: un ostacolo (ci si gira attorno)
+function doorBody (i) {
+  const d = doorGeo(i, 1), b = Bodies.rectangle(d.hinge.x + DOOR_L / 2, d.hinge.y, DOOR_L, 6,
+    { isStatic: true, restitution: 0, friction: 0, collisionFilter: { category: CAT.WALL, mask: 0xffff } });
+  b.plugin.draw = false; G.statics.push(b); Composite.add(G.world, b);
 }
 function lowerRamp (w, mate) {
   if (!G.van.open || G.van.ramp || G.van.anim) return;
   w = w || G.macio;
-  G.van.anim = { what: 'ramp', t: 0, who: w, mate: mate || null }; G.van.rampA = RAMP_ANG;
+  G.van.anim = { what: 'ramp', t: 0, who: w, mate: mate || null }; G.van.rampA = RAMP_ANG; G.van.rampX = DOOR_X - 10;
   AU.clack();
   bubble(w, mate ? 'Pronti? Giù piano…' : 'Piano con la rampa…', 1.4);
 }
@@ -721,41 +739,51 @@ function vanStep (dt) {
   const A = G.van.anim; if (!A) return;
   const t0 = A.t; A.t += dt;
   const at = x => t0 < x && A.t >= x;            // un istante preciso dell'animazione
-  if (A.what === 'doors') {
-    // 0–0,6 la maniglia; 0,6 parte l'anta destra, 0,95 la sinistra; chi apre fa un passo indietro
-    G.van.lever = ease(A.t / 0.5);
-    if (at(0.42)) AU.clack();
-    const k0 = doorK((A.t - 0.6) / 1.1), k1 = doorK((A.t - 0.95) / 1.1);
-    G.van.doorK = [k0, k1]; G.doorsOpen = (k0 + k1) / 2;
-    if (at(0.62) || at(0.97)) AU.tone(240, 150, 0.25, 0.05, 'sawtooth');   // il cigolio dei cardini
-    if (at(1.72) || at(2.07)) { AU.thud(3); AU.clack(); }                   // contro la fiancata, e il gancio
-    const w = A.who, back = ease((A.t - 0.6) / 0.7);
-    if (w && A.t < 1.4) vanMove(w, { x: A.from.x + back * 46, y: A.from.y + Math.sin(back * Math.PI) * 6 }, Math.PI);
-    if (A.t >= 2.4) {
-      G.van.open = true; G.van.anim = null; G.van.doorK = [1, 1]; G.doorsOpen = 1;
-      goal('Tira giù la rampa: TIRA GIÙ LA RAMPA, qui sotto.');
-      once('legati', 'Dentro i case sono legati con le cinghie e i case con le ruote hanno il freno tirato, come per il viaggio.', 'ok');
+  if (A.what === 'door') {
+    // 0–0,45 la maniglia (o il fermo dell'altra anta); poi l'anta accompagnata fino a 90°
+    const i = A.i, w = A.who, dk = G.van.doorK || (G.van.doorK = [0, 0]);
+    if (i === 0) G.van.lever = ease(A.t / 0.4); else G.van.latch = ease(A.t / 0.35);
+    if (at(0.3)) AU.clack();
+    if (at(0.5)) AU.tone(240, 150, 0.3, 0.05, 'sawtooth');                    // il cigolio dei cardini
+    const k = doorK((A.t - 0.45) / 1.25);
+    dk[i] = k; G.doorsOpen = (dk[0] + dk[1]) / 2;
+    if (at(1.7)) { AU.thud(2); AU.clack(); }                                   // sul fermo
+    if (w && A.t < 1.75) {
+      const d = doorGeo(i, Math.min(k, 1));
+      vanMove(w, doorHold(i, Math.min(k, 1), w.r), Math.atan2(-d.n.y, -d.n.x));
+    }
+    if (A.t >= 2.0) {
+      dk[i] = 1; G.van.anim = null; doorBody(i);
+      if (i === 1) {
+        G.van.open = true; G.doorsOpen = 1;
+        goal('Tira giù la rampa: TIRA GIÙ LA RAMPA, qui sotto.');
+        once('legati', 'Dentro i case sono legati con le cinghie e i case con le ruote hanno il freno tirato, come per il viaggio.', 'ok');
+      }
     }
   } else if (A.what === 'ramp') {
     // 0–0,45 i fermi; 0,45–1,75 giù accompagnata; poi l'ultimo tratto cade da sola e rimbalza
-    const T1 = 0.45, T2 = 1.75, T3 = 1.95;
+    // 0–0,4 i fermi; 0,4–1 la si tira fuori in piedi fino al bordo; 1–2,2 giù
+    // accompagnata; poi l'ultimo tratto cade da sola e rimbalza
+    const T0 = 0.4, T1 = 1.0, T2 = 2.2, T3 = 2.4;
     let ang;
-    if (A.t < T1) ang = RAMP_ANG - 0.06 * ease(A.t / T1);
-    else if (A.t < T2) ang = (RAMP_ANG - 0.06) - (RAMP_ANG - 0.06 - 0.16) * ease((A.t - T1) / (T2 - T1));
+    if (A.t < T1) ang = RAMP_ANG - 0.05 * ease(A.t / T1);
+    else if (A.t < T2) ang = (RAMP_ANG - 0.05) - (RAMP_ANG - 0.05 - 0.16) * ease((A.t - T1) / (T2 - T1));
     else if (A.t < T3) { const u = (A.t - T2) / (T3 - T2); ang = 0.16 * (1 - u * u); }
     else ang = 0.035 * Math.exp(-(A.t - T3) * 9) * Math.abs(Math.sin((A.t - T3) * 22));
-    if (at(0.2) || at(0.38)) AU.clack();
+    G.van.rampX = DOOR_X - 10 + 6 * ease((A.t - T0) / (T1 - T0));
+    if (at(0.15) || at(0.32)) AU.clack();
+    if (at(T0 + 0.05)) AU.noise(0.5, 900, 'bandpass', 0.08);                  // la lamiera che striscia sul pianale
     if (at(T3)) { AU.thud(6); for (const y of [RAMP.y + 8, RAMP.y + RAMP.h / 2, RAMP.y + RAMP.h - 8]) puff(DOOR_X + RAMP.w, y, 5, 'rgba(190,185,175,', 1.6); }
     G.van.rampA = ang; G.van.rampK = 1 - ang / RAMP_ANG;
-    // chi la tiene sta al bordo che scende, e ci cammina dietro all'indietro
-    const edge = Math.min(DOOR_X + Math.cos(Math.max(ang, 0.16)) * RAMP.w, DOOR_X + RAMP.w) + 20;
+    // chi la tiene sta al bordo alto, e mentre scende ci cammina dietro all'indietro
+    const edge = Math.max(DOOR_X + 16, Math.min(G.van.rampX + Math.cos(Math.max(ang, 0.16)) * RAMP.w, DOOR_X + RAMP.w) + 24);
     if (A.t < T2 + 0.05) {
       if (A.mate) {
         vanMove(A.who, { x: edge, y: RAMP.y + 28 }, Math.PI);
         vanMove(A.mate, { x: edge, y: RAMP.y + RAMP.h - 28 }, Math.PI);
       } else vanMove(A.who, { x: edge, y: RAMP.y + RAMP.h / 2 }, Math.PI);
     }
-    if (A.t >= 2.4) {
+    if (A.t >= 2.8) {
       G.van.ramp = true; G.van.anim = null; G.van.rampA = 0; G.van.rampK = 1;
       // chi l'ha tenuta si toglie dal fondo della rampa: di lì passano i case
       [[A.who, { x: DOOR_X + 60, y: 340 }], [A.mate, { x: DOOR_X + 190, y: 372 }]].forEach(([w, to]) => { if (w && !w.jobs.length) w.jobs.push({ kind: 'clear', who: w, to }); });
@@ -2242,6 +2270,11 @@ function canWork (w) {
 function destName (d) { return d.zone ? ZONES[d.zone].name : 'qui'; }
 function buildSteps (j) {
   const t = G.trolley, S = [], ce = j.ce;
+  if (j.kind === 'van' && j.what === 'doors') {
+    // un'anta, il giro attorno a lei aperta, l'altra
+    const sp = i => { const p = doorHold(i, 0, j.who.r); return { x: p.x, y: p.y, f: Math.PI }; };
+    return [{ k: 'walk', to: sp(0) }, { k: 'vanDoor', i: 0 }, { k: 'walk', to: sp(1) }, { k: 'vanDoor', i: 1 }];
+  }
   if (j.kind === 'van') return [{ k: 'walk', to: VAN_SPOT[j.what] }, { k: 'van' }];
   if (j.kind === 'vanHelp') return [{ k: 'walk', to: VAN_SPOT.ramp2 }, { k: 'vanHelp' }];
   if (j.kind === 'coffee') return [{ k: 'walk', to: { x: MOKA.x, y: MOKA.y + 4, f: -Math.PI / 2 } }, { k: 'coffee' }];
@@ -2293,12 +2326,13 @@ const STEPS = {
           s.mate = null;
         }
         s.started = true; lowerRamp(w, s.mate);
-      } else {
-        s.started = true;
-        if (j.what === 'doors') openDoors(w); else if (j.what === 'strap') openStrap(w);
-      }
+      } else { s.started = true; if (j.what === 'strap') openStrap(w); }
     }
     return G.van.anim ? 'run' : 'done';
+  },
+  vanDoor (w, j, s) {
+    if (!s.started) { if (G.van.anim) return 'run'; s.started = true; openDoor(w, s.i); }
+    return G.van.anim && G.van.anim.what === 'door' ? 'run' : 'done';
   },
   vanHelp (w, j) {
     j.ready = true; w.facing = Math.PI;
@@ -3642,15 +3676,17 @@ function sceneSolids (put) {
   });
   // portelloni: si aprono fino ad appoggiarsi alle fiancate; quello vicino,
   // aperto, si fa basso come la fiancata trasparente, per non coprire i case
-  // (ognuna col suo tempo: G.van.doorK, la destra parte prima; la maniglia
-  // e le aste di chiusura sull'anta vicina)
-  const DL = (Y1 - Y0) / 2 + 6, dk = G.van.doorK || [G.doorsOpen, G.doorsOpen];
+  // (ognuna col suo tempo: G.van.doorK, fino a 90° sul fermo; la maniglia
+  // e le aste di chiusura sull'anta che si apre per prima)
+  const DL = DOOR_L, dk = G.van.doorK || [G.doorsOpen, G.doorsOpen];
   [[Y0 - 3, 1, 0], [Y1 + 3, -1, 1]].forEach(([hy, sd, i]) => {
-    const near = hy < (Y0 + Y1) / 2, da = dk[i];
-    const a = sd * (Math.PI / 2 - da * Math.PI * 1.5), dh = !near ? HV - 4 : HV - 4 - (HV - 22) * clamp(da, 0, 1);
-    const dir = { x: Math.cos(a), y: Math.sin(a) }, tip = { x: X1 + dir.x * DL, y: hy + dir.y * DL };
+    const da = dk[i], D = doorGeo(i, da), a = D.a, dh = HV - 4;
+    const dir = D.dir, tip = D.tip;
     const pts = rectPts({ x: (X1 + tip.x) / 2, y: (hy + tip.y) / 2 }, DL, 5, a);
-    put(!near && da > 0.5 ? BACK + 2 : frontY(pts), () => {
+    put(frontY(pts), () => {
+      // l'anta vicina, aperta, sta davanti alla rampa: si fa trasparente come la fiancata
+      const fade = i === 0 ? clamp(da, 0, 1) : 0;
+      if (fade > 0) ctx.globalAlpha = 1 - 0.78 * fade;
       prism(pts, 0, dh, '#f2f3f5', '#dcdfe3', { edge: '#ffffff', gloss: true });
       if (dh > 60) facesOf(pts, (p, q) => onFace(p, q, L => { ctx.fillStyle = 'rgba(0,0,0,.08)'; ctx.fillRect(10, -dh + 24, L - 20, 2); ctx.fillRect(10, -40, L - 20, 2); ctx.fillStyle = '#1a1b1e'; ctx.fillRect(0, -15, L, 9); }));
       // la faccia di fuori (verso il cortile quando è chiusa): aste e maniglia
@@ -3669,6 +3705,7 @@ function sceneSolids (put) {
           }
         });
       }
+      ctx.globalAlpha = 1;
     });
   });
   // la rampa in piedi nel vano, poi accompagnata giù: una lastra che gira
@@ -3676,12 +3713,14 @@ function sceneSolids (put) {
   if ((G.van.open || G.van.anim) && !G.van.ramp) {
     const A = G.van.anim, ang = A && A.what === 'ramp' && G.van.rampA != null ? G.van.rampA : RAMP_ANG;
     const c = Math.cos(ang), sn = Math.sin(ang), Lx = RAMP.w * c, Lz = RAMP.w * sn;
-    const foot = boxPts(DOOR_X - 6, RAMP.y, DOOR_X + Math.max(6, Lx), RAMP.y + RAMP.h);
-    put(frontY(foot) - 1, () => {
-      const P0 = zp({ x: DOOR_X - 4, y: RAMP.y }, 0), PU = zp({ x: DOOR_X - 4 + Lx, y: RAMP.y }, Lz), PV = zp({ x: DOOR_X - 4, y: RAMP.y + RAMP.h }, 0);
+    // in piedi sta dentro, dietro alle ante; la si tira fino al bordo del pianale
+    const HX = A && A.what === 'ramp' && G.van.rampX != null ? G.van.rampX : DOOR_X - 10;
+    // (in profondità: davanti ai case del vano, dietro a chi la tiene da fuori)
+    put(dep({ x: HX + Lx, y: RAMP.y + RAMP.h / 2 }), () => {
+      const P0 = zp({ x: HX, y: RAMP.y }, 0), PU = zp({ x: HX + Lx, y: RAMP.y }, Lz), PV = zp({ x: HX, y: RAMP.y + RAMP.h }, 0);
       const uX = (PU.x - P0.x) / RAMP.w, uY = (PU.y - P0.y) / RAMP.w, vX = (PV.x - P0.x) / RAMP.h, vY = (PV.y - P0.y) / RAMP.h;
       // lo spessore: il bordo che scende (4 cm sotto la lastra)
-      const E = [zp({ x: DOOR_X - 4 + Lx, y: RAMP.y }, Lz), zp({ x: DOOR_X - 4 + Lx, y: RAMP.y + RAMP.h }, Lz), zp({ x: DOOR_X - 4 + Lx + 4 * sn, y: RAMP.y + RAMP.h }, Lz - 4 * c), zp({ x: DOOR_X - 4 + Lx + 4 * sn, y: RAMP.y }, Lz - 4 * c)];
+      const E = [zp({ x: HX + Lx, y: RAMP.y }, Lz), zp({ x: HX + Lx, y: RAMP.y + RAMP.h }, Lz), zp({ x: HX + Lx + 4 * sn, y: RAMP.y + RAMP.h }, Lz - 4 * c), zp({ x: HX + Lx + 4 * sn, y: RAMP.y }, Lz - 4 * c)];
       ctx.fillStyle = '#5f646c'; ctx.beginPath(); E.forEach((p, k) => k ? ctx.lineTo(p.x, p.y) : ctx.moveTo(p.x, p.y)); ctx.closePath(); ctx.fill();
       ctx.save(); ctx.transform(uX, uY, vX, vY, P0.x, P0.y);
       ctx.fillStyle = mats().plate; ctx.fillRect(0, 0, RAMP.w, RAMP.h);
@@ -4341,6 +4380,9 @@ function camFocus () {
    due dita o i tasti + e −. */
 const ZOOM_MIN = 0.6, ZOOM_MAX = 4.5;
 let baseK = null;
+// si parte più vicini della vista intera del montaggio: le persone e i case
+// si leggono bene (con − e 1:1 si torna alla scala del montaggio)
+const ZOOM0 = touchUI ? 2.1 : 1.6;
 function baseScale () {
   if (baseK && baseK.w === W && baseK.h === H) return baseK.v;
   const top = $('.hud').getBoundingClientRect().bottom, bot = $('#hintbar').getBoundingClientRect().top || H;
