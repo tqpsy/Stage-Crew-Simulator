@@ -721,10 +721,13 @@ non toccano la scena di Phaser.
   altezze dei case
   sono in `CASE_Z`. I tocchi prendono la sagoma in piedi (coperchio e
   facce, `caseAtScreen`), le persone si toccano anche sulla testa.
-  Personaggi in piedi: Topsy è la foto della sua action figure
-  (`img/personaggi/topsy-s1.png`), gli altri il ritratto a caricatura di
-  oggi (`personaggi-s1.js`) finché non hanno la loro immagine; senza
-  immagine, una sagoma. Test: `tests/scarico-s1.js`.
+  Personaggi in piedi: le figure dell'atlante (vedi sotto); ripieghi la foto
+  di Topsy (`img/personaggi/topsy-s1.png`), poi il ritratto a caricatura
+  (`personaggi-s1.js`), poi una sagoma. Test: `tests/scarico-s1.js`.
+- **Campione grafico** (2026-10-11): lo scarico è la prima scena nella
+  direzione «miniatura fotografata», con Topsy come riferimento. Regole e
+  file in `docs/direzione-artistica.md`. Solo disegno: fisica, ordini,
+  tocchi e salvataggi non cambiano.
 - **Più avanti**: i case consegnati nella zona sbagliata costano solo
   tempo (potranno comparire lì nel montaggio); scenari 2-5 coi mezzi più
   grandi.

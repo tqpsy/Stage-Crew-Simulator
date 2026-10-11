@@ -1,8 +1,9 @@
 /* Lo scarico nella vista S1 (dall'alto inclinata): cambia solo il disegno.
    Prova che i case si scelgono toccando il coperchio e la faccia davanti
    (non solo l'impronta per terra), che le persone si scelgono toccando la
-   testa, che schermo e pianta tornano uno nell'altro, che Topsy è la foto
-   della sua action figure e che senza la foto c'è il ripiego, senza errori.
+   testa, che schermo e pianta tornano uno nell'altro, che le persone sono
+   le figure dell'atlante (Topsy dal suo modello 3D, Macio con la maglia del
+   service) e che senza atlante c'è il ripiego (la foto di Topsy), senza errori.
 
    Uso:  node tests/scarico-s1.js
    Richiede Playwright. Senza rete, MATTER_PATH=/percorso/matter.min.js. */
@@ -16,7 +17,7 @@ const path = require('path');
     const ctx = await b.newContext(opts);
     const p = await ctx.newPage();
     if (process.env.MATTER_PATH) await p.route('**/matter.min.js', r => r.fulfill({ path: process.env.MATTER_PATH, contentType: 'application/javascript' }));
-    if (noPhoto) await p.route('**/topsy-s1.png', r => r.abort());
+    if (noPhoto) { await p.route('**/topsy-s1.png', r => r.abort()); await p.route('**/*-atlante.webp', r => r.abort()); }
     await p.route(/fonts\./, r => r.abort());
     p.on('pageerror', e => errs.push(e.message));
     await p.goto('file://' + path.join(__dirname, '..', 'scarico.html'));
@@ -61,7 +62,19 @@ const path = require('path');
     const hs = await p.evaluate(() => { const r = document.querySelector('canvas').getBoundingClientRect(), s = worldToScreen(G.macio.body.position, 150); return { x: r.left + s.x, y: r.top + s.y }; });
     await p.mouse.click(hs.x, hs.y);
     check(head && await p.evaluate(() => G.sel.who === G.macio), 'toccando la testa di Macio non si sceglie Macio');
-    // Topsy è la foto della sua action figure
+    // le persone sono le figure dell'atlante, 8 direzioni × (fermo + passi) per ogni posa
+    const atl = await p.evaluate(() => ['topsy', 'macio', 'gerry', 'kid', 'kid2'].map(w => {
+      const f = figAtlas(w); if (!f) return w + ': non pronto';
+      const bad = Object.entries(f.A.poses).filter(([, d]) => d.length !== 8 || d.some(r => r.length !== FIG_ATLAS.WALK + 1)).map(([k]) => k);
+      return bad.length ? w + ': pose incomplete ' + bad : '';
+    }).filter(Boolean));
+    check(!atl.length, 'atlanti delle figure: ' + atl.join('; '));
+    check(await p.evaluate(() => ['giu', 'avanti', 'porta'].every(k => FIG_ATLAS.figs.topsy.poses[k] && FIG_ATLAS.figs.macio.poses[k])), 'mancano pose di Topsy o di Macio');
+    // Macio ha la maglia tinta coi colori del service (l'atlante tinto è un canvas)
+    check(await p.evaluate(() => figAtlas('macio').img instanceof HTMLCanvasElement), 'la maglia di Macio non è tinta coi colori del service');
+    // si disegna davvero dall'atlante: un fotogramma passa da drawAtlas
+    check(await p.evaluate(() => { let n = 0; const f = window.drawAtlas; window.drawAtlas = function () { n++; return f.apply(this, arguments); }; render(); window.drawAtlas = f; return n >= 2; }), 'Topsy e Macio non si disegnano dall\'atlante');
+    // il ripiego c'è sempre: la foto di Topsy
     check(await p.evaluate(() => TOPSY_IMG.complete && TOPSY_IMG.naturalWidth > 0), 'la foto di Topsy non si carica');
     await p.close();
   }
@@ -72,6 +85,8 @@ const path = require('path');
     for (let i = 0; i < 3; i++) { await p.waitForSelector('#cmd-act button.van', { timeout: 20000 }); await p.tap('#cmd-act button.van'); await p.waitForTimeout(300); await waitIdle(p); }
     await p.waitForTimeout(600);
     check(await p.evaluate(() => !(TOPSY_IMG.naturalWidth > 0)), 'la foto di Topsy c\'è anche se bloccata');
+    check(await p.evaluate(() => !figAtlas('topsy') && !figAtlas('macio')), 'l\'atlante c\'è anche se bloccato');
+    await p.evaluate(() => render());
     const top = await at(p, 'stativi', 'top');
     await p.touchscreen.tap(top.x, top.y + 3);
     check(await p.evaluate(() => G.sel.ce && G.sel.ce.def.id === 'stativi'), 'sul telefono toccando il coperchio della borsa stativi non si sceglie');
