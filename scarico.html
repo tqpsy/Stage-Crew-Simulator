@@ -3424,22 +3424,54 @@ function drawTarp (ce, k) {
 }
 // il carrello a due ruote da facchino, visto dall'alto: pala davanti, due
 // ruote grandi ai lati, telaio e maniglie dietro. I posti pieni in verde.
-function drawHandTruck (w, h, used, glow, s1) {
-  ctx.fillStyle = 'rgba(0,0,0,.35)'; rr(-w / 2 + 4, -h / 2 + 5, w, h, 5); ctx.fill();
-  ctx.fillStyle = '#0c0d10';
-  [-1, 1].forEach(sy => { rr(-w / 2 + 4, sy * (h / 2 - 2) - 7, 22, 14, 6); ctx.fill(); });       // ruote
-  ctx.fillStyle = '#5c636c'; ctx.fillRect(-w / 2 + 12, -h / 2 + 7, 6, h - 14);                       // asse
-  if (!s1) {   // telaio e maniglie (nella vista S1 stanno in piedi: vedi drawTrolley)
-    ctx.strokeStyle = '#c2353a'; ctx.lineWidth = 5; ctx.lineCap = 'round';
-    [-1, 1].forEach(sy => { ctx.beginPath(); ctx.moveTo(-w / 2 - 6, sy * (h / 2 - 10)); ctx.lineTo(w / 2 - 12, sy * (h / 2 - 10)); ctx.stroke(); });   // telaio
-    ctx.lineWidth = 3;
-    [-0.15, 0.2].forEach(k => { ctx.beginPath(); ctx.moveTo(k * w, -h / 2 + 10); ctx.lineTo(k * w, h / 2 - 10); ctx.stroke(); });
-    ctx.strokeStyle = '#2b2d33'; ctx.lineWidth = 4;                                                      // maniglie
-    [-1, 1].forEach(sy => { ctx.beginPath(); ctx.moveTo(-w / 2 - 6, sy * (h / 2 - 10)); ctx.lineTo(-w / 2 - 12, sy * (h / 2 - 6)); ctx.stroke(); });
-  }
-  ctx.fillStyle = '#9aa1ab'; rr(w / 2 - 14, -h / 2 + 2, 14, h - 4, 2); ctx.fill();                     // pala
-  ctx.fillStyle = 'rgba(0,0,0,.2)'; for (let y = -h / 2 + 6; y < h / 2 - 4; y += 6) ctx.fillRect(w / 2 - 12, y, 10, 2);
+/* il carrello a due ruote (portacase) in piedi: pala d'alluminio mandorlato
+   per terra, due ruote piene col mozzo, telaio di tubo rosso verniciato con
+   le traverse e la maniglia ad anello in gomma. Disteso (pronto a caricare)
+   le maniglie stanno all'altezza delle mani; nel furgone sta dritto */
+function handTruck3D (pos, ang, w, h, upright, used, glow) {
+  const P = (x, y) => add(pos, rot({ x, y }, ang)), P3 = (x, y, z) => zp(P(x, y), z);
+  const R = 11, ax = w / 2 - 15, px0 = w / 2 - 15, hy = h / 2 - 8;
+  const hx = upright ? ax - 10 : -w / 2 - 6, hz = upright ? 124 : 100;
+  dropShadow(rectPts(P((upright ? ax : 0), 0), upright ? 30 : w, h, ang), 26, 0.28);
+  // le ruote: un disco in piedi lungo la direzione di marcia
+  const wheelAt = s => onFace(P(ax, s * (h / 2 + 2)), P(ax + 1, s * (h / 2 + 2)), () => {
+    const c = (r, f) => { ctx.fillStyle = f; ctx.beginPath(); ctx.arc(0, -R, r, 0, Math.PI * 2); ctx.fill(); };
+    c(R, '#141518'); c(R * 0.84, '#2b2d32'); c(R * 0.74, '#18191c');
+    const g = ctx.createRadialGradient(-R * 0.15, -R * 1.15, 0.5, 0, -R, R * 0.48);
+    g.addColorStop(0, '#f2f4f7'); g.addColorStop(0.6, '#a1a7b0'); g.addColorStop(1, '#5d626a');
+    c(R * 0.46, g); c(R * 0.14, '#3b3f45');
+  });
+  const sides = [-1, 1].sort((a, b) => dep(P(ax, a)) - dep(P(ax, b)));
+  wheelAt(sides[0]);
+  // pala: lamiera mandorlata con lo spessore davanti
+  prism(rectPts(P((px0 + w / 2) / 2, 0), w / 2 - px0, h - 4, ang), 0, 2, '#b9bfc7', '#7b8189', { mat: 'plate', matA: 0.8 });
+  const tube = (a, b, wd, cols) => cols.forEach(([c, k], i) => {
+    ctx.strokeStyle = c; ctx.lineWidth = wd * k; ctx.beginPath();
+    const o = i === cols.length - 1 ? -wd * 0.18 : 0;
+    ctx.moveTo(a[0], a[1] + o); ctx.lineTo(b[0], b[1] + o); ctx.stroke();
+  });
+  const pt = (x, y, z) => { const q = P3(x, y, z); return [q.x, q.y]; };
+  const RED = [['#6e1519', 1], ['#b5262d', 0.72], ['rgba(255,190,190,.7)', 0.22]];
+  ctx.lineCap = 'round';
+  ctx.strokeStyle = '#3a3d43'; ctx.lineWidth = 3.4; ctx.beginPath(); ctx.moveTo(...pt(ax, -h / 2 - 1, R)); ctx.lineTo(...pt(ax, h / 2 + 1, R)); ctx.stroke();   // asse
+  // telaio: i due montanti dalla pala alla maniglia, il lato lontano prima
+  sides.forEach(s => {
+    tube(pt(px0 + 1, s * hy, 3), pt(hx, s * hy, hz), 5.5, RED);
+    tube(pt(ax, s * hy, R), pt(ax - 6, s * hy, R + 22), 3.5, RED);                     // puntone dall'asse
+  });
+  [0.3, 0.62].forEach(k => {   // traverse
+    const x = px0 + 1 + (hx - px0 - 1) * k, z = 3 + (hz - 3) * k;
+    tube(pt(x, -hy, z), pt(x, hy, z), 3.2, RED);
+  });
+  // maniglia ad anello: curva in alto, impugnatura in gomma nera
+  const top = s => pt(hx, s * hy, hz), up = s => pt(hx - (upright ? 2 : 7), s * (hy - 3), hz + 8);
+  [-1, 1].forEach(s => tube(top(s), up(s), 5.5, RED));
+  tube(up(-1), up(1), 6.5, [['#0d0e10', 1], ['#25272c', 0.7], ['rgba(255,255,255,.25)', 0.2]]);
+  wheelAt(sides[1]);
+  ctx.lineCap = 'butt';
   if (used == null) return;
+  // per terra davanti alla pala: quanti posti sono presi
+  ctx.save(); ctx.translate(pos.x, pos.y); ctx.rotate(ang);
   for (let i = 0; i < TROLLEY_MAX; i++) {
     const full = i < used;
     ctx.fillStyle = full ? '#2f8f4e' : 'rgba(0,0,0,.35)'; ctx.strokeStyle = full ? '#49e07a' : 'rgba(207,219,232,.6)'; ctx.lineWidth = 1.5;
@@ -3450,30 +3482,18 @@ function drawHandTruck (w, h, used, glow, s1) {
     ctx.strokeStyle = 'rgba(73,224,122,' + (0.55 + 0.45 * Math.sin(performance.now() / 160)) + ')'; ctx.lineWidth = 4;
     rr(-w / 2 - 14, -h / 2 - 6, w + 20, h + 12, 7); ctx.stroke();
   }
+  ctx.restore();
 }
 function drawTrolley () {
   const t = G.trolley;
   if (!t) {   // ancora nel furgone, in piedi accanto al portellone
     if (G.van.ramp) return;
-    ctx.save(); ctx.translate(VAN.x1 + 187, VAN.y1 + 25); ctx.rotate(-Math.PI / 2); ctx.scale(0.62, 0.62); drawHandTruck(64, 46, null); ctx.restore();
+    handTruck3D({ x: VAN.x1 + 187, y: VAN.y1 + 25 }, -Math.PI / 2, 40, 29, true, null);
     return;
   }
-  const b = t.body, w = t.def.w, h = t.def.h, S = G.sel;
+  const b = t.body, S = G.sel;
   // col case scelto e CARRELLO attivo il carrello si illumina
-  ctx.save(); ctx.translate(b.position.x, b.position.y); ctx.rotate(b.angle);
-  drawHandTruck(w, h, cartUsed(t), G.mode === 'play' && S.ce && S.cart, true);
-  ctx.restore();
-  // il telaio inclinato: dalla pala per terra alle maniglie all'altezza delle mani
-  const P3 = (x, y, z) => { const q = add(b.position, rot({ x, y }, b.angle)); const r = zp(q, z); return [r.x, r.y]; };
-  ctx.lineCap = 'round';
-  [-1, 1].forEach(sy => {
-    const y = sy * (h / 2 - 10);
-    ctx.strokeStyle = '#a3262c'; ctx.lineWidth = 5; ctx.beginPath(); ctx.moveTo(...P3(w / 2 - 12, y, 4)); ctx.lineTo(...P3(-w / 2 - 6, y, 100)); ctx.stroke();
-    ctx.strokeStyle = 'rgba(255,170,170,.55)'; ctx.lineWidth = 1.4; ctx.beginPath(); ctx.moveTo(...P3(w / 2 - 12, y - 1.2, 5)); ctx.lineTo(...P3(-w / 2 - 6, y - 1.2, 101)); ctx.stroke();   // riflesso del tubo
-    ctx.strokeStyle = '#2b2d33'; ctx.lineWidth = 5; ctx.beginPath(); ctx.moveTo(...P3(-w / 2 - 6, y, 100)); ctx.lineTo(...P3(-w / 2 - 12, y, 104)); ctx.stroke();
-  });
-  ctx.strokeStyle = '#c2353a'; ctx.lineWidth = 3;
-  [0.25, 0.6].forEach(k => { const x = w / 2 - 12 - k * (w - 6), z = 4 + k * 96; ctx.beginPath(); ctx.moveTo(...P3(x, -h / 2 + 10, z)); ctx.lineTo(...P3(x, h / 2 - 10, z)); ctx.stroke(); });
+  handTruck3D(b.position, b.angle, t.def.w, t.def.h, false, cartUsed(t), G.mode === 'play' && S.ce && S.cart);
 }
 // cinghie tirate attraverso il furgone e freni sulle ruote (P rossa)
 function drawLocks () {
