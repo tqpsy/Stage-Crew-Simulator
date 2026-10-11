@@ -40,8 +40,9 @@ ferma più 6 fotogrammi del passo, per ogni posa delle braccia: `giu`, `avanti`
 (alle maniglie), `porta` (case davanti). Il gioco sceglie la direzione da `facing`,
 il fotogramma dalla strada fatta (`stride`) e la posa da cosa ha in mano (`drawAtlas`).
 
-- **Topsy** viene dal suo modello 3D (`topsy3d.js` + `topsy-rig.js` del thread
-  dei personaggi), renderizzato con la telecamera dello scarico (38° dall'alto,
+- **Topsy** viene dal suo modello 3D definitivo (`topsy3d.js` + `topsy-rig.js`,
+  confermati da Luca l'11/10/2026, in `personaggi/topsy/definitivo/` dei file del
+  progetto), renderizzato con la telecamera dello scarico (38° dall'alto,
   mondo girato di 45°).
 - **Macio, Gerry e i bambini** sono miniature provvisorie (`strumenti/figure/manichini.js`),
   con la stessa luce, la stessa telecamera e lo stesso passo, finché non hanno la
@@ -55,7 +56,7 @@ Rigenerare (serve Playwright e three.js r128, che il gioco **non** carica):
 node strumenti/figure/genera.js --three three.min.js --topsy topsy3d.js --rig topsy-rig.js [topsy macio gerry kid kid2]
 ```
 
-**Topsy definitivo**: si rigenera con il nuovo `topsy3d.js` (`... genera.js ... topsy`).
+**Se Topsy cambia ancora**: si rigenera con il nuovo `topsy3d.js` (`... genera.js ... topsy`).
 Cambiano solo `img/personaggi/topsy-atlante.webp` e le sue celle: ambiente e codice
 del gioco restano uguali. Lo stesso vale per una figura vera di Macio o degli altri.
 
