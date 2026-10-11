@@ -2751,6 +2751,42 @@ function tapAt (p, sp) {
   if (G.sel.pickTop) return;
   cancelSel();
 }
+/* chi sta in piedi accanto a un solido lungo (un case, un'anta, la rampa):
+   l'ordine "dal fondo verso chi guarda" col punto più vicino del solido non
+   basta (un case lungo sporge verso chi guarda anche se la persona gli sta
+   davanti). Qui per ogni persona si guarda il punto del solido più vicino a
+   lei: se sta dalla parte di chi guarda il solido va davanti, se no dietro. */
+function closestOnPoly (pts, c) {
+  let best = null, bd = Infinity, inside;
+  for (let i = 0; i < pts.length; i++) {
+    const a = pts[i], b = pts[(i + 1) % pts.length], ab = sub(b, a), t = clamp(((c.x - a.x) * ab.x + (c.y - a.y) * ab.y) / (ab.x * ab.x + ab.y * ab.y || 1), 0, 1);
+    const q = { x: a.x + ab.x * t, y: a.y + ab.y * t }, d = Math.hypot(q.x - c.x, q.y - c.y);
+    if (d < bd) { bd = d; best = q; }
+  }
+  let pos = 0, neg = 0;
+  for (let i = 0; i < pts.length; i++) {
+    const a = pts[i], b = pts[(i + 1) % pts.length], cr = (b.x - a.x) * (c.y - a.y) - (b.y - a.y) * (c.x - a.x);
+    if (cr > 0) pos++; else if (cr < 0) neg++;
+  }
+  inside = !(pos && neg);
+  return { q: best, d: bd, inside };
+}
+function standOrder (L) {
+  const polys = L.filter(o => Array.isArray(o.fp));
+  for (const o of L) {
+    if (!o.fp || Array.isArray(o.fp)) continue;
+    const c = o.fp.c; let lo = -Infinity, hi = Infinity;
+    for (const P of polys) {
+      const { q, d, inside } = closestOnPoly(P.fp, c);
+      if (d > 160 || d < 1e-6 || inside) continue;
+      const s = ((q.x - c.x) * SA + (q.y - c.y) * CA) / d;
+      if (Math.abs(s) < 0.25) continue;                       // di fianco: non si coprono
+      if (s > 0) hi = Math.min(hi, P.y); else lo = Math.max(lo, P.y);
+    }
+    if (lo >= hi) o.y = lo + 0.01;                            // non si può accontentare tutti: meglio vederlo
+    else o.y = clamp(o.y, lo + 0.01, hi - 0.01);
+  }
+}
 function screenToWorld (s, z) {
   const u = (s.x - W / 2) / G.cam.scale, v = ((s.y - H / 2) / G.cam.scale + (z || 0) * KZ) / KY;
   return { x: u * CA + v * SA + G.cam.x, y: -u * SA + v * CA + G.cam.y };
@@ -3706,7 +3742,7 @@ function sceneSolids (put) {
         });
       }
       ctx.globalAlpha = 1;
-    });
+    }, pts);
   });
   // la rampa in piedi nel vano, poi accompagnata giù: una lastra che gira
   // attorno al bordo del pianale (vedi vanStep). Stesa, si disegna a terra.
@@ -3716,7 +3752,10 @@ function sceneSolids (put) {
     // in piedi sta dentro, dietro alle ante; la si tira fino al bordo del pianale
     const HX = A && A.what === 'ramp' && G.van.rampX != null ? G.van.rampX : DOOR_X - 10;
     // (in profondità: davanti ai case del vano, dietro a chi la tiene da fuori)
-    put(dep({ x: HX + Lx, y: RAMP.y + RAMP.h / 2 }), () => {
+    // davanti a tutto quello che c'è nel vano (sta sul bordo, fuori dai case)
+    const rfp = boxPts(HX - 2, RAMP.y, HX + Math.max(2, Lx), RAMP.y + RAMP.h);
+    const inVanY = Math.max(-Infinity, ...G.cases.filter(c => !c.hidden && inVan(c)).map(c => frontY(rectPts(c.body.position, c.def.w, c.def.h, c.body.angle))));
+    put(Math.max(frontY(rfp), inVanY + 0.5), () => {
       const P0 = zp({ x: HX, y: RAMP.y }, 0), PU = zp({ x: HX + Lx, y: RAMP.y }, Lz), PV = zp({ x: HX, y: RAMP.y + RAMP.h }, 0);
       const uX = (PU.x - P0.x) / RAMP.w, uY = (PU.y - P0.y) / RAMP.w, vX = (PV.x - P0.x) / RAMP.h, vY = (PV.y - P0.y) / RAMP.h;
       // lo spessore: il bordo che scende (4 cm sotto la lastra)
@@ -3732,7 +3771,7 @@ function sceneSolids (put) {
       ctx.fillStyle = '#2a2c31'; [16, RAMP.h - 28].forEach(v => ctx.fillRect(RAMP.w - 10 + op * 8, v, 8, 12));
       ctx.fillStyle = '#c9ccd1'; ctx.fillRect(RAMP.w - 6, RAMP.h / 2 - 16, 4, 32);
       ctx.restore();
-    });
+    }, rfp);
   }
   // muri e recinto, a pezzi per l'ordine di disegno; quelli davanti (a sud e
   // a est) tagliati bassi, così le zone e chi ci lavora si vedono
@@ -4429,15 +4468,16 @@ function render () {
   drawStatics(); drawTreeShadow();
   drawOrders();
   // in piedi: dal fondo verso chi guarda (y della faccia davanti)
-  const L = [], put = (y, f) => L.push({ y, f });
+  const L = [], put = (y, f, fp) => L.push({ y, f, fp });
   sceneSolids(put);
-  for (const ce of G.cases) if (!ce.onTrolley) put(frontY(rectPts(ce.body.position, ce.def.w, ce.def.h, ce.body.angle)), () => drawCase(ce));
-  if (G.trolley) put(frontY(rectPts(G.trolley.body.position, G.trolley.def.w, G.trolley.def.h, G.trolley.body.angle)), () => { drawTrolley(); G.trolley.load.forEach(drawCase); });
+  for (const ce of G.cases) if (!ce.onTrolley) { const pts = rectPts(ce.body.position, ce.def.w, ce.def.h, ce.body.angle); put(frontY(pts), () => drawCase(ce), pts); }
+  if (G.trolley) { const pts = rectPts(G.trolley.body.position, G.trolley.def.w, G.trolley.def.h, G.trolley.body.angle); put(frontY(pts), () => { drawTrolley(); G.trolley.load.forEach(drawCase); }, pts); }
   else put(dep({ x: VAN.x1 + 187, y: VAN.y1 + 40 }), drawTrolley);
   put(dep({ x: DOOR_X, y: VAN.y2 }) + 1, drawLocks);
-  G.kids.forEach(k => put(dep(k.body.position) + 8, () => drawKid(k)));
+  G.kids.forEach(k => put(dep(k.body.position) + 8, () => drawKid(k), { c: k.body.position, r: 13 }));
   if (G.cart) { const cp = G.cart.body.position; put(dep({ x: cp.x, y: cp.y - 44 }), drawGerry); put(frontY(cartPts()), drawCart); }
-  G.workers.forEach(w => put(dep(w.body.position) + w.r * 0.6, () => drawWorker(w)));
+  G.workers.forEach(w => put(dep(w.body.position) + w.r * 0.6, () => drawWorker(w), { c: w.body.position, r: w.r }));
+  standOrder(L);
   L.sort((a, b) => a.y - b.y).forEach(o => o.f());
   if (G.tarp && G.t - G.tarp < 1.2) { ctx.save(); lift(60); drawTarp(G.cases.find(c => c.def.surprise), (G.t - G.tarp) / 1.2); ctx.restore(); }
   drawPicks();
