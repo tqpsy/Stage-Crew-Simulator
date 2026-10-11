@@ -6544,6 +6544,10 @@ const GAME_H = Math.round(GAME_W * __containerRatio);
 const ORIGIN_X = 853;
 const TILE_W = 102, TILE_H = 70;
 const VENUE_W = 10, VENUE_H = 16;     // intera area di lavoro (locale), raddoppiata in profondità
+// la palestra intera, come nello scarico: sala in parquet 32 × 19 m (gy da
+// CARICO_ROWS a HALL_Y1, gx da HALL_X0 a HALL_X1) con campi da basket e
+// calcetto centrati in HALL_CX, HALL_CY. Solo disegno: si lavora in VENUE_W × VENUE_H
+const HALL_X0 = -4.5, HALL_X1 = 14.5, HALL_Y1 = 34, HALL_CX = 5, HALL_CY = 18;
 // ORIGIN_Y centra la venue nel nuovo GAME_H, qualunque esso sia
 const ORIGIN_Y = Math.round((GAME_H - (VENUE_W + VENUE_H) * TILE_H / 2) / 2);
 
@@ -7155,9 +7159,9 @@ class StageScene extends Phaser.Scene {
     // finestroni della parete di fondo, quindi resta quasi nero
     // (tagliato in diagonale a destra, così non sporge oltre la parete)
     g.fillStyle(0x202226, 1);
-    g.fillPoints([gridToScreen(0, 0), gridToScreen(VENUE_W - CARICO_ROWS, 0), gridToScreen(VENUE_W, CARICO_ROWS), gridToScreen(0, CARICO_ROWS)], true);
-    for (let i = 0; i < 160; i++) {
-      const x = rnd() * (VENUE_W - CARICO_ROWS), y = rnd() * CARICO_ROWS, q = gridToScreen(x, y);
+    g.fillPoints([gridToScreen(HALL_X0, 0), gridToScreen(HALL_X1 - CARICO_ROWS, 0), gridToScreen(HALL_X1, CARICO_ROWS), gridToScreen(HALL_X0, CARICO_ROWS)], true);
+    for (let i = 0; i < 300; i++) {
+      const x = HALL_X0 + rnd() * (HALL_X1 - HALL_X0 - CARICO_ROWS), y = rnd() * CARICO_ROWS, q = gridToScreen(x, y);
       g.fillStyle(rnd() < 0.5 ? 0x2a2c31 : 0x18191c, 0.9); g.fillCircle(q.x, q.y, 1 + rnd() * 1.2);
     }
 
@@ -7168,29 +7172,29 @@ class StageScene extends Phaser.Scene {
       g.lineStyle(1, 0x2c2e33, 0.9); g.lineBetween(a.x, a.y, b.x, b.y);
     }
 
-    // palestra: parquet a doghe, dal palco fino in fondo
+    // palestra: parquet a doghe da 25 cm × 2,4 m, in tutta la sala tranne il backstage
     const woods = [0x4b3a29, 0x523f2c, 0x473726, 0x4e3c2a];
-    for (let x = 0, k = 0; x < VENUE_W - 0.01; x += 0.25, k++) {
-      let y = STAGE_ORIGIN_Y - (k % 4) * 0.6;
-      while (y < VENUE_H) {
-        const y0 = Math.max(STAGE_ORIGIN_Y, y), y1 = Math.min(VENUE_H, y + 2.4);
-        quad(x, y0, x + 0.25, y1, woods[Math.floor(rnd() * woods.length)]);
-        y += 2.4;
+    const parquet = (x0, y0, x1, y1) => {
+      for (let x = x0, k = 0; x < x1 - 0.01; x += 0.25, k++) {
+        let y = y0 - (k % 4) * 0.6;
+        while (y < y1) {
+          quad(x, Math.max(y0, y), x + 0.25, Math.min(y1, y + 2.4), woods[Math.floor(rnd() * woods.length)]);
+          y += 2.4;
+        }
+        const a = gridToScreen(x, y0), b = gridToScreen(x, y1);
+        g.lineStyle(1, 0x2e2318, 0.55); g.lineBetween(a.x, a.y, b.x, b.y);
       }
-      const a = gridToScreen(x, STAGE_ORIGIN_Y), b = gridToScreen(x, VENUE_H);
-      g.lineStyle(1, 0x2e2318, 0.55); g.lineBetween(a.x, a.y, b.x, b.y);
-    }
-    // righe del campo da basket, sbiadite
-    const pitStart = STAGE_ORIGIN_Y + STAGE_H, fohStart = pitStart + PIT_ROWS + PLATEA_ROWS;
-    const line = (pts, color, alpha) => { g.lineStyle(3, color, alpha); g.strokePoints(pts.map(([x, y]) => gridToScreen(x, y)), false); };
-    line([[0.5, pitStart + 0.5], [0.5, VENUE_H - 0.4], [VENUE_W - 0.5, VENUE_H - 0.4], [VENUE_W - 0.5, pitStart + 0.5]], 0xe9e4d6, 0.22);
-    const circ = []; for (let a = 0; a <= Math.PI; a += Math.PI / 24) circ.push([VENUE_W / 2 + Math.cos(a) * 1.8, VENUE_H - 0.4 - Math.sin(a) * 1.8]);
-    line(circ, 0xe9e4d6, 0.22);
-    line([[VENUE_W / 2 - 1.2, VENUE_H - 0.4], [VENUE_W / 2 - 1.2, VENUE_H - 2.6], [VENUE_W / 2 + 1.2, VENUE_H - 2.6], [VENUE_W / 2 + 1.2, VENUE_H - 0.4]], 0xd6392f, 0.28);
+    };
+    parquet(HALL_X0, CARICO_ROWS, 0, STAGE_ORIGIN_Y);
+    parquet(VENUE_W, CARICO_ROWS, HALL_X1, STAGE_ORIGIN_Y);
+    parquet(HALL_X0, STAGE_ORIGIN_Y, HALL_X1, HALL_Y1);
+    this.drawCourtLines(g);
     // Pit: fascia più scura davanti al palco, dove stanno le casse
+    const pitStart = STAGE_ORIGIN_Y + STAGE_H;
     quad(0, pitStart, VENUE_W, pitStart + PIT_ROWS, 0x000000, 0.18);
 
-    // griglia di posa appena accennata (un metro), per orientarsi
+    // griglia di posa appena accennata (un metro), per orientarsi: c'è solo
+    // dove si lavora, il resto della palestra è parquet e basta
     for (let x = 1; x < VENUE_W; x += 1) {
       const a = gridToScreen(x, CARICO_ROWS), b = gridToScreen(x, VENUE_H);
       g.lineStyle(1, 0xffffff, 0.045); g.lineBetween(a.x, a.y, b.x, b.y);
@@ -7199,8 +7203,14 @@ class StageScene extends Phaser.Scene {
       const a = gridToScreen(0, y), b = gridToScreen(VENUE_W, y);
       g.lineStyle(1, 0xffffff, 0.045); g.lineBetween(a.x, a.y, b.x, b.y);
     }
+    // bordo dell'area di lavoro, appena segnato, e bordo della sala
+    g.lineStyle(1.5, 0xffffff, 0.12);
+    g.strokePoints([gridToScreen(VENUE_W, CARICO_ROWS), p2, p3], false);
     g.lineStyle(2, 0x0c0d10, 0.9);
-    g.strokePoints([gridToScreen(0, CARICO_ROWS), gridToScreen(VENUE_W, CARICO_ROWS), p2, p3], true);
+    g.strokePoints([gridToScreen(HALL_X0, CARICO_ROWS), gridToScreen(HALL_X1, CARICO_ROWS), gridToScreen(HALL_X1, HALL_Y1), gridToScreen(HALL_X0, HALL_Y1)], true);
+    // il pavimento non cambia mai: si fotografa una volta in una texture,
+    // così la scena non ridisegna più di mille doghe a ogni fotogramma
+    this.bakeFloor(g);
     this.drawGymWalls();
     this.drawGymDetails();
     this.drawWorkLights();
@@ -7240,20 +7250,92 @@ class StageScene extends Phaser.Scene {
     this.floorGraphics = g;
   }
 
+  /* fotografa la grafica del pavimento in una texture (fino a 1,5 volte la
+     risoluzione, per lo zoom) e la svuota: la grafica resta solo come
+     superficie dei tocchi sul pavimento */
+  bakeFloor (g) {
+    const xs = [gridToScreen(HALL_X0, HALL_Y1).x, gridToScreen(HALL_X1, 0).x];
+    const ys = [gridToScreen(HALL_X0, 0).y, gridToScreen(HALL_X1, HALL_Y1).y];
+    const x0 = Math.floor(xs[0]) - 4, y0 = Math.floor(ys[0]) - 4;
+    const w = Math.ceil(xs[1] - xs[0]) + 8, h = Math.ceil(ys[1] - ys[0]) + 8;
+    const r = this.game.renderer, max = (r.getMaxTextureSize && r.getMaxTextureSize()) || 4096;
+    const K = Math.min(1.5, max / w, max / h);
+    try {
+      const rt = this.add.renderTexture(x0, y0, Math.floor(w * K), Math.floor(h * K)).setOrigin(0).setScale(1 / K).setDepth(0);
+      g.setScale(K);
+      rt.draw(g, -x0 * K, -y0 * K);
+      g.setScale(1);
+      g.clear();
+    } catch (e) { g.setScale(1); }   // senza texture si resta con la grafica normale
+  }
+
+  /* righe dei campi della palestra, come nello scarico (lato lungo lungo gy):
+     calcetto 30 × 17 m in blu (cerchio 3 m, aree a quarti di cerchio da 6 m,
+     porte da 3 m, dischetti a 6 e 10 m) e basket FIBA 28 × 15 m in bianco
+     con l'area rossa (4,9 × 5,8, tiro libero, tre punti a 6,75 m) */
+  drawCourtLines (g) {
+    const cx = HALL_CX, cy = HALL_CY;
+    // u lungo il campo (gy), v di traverso (gx), in metri dal centro
+    const P = (u, v) => gridToScreen(cx + v, cy + u);
+    const poly = (pts, w, col, a, close = false) => { g.lineStyle(w, col, a); g.strokePoints(pts.map(([u, v]) => P(u, v)), close); };
+    const arcPts = (u0, v0, r, a0, a1) => { const n = Math.max(6, Math.ceil(Math.abs(a1 - a0) * r * 3)), o = []; for (let i = 0; i <= n; i++) { const t = a0 + (a1 - a0) * i / n; o.push([u0 + Math.cos(t) * r, v0 + Math.sin(t) * r]); } return o; };
+    const rect = (u0, v0, u1, v1) => [[u0, v0], [u1, v0], [u1, v1], [u0, v1]];
+    const dot = (u, v, col, a) => { const q = P(u, v); g.fillStyle(col, a); g.fillEllipse(q.x, q.y, 6, 4); };
+    // calcetto
+    { const L = 15, W = 8.5, col = 0x3476ce, a = 0.45, w = 3.5;
+      poly(rect(-L, -W, L, W), w, col, a, true);
+      poly([[0, -W], [0, W]], w, col, a);
+      poly(arcPts(0, 0, 3, 0, Math.PI * 2), w, col, a);
+      dot(0, 0, col, a);
+      for (const s of [-1, 1]) {
+        const b = s * L, d = -s, p = 1.58;
+        // area: due quarti di cerchio da 6 m dai pali, uniti da una retta
+        const q1 = arcPts(b, -p, 6, s < 0 ? -Math.PI / 2 : -Math.PI / 2, s < 0 ? 0 : -Math.PI);
+        const q2 = arcPts(b, p, 6, s < 0 ? 0 : Math.PI, Math.PI / 2);
+        poly([...q1, ...q2], w, col, a);
+        dot(b + d * 6, 0, col, a); dot(b + d * 10, 0, col, a);
+        poly(rect(b, -1.5, b - d * 0.8, 1.5), w * 0.8, col, a, true);   // la porta, dietro la linea
+      }
+    }
+    // basket
+    { const L = 14, W = 7.5, col = 0xf6f4ec, a = 0.4, w = 2.5;
+      for (const s of [-1, 1]) {
+        const b = s * L, d = -s, ft = b + d * 5.8, bx = b + d * 1.575;
+        const key = rect(b, -2.45, ft, 2.45);
+        g.fillStyle(0xa82e28, 0.3); g.fillPoints(key.map(([u, v]) => P(u, v)), true);
+        poly(key, w, col, a, true);
+        // cerchio del tiro libero: verso il centro pieno, verso il canestro a tratti
+        const out = s < 0 ? 0 : Math.PI;
+        poly(arcPts(ft, 0, 1.8, out - Math.PI / 2, out + Math.PI / 2), w, col, a);
+        for (let i = 0; i < 6; i++) { const t0 = out + Math.PI / 2 + i * Math.PI / 6; poly(arcPts(ft, 0, 1.8, t0, t0 + Math.PI / 10), w, col, a); }
+        // tre punti: rette a ±6,6 m e arco di 6,75 m dal canestro
+        const ang = Math.asin(6.6 / 6.75), us = bx + d * 6.75 * Math.cos(ang);
+        poly([[b, -6.6], [us, -6.6]], w, col, a); poly([[b, 6.6], [us, 6.6]], w, col, a);
+        poly(arcPts(bx, 0, 6.75, out - ang, out + ang), w, col, a);
+        poly(arcPts(bx, 0, 1.25, out - Math.PI / 2, out + Math.PI / 2), w, col, a);
+      }
+      poly(rect(-L, -W, L, W), w, col, a, true);
+      poly([[0, -W], [0, W]], w, col, a);
+      poly(arcPts(0, 0, 1.8, 0, Math.PI * 2), w, col, a);
+    }
+  }
+
   // celle dove sta la scenografia (i case nel backstage): lì non si posa niente
   blockSceneryCells () {
     for (let cx = 0; cx < 2; cx += CELL) for (let cy = VENUE_H - 1; cy < VENUE_H; cy += CELL) this.occupied[cellKey(cx, cy)] = 'scenografia';
     for (let cx = 0; cx < 1; cx += CELL) for (let cy = VENUE_H - 2; cy < VENUE_H - 1; cy += CELL) this.occupied[cellKey(cx, cy)] = 'scenografia';
   }
 
-  /* parete di fondo della palestra, lungo il lato sinistro (gx = 0): finestre
-     alte, spalliere, l'uscita di sicurezza e lo striscione della festa.
+  /* parete lunga della palestra, sul lato sinistro (gx = HALL_X0): finestre
+     alte, spalliere, tre uscite di sicurezza e lo striscione della festa.
      Sta dietro a tutto, quindi non copre mai i dispositivi. */
   drawGymWalls () {
     const g = this.add.graphics().setDepth(0.5);
-    const H = 190, gy0 = CARICO_ROWS, gy1 = VENUE_H;
+    const H = 190, gy0 = CARICO_ROWS, gy1 = HALL_Y1, X = HALL_X0;
+    // uscite di sicurezza (da gy a gy), come nello scarico
+    const exits = [[2.5, 3.6], [11.2, 12.3], [22, 23.1]];
     // punto della parete: gy lungo il muro, h altezza in px
-    const wp = (gy, h) => { const q = gridToScreen(0, gy); return { x: q.x, y: q.y - h }; };
+    const wp = (gy, h) => { const q = gridToScreen(X, gy); return { x: q.x, y: q.y - h }; };
     const face = (ya, yb, ha, hb, color, alpha = 1) => { g.fillStyle(color, alpha); g.fillPoints([wp(ya, ha), wp(yb, ha), wp(yb, hb), wp(ya, hb)], true); };
     face(gy0, gy1, 0, H, 0x4a4f5a);
     face(gy0, gy1, 0, 74, 0x2f4356);
@@ -7261,10 +7343,10 @@ class StageScene extends Phaser.Scene {
     face(gy0, gy1, H - 6, H, 0x5d636f);
     // ombra del muro sul pavimento
     g.fillStyle(0x000000, 0.28);
-    g.fillPoints([gridToScreen(0, gy0), gridToScreen(0, gy1), gridToScreen(0.45, gy1), gridToScreen(0.45, gy0)], true);
+    g.fillPoints([gridToScreen(X, gy0), gridToScreen(X, gy1), gridToScreen(X + 0.45, gy1), gridToScreen(X + 0.45, gy0)], true);
     // finestre alte
-    for (let y = gy0 + 4.3; y < gy1 - 1; y += 2.1) {
-      if (y < 12.5 && y + 1.5 > 11) continue;   // lì c'è la seconda uscita
+    for (let y = gy0 + 4.3; y < gy1 - 1.5; y += 2.1) {
+      if (exits.some(([a, b]) => y < b + 0.2 && y + 1.5 > a - 0.2)) continue;   // lì c'è un'uscita
       face(y, y + 1.5, 112, 170, 0x1a2738);
       face(y, y + 1.5, 112, 116, 0x6b7180);
       g.lineStyle(1.5, 0x6d8fb3, 0.35);
@@ -7276,15 +7358,14 @@ class StageScene extends Phaser.Scene {
     for (let h = 10; h <= 150; h += 14) { const a = wp(12.9, h), b = wp(14.3, h); g.lineStyle(2, 0x9c7a50, 0.9); g.lineBetween(a.x, a.y, b.x, b.y); }
     // spigolo del muro verso il cortile
     { const a = wp(gy0, 0), b = wp(gy0, H); g.lineStyle(3, 0x6b7180, 1); g.lineBetween(a.x, a.y, b.x, b.y); }
-    // uscita di sicurezza verso il backstage
-    face(2.5, 3.6, 0, 105, 0x1b1d21);
-    face(2.5, 3.6, 105, 109, 0x6b7180);
-    face(2.75, 3.35, 116, 134, 0x2fa35a);
-    // seconda uscita di sicurezza, in fondo alla via di fuga della sala
-    face(11.2, 12.3, 0, 105, 0x1b1d21);
-    face(11.7, 11.72, 0, 105, 0x0f1013);
-    face(11.2, 12.3, 105, 109, 0x6b7180);
-    face(11.45, 12.05, 116, 134, 0x2fa35a);
+    // uscite di sicurezza: porte a due ante col cartello verde sopra
+    exits.forEach(([a, b]) => {
+      const m = (a + b) / 2;
+      face(a, b, 0, 105, 0x1b1d21);
+      face(m - 0.01, m + 0.01, 0, 105, 0x0f1013);
+      face(a, b, 105, 109, 0x6b7180);
+      face(a + 0.25, b - 0.25, 116, 134, 0x2fa35a);
+    });
     // striscione della festa
     face(5.2, 9.6, 118, 150, 0xe9e4d6);
     face(5.2, 9.6, 118, 123, 0xd6392f);
@@ -7294,14 +7375,12 @@ class StageScene extends Phaser.Scene {
     this.add.text(c.x, c.y, 'FESTA DI FINE ANNO', { fontFamily: FONT_MARKER, fontSize: '15px', color: '#2b5fb0' })
       .setOrigin(0.5).setAngle(ang).setDepth(0.55);
     this.drawBackWall(H);
-    const ex = wp(3.05, 125);
-    [ex, wp(11.75, 125)].forEach(q => this.add.text(q.x, q.y, 'USCITA', { fontFamily: 'Inter, sans-serif', fontStyle: 'bold', fontSize: '8px', color: '#ffffff' })
+    exits.map(([a, b]) => wp((a + b) / 2, 125)).forEach(q => this.add.text(q.x, q.y, 'USCITA', { fontFamily: 'Inter, sans-serif', fontStyle: 'bold', fontSize: '8px', color: '#ffffff' })
       .setOrigin(0.5).setAngle(ang).setDepth(0.55));
   }
 
   /* rifiniture della palestra: ombre morbide ai piedi dei muri, spessore
-     in cima alle pareti, luce della luna dalle finestre, canestro e
-     tabellone. Solo scenografia: nessuna cella occupata. */
+     in cima alle pareti, luce della luna dalle finestre e tabellone. Solo scenografia: nessuna cella occupata. */
   drawGymDetails () {
     const H = 190, y0 = CARICO_ROWS;
     const g = this.add.graphics().setDepth(0.45);
@@ -7310,26 +7389,27 @@ class StageScene extends Phaser.Scene {
       g.fillPoints([gridToScreen(x0, ya), gridToScreen(x1, ya), gridToScreen(x1, yb), gridToScreen(x0, yb)], true);
     };
     // ombra morbida lungo i due muri (si allarga e sfuma verso la sala)
+    const X0 = HALL_X0, X1 = HALL_X1, Y1 = HALL_Y1;
     [[0.45, 0.9, 0.1], [0.9, 1.5, 0.05]].forEach(([a, b, al]) => {
-      floorQuad(a, y0, b, VENUE_H, 0x000000, al);
-      floorQuad(0, y0 + a, VENUE_W, y0 + b, 0x000000, al);
+      floorQuad(X0 + a, y0, X0 + b, Y1, 0x000000, al);
+      floorQuad(X0, y0 + a, X1, y0 + b, 0x000000, al);
     });
     // luna dalle finestre della parete laterale: chiazze fredde sul parquet
     const moon = this.add.graphics().setDepth(0.46).setBlendMode(Phaser.BlendModes.ADD);
-    for (let y = y0 + 4.3; y < VENUE_H - 1; y += 2.1) {
-      if (y + 1.5 < STAGE_ORIGIN_Y + STAGE_H + 0.5 || y + 3 > VENUE_H) continue;   // palco già illuminato; non fuori sala
+    for (let y = y0 + 4.3; y < Y1 - 1.5; y += 2.1) {
+      if (y + 3 > Y1) continue;   // non fuori sala
       moon.fillStyle(0x7f9ccc, 0.07);
-      moon.fillPoints([gridToScreen(0.7, y + 0.9), gridToScreen(2.1, y + 1.5), gridToScreen(2.1, y + 3.0), gridToScreen(0.7, y + 2.4)], true);
+      moon.fillPoints([gridToScreen(X0 + 0.7, y + 0.9), gridToScreen(X0 + 2.1, y + 1.5), gridToScreen(X0 + 2.1, y + 3.0), gridToScreen(X0 + 0.7, y + 2.4)], true);
     }
 
     const w = this.add.graphics().setDepth(1.16);
     // spessore in cima alle pareti: si capisce che sono muri veri
     const top = (pts, color) => { w.fillStyle(color, 1); w.fillPoints(pts.map(([x, y]) => { const q = gridToScreen(x, y); return { x: q.x, y: q.y - H }; }), true); };
-    top([[-0.22, y0 - 0.22], [0, y0], [0, VENUE_H], [-0.22, VENUE_H]], 0x767c89);
-    top([[-0.22, y0 - 0.22], [VENUE_W, y0 - 0.22], [VENUE_W, y0], [0, y0]], 0x767c89);
-    { const a = gridToScreen(VENUE_W, y0 - 0.22), b = gridToScreen(VENUE_W, y0); w.fillStyle(0x3a3e47, 1);
+    top([[X0 - 0.22, y0 - 0.22], [X0, y0], [X0, Y1], [X0 - 0.22, Y1]], 0x767c89);
+    top([[X0 - 0.22, y0 - 0.22], [X1, y0 - 0.22], [X1, y0], [X0, y0]], 0x767c89);
+    { const a = gridToScreen(X1, y0 - 0.22), b = gridToScreen(X1, y0); w.fillStyle(0x3a3e47, 1);
       w.fillPoints([{ x: a.x, y: a.y - H }, { x: b.x, y: b.y - H }, { x: b.x, y: b.y }, { x: a.x, y: a.y }], true); }
-    { const a = gridToScreen(0, VENUE_H), b = gridToScreen(-0.22, VENUE_H); w.fillStyle(0x3a3e47, 1);
+    { const a = gridToScreen(X0, Y1), b = gridToScreen(X0 - 0.22, Y1); w.fillStyle(0x3a3e47, 1);
       w.fillPoints([{ x: a.x, y: a.y - H }, { x: b.x, y: b.y - H }, { x: b.x, y: b.y }, { x: a.x, y: a.y }], true); }
 
     // tabellone segnapunti sulla parete di fondo, sopra la porta del carico
@@ -7343,17 +7423,6 @@ class StageScene extends Phaser.Scene {
     this.add.text(sc.x, sc.y, '20:30', { ...digit, fontSize: '13px', color: '#ffb23c' }).setOrigin(0.5).setAngle(ang).setDepth(1.17);
     this.add.text(sl.x, sl.y, 'CASA 12', { ...digit, fontSize: '7px' }).setOrigin(0.5).setAngle(ang).setDepth(1.17);
     this.add.text(sr.x, sr.y, 'OSPITI 9', { ...digit, fontSize: '7px' }).setOrigin(0.5).setAngle(ang).setDepth(1.17);
-
-    // canestro laterale sulla parete sinistra, sopra l'angolo dei case
-    const lp = (gy, h, gx = 0) => { const q = gridToScreen(gx, gy); return { x: q.x, y: q.y - h }; };
-    const c = this.add.graphics().setDepth(0.55);
-    c.fillStyle(0x9aa0ab, 1); c.fillPoints([lp(14.95, 120), lp(15.25, 120), lp(15.25, 128, 0.35), lp(14.95, 128, 0.35)], true);
-    c.fillStyle(0xf4f2ec, 1); c.fillPoints([lp(14.45, 128, 0.35), lp(15.75, 128, 0.35), lp(15.75, 178, 0.35), lp(14.45, 178, 0.35)], true);
-    c.lineStyle(2, 0xd6392f, 1); c.strokePoints([lp(14.8, 132, 0.35), lp(15.4, 132, 0.35), lp(15.4, 152, 0.35), lp(14.8, 152, 0.35)], true);
-    const rim = lp(15.1, 132, 0.75);
-    c.lineStyle(2.5, 0xf06a1f, 1); c.strokeEllipse(rim.x, rim.y, 30, 14);
-    for (let i = -2; i <= 2; i++) { c.lineStyle(1, 0xe9e4d6, 0.6); c.lineBetween(rim.x + i * 6, rim.y + 3, rim.x + i * 3.5, rim.y + 20); }
-    c.lineStyle(1, 0xe9e4d6, 0.5); c.strokeEllipse(rim.x, rim.y + 12, 18, 7);
   }
 
   /* parete dietro al palco (gy = CARICO_ROWS): chiude la palestra. Dai
@@ -7365,16 +7434,17 @@ class StageScene extends Phaser.Scene {
     const wp = (gx, h) => { const q = gridToScreen(gx, y); return { x: q.x, y: q.y - h }; };
     const face = (xa, xb, ha, hb, color, alpha = 1) => { g.fillStyle(color, alpha); g.fillPoints([wp(xa, ha), wp(xb, ha), wp(xb, hb), wp(xa, hb)], true); };
     const W0 = 66, W1 = 172;                     // davanzale e architrave dei finestroni
-    const wins = [[0.35, 2.85], [5.7, 7.6], [7.9, 9.7]];
+    const X0 = HALL_X0, X1 = HALL_X1;
+    const wins = [[-4.1, -1.6], [0.35, 2.85], [5.7, 7.6], [7.9, 9.7], [10.4, 12.4], [12.7, 14.2]];
     // muro pieno sotto, sopra e fra i finestroni (i vetri restano aperti sul cortile)
-    face(0, VENUE_W, 0, W0, 0x464b56);
-    face(0, VENUE_W, W1, H, 0x464b56);
-    let x = 0;
+    face(X0, X1, 0, W0, 0x464b56);
+    face(X0, X1, W1, H, 0x464b56);
+    let x = X0;
     wins.forEach(([a, b]) => { face(x, a, W0, W1, 0x464b56); x = b; });
-    face(x, VENUE_W, W0, W1, 0x464b56);
-    face(0, VENUE_W, 0, 56, 0x2f4356);
-    face(0, VENUE_W, 56, 60, 0xf2a541, 0.55);
-    face(0, VENUE_W, H - 6, H, 0x5d636f);
+    face(x, X1, W0, W1, 0x464b56);
+    face(X0, X1, 0, 56, 0x2f4356);
+    face(X0, X1, 56, 60, 0xf2a541, 0.55);
+    face(X0, X1, H - 6, H, 0x5d636f);
     // vetri: notte fuori, riflessi e montanti
     wins.forEach(([a, b]) => {
       face(a, b, W0, W1, 0x0e1622, 0.35);
@@ -7387,15 +7457,15 @@ class StageScene extends Phaser.Scene {
       g.lineStyle(2, 0x9fb6d3, 0.22);
       const r0 = wp(a + 0.2, W0 + 8), r1 = wp(a + 0.6, W1 - 6); g.lineBetween(r0.x, r0.y, r1.x, r1.y);
     });
-    // porta del carico, da dove sono entrati i case
-    face(4.3, 5.4, 0, 100, 0x2a2d33);
-    face(4.85, 4.87, 0, 100, 0x14161a);
-    face(4.3, 5.4, 100, 104, 0x6b7180);
+    // porta del carico, da dove sono entrati i case (larga 1,6 m come nello scarico)
+    face(4.05, 5.65, 0, 100, 0x2a2d33);
+    face(4.84, 4.86, 0, 100, 0x14161a);
+    face(4.05, 5.65, 100, 104, 0x6b7180);
     // ombra del muro sul pavimento del backstage
     g.fillStyle(0x000000, 0.25);
-    g.fillPoints([gridToScreen(0, y), gridToScreen(VENUE_W, y), gridToScreen(VENUE_W, y + 0.4), gridToScreen(0, y + 0.4)], true);
+    g.fillPoints([gridToScreen(X0, y), gridToScreen(X1, y), gridToScreen(X1, y + 0.4), gridToScreen(X0, y + 0.4)], true);
     // spigolo con la parete laterale
-    { const a = wp(0, 0), b = wp(0, H); g.lineStyle(3, 0x5d636f, 1); g.lineBetween(a.x, a.y, b.x, b.y); }
+    { const a = wp(X0, 0), b = wp(X0, H); g.lineStyle(3, 0x5d636f, 1); g.lineBetween(a.x, a.y, b.x, b.y); }
   }
 
   /* luci di servizio: pozze calde sul palco e in regia, buio ai bordi */
@@ -7411,9 +7481,8 @@ class StageScene extends Phaser.Scene {
       this.add.image(q.x, q.y, 'pool').setScale(sx, sx * 0.62).setTint(color).setAlpha(alpha)
         .setBlendMode(Phaser.BlendModes.ADD).setDepth(0.9);
     };
-    pool(1.8, 0.6, 2.2, 0xffd28a, 0.35);
-    pool(0.6, 3.05, 0.5, 0x2fa35a, 0.35);  // luce verde delle uscite
-    pool(0.6, 11.75, 0.5, 0x2fa35a, 0.35);   // lampione del cortile, si vede dai finestroni
+    pool(1.8, 0.6, 2.2, 0xffd28a, 0.35);   // lampione del cortile, si vede dai finestroni
+    [3.05, 11.75, 22.55].forEach(gy => pool(HALL_X0 + 0.6, gy, 0.5, 0x2fa35a, 0.35));   // luce verde delle uscite
     pool(STAGE_ORIGIN_X + 2, STAGE_ORIGIN_Y + 2, 2.6, 0xffc98a, 0.22);
     pool(7.5, 6, 1.6, 0xffe2b8, 0.16);
     pool(5, 2.6, 2.4, 0xbfd4ff, 0.12);
@@ -8669,7 +8738,7 @@ class StageScene extends Phaser.Scene {
     let n = 0;
     // il resto del locale si abbassa: resta in luce solo dove il pezzo può andare
     g.fillStyle(0x07080a, 0.45);
-    g.fillPoints([gridToScreen(0, 0), gridToScreen(VENUE_W, 0), gridToScreen(VENUE_W, VENUE_H), gridToScreen(0, VENUE_H)], true);
+    g.fillPoints([gridToScreen(HALL_X0, 0), gridToScreen(HALL_X1, 0), gridToScreen(HALL_X1, HALL_Y1), gridToScreen(HALL_X0, HALL_Y1)], true);
     g.fillStyle(0x49b06a, 0.3);
     g.lineStyle(1, 0x7fe0a0, 0.55);
     for (let cx = 0; cx < VENUE_W; cx += CELL) {
