@@ -35,6 +35,9 @@ const path = require('path');
     const p = await page({ viewport: { width: 390, height: 844 }, hasTouch: true, isMobile: true, deviceScaleFactor: 2 }, 4242);
     await p.tap('#btn-start');
     await p.waitForFunction(() => G && G.mode === 'play');
+    // i tocchi qui sono misurati alla scala vicina di prima (0,907): lo zoom
+    // di base ora è quello del montaggio, molto più piccolo (tests/scarico-zoom.js)
+    await p.evaluate(() => { G.cam.zoom = 0.907 / baseScale(); });
     for (let i = 0; i < 3; i++) { await p.waitForSelector('#cmd-act button.van', { timeout: 20000 }); await p.tap('#cmd-act button.van'); await p.waitForTimeout(300); await waitIdle(p); }
     await p.waitForFunction(() => !!G.trolley, null, { timeout: 20000 });
     await p.waitForTimeout(900);
