@@ -2,8 +2,8 @@
    Prova che i case si scelgono toccando il coperchio e la faccia davanti
    (non solo l'impronta per terra), che le persone si scelgono toccando la
    testa, che schermo e pianta tornano uno nell'altro, che le persone sono
-   le figure dell'atlante (Topsy dal suo modello 3D, Macio con la maglia del
-   service) e che senza atlante c'è il ripiego (la foto di Topsy), senza errori.
+   le figure dell'atlante (Topsy e Macio dal loro modello 3D, Macio con la
+   sua maglietta nera, senza tinta) e che senza atlante c'è il ripiego (la foto di Topsy), senza errori.
 
    Uso:  node tests/scarico-s1.js
    Richiede Playwright. Senza rete, MATTER_PATH=/percorso/matter.min.js. */
@@ -70,8 +70,8 @@ const path = require('path');
     }).filter(Boolean));
     check(!atl.length, 'atlanti delle figure: ' + atl.join('; '));
     check(await p.evaluate(() => ['giu', 'avanti', 'porta'].every(k => FIG_ATLAS.figs.topsy.poses[k] && FIG_ATLAS.figs.macio.poses[k])), 'mancano pose di Topsy o di Macio');
-    // Macio ha la maglia tinta coi colori del service (l'atlante tinto è un canvas)
-    check(await p.evaluate(() => figAtlas('macio').img instanceof HTMLCanvasElement), 'la maglia di Macio non è tinta coi colori del service');
+    // Macio viene dal suo modello 3D: niente maschera da tingere, l'atlante è l'immagine così com'è
+    check(await p.evaluate(() => !FIG_ATLAS.figs.macio.mask && figAtlas('macio').img instanceof HTMLImageElement), 'Macio non è la figura del suo modello 3D');
     // si disegna davvero dall'atlante: un fotogramma passa da drawAtlas
     check(await p.evaluate(() => { let n = 0; const f = window.drawAtlas; window.drawAtlas = function () { n++; return f.apply(this, arguments); }; render(); window.drawAtlas = f; return n >= 2; }), 'Topsy e Macio non si disegnano dall\'atlante');
     // il ripiego c'è sempre: la foto di Topsy

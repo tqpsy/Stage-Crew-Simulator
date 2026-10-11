@@ -40,29 +40,29 @@ ferma più 6 fotogrammi del passo, per ogni posa delle braccia: `giu`, `avanti`
 (alle maniglie), `porta` (case davanti). Il gioco sceglie la direzione da `facing`,
 il fotogramma dalla strada fatta (`stride`) e la posa da cosa ha in mano (`drawAtlas`).
 
-- **Topsy** viene dal suo modello 3D definitivo (`topsy3d.js` + `topsy-rig.js`,
-  confermati da Luca l'11/10/2026, in `personaggi/topsy/definitivo/` dei file del
-  progetto), renderizzato con la telecamera dello scarico (38° dall'alto,
-  mondo girato di 45°).
-- **Macio, Gerry e i bambini** sono miniature provvisorie (`strumenti/figure/manichini.js`),
+- **Topsy e Macio** vengono dal loro modello 3D definitivo (`topsy3d.js`, `macio3d.js`,
+  stesso `topsy-rig.js`), confermati da Luca l'11/10/2026, in `personaggi/topsy/definitivo/`
+  e `personaggi/macio/definitivo/` dei file del progetto, renderizzati con la telecamera
+  dello scarico (38° dall'alto, mondo girato di 45°). Macio è come la sua figura:
+  pelato, baffi scuri, maglietta nera liscia, pantaloncini neri, scalzo. Non si tinge.
+- **Gerry e i bambini** sono miniature provvisorie (`strumenti/figure/manichini.js`),
   con la stessa luce, la stessa telecamera e lo stesso passo, finché non hanno la
-  loro figura. Macio resta Macio: pelato lucido, baffoni scuri, pancia, maglia del
-  service col logo anche sulla schiena. La maglia e il logo si tingono nel gioco coi
-  colori del service (`tintFig`, maschera `macio-maschera.webp`).
+  loro figura. Se manca `macio3d.js`, anche Macio torna alla miniatura (maglia del
+  service tinta nel gioco con `tintFig` e la maschera `macio-maschera.webp`).
 
 Rigenerare (serve Playwright e three.js r128, che il gioco **non** carica):
 
 ```
-node strumenti/figure/genera.js --three three.min.js --topsy topsy3d.js --rig topsy-rig.js [topsy macio gerry kid kid2]
+node strumenti/figure/genera.js --three three.min.js --topsy topsy3d.js --macio macio3d.js --rig topsy-rig.js [topsy macio gerry kid kid2]
 ```
 
-**Se Topsy cambia ancora**: si rigenera con il nuovo `topsy3d.js` (`... genera.js ... topsy`).
-Cambiano solo `img/personaggi/topsy-atlante.webp` e le sue celle: ambiente e codice
+**Se Topsy o Macio cambiano**: si rigenera solo lui (`... genera.js ... macio`).
+Cambiano solo il suo `img/personaggi/<chi>-atlante.webp` e le sue celle: ambiente e codice
 del gioco restano uguali. Lo stesso vale per una figura vera di Macio o degli altri.
 
 ## Prestazioni
 
-Atlanti in WebP, ritagliati stretti e impacchettati: circa 1,9 MB in tutto
-(Topsy 0,9 MB). Le figure simmetriche usano 5 direzioni e le altre 3 allo specchio.
+Atlanti in WebP, ritagliati stretti e impacchettati: circa 2 MB in tutto
+(Topsy 0,9 MB, Macio 0,8 MB). Le figure simmetriche usano 5 direzioni e le altre 3 allo specchio.
 Pavimento, ombre dei muri, case e albero si dipingono una volta sola. Nel gioco non
 c'è nessun motore 3D.
