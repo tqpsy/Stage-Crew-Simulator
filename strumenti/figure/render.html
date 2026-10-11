@@ -1,8 +1,9 @@
 <!doctype html><meta charset="utf-8"><title>Atlanti delle figure</title>
 <!-- Genera gli atlanti delle figure dello scarico (vedi genera.js). three.js,
-     il Topsy 3D e il rig arrivano da genera.js: qui c'è solo il rendering. -->
+     i modelli 3D (Topsy, Macio) e il rig arrivano da genera.js: qui c'è solo il rendering. -->
 <script src="three.min.js"></script>
 <script src="topsy3d.js"></script>
+<script src="macio3d.js"></script>
 <script src="topsy-rig.js"></script>
 <script src="manichini.js"></script>
 <body style="margin:0;background:#888">
@@ -105,9 +106,11 @@ function finish (name, R) {
   }
   return res;
 }
-window.renderTopsy = () => new Promise(done => {
+// le figure dal loro modello 3D definitivo (stesso rig per tutti)
+const MODELS = { topsy: () => typeof TOPSY3D !== 'undefined' && TOPSY3D, macio: () => typeof MACIO3D !== 'undefined' && MACIO3D };   // const nei file: non stanno su window
+window.render3D = who => new Promise(done => {
   const scene = new THREE.Scene(); lights(scene);
-  TopsyRig.create(THREE, TOPSY3D, rig => {
+  TopsyRig.create(THREE, MODELS[who](), rig => {
     scene.add(rig.root);
     // il passo a velocità di cammino, poi la fase fissata a mano
     for (let i = 0; i < 120; i++) rig.update(1 / 60, { speed: 1.25 });
@@ -120,7 +123,7 @@ window.renderTopsy = () => new Promise(done => {
       rig.update(1e-5, { speed: moving ? 1.25 : 0, hands, grip: hands ? 1 : 0 });
       if (hands) for (let i = 0; i < 4; i++) rig.update(1e-5, { speed: moving ? 1.25 : 0, hands, grip: 1 });
     };
-    done(finish('topsy', render(scene, setPose, rig.root, POSES.topsy)));
+    done(finish(who, render(scene, setPose, rig.root, POSES[who])));
   });
 });
 window.renderManichino = who => {
@@ -140,5 +143,6 @@ window.renderManichino = who => {
   }
   return finish(who, render(scene, setPose, F.root, POSES[who], maskFn, true));
 };
+window.has3D = who => !!(MODELS[who] && MODELS[who]());
 window.ATLAS_INFO = { RES, DIRS, WALK, TOP, BOT, FW };
 </script>
