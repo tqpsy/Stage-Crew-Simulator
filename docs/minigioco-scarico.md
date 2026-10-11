@@ -178,7 +178,7 @@ mirati sullo scarico a ordini, senza cambiarne la struttura:
   trascinare la scena a ogni ordine); scelto un collega, va su di lui.
 - **Zoom**: a zoom 1 (pulsante 1:1) la scena ha la stessa scala della vista
   intera del montaggio sullo stesso schermo (stessi pixel per metro, `baseScale`).
-  Si regola da 0,6 a 4,5 con + e − sulla destra, la rotellina, due dita o i
+  Si regola da 0,3 a 4,5 con + e − sulla destra, la rotellina, due dita o i
   tasti + e −; il punto sotto il dito resta fermo (`setZoom`).
   Sotto 0,6 px/cm (`CROWD_SCALE`) un tocco fra più cose vicine non sceglie:
   la scena si avvicina lì, come nel montaggio, e il tocco dopo prende quella giusta.

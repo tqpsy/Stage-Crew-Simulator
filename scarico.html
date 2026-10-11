@@ -286,14 +286,25 @@ const VAN = { x1: DOOR_X - 212, x2: DOOR_X, y1: 400, y2: 600 };   // il vano di 
 const RAMP = { x: DOOR_X, y: 440, w: 110, h: 120 };
 const GYM_X = 1160;                    // muro della palestra (porta con gradino)
 const STEP_BAND = { y1: 420, y2: 580 };   // porta a due ante della palestra: 1,6 m (gx 4,05-5,65)
-const CHAIRS = { x1: 2200, y1: 925, x2: 2300, y2: 975 };   // sedie impilate in platea, contro il muro
-/* La palestra è quella del montaggio, alla stessa scala (1 m = 100 cm) e con
-   la stessa pianta: larga 10 m (gx del montaggio, in pianta y = GYM.y2 - gx)
-   e profonda 14 m dal muro del cortile (gy 2 → 16, in pianta x = GYM_X +
-   (gy - 2) m). La porta del carico è nel muro di fondo, a gx 4,05-5,65. */
-const GYM = { x2: 2560, y1: -15, y2: 985 };
-const gymPt = (gx, gy) => ({ x: GYM_X + (gy - 2) * 100, y: GYM.y2 - gx * 100 });
-const WORLD = { x1: 290, y1: -60, x2: 2600, y2: 1030 };
+const CHAIRS = { x1: 2200, y1: 1375, x2: 2300, y2: 1425 };   // sedie impilate in platea, contro il muro
+/* Misure vere (1 m = 100 cm). La palestra è una sala da 32 × 19 m in parquet
+   con le righe del basket (campo FIBA 28 × 15 m) e del calcetto (30 × 17 m):
+   larga 19 m e lunga 32 m dal muro del cortile (gy 2 → 34, in pianta
+   x = GYM_X + (gy - 2) m; in pianta y = 985 - gx m). Palco, Off Stage,
+   Backstage e Pit restano dove sono al montaggio (gx 0-10 vicino al muro del
+   cortile), in mezzo alla sala: le pareti lunghe sono a gx -4,5 e 14,5.
+   La porta del carico è nel muro di fondo, a gx 4,05-5,65.
+   Fuori c'è il campetto della scuola in cemento, 36 × 21 m (calcetto 32 × 17,
+   basket 28 × 15), attaccato alla palestra: il furgone è salito sul campetto
+   e ha la coda verso la porta. Intorno la recinzione, a un metro. */
+const GYM = { x2: GYM_X + 3200, y1: 985 - 1450, y2: 985 + 450 };
+const gymPt = (gx, gy) => ({ x: GYM_X + (gy - 2) * 100, y: 985 - gx * 100 });
+const YARD = { x1: GYM_X - 3600, x2: GYM_X, y1: (GYM.y1 + GYM.y2) / 2 - 1050, y2: (GYM.y1 + GYM.y2) / 2 + 1050 };
+const FENCE = { x1: YARD.x1 - 100, y1: YARD.y1 - 100, y2: YARD.y2 + 100 };
+const WORLD = { x1: FENCE.x1 - 60, y1: FENCE.y1 - 60, x2: GYM.x2 + 60, y2: FENCE.y2 + 60 };
+// dove si cammina con gli ordini (la griglia dei percorsi): furgone, cortile
+// davanti alla porta e la palestra fino alla platea
+const NAVB = { x1: 260, y1: GYM.y1 - 40, x2: GYM_X + 1440, y2: GYM.y2 + 40 };
 // il cortile fra furgone e palestra: albero, panchina, moka del bidello
 const TREE = { x: 1075, y: 745 }, BENCH = { x: 845, y: 114 }, MOKA = { x: 1100, y: 833 };
 
@@ -311,7 +322,8 @@ const ZONES = {
   // il Backstage tra il muro e il palco (la parte davanti alla porta resta il passaggio)
   back:  { name: 'Backstage', color: '#ff4fb4', x: 1172, y: 600, w: 182, h: 377 },
   foh:   { name: 'Off Stage · regia', color: '#49e07a', x: OFFSTAGE.x1 + 6, y: OFFSTAGE.y1 + 6, w: OFFSTAGE.x2 - OFFSTAGE.x1 - 12, h: OFFSTAGE.y2 - OFFSTAGE.y1 - 12 },
-  pit:   { name: 'Pit', color: '#4fb7ff', x: PIT.x1 + 6, y: GYM.y1 + 6, w: PIT.x2 - PIT.x1 - 12, h: GYM.y2 - GYM.y1 - 12 }
+  // il Pit davanti al palco e all'Off Stage (gx 0-10, come al montaggio), non per tutta la sala
+  pit:   { name: 'Pit', color: '#4fb7ff', x: PIT.x1 + 6, y: gymPt(10, 0).y + 6, w: PIT.x2 - PIT.x1 - 12, h: 1000 - 12 }
 };
 // i flight case sono fatti per prendere colpi: si rovina qualcosa solo con
 // un urto vero (correre contro un muro, far cadere, lanciare un case)
@@ -492,9 +504,12 @@ function newGame () {
   wall(VAN.x1 - 12, VAN.y1 - 12, VAN.x1, VAN.y2 + 12, false);
   // (un case in mano passa sopra al bordo: è sollevato)
   G.edges = [wall(DOOR_X - 2, VAN.y1, DOOR_X + 4, RAMP.y, false), wall(DOOR_X - 2, RAMP.y + RAMP.h, DOOR_X + 4, VAN.y2, false)];
-  // recinto del cortile
-  wall(DOOR_X - 5, 80, GYM_X, 92); wall(DOOR_X - 5, 908, GYM_X, 920);
-  wall(DOOR_X - 6, 80, DOOR_X + 5, VAN.y1 - 12); wall(DOOR_X - 6, VAN.y2 + 12, DOOR_X + 5, 920);
+  // la recinzione del campetto, a un metro dal cemento, fino ai muri della palestra
+  wall(FENCE.x1, FENCE.y1 - 12, GYM_X - 22, FENCE.y1); wall(FENCE.x1, FENCE.y2, GYM_X - 22, FENCE.y2 + 12);
+  wall(FENCE.x1 - 12, FENCE.y1 - 12, FENCE.x1, FENCE.y2 + 12);
+  // le transenne della scuola ai lati della coda del furgone: i bambini restano fuori dallo scarico
+  wall(DOOR_X - 6, VAN.y1 - 320, DOOR_X + 5, VAN.y1 - 12); wall(DOOR_X - 6, VAN.y2 + 12, DOOR_X + 5, VAN.y2 + 320);
+  wall(GYM_X - 34, FENCE.y1, GYM_X - 22, GYM.y1 - 20); wall(GYM_X - 34, GYM.y2 + 20, GYM_X - 22, FENCE.y2);
   // palestra
   wall(GYM_X - 10, GYM.y1 - 20, GYM_X + 10, STEP_BAND.y1); wall(GYM_X - 10, STEP_BAND.y2, GYM_X + 10, GYM.y2 + 20);
   wall(GYM_X, GYM.y1 - 20, GYM.x2 + 20, GYM.y1); wall(GYM_X, GYM.y2, GYM.x2 + 20, GYM.y2 + 20); wall(GYM.x2, GYM.y1 - 20, GYM.x2 + 20, GYM.y2 + 20);
@@ -1647,7 +1662,7 @@ Heap.prototype.pop = function () {
 // d(x, y) — quanto manca girando attorno agli ostacoli; strict: Infinity se
 // lì attorno non si arriva
 function distField (goal, bodies) {
-  const C = NAV.cell, X0 = WORLD.x1, Y0 = WORLD.y1, W = Math.ceil((WORLD.x2 - X0) / C) + 1, H = Math.ceil((WORLD.y2 - Y0) / C) + 1, R = 8;
+  const C = NAV.cell, X0 = NAVB.x1, Y0 = NAVB.y1, W = Math.ceil((NAVB.x2 - X0) / C) + 1, H = Math.ceil((NAVB.y2 - Y0) / C) + 1, R = 8;
   const block = new Uint8Array(W * H), dist = new Float64Array(W * H).fill(Infinity);
   for (const b of bodies) {
     const bb = b.bounds, x1 = Math.max(0, Math.floor((bb.min.x - R - X0) / C)), x2 = Math.min(W - 1, Math.ceil((bb.max.x + R - X0) / C));
@@ -1690,7 +1705,7 @@ function plan (g, goal, avoid) {
   const startHits = held ? null : boxes.filter(b => circleBoxHit(p0.x, p0.y, w.r - 1.5, b));
   const allow = held ? contactsOf(g, o) : null;
   const free = (x, y, f) => {
-    if (x < WORLD.x1 || x > WORLD.x2 || y < WORLD.y1 || y > WORLD.y2) return false;
+    if (x < NAVB.x1 || x > NAVB.x2 || y < NAVB.y1 || y > NAVB.y2) return false;
     if (!held) {
       const near = Math.hypot(x - p0.x, y - p0.y) < C * 2.5;
       for (const b of boxes) if ((!near || !startHits.includes(b)) && circleBoxHit(x, y, w.r - 0.3, b)) return false;
@@ -1978,7 +1993,7 @@ function sidestep (k, w) {
   if (w.grab) { boxes.push(w.grab.body.bounds); if (w.grab.kind === 'trolley') for (const c of w.grab.load) boxes.push(c.body.bounds); }
   for (const r of [55, 80, 110]) for (const dir of [n, mul(n, -1), d]) {
     const t = add(p, mul(dir, r));
-    if (t.x < WORLD.x1 + k.r || t.x > WORLD.x2 - k.r || t.y < WORLD.y1 + k.r || t.y > WORLD.y2 - k.r) continue;
+    if (t.x < NAVB.x1 + k.r || t.x > NAVB.x2 - k.r || t.y < NAVB.y1 + k.r || t.y > NAVB.y2 - k.r) continue;
     if (!boxes.some(b => circleBoxHit(t.x, t.y, k.r + 4, b))) return t;
   }
   return null;
@@ -3345,9 +3360,15 @@ function drawFigure (p, who, hU, o) {
 
 // il pavimento non cambia: cortile, palestra, luce del pomeriggio e zone si
 // dipingono una volta sola in pianta e poi si incollano (pesa poco sul telefono)
-const GROUND = { x: WORLD.x1 - 260, y: WORLD.y1 - 160, w: WORLD.x2 - WORLD.x1 + 520, h: WORLD.y2 - WORLD.y1 + 320, k: 1.5, c: null };
-if (document.fonts && document.fonts.ready) document.fonts.ready.then(() => { GROUND.c = null; });
-function groundLayer () {
+/* il terreno si dipinge una volta in due strati: tutto il mondo a bassa
+   risoluzione (campetto e palestra interi, si vedono da lontano) e, sopra,
+   la parte dove si lavora (furgone, porta, zone) più fitta */
+const GROUNDS = [
+  { x: WORLD.x1 - 260, y: WORLD.y1 - 160, w: WORLD.x2 - WORLD.x1 + 520, h: WORLD.y2 - WORLD.y1 + 320, k: 0.3, c: null },
+  { x: NAVB.x1 - 100, y: NAVB.y1 - 60, w: NAVB.x2 - NAVB.x1 + 200, h: NAVB.y2 - NAVB.y1 + 120, k: 1.0, c: null }
+];
+if (document.fonts && document.fonts.ready) document.fonts.ready.then(() => { GROUNDS.forEach(L => { L.c = null; }); });
+function groundLayer (GROUND) {
   if (GROUND.c) return GROUND.c;
   const c = document.createElement('canvas'), k = GROUND.k, main = ctx;
   c.width = Math.round(GROUND.w * k); c.height = Math.round(GROUND.h * k);
@@ -3359,43 +3380,84 @@ function groundLayer () {
     // la luce del pomeriggio: calda da in alto a sinistra, più fresca in basso a destra
     const sun = ctx.createLinearGradient(VAN.x1, WORLD.y1, GYM_X + 400, WORLD.y2);
     sun.addColorStop(0, 'rgba(255,214,150,.10)'); sun.addColorStop(0.6, 'rgba(255,214,150,0)'); sun.addColorStop(1, 'rgba(40,60,90,.12)');
-    ctx.fillStyle = sun; ctx.fillRect(WORLD.x1 - 400, WORLD.y1 - 400, 3000, 1800);
+    ctx.fillStyle = sun; ctx.fillRect(WORLD.x1 - 400, WORLD.y1 - 400, WORLD.x2 - WORLD.x1 + 800, WORLD.y2 - WORLD.y1 + 800);
     drawZones();
   } finally { ctx = main; }
   if (!(G && G.statics)) return c;   // prima della partita: senza le ombre dei muri, non si tiene
   return (GROUND.c = c);
 }
+/* righe dei campi, col lato lungo in x (in pianta): basket FIBA 28 × 15 m
+   (area 4,9 × 5,8, tiro libero, tre punti a 6,75 m, cerchio 1,8 m) e
+   calcetto L × W (cerchio 3 m, aree a quarti di cerchio da 6 m, porte da 3 m,
+   dischetti a 6 e 10 m) */
+function basketLines (cx, cy, col, key) {
+  const L = 2800, W = 1500, x0 = cx - L / 2, y0 = cy - W / 2;
+  ctx.save(); ctx.strokeStyle = col; ctx.lineWidth = 5;
+  const arc = (x, y, r, a0, a1, dash) => { ctx.setLineDash(dash || []); ctx.beginPath(); ctx.arc(x, y, r, a0, a1); ctx.stroke(); ctx.setLineDash([]); };
+  ctx.strokeRect(x0, y0, L, W);
+  ctx.beginPath(); ctx.moveTo(cx, y0); ctx.lineTo(cx, y0 + W); ctx.stroke();
+  arc(cx, cy, 180, 0, Math.PI * 2);
+  for (const s of [-1, 1]) {
+    const base = cx + s * L / 2, d = -s, ft = base + d * 580, bx = base + d * 157.5;
+    if (key) { ctx.fillStyle = key; ctx.fillRect(Math.min(base, ft), cy - 245, 580, 490); }
+    ctx.strokeRect(Math.min(base, ft), cy - 245, 580, 490);
+    const out = s < 0 ? 0 : Math.PI;   // metà del cerchio verso il centro del campo: piena; l'altra a tratti
+    arc(ft, cy, 180, out - Math.PI / 2, out + Math.PI / 2); arc(ft, cy, 180, out + Math.PI / 2, out + Math.PI * 1.5, [24, 18]);
+    const a = Math.asin(660 / 675), xs = bx + d * 675 * Math.cos(a);
+    ctx.beginPath(); ctx.moveTo(base, cy - 660); ctx.lineTo(xs, cy - 660); ctx.moveTo(base, cy + 660); ctx.lineTo(xs, cy + 660); ctx.stroke();
+    if (s < 0) arc(bx, cy, 675, -a, a); else arc(bx, cy, 675, Math.PI - a, Math.PI + a);
+    if (s < 0) arc(bx, cy, 125, -Math.PI / 2, Math.PI / 2); else arc(bx, cy, 125, Math.PI / 2, Math.PI * 1.5);
+  }
+  ctx.restore();
+}
+function futsalLines (cx, cy, L, W, col, lw) {
+  const x0 = cx - L / 2, y0 = cy - W / 2;
+  ctx.save(); ctx.strokeStyle = col; ctx.fillStyle = col; ctx.lineWidth = lw;
+  ctx.strokeRect(x0, y0, L, W);
+  ctx.beginPath(); ctx.moveTo(cx, y0); ctx.lineTo(cx, y0 + W); ctx.stroke();
+  ctx.beginPath(); ctx.arc(cx, cy, 300, 0, Math.PI * 2); ctx.stroke();
+  const dot = (x, y) => { ctx.beginPath(); ctx.arc(x, y, 6, 0, Math.PI * 2); ctx.fill(); };
+  dot(cx, cy);
+  for (const s of [-1, 1]) {
+    const base = cx + s * L / 2, d = -s, p = 158;   // pali a ±1,5 m, la linea dell'area è lunga 3,16 m
+    ctx.beginPath();
+    if (s < 0) { ctx.arc(base, cy - p, 600, -Math.PI / 2, 0); ctx.lineTo(base + 600, cy + p); ctx.arc(base, cy + p, 600, 0, Math.PI / 2); }
+    else { ctx.arc(base, cy - p, 600, -Math.PI / 2, -Math.PI, true); ctx.lineTo(base - 600, cy + p); ctx.arc(base, cy + p, 600, Math.PI, Math.PI / 2, true); }
+    ctx.stroke();
+    dot(base + d * 600, cy); dot(base + d * 1000, cy);
+    ctx.strokeRect(Math.min(base, base - d * 80), cy - 150, 80, 300);   // la porta, dietro la linea
+  }
+  ctx.restore();
+}
 function drawGround () {
-  // strada e marciapiede fuori
-  const M = mats();
-  ctx.fillStyle = M.asphalt; ctx.fillRect(WORLD.x1 - 1500, WORLD.y1 - 1500, 5000, 4000);
-  ctx.fillStyle = 'rgba(8,9,11,.55)'; ctx.fillRect(WORLD.x1 - 1500, WORLD.y1 - 1500, 5000, 4000);
+  // strada e parcheggio fuori dal recinto
+  const M = mats(), BX = WORLD.x1 - 1500, BY = WORLD.y1 - 1500, BW = WORLD.x2 - WORLD.x1 + 3000, BH = WORLD.y2 - WORLD.y1 + 3000;
+  ctx.fillStyle = M.asphalt; ctx.fillRect(BX, BY, BW, BH);
+  ctx.fillStyle = 'rgba(8,9,11,.55)'; ctx.fillRect(BX, BY, BW, BH);
+  // il campetto della scuola: cemento lisciato, giunti ogni 3 m, righe di basket e calcetto
+  const YW = YARD.x2 - YARD.x1, YH = YARD.y2 - YARD.y1;
+  ctx.fillStyle = '#7d7c78'; ctx.fillRect(YARD.x1, YARD.y1, YW, YH);
+  ctx.save(); ctx.globalAlpha = 0.5; ctx.fillStyle = M.concrete; ctx.fillRect(YARD.x1, YARD.y1, YW, YH); ctx.restore();
+  ctx.fillStyle = 'rgba(0,0,0,.16)';
+  for (let x = YARD.x1 + 300; x < YARD.x2; x += 300) ctx.fillRect(x, YARD.y1, 1.6, YH);
+  for (let y = YARD.y1 + 300; y < YARD.y2; y += 300) ctx.fillRect(YARD.x1, y, YW, 1.6);
+  ctx.strokeStyle = 'rgba(0,0,0,.35)'; ctx.lineWidth = 6; ctx.strokeRect(YARD.x1 + 3, YARD.y1 + 3, YW - 6, YH - 6);   // bordo del getto
+  { const cx = (YARD.x1 + YARD.x2) / 2, cy = (YARD.y1 + YARD.y2) / 2;
+    futsalLines(cx, cy, 3200, 1700, 'rgba(236,196,62,.62)', 8);
+    basketLines(cx, cy, 'rgba(240,238,230,.62)', null); }
   ctx.fillStyle = 'rgba(8,9,11,.25)'; ctx.fillRect(VAN.x1 - 200, VAN.y1 - 80, DOOR_X - VAN.x1 + 200, VAN.y2 - VAN.y1 + 160);
-  // cortile in asfalto, più chiaro al sole, con le toppe di catrame
-  ctx.fillStyle = M.asphalt; ctx.fillRect(DOOR_X, 88, GYM_X - DOOR_X, 826);
   {   // chiazze larghe (usura, sole, pioggia) che non si ripetono come la grana
     const n = tileNoise(41), c = document.createElement('canvas'); c.width = 96; c.height = 60;
     const g = c.getContext('2d'), im = g.createImageData(96, 60);
     for (let y = 0; y < 60; y++) for (let x = 0; x < 96; x++) { const k = fbm(n, x, y, 96, 60, 6, 4), i = (y * 96 + x) * 4; im.data[i] = im.data[i + 1] = im.data[i + 2] = k > 0.5 ? 255 : 0; im.data[i + 3] = Math.abs(k - 0.5) * 120; }
     g.putImageData(im, 0, 0);
-    ctx.save(); ctx.imageSmoothingEnabled = true; ctx.drawImage(c, WORLD.x1 - 300, WORLD.y1 - 160, 2600, 1360); ctx.restore();
+    ctx.save(); ctx.imageSmoothingEnabled = true; ctx.globalAlpha = 0.7; ctx.drawImage(c, YARD.x1, YARD.y1, YARD.x2 - YARD.x1, YARD.y2 - YARD.y1); ctx.restore();
     // macchie d'olio dove parcheggiano i furgoni
     [[DOOR_X - 140, VAN.y1 + 60, 60], [DOOR_X - 380, VAN.y1 + 120, 46], [DOOR_X + 40, VAN.y2 + 160, 28]].forEach(([x, y, rad]) => {
       const og = ctx.createRadialGradient(x, y, 2, x, y, rad); og.addColorStop(0, 'rgba(10,10,12,.35)'); og.addColorStop(1, 'rgba(10,10,12,0)');
       ctx.fillStyle = og; ctx.beginPath(); ctx.ellipse(x, y, rad, rad * 0.7, 0.4, 0, Math.PI * 2); ctx.fill();
     });
   }
-  const r = seeded(7);
-  for (let i = 0; i < 5; i++) { ctx.fillStyle = 'rgba(14,15,18,' + (0.18 + r() * 0.1) + ')'; const x = DOOR_X + 40 + r() * 300, y = 140 + r() * 720, w = 30 + r() * 60, h = 20 + r() * 40; ctx.beginPath(); ctx.moveTo(x, y); for (let k = 1; k < 9; k++) { const a = k / 8 * Math.PI * 2; ctx.lineTo(x + Math.cos(a) * w * (0.8 + r() * 0.3) / 2, y + Math.sin(a) * h * (0.8 + r() * 0.3) / 2); } ctx.fill(); }
-  // cordolo in cemento lungo il recinto
-  ctx.fillStyle = M.concrete; ctx.fillRect(DOOR_X + 4, 92, GYM_X - DOOR_X - 14, 14); ctx.fillRect(DOOR_X + 4, 894, GYM_X - DOOR_X - 14, 14);
-  // strisce del parcheggio accanto al furgone, tombino, crepe e foglie
-  ctx.strokeStyle = 'rgba(238,233,223,.18)'; ctx.lineWidth = 3;
-  [[VAN.x1 + 40, VAN.y1 - 44], [VAN.x1 + 40, VAN.y2 + 44]].forEach(([x, y]) => { ctx.beginPath(); ctx.moveTo(x, y); ctx.lineTo(x + 110, y); ctx.stroke(); });
-  const MH = { x: 905, y: 670 };
-  ctx.fillStyle = '#26282d'; ctx.beginPath(); ctx.arc(MH.x, MH.y, 20, 0, Math.PI * 2); ctx.fill();
-  ctx.strokeStyle = '#3c3f46'; ctx.lineWidth = 2; ctx.beginPath(); ctx.arc(MH.x, MH.y, 20, 0, Math.PI * 2); ctx.stroke();
-  for (let i = -12; i <= 12; i += 6) { ctx.beginPath(); ctx.moveTo(MH.x + i, MH.y - 17); ctx.lineTo(MH.x + i, MH.y + 17); ctx.stroke(); }
   ctx.strokeStyle = 'rgba(12,13,15,.55)'; ctx.lineWidth = 0.8;
   const cr = seeded(9);
   [[[815, 770], [845, 758], [859, 730], [895, 720]], [[1000, 480], [1025, 460], [1030, 425]], [[800, 140], [830, 150], [790, 115]]].forEach(pts => {
@@ -3424,33 +3486,26 @@ function drawGround () {
     ctx.fillStyle = ['#6b5a2a', '#8a5a26', '#4f6b2e', '#a07a34'][i % 4];
     ctx.beginPath(); ctx.ellipse(TREE.x + Math.cos(a) * d, TREE.y + 2 + Math.sin(a) * d, 4, 2.2, a, 0, Math.PI * 2); ctx.fill();
   }
-  // campetto e campana disegnati per terra
-  ctx.strokeStyle = 'rgba(226,222,212,.22)'; ctx.lineWidth = 5; ctx.setLineDash([40, 3, 22, 2]);
-  ctx.strokeRect(810, 170, 250, 220); ctx.beginPath(); ctx.arc(935, 280, 40, 0, Math.PI * 2); ctx.stroke();
-  ctx.beginPath(); ctx.moveTo(935, 170); ctx.lineTo(935, 390); ctx.stroke();
-  ctx.setLineDash([]); ctx.strokeStyle = 'rgba(214,180,70,.28)'; ctx.lineWidth = 4;
-  [[1110, 200], [1110, 240], [1090, 280], [1130, 280], [1110, 320], [1090, 360], [1130, 360]].forEach(([x, y]) => ctx.strokeRect(x - 18, y - 18, 36, 36));
   // la palestra, come al montaggio: Backstage in cemento a lastre, poi il
   // parquet a doghe, le righe sbiadite del campo da basket e la fascia del Pit
   const gq = (gx0, gy0, gx1, gy1) => { const p = gymPt(gx0, gy0), q = gymPt(gx1, gy1); return [Math.min(p.x, q.x), Math.min(p.y, q.y), Math.abs(q.x - p.x), Math.abs(q.y - p.y)]; };
+  ctx.fillStyle = mats().wood; ctx.fillRect(...gq(-4.5, 2, 14.5, 34));
+  ctx.fillStyle = 'rgba(120,80,40,.18)'; ctx.fillRect(...gq(-4.5, 2, 14.5, 34));   // acero scurito, come al montaggio
+  ctx.fillStyle = 'rgba(255,214,150,.05)'; ctx.fillRect(...gq(-4.5, 2, 14.5, 34));   // vernice lucida del parquet
+  { const c = gymPt(5, 18);   // il centro della sala
+    futsalLines(c.x, c.y, 3000, 1700, 'rgba(52,118,206,.7)', 8);
+    basketLines(c.x, c.y, 'rgba(246,244,236,.72)', 'rgba(168,46,40,.28)'); }
   ctx.fillStyle = '#4a4c52'; ctx.fillRect(...gq(0, 2, 10, 4));
   ctx.save(); ctx.globalAlpha = 0.35; ctx.fillStyle = M.concrete; ctx.fillRect(...gq(0, 2, 10, 4)); ctx.restore();
   ctx.fillStyle = 'rgba(0,0,0,.22)'; for (let gx = 2; gx < 10; gx += 2) ctx.fillRect(...gq(gx, 2, gx + 0.02, 4));
-  ctx.fillStyle = mats().wood; ctx.fillRect(...gq(0, 4, 10, 16));
-  ctx.fillStyle = 'rgba(120,80,40,.18)'; ctx.fillRect(...gq(0, 4, 10, 16));   // acero scurito, come al montaggio
-  ctx.fillStyle = 'rgba(255,214,150,.05)'; ctx.fillRect(...gq(0, 4, 10, 16));   // vernice lucida del parquet
-  const line = (pts, col, w) => { ctx.strokeStyle = col; ctx.lineWidth = w; ctx.beginPath(); pts.forEach(([gx, gy], i) => { const q = gymPt(gx, gy); i ? ctx.lineTo(q.x, q.y) : ctx.moveTo(q.x, q.y); }); ctx.stroke(); };
-  line([[0.5, 8.5], [0.5, 15.6], [9.5, 15.6], [9.5, 8.5]], 'rgba(233,228,214,.28)', 5);
-  { const arc = []; for (let t = 0; t <= Math.PI + 1e-6; t += Math.PI / 24) arc.push([5 + Math.cos(t) * 1.8, 15.6 - Math.sin(t) * 1.8]); line(arc, 'rgba(233,228,214,.28)', 5); }
-  line([[3.8, 15.6], [3.8, 13.4], [6.2, 13.4], [6.2, 15.6]], 'rgba(214,57,47,.32)', 5);
   ctx.fillStyle = 'rgba(0,0,0,.18)'; ctx.fillRect(...gq(0, 8, 10, 10));            // Pit: fascia più scura
-  // griglia di posa appena accennata (un metro), per orientarsi come al montaggio
+  // griglia di posa appena accennata (un metro) dove si monta, come al montaggio
   ctx.fillStyle = 'rgba(255,255,255,.045)';
   for (let gx = 1; gx < 10; gx++) ctx.fillRect(...gq(gx, 2, gx + 0.015, 16));
   for (let gy = 3; gy < 16; gy++) ctx.fillRect(...gq(0, gy, 10, gy + 0.015));
-  // luce delle finestre della parete sinistra, chiazze fredde sul parquet
+  // luce delle finestre della parete lunga, chiazze fredde sul parquet
   ctx.fillStyle = 'rgba(190,210,255,.05)';
-  for (let gy = 10.4; gy < 15; gy += 2.1) { const p = [[0.7, gy + 0.9], [2.1, gy + 1.5], [2.1, gy + 3], [0.7, gy + 2.4]].map(([a, b]) => gymPt(a, Math.min(b, 15.9))); ctx.beginPath(); p.forEach((q, i) => i ? ctx.lineTo(q.x, q.y) : ctx.moveTo(q.x, q.y)); ctx.fill(); }
+  for (let gy = 6.3; gy < 32; gy += 2.1) { const p = [[-3.8, gy + 0.9], [-2.4, gy + 1.5], [-2.4, gy + 3], [-3.8, gy + 2.4]].map(([a, b]) => gymPt(a, Math.min(b, 33.9))); ctx.beginPath(); p.forEach((q, i) => i ? ctx.lineTo(q.x, q.y) : ctx.moveTo(q.x, q.y)); ctx.fill(); }
   // il palco già montato e accanto l'Off Stage, sulla stessa pedana (come al
   // montaggio): pedane 2 × 1 m, piano nero antiscivolo, bordo d'alluminio
   for (const S of [STAGE, OFFSTAGE]) {
@@ -3474,7 +3529,7 @@ function drawGround () {
   // scritte per terra (adesivi come al montaggio): PLATEA e REGIA FOH
   ctx.save(); ctx.textAlign = 'center';
   ctx.fillStyle = 'rgba(238,233,223,.14)'; ctx.font = '700 46px "Barlow Condensed", sans-serif';
-  const pl = gymPt(5, 12), fo = gymPt(5, 15);
+  const pl = gymPt(5, 14), fo = gymPt(5, 26);
   ctx.translate(pl.x, pl.y); ctx.rotate(-Math.PI / 2); ctx.fillText('PLATEA', 0, 14); ctx.restore();
   ctx.save(); ctx.textAlign = 'center'; ctx.fillStyle = 'rgba(238,233,223,.14)'; ctx.font = '700 30px "Barlow Condensed", sans-serif';
   ctx.translate(fo.x, fo.y); ctx.rotate(-Math.PI / 2); ctx.fillText('REGIA FOH', 0, 10); ctx.restore();
@@ -3582,12 +3637,12 @@ function leftWallDecor (a, b, L, hgt) {
     u0 = Math.max(0, u0); u1 = Math.min(L, u1); if (u1 <= u0) return;
     ctx.fillStyle = col; ctx.fillRect(u0, -Math.min(z1, hgt), u1 - u0, Math.min(z1, hgt) - z0);
   };
-  for (let gy = 6.3; gy < 15; gy += 2.1) {   // finestre alte (non sopra la seconda uscita)
-    if (gy < 12.5 && gy + 1.5 > 11) continue;
+  for (let gy = 6.3; gy < 32.5; gy += 2.1) {   // finestre alte (non sopra le uscite)
+    if ((gy < 12.5 && gy + 1.5 > 11) || (gy < 23.3 && gy + 1.5 > 21.8)) continue;
     f(gy, gy + 1.5, 110, 168, '#1a2738'); f(gy, gy + 1.5, 110, 114, '#6b7180'); f(gy + 0.73, gy + 0.77, 110, 168, '#6b7180');
     f(gy + 0.2, gy + 0.5, 130, 160, 'rgba(109,143,179,.25)');
   }
-  for (const [g0, g1] of [[2.5, 3.6], [11.2, 12.3]]) {   // uscite di sicurezza
+  for (const [g0, g1] of [[2.5, 3.6], [11.2, 12.3], [22, 23.1]]) {   // uscite di sicurezza
     f(g0, g1, 0, 103, '#1b1d21'); f(g0, g1, 103, 107, '#6b7180'); f((g0 + g1) / 2 - 0.01, (g0 + g1) / 2 + 0.01, 0, 103, '#0f1013');
     f(g0 + 0.25, g1 - 0.25, 114, 131, '#2fa35a'); f(g0 + 0.35, g1 - 0.35, 120, 125, 'rgba(255,255,255,.75)');
   }
@@ -3597,8 +3652,6 @@ function leftWallDecor (a, b, L, hgt) {
   // spalliere
   for (let gy = 12.9; gy <= 14.31; gy += 0.35) f(gy - 0.03, gy + 0.03, 0, 147, '#8a6a45');
   for (let z = 10; z <= 147; z += 14) f(12.87, 14.34, z, z + 2, '#9c7a50');
-  // tabellone del canestro, in fondo
-  f(14.45, 15.75, 126, 175, '#f4f2ec'); f(14.8, 15.4, 130, 150, '#d6392f'); f(14.84, 15.36, 133, 147, '#f4f2ec');
 }
 // i due generici dei cavi (CORRENTE e SEGNALE): nel gioco sono già nelle loro
 // zone e non si toccano; qui si vedono fermi in fondo alla palestra, oltre il Pit
@@ -4458,7 +4511,7 @@ function camFocus () {
    102 in diagonale e la palestra intera, 1224×1010, sta nello spazio libero;
    qui la diagonale di 1 m è 141 cm). Poi si regola con − / +, la rotellina,
    due dita o i tasti + e −. */
-const ZOOM_MIN = 0.6, ZOOM_MAX = 4.5;
+const ZOOM_MIN = 0.3, ZOOM_MAX = 4.5;
 let baseK = null;
 // si parte più vicini della vista intera del montaggio: le persone e i case
 // si leggono bene (con − e 1:1 si torna alla scala del montaggio)
@@ -4496,7 +4549,7 @@ function render () {
   const scale = G.cam.scale;
   G.cam.x += (target.x - G.cam.x) * k; G.cam.y += (target.y - G.cam.y) * k;
   // la vista è in diagonale: la telecamera resta sopra il cortile e la palestra
-  G.cam.x = clamp(G.cam.x, VAN.x1, WORLD.x2 - 150); G.cam.y = clamp(G.cam.y, WORLD.y1 + 120, WORLD.y2 - 120);
+  G.cam.x = clamp(G.cam.x, WORLD.x1 + 150, WORLD.x2 - 150); G.cam.y = clamp(G.cam.y, WORLD.y1 + 120, WORLD.y2 - 120);
   if (man) G.cam.manual = { x: G.cam.x, y: G.cam.y };
 
   ctx.setTransform(1, 0, 0, 1, 0, 0);
@@ -4504,8 +4557,12 @@ function render () {
   const cx = G.cam.x, cy = G.cam.y, k2 = DPR * scale;
   ctx.setTransform(k2 * CA, k2 * SA * KY, -k2 * SA, k2 * CA * KY, DPR * W / 2 - k2 * (cx * CA - cy * SA), DPR * H / 2 - k2 * (cx * SA + cy * CA) * KY);
   // per terra: cortile e zone (dipinti una volta sola), pianale, rampa, gli ordini
-  ctx.fillStyle = '#1b1c20'; ctx.fillRect(WORLD.x1 - 1500, WORLD.y1 - 1500, 5000, 4000);
-  ctx.drawImage(groundLayer(), GROUND.x, GROUND.y, GROUND.w, GROUND.h);
+  ctx.fillStyle = '#1b1c20'; ctx.fillRect(WORLD.x1 - 1500, WORLD.y1 - 1500, WORLD.x2 - WORLD.x1 + 3000, WORLD.y2 - WORLD.y1 + 3000);
+  {   // lo strato largo serve solo se si vede oltre quello fitto
+    const cs = [[0, 0], [W, 0], [0, H], [W, H]].map(([x, y]) => screenToWorld({ x, y })), N = GROUNDS[1];
+    const inN = cs.every(q => q.x > N.x && q.x < N.x + N.w && q.y > N.y && q.y < N.y + N.h);
+    for (const L of GROUNDS) if (L === N || !inN) ctx.drawImage(groundLayer(L), L.x, L.y, L.w, L.h);
+  }
   drawStatics(); drawTreeShadow();
   drawOrders();
   // in piedi: dal fondo verso chi guarda (y della faccia davanti)
