@@ -3100,10 +3100,25 @@ function drawGround () {
     for (let i = 1; i < pts.length; i++) { const [x0, y0] = pts[i - 1], [x1, y1] = pts[i]; for (let t = 0.2; t <= 1.001; t += 0.2) ctx.lineTo(x0 + (x1 - x0) * t + (cr() - 0.5) * 4, y0 + (y1 - y0) * t + (cr() - 0.5) * 4); }
     ctx.stroke();
   });
+  // l'aiuola del platano: cordolo di cemento, terra battuta e le radici che affiorano
+  ctx.fillStyle = 'rgba(0,0,0,.35)'; ctx.beginPath(); ctx.arc(TREE.x + 2, TREE.y + 3, 62, 0, Math.PI * 2); ctx.fill();
+  ctx.fillStyle = '#8f8b82'; ctx.beginPath(); ctx.arc(TREE.x, TREE.y, 60, 0, Math.PI * 2); ctx.fill();
+  ctx.strokeStyle = 'rgba(255,255,255,.18)'; ctx.lineWidth = 1.5; ctx.beginPath(); ctx.arc(TREE.x, TREE.y, 59, Math.PI * 0.9, Math.PI * 1.7); ctx.stroke();
+  ctx.fillStyle = '#3b2f25'; ctx.beginPath(); ctx.arc(TREE.x, TREE.y, 50, 0, Math.PI * 2); ctx.fill();
+  const so = seeded(13);
+  for (let i = 0; i < 260; i++) { const a = so() * Math.PI * 2, d = Math.sqrt(so()) * 49; ctx.fillStyle = ['#2a211a', '#4d3e30', '#5a4a3a', '#33402a'][i % 4]; ctx.fillRect(TREE.x + Math.cos(a) * d, TREE.y + Math.sin(a) * d, 1 + so() * 2, 1 + so() * 2); }
+  ctx.lineCap = 'round';
+  for (let i = 0; i < 6; i++) {
+    const a = i / 6 * Math.PI * 2 + so() * 0.5, l = 30 + so() * 16;
+    ctx.strokeStyle = '#5c5240'; ctx.lineWidth = 7 - i % 3; ctx.beginPath(); ctx.moveTo(TREE.x, TREE.y);
+    ctx.quadraticCurveTo(TREE.x + Math.cos(a + 0.3) * l * 0.6, TREE.y + Math.sin(a + 0.3) * l * 0.6, TREE.x + Math.cos(a) * l, TREE.y + Math.sin(a) * l); ctx.stroke();
+    ctx.strokeStyle = 'rgba(214,206,176,.35)'; ctx.lineWidth = 2; ctx.stroke();
+  }
+  ctx.lineCap = 'butt';
   const lf = seeded(3);
-  for (let i = 0; i < 26; i++) {
-    const a = lf() * Math.PI * 2, d = 50 + lf() * 45;
-    ctx.fillStyle = ['#6b5a2a', '#7a4e24', '#4f6b2e'][i % 3];
+  for (let i = 0; i < 46; i++) {
+    const a = lf() * Math.PI * 2, d = 20 + lf() * 85;
+    ctx.fillStyle = ['#6b5a2a', '#8a5a26', '#4f6b2e', '#a07a34'][i % 4];
     ctx.beginPath(); ctx.ellipse(TREE.x + Math.cos(a) * d, TREE.y + 2 + Math.sin(a) * d, 4, 2.2, a, 0, Math.PI * 2); ctx.fill();
   }
   // campetto e campana disegnati per terra
@@ -3374,11 +3389,8 @@ function sceneSolids (put) {
   });
   const MT = boxPts(MOKA.x - 30, MOKA.y - 57, MOKA.x + 30, MOKA.y - 29);
   put(frontY(MT), () => { prism(MT, 0, 74, '#8a7660', '#5b4e40', { mat: 'wood', matA: 0.45 }); ctx.save(); lift(74); drawMoka(); ctx.restore(); });
-  put(dep(TREE) + 6, () => billboard(TREE, () => {   // il tronco (la chioma si disegna alla fine, sopra tutto)
-    const g = ctx.createLinearGradient(-8, 0, 8, 0); g.addColorStop(0, '#6b5038'); g.addColorStop(0.5, '#4b3524'); g.addColorStop(1, '#2c1f15');
-    ctx.fillStyle = g; ctx.beginPath(); ctx.moveTo(-10, 0); ctx.lineTo(-6, -175); ctx.lineTo(6, -175); ctx.lineTo(10, 0); ctx.fill();
-    ctx.strokeStyle = 'rgba(20,12,6,.4)'; ctx.lineWidth = 1; for (let k = 0; k < 5; k++) { ctx.beginPath(); ctx.moveTo(-6 + k * 3, 0); ctx.lineTo(-4 + k * 2, -175); ctx.stroke(); }
-  }));
+  put(dep(TREE) + 6, () => treePart(TREE_CUT, TREE_BOX.y + TREE_BOX.h));   // il tronco (la chioma si disegna alla fine, sopra tutto)
+
 }
 // una ruota su una faccia (coordinate della faccia: x lungo, y = -altezza)
 function wheel (x, r) {
@@ -3391,24 +3403,186 @@ function wheel (x, r) {
   ctx.lineCap = 'butt';
   el(0.14, '#9aa0a8');
 }
-function drawTreeShadow () {
-  ctx.fillStyle = 'rgba(0,0,0,.25)'; ctx.beginPath(); ctx.ellipse(TREE.x + 70, TREE.y + 40, 66, 50, 0, 0, Math.PI * 2); ctx.fill();
-}
-// la chioma, in alto sopra il tronco: una palla, quindi tonda anche a schermo
-function drawTreeTop () {
-  billboard(TREE, () => {
-    const ball = (x, y, r) => { ctx.beginPath(); ctx.ellipse(x, -195 + y / KZ, r, r / KZ, 0, 0, Math.PI * 2); ctx.fill(); };
-    ctx.globalAlpha = 0.97;
-    ctx.fillStyle = '#1d3524'; ball(0, 4, 62);
-    // ciuffi di foglie: più chiari verso il sole (in alto a sinistra)
-    const r = seeded(11);
-    for (let i = 0; i < 70; i++) {
-      const a = r() * Math.PI * 2, d = Math.sqrt(r()) * 52, x = Math.cos(a) * d, y = Math.sin(a) * d, sz = 9 + r() * 12;
-      const lit = clamp(0.5 - (x + y) / 140, 0, 1), g = ctx.createRadialGradient(x - sz * 0.3, -195 + (y - sz * 0.3) / KZ, 1, x, -195 + y / KZ, sz);
-      g.addColorStop(0, `rgb(${70 + lit * 50},${110 + lit * 50},${60 + lit * 25})`); g.addColorStop(1, `rgba(${28 + lit * 20},${54 + lit * 25},${34 + lit * 10},0)`);
-      ctx.fillStyle = g; ball(x, y, sz);
+/* l'albero del cortile è un platano vero: tronco con la corteccia a chiazze
+   che si sfoglia, colletto con le radici, tre grosse branche che si aprono in
+   una chioma a lobi fatta di ciuffi di foglie, più chiari verso il sole e
+   scuri dentro e sotto. Si dipinge una volta sola (in unità di schermo, a
+   scala 1) e poi si incolla: il tronco sta in mezzo alle altre cose, la chioma
+   sopra tutto e si fa trasparente quando sotto c'è qualcuno o qualcosa.
+   Anche l'ombra a chiazze per terra nasce dagli stessi ciuffi e rami. */
+const TREE_RES = 2, TREE_BOX = { x: -190, y: -400, w: 380, h: 430 }, TREE_FORK = 132, TREE_CUT = -150;
+const TREE_LIGHT = (() => { const l = Math.hypot(0.55, 0.65, 0.52); return { x: -0.55 / l, y: -0.65 / l, z: 0.52 / l }; })();
+let TREE_TEX = null, TREE_SH = null, treeFade = 1;
+function treeModel () {
+  const r = seeded(41), segs = [], clumps = [];
+  // le branche: curve che si assottigliano e si dividono
+  const branch = (x, y, a, l, w, d) => {
+    const bend = (r() - 0.5) * 0.5, x1 = x + Math.sin(a) * l, y1 = y - Math.cos(a) * l;
+    const cx = x + Math.sin(a + bend) * l * 0.55, cy = y - Math.cos(a + bend) * l * 0.55;
+    segs.push({ x0: x, y0: y, cx, cy, x1, y1, w0: w, w1: w * 0.72, d });
+    if (d >= 4) return;
+    const n = d < 2 && r() < 0.4 ? 3 : 2;
+    for (let i = 0; i < n; i++) {
+      const s = n === 2 ? (i ? 1 : -1) : i - 1;
+      branch(x1, y1, a + s * (0.32 + r() * 0.3) + (r() - 0.5) * 0.15, l * (0.62 + r() * 0.16), w * 0.62, d + 1);
+    }
+  };
+  [[-0.62, 76, 13], [0.06, 86, 14], [0.66, 74, 12]].forEach(([a, l, w]) => branch(a * 6, -TREE_FORK + 16, a, l, w, 1));
+  // la chioma: lobi sopra le punte delle branche, pieni di ciuffi
+  const lobes = [[-78, -318, 84], [70, -330, 88], [-8, -392, 76], [-118, -258, 54], [118, -266, 58], [0, -300, 96], [-40, -246, 60], [46, -244, 58]]
+    .map(([x, y, lr]) => [x * 0.84, -TREE_FORK - (-y - 182) * 0.82, lr * 0.82]);
+  lobes.forEach(([lx, ly, lr], li) => {
+    const n = Math.round(lr * lr / 70);
+    for (let i = 0; i < n; i++) {
+      const a = r() * Math.PI * 2, d = Math.sqrt(r()) * 0.98, u = Math.cos(a) * d, v = Math.sin(a) * d;
+      clumps.push({ x: lx + u * lr, y: ly + v * lr, R: 10 + r() * 9, u, v, nz: Math.sqrt(Math.max(0, 1 - u * u - v * v)), gap: r() < 0.16, s: r() * 1e4 | 0, li });
     }
   });
+  return { segs, clumps, lobes };
+}
+function leafRGB (b) {
+  const P = [[18, 32, 18], [42, 70, 30], [80, 116, 46], [128, 156, 68], [170, 188, 98]];
+  b = clamp(b, 0, 0.999) * (P.length - 1); const i = Math.floor(b), t = b - i, A = P[i], B = P[i + 1];
+  return [A[0] + (B[0] - A[0]) * t, A[1] + (B[1] - A[1]) * t, A[2] + (B[2] - A[2]) * t];
+}
+// corteccia del platano: chiazze crema, oliva e grigie, a pezzi irregolari
+function barkFill (r, x0, y0, x1, y1, n) {
+  ctx.fillStyle = '#8d876c'; ctx.fillRect(x0, y0, x1 - x0, y1 - y0);
+  const C = ['#c9c2a2', '#b3ad8c', '#6f7356', '#7d6f55', '#d8d2b6', '#9a9a7a'];
+  for (let i = 0; i < n; i++) {
+    const cx = x0 + r() * (x1 - x0), cy = y0 + r() * (y1 - y0), s = 1.6 + r() * 4.5;
+    ctx.fillStyle = C[i % C.length]; ctx.globalAlpha = 0.35 + r() * 0.4; ctx.beginPath();
+    for (let k = 0; k < 7; k++) { const a = k / 7 * Math.PI * 2, q = s * (0.55 + r() * 0.6); ctx[k ? 'lineTo' : 'moveTo'](cx + Math.cos(a) * q * 1.2, cy + Math.sin(a) * q * 0.8); }
+    ctx.closePath(); ctx.fill();
+  }
+  ctx.globalAlpha = 1;
+}
+function treeTexture () {
+  if (TREE_TEX) return TREE_TEX;
+  const mk = () => { const c = document.createElement('canvas'); c.width = TREE_BOX.w * TREE_RES; c.height = TREE_BOX.h * TREE_RES; const x = c.getContext('2d'); x.setTransform(TREE_RES, 0, 0, TREE_RES, -TREE_BOX.x * TREE_RES, -TREE_BOX.y * TREE_RES); return [c, x]; };
+  const [c, cx0] = mk(), [cc, cx1] = mk();
+  const keep = ctx; ctx = cx0;
+  const M = treeModel(), r = seeded(77), L = TREE_LIGHT;
+  // ombra di contatto alla base
+  const g0 = ctx.createRadialGradient(0, 2, 4, 0, 2, 46); g0.addColorStop(0, 'rgba(0,0,0,.45)'); g0.addColorStop(1, 'rgba(0,0,0,0)');
+  ctx.fillStyle = g0; ctx.beginPath(); ctx.ellipse(0, 2, 46, 14, 0, 0, Math.PI * 2); ctx.fill();
+  // il tronco: colletto largo con le radici, poi su leggermente storto fino alla biforcazione
+  const F = TREE_FORK;
+  ctx.save(); ctx.beginPath();
+  ctx.moveTo(-34, 4); ctx.quadraticCurveTo(-22, 0, -19, -22); ctx.bezierCurveTo(-17, -60, -11, -95, -15, -F + 6);
+  ctx.quadraticCurveTo(-20, -F - 4, -24, -F - 12); ctx.quadraticCurveTo(0, -F - 2, 22, -F - 10);
+  ctx.quadraticCurveTo(18, -F + 2, 16, -F + 12); ctx.bezierCurveTo(14, -95, 18, -55, 18, -22); ctx.quadraticCurveTo(22, 0, 36, 5);
+  ctx.quadraticCurveTo(14, 9, 0, 7); ctx.quadraticCurveTo(-16, 9, -34, 4); ctx.closePath(); ctx.clip();
+  barkFill(r, -40, -F - 30, 40, 12, 420);
+  const gt = ctx.createLinearGradient(-22, 0, 22, 0);
+  gt.addColorStop(0, 'rgba(255,244,214,.20)'); gt.addColorStop(0.3, 'rgba(255,244,214,.06)'); gt.addColorStop(0.62, 'rgba(0,0,0,.12)'); gt.addColorStop(1, 'rgba(0,0,0,.58)');
+  ctx.fillStyle = gt; ctx.fillRect(-40, -F - 30, 80, 44);
+  ctx.fillRect(-40, -F + 14, 80, F);
+  // sotto la chioma il tronco è in ombra
+  const gv = ctx.createLinearGradient(0, -F - 20, 0, -F + 70); gv.addColorStop(0, 'rgba(10,16,8,.55)'); gv.addColorStop(1, 'rgba(10,16,8,0)');
+  ctx.fillStyle = gv; ctx.fillRect(-40, -F - 30, 80, 100);
+  // pieghe del legno alla biforcazione e al colletto
+  ctx.strokeStyle = 'rgba(40,34,22,.35)'; ctx.lineWidth = 0.8;
+  for (let k = 0; k < 5; k++) { ctx.beginPath(); ctx.moveTo(-14 + k * 6, -F + 6); ctx.quadraticCurveTo(-10 + k * 5, -F - 4, -16 + k * 8, -F - 14); ctx.stroke(); }
+  for (let k = 0; k < 4; k++) { ctx.beginPath(); ctx.moveTo(-26 + k * 16, 5); ctx.quadraticCurveTo(-18 + k * 12, -6, -14 + k * 9, -22); ctx.stroke(); }
+  ctx.restore();
+  // i ciuffi dietro, poi i rami, poi i ciuffi davanti (con qualche buco)
+  const sh = cl => {
+    const nx = cl.u, ny = cl.v, nz = cl.nz, dot = Math.max(0, nx * L.x + ny * L.y + nz * L.z);
+    const hf = clamp(0.8 + (-cl.y - 260) / 520, 0.72, 1.1);
+    return (0.1 + dot * 0.62 + nz * 0.16) * hf;
+  };
+  const clump = cl => {
+    const rr2 = seeded(cl.s + 1), b = sh(cl), R = cl.R;
+    const [dr, dg, db] = leafRGB(b * 0.55);
+    ctx.fillStyle = `rgba(${dr | 0},${dg | 0},${db | 0},.85)`; ctx.beginPath(); ctx.ellipse(cl.x + 1.5, cl.y + 2.5, R * 0.86, R * 0.78, 0, 0, Math.PI * 2); ctx.fill();
+    for (let k = 0; k < 16; k++) {
+      const a = rr2() * Math.PI * 2, d = Math.sqrt(rr2()) * R * 0.92, x = cl.x + Math.cos(a) * d, y = cl.y + Math.sin(a) * d;
+      const lb = b + (-(x - cl.x) - (y - cl.y)) / R * 0.14 + (rr2() - 0.5) * 0.14;
+      let [cr, cg, cb] = leafRGB(lb);
+      if (rr2() < 0.025) { cr += 34; cg += 18; cb -= 8; }          // qualche foglia che ingiallisce
+      const s = 3.6 + rr2() * 3.2;
+      ctx.fillStyle = `rgb(${cr | 0},${cg | 0},${cb | 0})`;
+      ctx.beginPath(); ctx.ellipse(x, y, s, s * 0.62, rr2() * Math.PI, 0, Math.PI * 2); ctx.fill();
+    }
+  };
+  // la chioma su un foglio a parte: sta tutta sopra, anche quando sbiadisce
+  ctx = cx1;
+  // dentro la chioma: buio
+  M.lobes.forEach(([x, y, lr]) => { ctx.fillStyle = 'rgba(16,28,16,.9)'; ctx.beginPath(); ctx.ellipse(x + 4, y + 6, lr * 0.84, lr * 0.8, 0, 0, Math.PI * 2); ctx.fill(); });
+  const back = M.clumps.filter(c => c.nz < 0.42).sort((a, b) => a.nz - b.nz);
+  const front = M.clumps.filter(c => c.nz >= 0.42 && !c.gap).sort((a, b) => a.nz - b.nz || a.y - b.y);
+  back.forEach(clump);
+  // i rami: legno chiaro del platano, il lato al sole più chiaro
+  const seg = (s, col, wk, ox) => { ctx.strokeStyle = col; ctx.lineWidth = Math.max(0.6, (s.w0 + s.w1) / 2 * wk); ctx.beginPath(); ctx.moveTo(s.x0 + ox * s.w0, s.y0); ctx.quadraticCurveTo(s.cx + ox * s.w0, s.cy, s.x1 + ox * s.w1, s.y1); ctx.stroke(); };
+  ctx.lineCap = 'round';
+  M.segs.forEach(s => seg(s, '#4e4a3a', 1, 0));
+  M.segs.forEach(s => seg(s, '#7f7a62', 0.62, -0.12));
+  M.segs.filter(s => s.d <= 2).forEach(s => seg(s, 'rgba(190,184,158,.35)', 0.2, -0.26));
+  ctx.lineCap = 'butt';
+  front.forEach(clump);
+  // un velo di luce calda sul lato del sole
+  ctx.globalCompositeOperation = 'source-atop';
+  const gl = ctx.createLinearGradient(-140, -380, 120, -160); gl.addColorStop(0, 'rgba(255,226,160,.16)'); gl.addColorStop(0.5, 'rgba(255,226,160,0)'); gl.addColorStop(1, 'rgba(0,10,20,.18)');
+  ctx.fillStyle = gl; ctx.fillRect(TREE_BOX.x, TREE_BOX.y, TREE_BOX.w, TREE_BOX.h);
+  ctx.globalCompositeOperation = 'source-over';
+  ctx = keep;
+  TREE_TEX = { c, cc, M };
+  return TREE_TEX;
+}
+// un punto del disegno dell'albero (unità di schermo) riportato in pianta
+// all'altezza giusta, poi spinto dal sole come le altre ombre
+function treeShadowPt (x, y) { const z = -y / KZ; return { x: TREE.x + RIGHT.x * x + z * 0.35, y: TREE.y + RIGHT.y * x + z * 0.22 }; }
+function treeShadowLayer () {
+  if (TREE_SH) return TREE_SH;
+  const B = { x: TREE.x - 200, y: TREE.y - 200, w: 640, h: 560, k: 1.5 };
+  const c = document.createElement('canvas'); c.width = B.w * B.k; c.height = B.h * B.k;
+  const g = c.getContext('2d'), M = treeTexture().M, r = seeded(5);
+  g.setTransform(B.k, 0, 0, B.k, -B.x * B.k, -B.y * B.k);
+  const blob = (p, R, a) => { const gr = g.createRadialGradient(p.x, p.y, R * 0.3, p.x, p.y, R); gr.addColorStop(0, `rgba(0,0,0,${a})`); gr.addColorStop(1, 'rgba(0,0,0,0)'); g.fillStyle = gr; g.beginPath(); g.arc(p.x, p.y, R, 0, Math.PI * 2); g.fill(); };
+  M.clumps.forEach(cl => blob(treeShadowPt(cl.x, cl.y), cl.R * 1.25, 0.9));
+  // tronco e rami
+  g.strokeStyle = '#000'; g.lineCap = 'round';
+  const line = (pts, w) => { g.lineWidth = w; g.beginPath(); pts.forEach((p, i) => g[i ? 'lineTo' : 'moveTo'](p.x, p.y)); g.stroke(); };
+  line([treeShadowPt(0, 0), treeShadowPt(0, -TREE_FORK)], 30);
+  M.segs.forEach(s => { const P = []; for (let t = 0; t <= 1.001; t += 0.25) { const u = 1 - t; P.push(treeShadowPt(u * u * s.x0 + 2 * u * t * s.cx + t * t * s.x1, u * u * s.y0 + 2 * u * t * s.cy + t * t * s.y1)); } line(P, (s.w0 + s.w1) / 2); });
+  // le macchie di sole che passano fra le foglie
+  g.globalCompositeOperation = 'destination-out';
+  M.clumps.forEach(cl => { if (r() < 0.22) blob(treeShadowPt(cl.x + (r() - 0.5) * 30, cl.y + (r() - 0.5) * 30), 4 + r() * 7, 0.85); });
+  TREE_SH = { c, B };
+  return TREE_SH;
+}
+function drawTreeShadow () {
+  const S = treeShadowLayer();
+  ctx.save(); ctx.beginPath(); ctx.rect(S.B.x, 92, GYM_X - 10 - S.B.x, S.B.y + S.B.h); ctx.clip();
+  ctx.globalAlpha = 0.34; ctx.drawImage(S.c, S.B.x, S.B.y, S.B.w, S.B.h); ctx.restore();
+}
+// un pezzo del disegno dell'albero, fra due quote a schermo, sul punto del tronco
+function treePart (y0, y1, rot, crown) {
+  const T = crown ? treeTexture().cc : treeTexture().c;
+  billboard(TREE, () => {
+    ctx.scale(1, 1 / KZ);
+    if (rot) { ctx.translate(0, -TREE_FORK); ctx.rotate(rot); ctx.translate(0, TREE_FORK); }
+    ctx.drawImage(T, 0, (y0 - TREE_BOX.y) * TREE_RES, T.width, (y1 - y0) * TREE_RES, TREE_BOX.x, y0, TREE_BOX.w, y1 - y0);
+  });
+}
+// qualcuno o qualcosa dietro la chioma? (in unità di schermo dell'albero)
+function underCrown () {
+  const hit = (p, h) => {
+    const d = sub(p, TREE), x = d.x * RIGHT.x + d.y * RIGHT.y, b = (d.x * -UP.x + d.y * -UP.y) / (ZK * ZK);
+    const yt = (b - h) * KZ, ym = (b - h / 2) * KZ;
+    return [yt, ym].some(y => y < TREE_CUT && TREE_TEX.M.lobes.some(([lx, ly, lr]) => Math.hypot(x - lx, y - ly) < lr + 12));
+  };
+  return G.workers.some(w => hit(w.body.position, 180)) || G.kids.some(k => hit(k.body.position, 130)) ||
+    G.cases.some(c => hit(c.body.position, 120)) || (G.cart && hit(G.cart.body.position, 180));
+}
+// la chioma, sopra tutto: si muove appena col vento
+function drawTreeTop () {
+  treeTexture(); treeFade += ((underCrown() ? 0.45 : 0.97) - treeFade) * 0.12;
+  ctx.save(); ctx.globalAlpha = treeFade;
+  const sway = Math.sin(performance.now() / 1300) * 0.006;
+  treePart(TREE_BOX.y, TREE_CUT, 0); treePart(TREE_BOX.y, TREE_BOX.y + TREE_BOX.h, sway, true);
+  ctx.restore();
 }
 // il telo grigio sopra il baule in fondo al furgone (vola via alla sorpresa)
 function drawTarp (ce, k) {
