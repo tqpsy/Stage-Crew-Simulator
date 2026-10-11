@@ -28,7 +28,7 @@ uno stile preso altrove. Valgono per le scene che verranno rifatte dopo
 | Personaggi | Figure 3D renderizzate nella vista del gioco con la luce della scena e un filo di controluce sul bordo in alto a sinistra, che le stacca dall'asfalto scuro. Ombra di contatto più ombra lunga. Niente contorni neri. |
 | Materiali | Riconoscibili ma non rumorosi: asfalto, parquet d'acero, intonaco e zoccolo verniciato, alluminio mandorlato, laminato nero dei case. Trama fine, contrasto basso. |
 | Palette | Neutri caldi per l'ambiente (asfalto grigio caldo, acero, intonaco #d9d3c6, zoccolo #5f6f7b, taglio dei muri #3a3d43). Colori saturi **solo** per le funzioni: zone, nastri dei case, cavi, selezione, stati. |
-| Muri | Come in un plastico tagliato: tagliati all'altezza utile, con il taglio scuro in alto e lo spigolo chiaro. Dentro la palestra intonaco, zoccolo verniciato fino a 1 m, battiscopa in gomma. Porte e telai tagliati alla stessa quota del muro. |
+| Muri | Come in un plastico tagliato: tagliati all'altezza utile, con il taglio scuro in alto e lo spigolo chiaro. Dentro la palestra i colori del montaggio: grigio azzurro, fascia blu fino a 72 cm col filo arancio, battiscopa in gomma; sulla parete sinistra finestre, uscite, striscione, spalliere e canestro come al montaggio. La palestra dello scarico è la stessa del montaggio (10 × 14 m, palco, Off Stage, Pit, stessa vista). Porte e telai tagliati alla stessa quota del muro. |
 | Attrezzature | Volumi chiari e dettagli che si leggono a 1,4–1,8 px/cm: profili, sfere, chiusure, maniglie, ruote, griglie. Niente scritte sotto i 9 px a schermo, a parte i nastri. |
 | Interfaccia | L'HTML resta com'è. In scena solo selezione, obiettivi e zone; gli avvisi stanno nella barra in basso. |
 

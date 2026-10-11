@@ -31,6 +31,7 @@ const WHO = only.length ? only : ['topsy', 'macio', 'gerry', 'kid', 'kid2'];
     const save = (data, f) => fs.writeFileSync(path.join(ROOT, 'img/personaggi', f), Buffer.from(data.split(',')[1], 'base64'));
     save(r.data, who + '-atlante.webp');
     meta.figs[who] = { src: 'img/personaggi/' + who + '-atlante.webp', w: r.w, h: r.h, poses: r.poses };
+    if (r.cycle) meta.figs[who].cycle = r.cycle;
     const maskF = path.join(ROOT, 'img/personaggi', who + '-maschera.webp');
     if (r.mask) { save(r.mask, who + '-maschera.webp'); meta.figs[who].mask = 'img/personaggi/' + who + '-maschera.webp'; }
     else if (fs.existsSync(maskF)) fs.unlinkSync(maskF);   // la figura vera ha già i suoi colori: niente maglia da tingere

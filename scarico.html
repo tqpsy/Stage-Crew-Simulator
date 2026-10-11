@@ -285,22 +285,33 @@ const DOOR_X = 780;                    // portellone del furgone
 const VAN = { x1: DOOR_X - 212, x2: DOOR_X, y1: 400, y2: 600 };   // il vano di carico
 const RAMP = { x: DOOR_X, y: 440, w: 110, h: 120 };
 const GYM_X = 1160;                    // muro della palestra (porta con gradino)
-const STEP_BAND = { y1: 420, y2: 580 };   // porta a due ante della palestra: 1,6 m
-const WORLD = { x1: 290, y1: 60, x2: 1900, y2: 940 };
+const STEP_BAND = { y1: 420, y2: 580 };   // porta a due ante della palestra: 1,6 m (gx 4,05-5,65)
+const CHAIRS = { x1: 2200, y1: 925, x2: 2300, y2: 975 };   // sedie impilate in platea, contro il muro
+/* La palestra è quella del montaggio, alla stessa scala (1 m = 100 cm) e con
+   la stessa pianta: larga 10 m (gx del montaggio, in pianta y = GYM.y2 - gx)
+   e profonda 14 m dal muro del cortile (gy 2 → 16, in pianta x = GYM_X +
+   (gy - 2) m). La porta del carico è nel muro di fondo, a gx 4,05-5,65. */
+const GYM = { x2: 2560, y1: -15, y2: 985 };
+const gymPt = (gx, gy) => ({ x: GYM_X + (gy - 2) * 100, y: GYM.y2 - gx * 100 });
+const WORLD = { x1: 290, y1: -60, x2: 2600, y2: 1030 };
 // il cortile fra furgone e palestra: albero, panchina, moka del bidello
-const TREE = { x: 1075, y: 255 }, BENCH = { x: 845, y: 860 }, MOKA = { x: 1100, y: 167 };
+const TREE = { x: 1075, y: 745 }, BENCH = { x: 845, y: 114 }, MOKA = { x: 1100, y: 833 };
 
 /* La palestra è la stessa del montaggio, vista dall'alto: dalla porta del
    cortile si entra nel Backstage (allaccio e quadro), davanti c'è il palco
    già montato (con la scaletta: l'asta e il microfono vanno lì), sotto il palco l'Off Stage con la
    regia, poi il Pit davanti al palco, la platea e in fondo la FOH. I case si
    lasciano dove serviranno al montaggio. */
-const STAGE = { x1: 1290, y1: 276, x2: 1490, y2: 564 };
+// palco (gx 1,5-6, gy 4-8) e accanto, sulla stessa pedana, l'Off Stage (gx 6-10)
+const STAGE = { x1: 1360, y1: 385, x2: 1760, y2: 835 };
+const OFFSTAGE = { x1: 1360, y1: -15, x2: 1760, y2: 385 };
+const PIT = { x1: 1760, x2: 1960 };   // gy 8-10, tutta la larghezza
 const ZONES = {
   palco: { name: 'Palco', color: '#eaff2b', x: STAGE.x1 + 6, y: STAGE.y1 + 6, w: STAGE.x2 - STAGE.x1 - 12, h: STAGE.y2 - STAGE.y1 - 12 },
-  back:  { name: 'Backstage', color: '#ff4fb4', x: 1170, y: 150, w: 115, h: 292 },
-  foh:   { name: 'Off Stage · regia', color: '#49e07a', x: 1292, y: 574, w: 198, h: 272 },
-  pit:   { name: 'Pit', color: '#4fb7ff', x: 1498, y: 160, w: 104, h: 686 }
+  // il Backstage tra il muro e il palco (la parte davanti alla porta resta il passaggio)
+  back:  { name: 'Backstage', color: '#ff4fb4', x: 1172, y: 600, w: 182, h: 377 },
+  foh:   { name: 'Off Stage · regia', color: '#49e07a', x: OFFSTAGE.x1 + 6, y: OFFSTAGE.y1 + 6, w: OFFSTAGE.x2 - OFFSTAGE.x1 - 12, h: OFFSTAGE.y2 - OFFSTAGE.y1 - 12 },
+  pit:   { name: 'Pit', color: '#4fb7ff', x: PIT.x1 + 6, y: GYM.y1 + 6, w: PIT.x2 - PIT.x1 - 12, h: GYM.y2 - GYM.y1 - 12 }
 };
 // i flight case sono fatti per prendere colpi: si rovina qualcosa solo con
 // un urto vero (correre contro un muro, far cadere, lanciare un case)
@@ -460,7 +471,7 @@ function newGame () {
     // non sempre allo stesso secondo, e il cavo s'incastra in uno dei due bauli
     at: { passante1: rand(20, 40), bidello: rand(80, 115), telefono: rand(135, 170), passante2: rand(195, 230) },
     // il SEGNALE è la sorpresa finale: il cavo s'incastra nel CORRENTE
-    cam: { x: DOOR_X + 20, y: 500, scale: 1, zoom: 1, focus: 'van' }, doorsOpen: 0, flashes: [], fx: [],
+    cam: { x: DOOR_X + 20, y: 500, scale: 1, zoom: ZOOM0, focus: 'van' }, doorsOpen: 0, flashes: [], fx: [],
     // tutorial che si gioca: comandi e strumenti compaiono quando servono
     unlock: { help: false, lift: false, stop: false, cart: false, eff: false },
     seen: {}, team: false, trolley: null, van: { open: false, ramp: false, anim: null }, straps: VAN_STRAPS.map(() => true), surprise: null, blockFlash: null, tarp: 0,
@@ -485,10 +496,10 @@ function newGame () {
   wall(DOOR_X - 5, 80, GYM_X, 92); wall(DOOR_X - 5, 908, GYM_X, 920);
   wall(DOOR_X - 6, 80, DOOR_X + 5, VAN.y1 - 12); wall(DOOR_X - 6, VAN.y2 + 12, DOOR_X + 5, 920);
   // palestra
-  wall(GYM_X - 10, 80, GYM_X + 10, STEP_BAND.y1); wall(GYM_X - 10, STEP_BAND.y2, GYM_X + 10, 920);
-  wall(GYM_X, 130, 1870, 150); wall(GYM_X, 850, 1870, 870); wall(1850, 130, 1870, 870);
-  // sedie impilate in palestra, un albero e una panchina in cortile
-  wall(1640, 170, 1740, 220, false);                // sedie impilate in platea
+  wall(GYM_X - 10, GYM.y1 - 20, GYM_X + 10, STEP_BAND.y1); wall(GYM_X - 10, STEP_BAND.y2, GYM_X + 10, GYM.y2 + 20);
+  wall(GYM_X, GYM.y1 - 20, GYM.x2 + 20, GYM.y1); wall(GYM_X, GYM.y2, GYM.x2 + 20, GYM.y2 + 20); wall(GYM.x2, GYM.y1 - 20, GYM.x2 + 20, GYM.y2 + 20);
+  // sedie impilate in platea, un albero e una panchina in cortile
+  wall(CHAIRS.x1, CHAIRS.y1, CHAIRS.x2, CHAIRS.y2, false);
   G.statics.push(Bodies.circle(TREE.x, TREE.y, 18, { isStatic: true, restitution: 0, friction: 0, collisionFilter: { category: CAT.WALL, mask: 0xffff } }));
   wall(BENCH.x, BENCH.y, BENCH.x + 110, BENCH.y + 26, false);
   wall(MOKA.x - 30, MOKA.y - 57, MOKA.x + 30, MOKA.y - 29, false);   // tavolino della moka
@@ -672,36 +683,133 @@ function refreshFilter (ce) {
    --------------------------------------------------------------------- */
 function strapOn (ce) { return ce.strap >= 0 && G.straps[ce.strap]; }
 function locked (ce) { return ce.kind === 'case' && (strapOn(ce) || !!ce.brake); }
-function openDoors () {
+/* Il furgone si apre a mano, con i suoi tempi. PORTELLONE: un'anta alla
+   volta. Chi apre gira la maniglia (le aste di chiusura scattano), poi tiene
+   l'anta per il bordo e la accompagna camminando lungo il suo giro fino a
+   90°, dove resta ferma sul fermo (il recinto del cortile non la lascia
+   aprire di più); fa il giro dell'anta aperta e apre l'altra. Le ante aperte
+   sono un ostacolo vero. RAMPA: sta in piedi dentro il vano; si sganciano i
+   fermi, la si tira fuori fino al bordo del pianale e la si accompagna giù
+   tenendola per il bordo, camminando all'indietro (in due se l'altro è
+   libero), poi tocca terra con un colpo. CINGHIA: si apre il cricchetto e
+   la cinghia cede. Finché un'animazione non finisce il passo dopo non si fa. */
+const ease = u => u <= 0 ? 0 : u >= 1 ? 1 : u * u * (3 - 2 * u);
+// l'anta che arriva sul fermo: un piccolo rimbalzo
+const doorK = u => u <= 0 ? 0 : u < 1 ? ease(u) : 1 - 0.04 * Math.exp(-(u - 1) * 8) * Math.abs(Math.sin((u - 1) * 16));
+const RAMP_ANG = Math.PI / 2;      // la rampa in piedi nel vano (90°)
+const DOOR_L = (VAN.y2 - VAN.y1) / 2 + 6;   // un'anta: metà del vano più la battuta
+// l'anta i (0 verso VAN.y1, 1 verso VAN.y2) aperta di k (0 chiusa, 1 a 90°):
+// cerniera, direzione dell'anta, punta e normale della faccia di fuori
+function doorGeo (i, k) {
+  const sd = i ? -1 : 1, hinge = { x: DOOR_X, y: i ? VAN.y2 + 3 : VAN.y1 - 3 };
+  const a = sd * (Math.PI / 2 - k * Math.PI / 2), dir = { x: Math.cos(a), y: Math.sin(a) };
+  return { sd, a, hinge, dir, tip: add(hinge, mul(dir, DOOR_L)), n: { x: dir.y * sd, y: -dir.x * sd } };
+}
+// la maniglia dell'anta i, aperta di k
+function doorHandle (i, k) { const d = doorGeo(i, k); return add(d.hinge, mul(d.dir, DOOR_L - 12)); }
+// dove ci si mette per aprire l'anta i: fuori dal giro dell'anta, dalla
+// parte della battuta (la destra si apre col braccio destro stando a
+// sinistra, poi la sinistra col braccio sinistro stando a destra)
+function doorSpot (i, r) {
+  const x = DOOR_X + r + 15, y = i ? VAN.y1 + 65 : VAN.y2 - 65, h = doorHandle(i, 0);
+  return { x, y, f: Math.atan2(h.y - y, h.x - x) };
+}
+function openDoor (w, i) {
   if (G.van.open || G.van.anim) return;
-  G.van.anim = { what: 'doors', t: 0 }; AU.clack();
-  bubble(G.player, 'Apro!', 0.8);
+  G.van.anim = { what: 'door', i, t: 0, who: w };
+  if (i === 0) bubble(w, 'Apro!', 0.8);
 }
-function lowerRamp () {
+// l'anta aperta: un ostacolo (ci si gira attorno)
+function doorBody (i) {
+  const d = doorGeo(i, 1), b = Bodies.rectangle(d.hinge.x + DOOR_L / 2, d.hinge.y, DOOR_L, 6,
+    { isStatic: true, restitution: 0, friction: 0, collisionFilter: { category: CAT.WALL, mask: 0xffff } });
+  b.plugin.draw = false; G.statics.push(b); Composite.add(G.world, b);
+}
+function lowerRamp (w, mate) {
   if (!G.van.open || G.van.ramp || G.van.anim) return;
-  G.van.anim = { what: 'ramp', t: 0 }; AU.thud(3);
-  bubble(G.macio, 'Piano con la rampa…', 1.2);
+  w = w || G.macio;
+  G.van.anim = { what: 'ramp', t: 0, who: w, mate: mate || null }; G.van.rampA = RAMP_ANG; G.van.rampX = DOOR_X - 10;
+  AU.clack();
+  bubble(w, mate ? 'Pronti? Giù piano…' : 'Piano con la rampa…', 1.4);
 }
-// fine delle animazioni: portellone aperto, rampa giù
+function openStrap (w) {
+  if (!G.straps[0] || G.van.anim) return;
+  G.van.anim = { what: 'strap', t: 0, who: w || G.player };
+}
+// chi lavora segue l'animazione: x, y dove deve stare adesso
+function vanMove (w, to, f) {
+  if (!w) return;
+  Body.setPosition(w.body, to); Body.setVelocity(w.body, { x: 0, y: 0 }); w.vel = { x: 0, y: 0 };
+  if (f !== undefined) w.facing = f;
+}
 function vanStep (dt) {
   const A = G.van.anim; if (!A) return;
-  A.t += dt;
-  if (A.what === 'doors') {
-    G.doorsOpen = clamp(A.t / 1.0, 0, 1);
-    if (A.t >= 1) {
-      G.van.open = true; G.van.anim = null;
-      goal('Tira giù la rampa: TIRA GIÙ LA RAMPA, qui sotto.');
-      once('legati', 'Dentro i case sono legati con le cinghie e i case con le ruote hanno il freno tirato, come per il viaggio.', 'ok');
+  const t0 = A.t; A.t += dt;
+  const at = x => t0 < x && A.t >= x;            // un istante preciso dell'animazione
+  if (A.what === 'door') {
+    // 0–0,45 la maniglia (o il fermo dell'altra anta); poi l'anta accompagnata fino a 90°
+    const i = A.i, w = A.who, dk = G.van.doorK || (G.van.doorK = [0, 0]);
+    if (i === 0) G.van.lever = ease(A.t / 0.4); else G.van.latch = ease(A.t / 0.35);
+    if (at(0.3)) AU.clack();
+    if (at(0.5)) AU.tone(240, 150, 0.3, 0.05, 'sawtooth');                    // il cigolio dei cardini
+    const k = doorK((A.t - 0.45) / 1.25);
+    dk[i] = k; G.doorsOpen = (dk[0] + dk[1]) / 2;
+    if (at(1.7)) { AU.thud(2); AU.clack(); }                                   // sul fermo
+    // chi apre resta fuori dal giro dell'anta: tira la maniglia col braccio
+    // dalla parte dell'anta e fa un passo indietro; a metà la lascia andare e
+    // l'anta finisce da sola sul fermo
+    if (w) {
+      if (!A.p0) A.p0 = { x: w.body.position.x, y: w.body.position.y };
+      const back = { x: 26, y: i ? -18 : 18 }, u = ease((A.t - 0.5) / 0.55);
+      const to = add(A.p0, mul(back, u)), h = doorHandle(i, Math.min(k, 1));
+      vanMove(w, to, A.t < 1.05 ? Math.atan2(h.y - to.y, h.x - to.x) : undefined);
+    }
+    if (A.t >= 2.0) {
+      dk[i] = 1; G.van.anim = null; doorBody(i);
+      if (i === 1) {
+        G.van.open = true; G.doorsOpen = 1;
+        goal('Tira giù la rampa: TIRA GIÙ LA RAMPA, qui sotto.');
+        once('legati', 'Dentro i case sono legati con le cinghie e i case con le ruote hanno il freno tirato, come per il viaggio.', 'ok');
+      }
     }
   } else if (A.what === 'ramp') {
-    G.van.rampK = clamp(A.t / 0.8, 0, 1);
-    if (A.t >= 0.8) {
-      G.van.ramp = true; G.van.anim = null; AU.thud(5);
+    // 0–0,45 i fermi; 0,45–1,75 giù accompagnata; poi l'ultimo tratto cade da sola e rimbalza
+    // 0–0,4 i fermi; 0,4–1 la si tira fuori in piedi fino al bordo; 1–2,2 giù
+    // accompagnata; poi l'ultimo tratto cade da sola e rimbalza
+    const T0 = 0.4, T1 = 1.0, T2 = 2.2, T3 = 2.4;
+    let ang;
+    if (A.t < T1) ang = RAMP_ANG - 0.05 * ease(A.t / T1);
+    else if (A.t < T2) ang = (RAMP_ANG - 0.05) - (RAMP_ANG - 0.05 - 0.16) * ease((A.t - T1) / (T2 - T1));
+    else if (A.t < T3) { const u = (A.t - T2) / (T3 - T2); ang = 0.16 * (1 - u * u); }
+    else ang = 0.035 * Math.exp(-(A.t - T3) * 9) * Math.abs(Math.sin((A.t - T3) * 22));
+    G.van.rampX = DOOR_X - 10 + 6 * ease((A.t - T0) / (T1 - T0));
+    if (at(0.15) || at(0.32)) AU.clack();
+    if (at(T0 + 0.05)) AU.noise(0.5, 900, 'bandpass', 0.08);                  // la lamiera che striscia sul pianale
+    if (at(T3)) { AU.thud(6); for (const y of [RAMP.y + 8, RAMP.y + RAMP.h / 2, RAMP.y + RAMP.h - 8]) puff(DOOR_X + RAMP.w, y, 5, 'rgba(190,185,175,', 1.6); }
+    G.van.rampA = ang; G.van.rampK = 1 - ang / RAMP_ANG;
+    // chi la tiene sta al bordo alto, e mentre scende ci cammina dietro all'indietro
+    const edge = Math.max(DOOR_X + 16, Math.min(G.van.rampX + Math.cos(Math.max(ang, 0.16)) * RAMP.w, DOOR_X + RAMP.w) + 24);
+    if (A.t < T2 + 0.05) {
+      if (A.mate) {
+        vanMove(A.who, { x: edge, y: RAMP.y + 28 }, Math.PI);
+        vanMove(A.mate, { x: edge, y: RAMP.y + RAMP.h - 28 }, Math.PI);
+      } else vanMove(A.who, { x: edge, y: RAMP.y + RAMP.h / 2 }, Math.PI);
+    }
+    if (A.t >= 2.8) {
+      G.van.ramp = true; G.van.anim = null; G.van.rampA = 0; G.van.rampK = 1;
+      // chi l'ha tenuta si toglie dal fondo della rampa: di lì passano i case
+      [[A.who, { x: DOOR_X + 60, y: 340 }], [A.mate, { x: DOOR_X + 190, y: 372 }]].forEach(([w, to]) => { if (w && !w.jobs.length) w.jobs.push({ kind: 'clear', who: w, to }); });
       Composite.remove(G.world, G.doorWall); G.statics = G.statics.filter(b => b !== G.doorWall);
       G.team = true; G.cartAt = G.t + 3.2;
       bubble(G.macio, 'Ti tiro fuori il carrello.', 2.4);
       goal('Il carico è legato: SGANCIA LA CINGHIA, qui sotto.');
     }
+  } else if (A.what === 'strap') {
+    // 0–0,5 si apre il cricchetto; poi la cinghia cede e scende
+    G.van.ratchet = ease(A.t / 0.45); G.van.slack = ease((A.t - 0.45) / 0.7);
+    if (at(0.15) || at(0.3)) AU.tone(900, 700, 0.04, 0.05, 'square');
+    if (at(0.45)) AU.clack();
+    if (A.t >= 1.25) { G.van.anim = null; G.van.ratchet = 0; G.van.slack = 0; releaseStrap(0); }
   }
 }
 function releaseStrap (i) {
@@ -1166,6 +1274,7 @@ function updateKids (dt) {
         k.target = kidTarget(k, obs);
       }
     }
+    if (!(k.block > G.t) && vanZone(k.target)) { k.wait = 0; k.target = kidTarget(k, obs); }
     // il passante sulla rampa ti deve fermare (si chiede permesso): gli altri si adattano
     if (!(k.block > G.t)) [dir, v] = kidAdapt(k, dir, v, obs, dt);
     drive(Object.assign(k, { fmax: 0.028 }), dir, v);
@@ -1196,12 +1305,14 @@ function kidFree (k, pt, obs) {
   return !overlap(kidProbe, obs.filter(b => b !== k.body));
 }
 // una meta in cortile dove si può stare davvero (non dentro panchina, moka, case)
+// mentre si aprono le ante o scende la rampa i bambini stanno alla larga
+function vanZone (p) { return !!G.van.anim && p.x < DOOR_X + 170 && p.y > VAN.y1 - 50 && p.y < VAN.y2 + 50; }
 function kidTarget (k, obs) {
   let t;
   for (let i = 0; i < 10; i++) {
     t = { x: rand(DOOR_X + 40, GYM_X - 40), y: rand(120, 880) };
-    if (len(sub(t, TREE)) < 70) t.y += 120;
-    if (kidFree(k, t, obs)) break;
+    if (len(sub(t, TREE)) < 70) t.y -= 140;
+    if (kidFree(k, t, obs) && !vanZone(t)) break;
   }
   k.tries = 0;
   return t;
@@ -1292,7 +1403,9 @@ function gerryStep (c, dt) {
       for (const dx of [35, -35, 70, -70, 105, -105, 140, -140, 175, -175]) {
         const x = b.position.x + dx;
         if (x < DOOR_X + 60 || x > GYM_X - 60) continue;
-        if (!gerryHit(c, obs, dx, 40)) { c.sideTo = x; c.waitT = 0; break; }
+        // una corsia libera fino in fondo (non solo il prossimo passo)
+        const rest = c.back ? b.position.y - 110 : 880 - b.position.y;
+        if (!gerryHit(c, obs, dx, Math.max(40, rest))) { c.sideTo = x; c.waitT = 0; break; }
       }
     }
     if (c.waitT > 10 && !c.back) { c.back = true; c.waitT = 0; bubble(c, 'Va be\', passo dopo!', 2); }
@@ -1444,7 +1557,7 @@ const KEEP_CLEAR = [
   { x1: TROLLEY_AT.x - 70, y1: TROLLEY_AT.y - 45, x2: TROLLEY_AT.x + 45, y2: TROLLEY_AT.y + 45 }
 ];
 // i case si posano partendo dal fondo della zona, così il passaggio resta libero
-const ZONE_ANCHOR = { back: { x: 1170, y: 150 }, palco: { x: 1300, y: 300 }, foh: { x: 1490, y: 846 }, pit: { x: 1602, y: 160 } };
+const ZONE_ANCHOR = { back: { x: 1172, y: 977 }, palco: { x: 1366, y: 829 }, foh: { x: 1366, y: -9 }, pit: { x: 1766, y: 979 } };
 
 // il gruppo che si muove insieme: chi guida, quello che tiene, chi aiuta
 function groupOf (w) {
@@ -1877,10 +1990,10 @@ function nearestWait (w, L) { const p = w.body.position; return L.wait.reduce((a
    l'altro sia uscito. Chi deve passarne più d'uno li prende tutti insieme,
    così nessuno resta in mezzo ad aspettare l'altro. */
 const LANES = [
-  { box: { x1: VAN.x1 - 10, y1: VAN.y1 - 10, x2: DOOR_X + RAMP.w + 20, y2: VAN.y2 }, way: KEEP_CLEAR[0], wait: [{ x: DOOR_X + 150, y: 378 }] },
+  { box: { x1: VAN.x1 - 10, y1: VAN.y1 - 10, x2: DOOR_X + RAMP.w + 20, y2: VAN.y2 }, way: KEEP_CLEAR[0], wait: [{ x: DOOR_X + 168, y: 372 }] },
   { box: { x1: GYM_X - 45, y1: STEP_BAND.y1, x2: GYM_X + 45, y2: STEP_BAND.y2 }, way: KEEP_CLEAR[1], wait: [{ x: GYM_X - 100, y: 372 }, { x: GYM_X + 64, y: 640 }] }
 ];
-const laneLead = w => w.job && w.job.kind === 'help' ? w.job.lead : w;
+const laneLead = w => w.job && (w.job.kind === 'help' || w.job.kind === 'vanHelp') ? w.job.lead : w;
 const inBox = (x, y, k, m) => x > k.x1 - m && x < k.x2 + m && y > k.y1 - m && y < k.y2 + m;
 function groupIn (w, L) {
   const g = groupOf(w), bs = [w.body];
@@ -2092,6 +2205,26 @@ function canExtract (w, ce, pose) {
     Body.setPosition(w.body, sv.p); Body.setPosition(ce.body, cp); Body.setAngle(ce.body, ca);
   }
 }
+// lo stesso per il case da due: chi guida in a, chi aiuta in b
+function canExtractPair (lead, help, ce, a, b) {
+  const sv = [lead, help].map(w => ({ w, p: { x: w.body.position.x, y: w.body.position.y }, f: w.facing, grab: w.grab, hold: w.hold, mode: w.mode }));
+  const cp = { x: ce.body.position.x, y: ce.body.position.y }, ca = ce.body.angle, gb = ce.grabbers;
+  Body.setPosition(lead.body, a); Body.setPosition(help.body, b);
+  lead.facing = a.f; lead.grab = ce; lead.hold = { off: rot(sub(cp, a), -a.f), rel: angDiff(ca, a.f) };
+  help.facing = b.f; help.grab = ce; help.hold = { helper: true, local: rot(sub(b, cp), -ca) };
+  ce.grabbers = [lead, help];
+  try { return !!plan(groupOf(lead), { x: DOOR_X + 150, y: RAMP.y + RAMP.h / 2, tol: 40 }, 'none'); }
+  finally {
+    for (const v of sv) { Object.assign(v.w, { facing: v.f, grab: v.grab, hold: v.hold, mode: v.mode }); Body.setPosition(v.w.body, v.p); }
+    ce.grabbers = gb; Body.setPosition(ce.body, cp); Body.setAngle(ce.body, ca);
+  }
+}
+// le coppie di posti da cui il case da due esce davvero dal furgone
+function extractPairs (lead, help, ce, max) {
+  const ok = [];
+  for (const pr of pairPoses(lead, help, ce, true)) { if (canExtractPair(lead, help, ce, pr[0], pr[1])) ok.push(pr); if (ok.length >= max) break; }
+  return ok;
+}
 // i lati da cui un case in mano esce dal furgone; se non ce n'è nessuno,
 // quali case vicini vanno tolti prima (si prova a toglierne uno alla volta)
 function extractPoses (w, ce, max) {
@@ -2100,12 +2233,12 @@ function extractPoses (w, ce, max) {
   return ok;
 }
 function extractNeeds (w, ce) {
-  const out = [], c = ce.body.position;
+  const out = [], c = ce.body.position, mate = other(w);
   for (const o of G.cases) {
     if (o === ce || o.hidden || !inVan(o) || blockers(o).length || Math.hypot(o.body.position.x - c.x, o.body.position.y - c.y) > 90) continue;
     const op = { x: o.body.position.x, y: o.body.position.y };
     Body.setPosition(o.body, { x: -9000, y: -9000 });
-    const yes = extractPoses(w, ce, 1).length > 0;
+    const yes = ce.def.heavy2 ? extractPairs(w, mate, ce, 1).length > 0 : extractPoses(w, ce, 1).length > 0;
     Body.setPosition(o.body, op);
     if (yes) out.push(o);
   }
@@ -2126,7 +2259,7 @@ function grabAt (w, ce, f) {
 }
 // per il case da due: un posto per chi guida e uno per chi aiuta (lati
 // opposti, oppure lo stesso lato lungo, uno per capo)
-function pairPoses (lead, help, ce) {
+function pairPoses (lead, help, ce, all) {
   const L = grabPoses(lead, ce, true), H = grabPoses(help, ce, true), out = [];
   for (const a of L) for (const b of H) {
     const opp = a.n.x === -b.n.x && a.n.y === -b.n.y && !a.t && !b.t;
@@ -2135,7 +2268,7 @@ function pairPoses (lead, help, ce) {
     if (opp || same || side) out.push([a, b, opp ? 0 : same ? 1 : 2]);
   }
   const p = lead.body.position;
-  return out.sort((u, v) => u[2] - v[2] || Math.hypot(u[0].x - p.x, u[0].y - p.y) - Math.hypot(v[0].x - p.x, v[0].y - p.y)).slice(0, 6);
+  return out.sort((u, v) => u[2] - v[2] || Math.hypot(u[0].x - p.x, u[0].y - p.y) - Math.hypot(v[0].x - p.x, v[0].y - p.y)).slice(0, all ? 40 : 6);
 }
 
 /* GLI INCARICHI — un ordine diventa una fila di passi: raggiungere,
@@ -2152,7 +2285,13 @@ function canWork (w) {
 function destName (d) { return d.zone ? ZONES[d.zone].name : 'qui'; }
 function buildSteps (j) {
   const t = G.trolley, S = [], ce = j.ce;
+  if (j.kind === 'van' && j.what === 'doors') {
+    // un'anta, il giro attorno a lei aperta, l'altra
+    const sp = i => doorSpot(i, j.who.r);
+    return [{ k: 'walk', to: sp(0) }, { k: 'vanDoor', i: 0 }, { k: 'walk', to: sp(1) }, { k: 'vanDoor', i: 1 }];
+  }
   if (j.kind === 'van') return [{ k: 'walk', to: VAN_SPOT[j.what] }, { k: 'van' }];
+  if (j.kind === 'vanHelp') return [{ k: 'walk', to: VAN_SPOT.ramp2 }, { k: 'vanHelp' }];
   if (j.kind === 'coffee') return [{ k: 'walk', to: { x: MOKA.x, y: MOKA.y + 4, f: -Math.PI / 2 } }, { k: 'coffee' }];
   if (j.kind === 'help') return [{ k: 'helpWait' }];
   if (j.kind === 'clear') return [{ k: 'walk', to: j.to, loose: true }];
@@ -2171,9 +2310,11 @@ function buildSteps (j) {
   S.push({ k: 'cartHaul', dest: j.dest }, { k: 'unload' }, { k: 'cartBack' }, { k: 'park' });
   return t ? S : [];
 }
+// dove ci si mette: alla maniglia, ai due capi della rampa in piedi, sul pianale al cricchetto
 const VAN_SPOT = {
-  doors: { x: DOOR_X + 62, y: 500, f: Math.PI }, ramp: { x: DOOR_X + 62, y: 500, f: Math.PI },
-  strap: { x: DOOR_X + 26, y: 500, f: Math.PI }
+  doors: { x: DOOR_X + 28, y: 512, f: Math.PI },
+  ramp: { x: DOOR_X + 34, y: RAMP.y + 28, f: Math.PI }, ramp2: { x: DOOR_X + 34, y: RAMP.y + RAMP.h - 28, f: Math.PI },
+  strap: { x: DOOR_X + 28, y: 500, f: Math.PI }
 };
 // i passi: 'done' quando è fatto, 'fail' se non si può (con s.why), se no si continua
 const STEPS = {
@@ -2184,12 +2325,34 @@ const STEPS = {
     if (r === 'fail') s.why = 'Non ci arrivo: c\'è qualcosa in mezzo.';
     return r;
   },
-  van (w, j, s) {
+  van (w, j, s, dt) {
     if (!s.started) {
-      s.started = true;
-      if (j.what === 'doors') openDoors(); else if (j.what === 'ramp') lowerRamp(); else if (j.what === 'strap') releaseStrap(0);
+      if (j.what === 'ramp') {
+        // la rampa in due, se l'altro è libero: lo si chiama e lo si aspetta
+        const m = other(w);
+        if (!s.asked) {
+          s.asked = true;
+          if (!busy(m) && canWork(m)) { s.hj = { kind: 'vanHelp', who: m, lead: w }; m.jobs.push(s.hj); s.mate = m; bubble(w, w === G.player ? 'Macio, mi dai una mano?' : 'Tieni l\'altro capo!', 1.4); }
+        }
+        const m2 = s.mate;
+        if (m2 && !s.hj.ready) {
+          s.wait = (s.wait || 0) + dt;
+          if (s.wait < 8 && (m2.job === s.hj || m2.jobs.includes(s.hj))) return 'run';
+          s.mate = null;
+        }
+        s.started = true; lowerRamp(w, s.mate);
+      } else { s.started = true; if (j.what === 'strap') openStrap(w); }
     }
     return G.van.anim ? 'run' : 'done';
+  },
+  vanDoor (w, j, s) {
+    if (!s.started) { if (G.van.anim) return 'run'; s.started = true; openDoor(w, s.i); }
+    return G.van.anim && G.van.anim.what === 'door' ? 'run' : 'done';
+  },
+  vanHelp (w, j) {
+    j.ready = true; w.facing = Math.PI;
+    if (!G.van.anim && G.van.ramp) return 'done';
+    return j.lead.job && j.lead.job.kind === 'van' ? 'run' : 'done';
   },
   coffee () { return G.coffee.used ? 'done' : 'run'; },
   reach (w, j, s, dt) {
@@ -2205,7 +2368,15 @@ const STEPS = {
     s.waiting = false;
     if (!s.poses) {
       if (ce.def.heavy2) {
-        const mate = other(w), pairs = pairPoses(w, mate, ce);
+        const mate = other(w), pairs = inVan(ce) ? extractPairs(w, mate, ce, 3) : pairPoses(w, mate, ce);
+        // nel furgone: solo da dove poi si esce in due col case in mano
+        if (!pairs.length && inVan(ce)) {
+          const nd = extractNeeds(w, ce);
+          if (nd.some(o => o.job) && (s.wait = (s.wait || 0) + 0.5) < 45) { s.waiting = true; s.waitFor = nd.find(o => o.job); s.pause = 0.5; return 'run'; }
+          if (retry(s, dt)) return 'run';
+          cantExtract(w, ce, nd); s.why = null; s.line = 'Così non esce, prima togliamo il resto!'; return 'fail';
+        }
+        s.waiting = false;
         // tutti e due devono arrivarci: chi aiuta prova il suo posto prima di partire
         for (const [a, b] of pairs) {
           if (!plan(groupOf(w), a) || !plan(groupOf(mate), b)) continue;
@@ -2441,7 +2612,7 @@ function updateJobs (w, dt) {
   if (G.qte && w.grab === G.qte.ce) return;        // Uno… due… ISSA!
   const s = j.steps[j.si];
   if (s && s.pause > 0) { s.pause -= dt; return; }
-  if (!s) { endJob(w, j); if (w === G.macio && j.kind !== 'help' && j.kind !== 'van') bubble(w, 'Fatto!', 1); return; }
+  if (!s) { endJob(w, j); if (w === G.macio && j.kind !== 'help' && j.kind !== 'van' && j.kind !== 'vanHelp') bubble(w, 'Fatto!', 1); return; }
   const r = STEPS[s.k](w, j, s, dt);
   if (r === 'done') j.si++;
   else if (r === 'fail') failJob(w, j, s.why, s.line);
@@ -2595,6 +2766,42 @@ function tapAt (p, sp) {
   if (G.sel.pickTop) return;
   cancelSel();
 }
+/* chi sta in piedi accanto a un solido lungo (un case, un'anta, la rampa):
+   l'ordine "dal fondo verso chi guarda" col punto più vicino del solido non
+   basta (un case lungo sporge verso chi guarda anche se la persona gli sta
+   davanti). Qui per ogni persona si guarda il punto del solido più vicino a
+   lei: se sta dalla parte di chi guarda il solido va davanti, se no dietro. */
+function closestOnPoly (pts, c) {
+  let best = null, bd = Infinity, inside;
+  for (let i = 0; i < pts.length; i++) {
+    const a = pts[i], b = pts[(i + 1) % pts.length], ab = sub(b, a), t = clamp(((c.x - a.x) * ab.x + (c.y - a.y) * ab.y) / (ab.x * ab.x + ab.y * ab.y || 1), 0, 1);
+    const q = { x: a.x + ab.x * t, y: a.y + ab.y * t }, d = Math.hypot(q.x - c.x, q.y - c.y);
+    if (d < bd) { bd = d; best = q; }
+  }
+  let pos = 0, neg = 0;
+  for (let i = 0; i < pts.length; i++) {
+    const a = pts[i], b = pts[(i + 1) % pts.length], cr = (b.x - a.x) * (c.y - a.y) - (b.y - a.y) * (c.x - a.x);
+    if (cr > 0) pos++; else if (cr < 0) neg++;
+  }
+  inside = !(pos && neg);
+  return { q: best, d: bd, inside };
+}
+function standOrder (L) {
+  const polys = L.filter(o => Array.isArray(o.fp));
+  for (const o of L) {
+    if (!o.fp || Array.isArray(o.fp)) continue;
+    const c = o.fp.c; let lo = -Infinity, hi = Infinity;
+    for (const P of polys) {
+      const { q, d, inside } = closestOnPoly(P.fp, c);
+      if (d > 160 || d < 1e-6 || inside) continue;
+      const s = ((q.x - c.x) * SA + (q.y - c.y) * CA) / d;
+      if (Math.abs(s) < 0.25) continue;                       // di fianco: non si coprono
+      if (s > 0) hi = Math.min(hi, P.y); else lo = Math.max(lo, P.y);
+    }
+    if (lo >= hi) o.y = lo + 0.01;                            // non si può accontentare tutti: meglio vederlo
+    else o.y = clamp(o.y, lo + 0.01, hi - 0.01);
+  }
+}
 function screenToWorld (s, z) {
   const u = (s.x - W / 2) / G.cam.scale, v = ((s.y - H / 2) / G.cam.scale + (z || 0) * KZ) / KY;
   return { x: u * CA + v * SA + G.cam.x, y: -u * SA + v * CA + G.cam.y };
@@ -2611,6 +2818,7 @@ function stepSim () {
     if (G.introT > 0.8) { G.mode = 'play'; goal('Il furgone è chiuso: APRI IL PORTELLONE, qui sotto (o tocca il portellone).'); }
   } else if (G.mode === 'play') {
     G.t += dt;
+    G.workers.forEach(w => { w.vanPrev = { x: w.body.position.x, y: w.body.position.y }; });
     vanStep(dt);
     scriptEvents();
     progress();
@@ -2641,7 +2849,11 @@ function stepSim () {
     w.mv = sub(w.body.position, prevW[i]); w.spd = len(w.mv);
     w.stillT = w.spd < 0.1 && w.job ? (w.stillT || 0) + dt : 0;
     if (!w.grab) { w.vel = { x: w.body.velocity.x, y: w.body.velocity.y }; if (len(w.vel) > w.vmax * 1.3) w.vel = mul(norm(w.vel), w.vmax * 1.3); }
-    w.stride = (w.stride || 0) + w.spd;
+    // i passi del furgone (vanStep sposta prima di qui) contano come gli altri;
+    // all'indietro il passo va al contrario
+    if (w.vanPrev) { const m = sub(prevW[i], w.vanPrev); if (len(m) > 0.01) { w.mv = add(w.mv, m); w.spd = len(w.mv); } w.vanPrev = null; }
+    const fw = Math.cos(w.facing) * w.mv.x + Math.sin(w.facing) * w.mv.y;
+    w.stride = (w.stride || 0) + (fw < -0.3 * w.spd ? -w.spd : w.spd);
   });
   for (const k of G.kids) k.stride = (k.stride || 0) + speedOf(k.body);
   G.cases.forEach((ce, i) => {
@@ -2696,8 +2908,14 @@ function seeded (s) { let x = Math.sin(s) * 10000; return () => { x = Math.sin(x
    --------------------------------------------------------------------- */
 // la stessa inquadratura della foto dell'action figure di Topsy: dall'alto a
 // circa 38° e di tre quarti (mondo girato di 45°, come un isometrico)
-const EL = 38 * Math.PI / 180, TH = Math.PI / 4;
+// Il mondo è girato come al montaggio: la palestra scende verso sinistra dal
+// muro del cortile (in pianta +x = profondità della sala, gy del montaggio) e
+// la sua larghezza va verso destra (in pianta -y = gx del montaggio).
+const EL = 38 * Math.PI / 180, TH = 3 * Math.PI / 4;
 const KY = Math.sin(EL), KZ = Math.cos(EL), ZK = KZ / KY, CA = Math.cos(TH), SA = Math.sin(TH);
+// il sole, in pianta: le ombre cadono a schermo in basso e un po' a destra
+// (come la luce delle figure, che viene da in alto a sinistra dello schermo)
+const SUN = (() => { const a = Math.PI / 4 - TH, c = Math.cos(a), s = Math.sin(a); return { x: 0.35 * c - 0.22 * s, y: 0.35 * s + 0.22 * c }; })();
 // in pianta: verso lo schermo in alto (per un cm di altezza) e verso destra a schermo
 const UP = { x: -SA * ZK, y: -CA * ZK }, RIGHT = { x: CA, y: -SA };
 const dep = p => p.x * SA + p.y * CA;                     // profondità: più grande = più vicino
@@ -2867,7 +3085,7 @@ function prism (pts, z0, z1, top, side, o) {
 // l'ombra per terra di un solido alto h (sole in alto a sinistra), sfumata:
 // la sagoma si disegna lontano e torna al suo posto solo come ombra
 function dropShadow (pts, h, a) {
-  const dx = h * 0.35, dy = h * 0.22, t = ctx.getTransform(), far = 20000;
+  const dx = h * SUN.x, dy = h * SUN.y, t = ctx.getTransform(), far = 20000;
   ctx.save();
   ctx.shadowColor = 'rgba(0,0,0,' + (a || 0.3) + ')';
   ctx.shadowBlur = Math.max(2, (4 + h * 0.1) * t.a);
@@ -3073,7 +3291,7 @@ function tintFig (f) {
 function figShadow (p, h, r) {
   ctx.save(); ctx.translate(p.x, p.y);
   ctx.fillStyle = 'rgba(0,0,0,.36)'; ctx.beginPath(); ctx.ellipse(1, 1, r, r * 0.72, 0, 0, Math.PI * 2); ctx.fill();
-  const L = h * 0.41, a = Math.atan2(0.22, 0.35);
+  const L = h * 0.41, a = Math.atan2(SUN.y, SUN.x);
   ctx.rotate(a); ctx.scale(1, 0.42);
   const g = ctx.createRadialGradient(L * 0.5, 0, 2, L * 0.5, 0, L * 0.62); g.addColorStop(0, 'rgba(0,0,0,.24)'); g.addColorStop(1, 'rgba(0,0,0,0)');
   ctx.fillStyle = g; ctx.beginPath(); ctx.ellipse(L * 0.5, 0, L * 0.62, L * 0.62, 0, 0, Math.PI * 2); ctx.fill();
@@ -3082,9 +3300,10 @@ function figShadow (p, h, r) {
 // la figura dall'atlante: o.facing (angolo in pianta), o.phase (0..1 del passo, null = fermo), o.arms
 function drawAtlas (f, p, o) {
   const P = f.A.poses, pose = P[o.arms] ? o.arms : P.giu ? 'giu' : Object.keys(P)[0];
-  const d = ((Math.round((o.facing || 0) / (Math.PI / 4)) % 8) + 8) % 8;
-  const k = o.phase == null ? 0 : 1 + (Math.floor(o.phase * FIG_ATLAS.WALK) % FIG_ATLAS.WALK + FIG_ATLAS.WALK) % FIG_ATLAS.WALK;
-  const [x, y, w, h, ax, ay] = P[pose][d][k], s = worldToScreen(p), q = G.cam.scale / FIG_ATLAS.RES;
+  const d = ((Math.round(((o.facing || 0) + (TH - Math.PI / 4)) / (Math.PI / 4)) % 8) + 8) % 8;   // l'atlante è fatto con la vista di prima (TH 45°): qui il mondo è girato di 90°
+  const row = P[pose][d], nw = row.length - 1;
+  const k = o.phase == null ? 0 : 1 + (Math.floor(o.phase * nw) % nw + nw) % nw;
+  const [x, y, w, h, ax, ay] = row[k], s = worldToScreen(p), q = G.cam.scale / FIG_ATLAS.RES;
   ctx.save(); ctx.setTransform(DPR, 0, 0, DPR, 0, 0); ctx.translate(s.x, s.y);
   if (w < 0) { ctx.scale(-1, 1); ctx.drawImage(f.img, x, y, -w, h, -(-w - ax) * q, -ay * q, -w * q, h * q); }
   else ctx.drawImage(f.img, x, y, w, h, -ax * q, -ay * q, w * q, h * q);
@@ -3173,13 +3392,13 @@ function drawGround () {
   // strisce del parcheggio accanto al furgone, tombino, crepe e foglie
   ctx.strokeStyle = 'rgba(238,233,223,.18)'; ctx.lineWidth = 3;
   [[VAN.x1 + 40, VAN.y1 - 44], [VAN.x1 + 40, VAN.y2 + 44]].forEach(([x, y]) => { ctx.beginPath(); ctx.moveTo(x, y); ctx.lineTo(x + 110, y); ctx.stroke(); });
-  const MH = { x: 905, y: 330 };
+  const MH = { x: 905, y: 670 };
   ctx.fillStyle = '#26282d'; ctx.beginPath(); ctx.arc(MH.x, MH.y, 20, 0, Math.PI * 2); ctx.fill();
   ctx.strokeStyle = '#3c3f46'; ctx.lineWidth = 2; ctx.beginPath(); ctx.arc(MH.x, MH.y, 20, 0, Math.PI * 2); ctx.stroke();
   for (let i = -12; i <= 12; i += 6) { ctx.beginPath(); ctx.moveTo(MH.x + i, MH.y - 17); ctx.lineTo(MH.x + i, MH.y + 17); ctx.stroke(); }
   ctx.strokeStyle = 'rgba(12,13,15,.55)'; ctx.lineWidth = 0.8;
   const cr = seeded(9);
-  [[[815, 230], [845, 242], [859, 270], [895, 280]], [[1000, 520], [1025, 540], [1030, 575]], [[800, 860], [830, 850], [790, 885]]].forEach(pts => {
+  [[[815, 770], [845, 758], [859, 730], [895, 720]], [[1000, 480], [1025, 460], [1030, 425]], [[800, 140], [830, 150], [790, 115]]].forEach(pts => {
     ctx.beginPath(); ctx.moveTo(pts[0][0], pts[0][1]);
     for (let i = 1; i < pts.length; i++) { const [x0, y0] = pts[i - 1], [x1, y1] = pts[i]; for (let t = 0.2; t <= 1.001; t += 0.2) ctx.lineTo(x0 + (x1 - x0) * t + (cr() - 0.5) * 4, y0 + (y1 - y0) * t + (cr() - 0.5) * 4); }
     ctx.stroke();
@@ -3207,44 +3426,58 @@ function drawGround () {
   }
   // campetto e campana disegnati per terra
   ctx.strokeStyle = 'rgba(226,222,212,.22)'; ctx.lineWidth = 5; ctx.setLineDash([40, 3, 22, 2]);
-  ctx.strokeRect(810, 610, 250, 220); ctx.beginPath(); ctx.arc(935, 720, 40, 0, Math.PI * 2); ctx.stroke();
-  ctx.beginPath(); ctx.moveTo(935, 610); ctx.lineTo(935, 830); ctx.stroke();
+  ctx.strokeRect(810, 170, 250, 220); ctx.beginPath(); ctx.arc(935, 280, 40, 0, Math.PI * 2); ctx.stroke();
+  ctx.beginPath(); ctx.moveTo(935, 170); ctx.lineTo(935, 390); ctx.stroke();
   ctx.setLineDash([]); ctx.strokeStyle = 'rgba(214,180,70,.28)'; ctx.lineWidth = 4;
-  [[1110, 800], [1110, 760], [1090, 720], [1130, 720], [1110, 680], [1090, 640], [1130, 640]].forEach(([x, y]) => ctx.strokeRect(x - 18, y - 18, 36, 36));
-  // palestra: parquet
-  ctx.fillStyle = mats().wood; ctx.fillRect(GYM_X, 140, 700, 720);
-  ctx.fillStyle = 'rgba(255,214,150,.06)'; ctx.fillRect(GYM_X, 140, 700, 720);   // vernice lucida del parquet
-  ctx.strokeStyle = 'rgba(0,0,0,.18)'; ctx.lineWidth = 1;
-
-  ctx.strokeStyle = 'rgba(30,90,170,.45)'; ctx.lineWidth = 5;
-  ctx.strokeRect(1200, 190, 620, 620); ctx.beginPath(); ctx.arc(1510, 500, 70, 0, Math.PI * 2); ctx.stroke();
-  // luce delle finestrone sul parquet
-  ctx.fillStyle = 'rgba(255,236,190,.05)';
-  for (let x = 1230; x < 1600; x += 110) { ctx.beginPath(); ctx.moveTo(x, 150); ctx.lineTo(x + 60, 150); ctx.lineTo(x + 110, 330); ctx.lineTo(x + 50, 330); ctx.fill(); }
-  // spalliere lungo il muro in basso
-  ctx.fillStyle = '#7b5634';
-  for (let x = 1420; x < 1600; x += 22) ctx.fillRect(x, 826, 16, 22);
-  ctx.fillStyle = 'rgba(0,0,0,.25)'; ctx.fillRect(1418, 846, 182, 4);
-  // il palco già montato (come al montaggio): pedana con la striscia di luce
-  const S = STAGE, sw = S.x2 - S.x1, sh = S.y2 - S.y1;
-  ctx.fillStyle = 'rgba(0,0,0,.4)'; ctx.fillRect(S.x1 + 6, S.y1 + 6, sw, sh);
-  // pedane da palco 2 × 1 m: piano nero antiscivolo, bordo d'alluminio
-  ctx.fillStyle = '#232220'; ctx.fillRect(S.x1, S.y1, sw, sh);
-  ctx.save(); ctx.globalAlpha = 0.6; ctx.fillStyle = mats().asphalt; ctx.fillRect(S.x1, S.y1, sw, sh); ctx.restore();
-  ctx.fillStyle = 'rgba(20,19,18,.55)'; ctx.fillRect(S.x1, S.y1, sw, sh);
-  ctx.strokeStyle = '#8a9099'; ctx.lineWidth = 1.5;
-  for (let x = S.x1; x < S.x2; x += 100) for (let y = S.y1; y < S.y2; y += 200) ctx.strokeRect(x + 0.75, y + 0.75, Math.min(100, S.x2 - x) - 1.5, Math.min(200, S.y2 - y) - 1.5);
-  ctx.fillStyle = '#f2a541'; ctx.globalAlpha = 0.45; ctx.fillRect(S.x2 - 3, S.y1, 3, sh); ctx.globalAlpha = 1;
-  ctx.fillStyle = '#6e1f24'; ctx.fillRect(S.x1, S.y1, 8, sh);                       // fondale verso il backstage
-  ctx.fillStyle = 'rgba(0,0,0,.25)'; for (let y = S.y1 + 4; y < S.y2; y += 14) ctx.fillRect(S.x1, y, 8, 4);
-  ctx.fillStyle = '#4a3d33'; for (let i = 0; i < 3; i++) ctx.fillRect(S.x2 - 30 + i * 9, S.y2, 8, 22);   // scaletta
-  ctx.save(); ctx.fillStyle = 'rgba(238,233,223,.35)'; ctx.font = '700 30px "Barlow Condensed", sans-serif'; ctx.textAlign = 'center';
-  ctx.fillStyle = 'rgba(238,233,223,.12)'; ctx.font = '700 34px "Barlow Condensed", sans-serif';
-  ctx.fillText('PLATEA', 1690, 520);
-  ctx.font = '700 22px "Barlow Condensed", sans-serif'; ctx.fillText('FOH', 1808, 520);
-  ctx.restore();
-  ctx.strokeStyle = 'rgba(238,233,223,.12)'; ctx.lineWidth = 2; ctx.setLineDash([8, 8]);
-  ctx.beginPath(); ctx.moveTo(1610, 150); ctx.lineTo(1610, 850); ctx.moveTo(1770, 150); ctx.lineTo(1770, 850); ctx.stroke(); ctx.setLineDash([]);
+  [[1110, 200], [1110, 240], [1090, 280], [1130, 280], [1110, 320], [1090, 360], [1130, 360]].forEach(([x, y]) => ctx.strokeRect(x - 18, y - 18, 36, 36));
+  // la palestra, come al montaggio: Backstage in cemento a lastre, poi il
+  // parquet a doghe, le righe sbiadite del campo da basket e la fascia del Pit
+  const gq = (gx0, gy0, gx1, gy1) => { const p = gymPt(gx0, gy0), q = gymPt(gx1, gy1); return [Math.min(p.x, q.x), Math.min(p.y, q.y), Math.abs(q.x - p.x), Math.abs(q.y - p.y)]; };
+  ctx.fillStyle = '#4a4c52'; ctx.fillRect(...gq(0, 2, 10, 4));
+  ctx.save(); ctx.globalAlpha = 0.35; ctx.fillStyle = M.concrete; ctx.fillRect(...gq(0, 2, 10, 4)); ctx.restore();
+  ctx.fillStyle = 'rgba(0,0,0,.22)'; for (let gx = 2; gx < 10; gx += 2) ctx.fillRect(...gq(gx, 2, gx + 0.02, 4));
+  ctx.fillStyle = mats().wood; ctx.fillRect(...gq(0, 4, 10, 16));
+  ctx.fillStyle = 'rgba(120,80,40,.18)'; ctx.fillRect(...gq(0, 4, 10, 16));   // acero scurito, come al montaggio
+  ctx.fillStyle = 'rgba(255,214,150,.05)'; ctx.fillRect(...gq(0, 4, 10, 16));   // vernice lucida del parquet
+  const line = (pts, col, w) => { ctx.strokeStyle = col; ctx.lineWidth = w; ctx.beginPath(); pts.forEach(([gx, gy], i) => { const q = gymPt(gx, gy); i ? ctx.lineTo(q.x, q.y) : ctx.moveTo(q.x, q.y); }); ctx.stroke(); };
+  line([[0.5, 8.5], [0.5, 15.6], [9.5, 15.6], [9.5, 8.5]], 'rgba(233,228,214,.28)', 5);
+  { const arc = []; for (let t = 0; t <= Math.PI + 1e-6; t += Math.PI / 24) arc.push([5 + Math.cos(t) * 1.8, 15.6 - Math.sin(t) * 1.8]); line(arc, 'rgba(233,228,214,.28)', 5); }
+  line([[3.8, 15.6], [3.8, 13.4], [6.2, 13.4], [6.2, 15.6]], 'rgba(214,57,47,.32)', 5);
+  ctx.fillStyle = 'rgba(0,0,0,.18)'; ctx.fillRect(...gq(0, 8, 10, 10));            // Pit: fascia più scura
+  // griglia di posa appena accennata (un metro), per orientarsi come al montaggio
+  ctx.fillStyle = 'rgba(255,255,255,.045)';
+  for (let gx = 1; gx < 10; gx++) ctx.fillRect(...gq(gx, 2, gx + 0.015, 16));
+  for (let gy = 3; gy < 16; gy++) ctx.fillRect(...gq(0, gy, 10, gy + 0.015));
+  // luce delle finestre della parete sinistra, chiazze fredde sul parquet
+  ctx.fillStyle = 'rgba(190,210,255,.05)';
+  for (let gy = 10.4; gy < 15; gy += 2.1) { const p = [[0.7, gy + 0.9], [2.1, gy + 1.5], [2.1, gy + 3], [0.7, gy + 2.4]].map(([a, b]) => gymPt(a, Math.min(b, 15.9))); ctx.beginPath(); p.forEach((q, i) => i ? ctx.lineTo(q.x, q.y) : ctx.moveTo(q.x, q.y)); ctx.fill(); }
+  // il palco già montato e accanto l'Off Stage, sulla stessa pedana (come al
+  // montaggio): pedane 2 × 1 m, piano nero antiscivolo, bordo d'alluminio
+  for (const S of [STAGE, OFFSTAGE]) {
+    const sw = S.x2 - S.x1, sh = S.y2 - S.y1, off = S === OFFSTAGE;
+    ctx.fillStyle = 'rgba(0,0,0,.4)'; ctx.fillRect(S.x1 + 6, S.y1 + 6, sw, sh);
+    ctx.fillStyle = off ? '#1b1b1a' : '#232220'; ctx.fillRect(S.x1, S.y1, sw, sh);
+    ctx.save(); ctx.globalAlpha = 0.6; ctx.fillStyle = mats().asphalt; ctx.fillRect(S.x1, S.y1, sw, sh); ctx.restore();
+    ctx.fillStyle = 'rgba(20,19,18,.55)'; ctx.fillRect(S.x1, S.y1, sw, sh);
+    ctx.strokeStyle = off ? 'rgba(138,144,153,.45)' : '#8a9099'; ctx.lineWidth = 1.5;
+    for (let x = S.x1; x < S.x2; x += 100) for (let y = S.y1; y < S.y2; y += 200) ctx.strokeRect(x + 0.75, y + 0.75, Math.min(100, S.x2 - x) - 1.5, Math.min(200, S.y2 - y) - 1.5);
+  }
+  { const S = STAGE, sh = S.y2 - S.y1;
+    ctx.fillStyle = '#f2a541'; ctx.globalAlpha = 0.45; ctx.fillRect(S.x2 - 3, S.y1, 3, sh); ctx.globalAlpha = 1;
+    ctx.fillStyle = '#6e1f24'; ctx.fillRect(S.x1, S.y1, 8, sh);                       // fondale verso il backstage
+    ctx.fillStyle = 'rgba(0,0,0,.25)'; for (let y = S.y1 + 4; y < S.y2; y += 14) ctx.fillRect(S.x1, y, 8, 4);
+    ctx.fillStyle = '#4a3d33'; for (let i = 0; i < 3; i++) ctx.fillRect(S.x2, S.y2 - 30 + i * 9, 22, 8);   // scaletta verso il Pit
+  }
+  // bordo dell'Off Stage: nastro giallo e nero a tratti, come al montaggio
+  ctx.save(); ctx.strokeStyle = '#e8bd3a'; ctx.lineWidth = 6; ctx.setLineDash([22, 14]);
+  ctx.beginPath(); ctx.moveTo(OFFSTAGE.x1, OFFSTAGE.y1 + 3); ctx.lineTo(OFFSTAGE.x2 - 3, OFFSTAGE.y1 + 3); ctx.lineTo(OFFSTAGE.x2 - 3, OFFSTAGE.y2); ctx.stroke(); ctx.restore();
+  // scritte per terra (adesivi come al montaggio): PLATEA e REGIA FOH
+  ctx.save(); ctx.textAlign = 'center';
+  ctx.fillStyle = 'rgba(238,233,223,.14)'; ctx.font = '700 46px "Barlow Condensed", sans-serif';
+  const pl = gymPt(5, 12), fo = gymPt(5, 15);
+  ctx.translate(pl.x, pl.y); ctx.rotate(-Math.PI / 2); ctx.fillText('PLATEA', 0, 14); ctx.restore();
+  ctx.save(); ctx.textAlign = 'center'; ctx.fillStyle = 'rgba(238,233,223,.14)'; ctx.font = '700 30px "Barlow Condensed", sans-serif';
+  ctx.translate(fo.x, fo.y); ctx.rotate(-Math.PI / 2); ctx.fillText('REGIA FOH', 0, 10); ctx.restore();
 }
 function drawZones () {
   for (const k in ZONES) {
@@ -3273,7 +3506,7 @@ function drawStatics () {
   ctx.fillStyle = 'rgba(0,0,0,.18)'; for (let x = X0 + 122; x < X1; x += 122) ctx.fillRect(x, Y0, 1, VH);
   ctx.fillStyle = '#8a9099'; ctx.fillRect(X1 - 4, Y0, 4, VH);
   // rampa in alluminio: su (agganciata al pianale) finché non la tiri giù
-  const rk = G.van && G.van.ramp ? 1 : (G.van && G.van.rampK) || 0;
+  const rk = G.van && G.van.ramp ? 1 : 0;   // in piedi o mentre scende: vedi sceneSolids
   if (rk > 0) {
     const rw = RAMP.w * rk;
     // lamiera mandorlata, più scura verso terra; lo spessore si vede davanti
@@ -3287,10 +3520,6 @@ function drawStatics () {
       const cy = RAMP.y + RAMP.h / 2;
       for (let i = 0; i < 3; i++) { const x = RAMP.x + 25 + i * 26; ctx.beginPath(); ctx.moveTo(x, cy - 15); ctx.lineTo(x + 14, cy); ctx.lineTo(x, cy + 15); ctx.lineTo(x + 5, cy); ctx.fill(); }
     }
-  } else if (G.van && G.van.open) {
-    // la rampa ripiegata dentro il portellone
-    ctx.fillStyle = '#8f959e'; ctx.fillRect(DOOR_X - 14, RAMP.y, 10, RAMP.h);
-    ctx.strokeStyle = '#555a62'; ctx.lineWidth = 2; ctx.strokeRect(DOOR_X - 14, RAMP.y, 10, RAMP.h);
   }
   // bordo del pianale: si cade se si esce fuori dalla rampa
   ctx.fillStyle = '#f2c53d'; ctx.fillRect(DOOR_X - 4, Y0, 4, RAMP.y - Y0); ctx.fillRect(DOOR_X - 4, RAMP.y + RAMP.h, 4, Y1 - RAMP.y - RAMP.h);
@@ -3323,40 +3552,81 @@ const BACK = -1e9;   // dietro a tutto (pareti in fondo al furgone, cabina)
    con lo zoccolo verniciato fino a un metro e il battiscopa scuro, in alto il
    taglio color cemento scuro. La luce è quella dei case (da sinistra). */
 function gymWall (pts, hgt, keep) {
-  prism(pts, 0, hgt, '#3a3d43', '#5f6f7b', { keep, flat: true });
+  prism(pts, 0, hgt, '#767c89', '#4a4f5a', { keep, flat: true });
   facesOf(pts, (a, b, sx, sy) => {
     if (!keep(a, b)) return;
     onFace(a, b, L => {
-      const zc = Math.min(hgt, 100);
-      ctx.fillStyle = '#d9d3c6'; ctx.fillRect(0, -hgt, L, hgt);               // intonaco
-      const g = ctx.createLinearGradient(0, -zc, 0, 0); g.addColorStop(0, '#62737f'); g.addColorStop(1, '#55646f');
-      ctx.fillStyle = g; ctx.fillRect(0, -zc, L, zc);                           // zoccolo verniciato
-      if (hgt > zc) { ctx.fillStyle = 'rgba(255,255,255,.35)'; ctx.fillRect(0, -zc - 1.5, L, 1.5); }
-      ctx.fillStyle = '#26292e'; ctx.fillRect(0, -9, L, 9);                     // battiscopa in gomma
+      // i colori del montaggio: grigio azzurro, fascia blu fino a 72 cm col filo arancio
+      ctx.fillStyle = '#4a4f5a'; ctx.fillRect(0, -hgt, L, hgt);
+      const zc = Math.min(hgt, 72);
+      ctx.fillStyle = '#2f4356'; ctx.fillRect(0, -zc, L, zc);
+      if (hgt > 77) { ctx.fillStyle = 'rgba(242,165,65,.55)'; ctx.fillRect(0, -77, L, 5); }
+      ctx.fillStyle = '#1d232b'; ctx.fillRect(0, -9, L, 9);                     // battiscopa in gomma
       ctx.fillStyle = 'rgba(255,255,255,.08)'; ctx.fillRect(0, -9, L, 1);
+      if (Math.abs(a.y - b.y) < 0.5 && Math.abs(a.y - GYM.y2) < 0.5 && hgt > 120) leftWallDecor(a, b, L, hgt);
       const k = Math.max(0, sx * 0.2 + (1 - sy) * 0.1);
       if (k > 0.01) { ctx.fillStyle = 'rgba(0,0,0,' + k.toFixed(3) + ')'; ctx.fillRect(0, -hgt, L, hgt); }
-      ctx.fillStyle = 'rgba(255,255,255,.45)'; ctx.fillRect(0, -hgt, L, 1.2);   // spigolo del taglio
+      ctx.fillStyle = '#5d636f'; ctx.fillRect(0, -hgt, L, Math.min(6, hgt));   // cornice in cima
+      ctx.fillStyle = 'rgba(255,255,255,.35)'; ctx.fillRect(0, -hgt, L, 1.2);   // spigolo del taglio
     });
   });
+}
+/* la parete sinistra della palestra (gx 0) com'è al montaggio: finestre
+   alte, due uscite di sicurezza, lo striscione della festa, le spalliere e
+   il canestro. f(gy0, gy1, z0, z1, colore): un rettangolo sul muro, tagliato
+   al pezzo di muro che si sta disegnando (da a a b, lungo L). */
+function leftWallDecor (a, b, L, hgt) {
+  const u = gy => (GYM_X + (gy - 2) * 100 - a.x) / (b.x - a.x) * L;
+  const f = (g0, g1, z0, z1, col) => {
+    let u0 = u(g0), u1 = u(g1); if (u0 > u1) [u0, u1] = [u1, u0];
+    u0 = Math.max(0, u0); u1 = Math.min(L, u1); if (u1 <= u0) return;
+    ctx.fillStyle = col; ctx.fillRect(u0, -Math.min(z1, hgt), u1 - u0, Math.min(z1, hgt) - z0);
+  };
+  for (let gy = 6.3; gy < 15; gy += 2.1) {   // finestre alte (non sopra la seconda uscita)
+    if (gy < 12.5 && gy + 1.5 > 11) continue;
+    f(gy, gy + 1.5, 110, 168, '#1a2738'); f(gy, gy + 1.5, 110, 114, '#6b7180'); f(gy + 0.73, gy + 0.77, 110, 168, '#6b7180');
+    f(gy + 0.2, gy + 0.5, 130, 160, 'rgba(109,143,179,.25)');
+  }
+  for (const [g0, g1] of [[2.5, 3.6], [11.2, 12.3]]) {   // uscite di sicurezza
+    f(g0, g1, 0, 103, '#1b1d21'); f(g0, g1, 103, 107, '#6b7180'); f((g0 + g1) / 2 - 0.01, (g0 + g1) / 2 + 0.01, 0, 103, '#0f1013');
+    f(g0 + 0.25, g1 - 0.25, 114, 131, '#2fa35a'); f(g0 + 0.35, g1 - 0.35, 120, 125, 'rgba(255,255,255,.75)');
+  }
+  // striscione della festa
+  f(5.2, 9.6, 116, 147, '#e9e4d6'); f(5.2, 9.6, 116, 121, '#d6392f'); f(5.2, 9.6, 142, 147, '#d6392f');
+  for (let gy = 5.5; gy < 9.3; gy += 0.42) f(gy, gy + 0.26, 127, 136, 'rgba(43,95,176,.75)');
+  // spalliere
+  for (let gy = 12.9; gy <= 14.31; gy += 0.35) f(gy - 0.03, gy + 0.03, 0, 147, '#8a6a45');
+  for (let z = 10; z <= 147; z += 14) f(12.87, 14.34, z, z + 2, '#9c7a50');
+  // tabellone del canestro, in fondo
+  f(14.45, 15.75, 126, 175, '#f4f2ec'); f(14.8, 15.4, 130, 150, '#d6392f'); f(14.84, 15.36, 133, 147, '#f4f2ec');
 }
 // i due generici dei cavi (CORRENTE e SEGNALE): nel gioco sono già nelle loro
 // zone e non si toccano; qui si vedono fermi in fondo alla palestra, oltre il Pit
 let DECO = null;
 function decoCases () {
-  if (!DECO) DECO = ['corrente', 'segnale'].map((id, i) => ({ kind: 'case', deco: true, def: CASES.find(d => d.id === id), integrity: 100, seed: 7 + i, grabbers: [], body: { position: { x: 1690 + i * 62, y: 790 }, angle: 0 } }));
+  if (!DECO) DECO = ['corrente', 'segnale'].map((id, i) => ({ kind: 'case', deco: true, def: CASES.find(d => d.id === id), integrity: 100, seed: 7 + i, grabbers: [], body: { position: { x: 2020 + i * 62, y: 905 }, angle: 0 } }));
   return DECO;
+}
+/* altezza dei muri, tagliati come in un plastico: alta la parete sinistra
+   della palestra (in fondo, come al montaggio, con finestre e uscite), più
+   basso il muro del cortile (dietro c'è chi scarica), bassi i muri davanti
+   (verso chi guarda), così zone e persone si vedono. Il recinto è di rete. */
+function wallH (bb) {
+  if (bb.min.x < GYM_X - 20) return 80;                 // recinto del cortile
+  if (bb.min.y >= GYM.y2 - 1) return 190;               // parete sinistra (gx 0)
+  if (bb.max.x <= GYM_X + 11) return 70;                // muro del cortile, con la porta
+  return 24;                                            // muri verso chi guarda
 }
 // le ombre dei muri e del recinto per terra, verso dove vanno tutte le altre (+x, +y)
 function drawStaticShadows () {
   ctx.save();
   for (const b of G.statics) {
     if (!b.plugin || !b.plugin.draw) continue;
-    const bb = b.bounds, fence = bb.min.x < GYM_X - 20, horiz = bb.max.x - bb.min.x > bb.max.y - bb.min.y;
-    const hgt = fence ? 80 : horiz ? (bb.min.y > 800 ? 24 : 110) : bb.min.x > 1800 ? 24 : 50;
+    const bb = b.bounds, fence = bb.min.x < GYM_X - 20;
+    const hgt = wallH(bb);
     ctx.fillStyle = fence ? 'rgba(0,0,0,.10)' : 'rgba(0,0,0,.26)';
     ctx.beginPath();
-    for (let t = 0; t <= 1.001; t += 0.1) ctx.rect(bb.min.x + hgt * 0.35 * t, bb.min.y + hgt * 0.22 * t, bb.max.x - bb.min.x, bb.max.y - bb.min.y);
+    for (let t = 0; t <= 1.001; t += 0.1) ctx.rect(bb.min.x + hgt * SUN.x * t, bb.min.y + hgt * SUN.y * t, bb.max.x - bb.min.x, bb.max.y - bb.min.y);
     ctx.fill();
   }
   ctx.restore();
@@ -3365,7 +3635,8 @@ function sceneSolids (put) {
   // furgone bianco a tetto alto, lungo e stretto come la foto (circa 5,4 ×
   // 2,1 m): cabina col cofano, paratia, scaffale fisso e il vano del carico.
   // La fiancata davanti e il tetto sono trasparenti, così i case si vedono
-  const X0 = VAN.x1, X1 = DOOR_X, Y0 = VAN.y1, Y1 = VAN.y2, YN = Y0 - 6, YS = Y1 + 6, HV = 215;
+  // YN: la fiancata lontana (y grande, in alto a sinistra), YS: quella vicina a chi guarda
+  const X0 = VAN.x1, X1 = DOOR_X, Y0 = VAN.y1, Y1 = VAN.y2, YN = Y1 + 6, YS = Y0 - 6, HV = 215;
   const CB = X0 - 122, CL = 198;                        // retro della cabina, lunghezza cabina
   put(BACK, () => {
     // la cabina, di profilo: tetto, parabrezza, cofano, muso
@@ -3410,8 +3681,8 @@ function sceneSolids (put) {
   // compensato; contro la paratia lo scaffale fisso con cavi e minuteria
   put(BACK + 1, () => {
     prism(boxPts(CB, YN, CB + 6, YS), 0, HV, '#f4f5f7', '#dfe2e6');
-    prism(boxPts(CB, YN, X1, Y0), 0, HV, '#f4f5f7', '#dfe2e6', { edge: '#ffffff' });
-    onFace({ x: CB + 6, y: Y0 }, { x: X1, y: Y0 }, L => {
+    prism(boxPts(CB, Y1, X1, YN), 0, HV, '#f4f5f7', '#dfe2e6', { edge: '#ffffff' });
+    onFace({ x: X1, y: Y1 }, { x: CB + 6, y: Y1 }, L => {
       ctx.fillStyle = '#c29b68'; ctx.fillRect(0, -120, L, 120);
       ctx.save(); ctx.globalAlpha = 0.35; ctx.fillStyle = mats().wood; ctx.fillRect(0, -120, L, 120); ctx.restore();
       ctx.fillStyle = 'rgba(60,40,20,.35)'; for (let x = 122; x < L; x += 122) ctx.fillRect(x, -120, 1, 120);
@@ -3445,7 +3716,7 @@ function sceneSolids (put) {
   put(BACK + 3, () => onFace({ x: CB, y: YS }, { x: X1, y: YS }, L => wheel(L - 70, 34)));
   // fiancata vicina e tetto trasparenti: solo il profilo, il listello nero in
   // basso e il montante dietro col fanale
-  const NW = boxPts(CB, Y1, X1, YS);
+  const NW = boxPts(CB, YS, X1, Y0);
   put(frontY(NW), () => {
     onFace({ x: CB, y: YS }, { x: X1, y: YS }, L => {
       ctx.fillStyle = 'rgba(255,255,255,.05)'; ctx.fillRect(0, -HV, L, HV);
@@ -3457,27 +3728,82 @@ function sceneSolids (put) {
     });
     const tp = [zp({ x: CB, y: YS }, HV), zp({ x: X1, y: YS }, HV), zp({ x: X1, y: YN }, HV)];
     ctx.strokeStyle = 'rgba(255,255,255,.6)'; ctx.lineWidth = 1.6; ctx.beginPath(); tp.forEach((p, i) => i ? ctx.lineTo(p.x, p.y) : ctx.moveTo(p.x, p.y)); ctx.stroke();
-    prism(boxPts(X1 - 6, YS - 6, X1, YS), 0, HV, '#f4f5f7', '#e1e4e8');
-    onFace({ x: X1, y: YS - 6 }, { x: X1, y: YS }, () => { ctx.fillStyle = '#c8322a'; ctx.fillRect(0, -150, 6, 46); ctx.fillStyle = '#f0a33a'; ctx.fillRect(0, -104, 6, 8); });
+    prism(boxPts(X1 - 6, YS, X1, YS + 6), 0, HV, '#f4f5f7', '#e1e4e8');
+    onFace({ x: X1, y: YS }, { x: X1, y: YS + 6 }, () => { ctx.fillStyle = '#c8322a'; ctx.fillRect(0, -150, 6, 46); ctx.fillStyle = '#f0a33a'; ctx.fillRect(0, -104, 6, 8); });
   });
   // portelloni: si aprono fino ad appoggiarsi alle fiancate; quello vicino,
   // aperto, si fa basso come la fiancata trasparente, per non coprire i case
-  const da = G.doorsOpen, DL = (Y1 - Y0) / 2 + 6;
-  [[Y0 - 3, 1], [Y1 + 3, -1]].forEach(([hy, sd]) => {
-    const a = sd * (Math.PI / 2 - da * Math.PI * 1.5), dh = sd > 0 ? HV - 4 : HV - 4 - (HV - 22) * da;
-    const tip = { x: X1 + Math.cos(a) * DL, y: hy + Math.sin(a) * DL };
+  // (ognuna col suo tempo: G.van.doorK, fino a 90° sul fermo; la maniglia
+  // e le aste di chiusura sull'anta che si apre per prima)
+  const DL = DOOR_L, dk = G.van.doorK || [G.doorsOpen, G.doorsOpen], leafY = G.leafY = [];
+  [[Y0 - 3, 1, 0], [Y1 + 3, -1, 1]].forEach(([hy, sd, i]) => {
+    const da = dk[i], D = doorGeo(i, da), a = D.a, dh = HV - 4;
+    const dir = D.dir, tip = D.tip;
     const pts = rectPts({ x: (X1 + tip.x) / 2, y: (hy + tip.y) / 2 }, DL, 5, a);
-    put(sd > 0 && da > 0.5 ? BACK + 2 : frontY(pts), () => {
+    if (da < 0.9) leafY.push(frontY(pts));   // un'anta ancora davanti all'apertura copre quello che c'è dietro
+    // l'anta vicina aperta è trasparente come la fiancata: si disegna sotto a
+    // tutti, così chi ci sta dietro non resta mezzo velato
+    const ghost = i === 0 && da > 0.6;
+    put(ghost ? -1e6 : frontY(pts), () => {
+      // l'anta vicina, aperta, sta davanti alla rampa: si fa trasparente come la fiancata
+      const fade = i === 0 ? clamp(da, 0, 1) : 0;
+      if (fade > 0) ctx.globalAlpha = 1 - 0.86 * fade;
       prism(pts, 0, dh, '#f2f3f5', '#dcdfe3', { edge: '#ffffff', gloss: true });
       if (dh > 60) facesOf(pts, (p, q) => onFace(p, q, L => { ctx.fillStyle = 'rgba(0,0,0,.08)'; ctx.fillRect(10, -dh + 24, L - 20, 2); ctx.fillRect(10, -40, L - 20, 2); ctx.fillStyle = '#1a1b1e'; ctx.fillRect(0, -15, L, 9); }));
-    });
+      // la faccia di fuori (verso il cortile quando è chiusa): aste e maniglia
+      if (da < 0.3) {
+        const n = { x: dir.y * sd, y: -dir.x * sd }, o = { x: n.x * 2.6, y: n.y * 2.6 };
+        onFace(add({ x: X1, y: hy }, o), add(tip, o), L => {
+          ctx.fillStyle = '#9aa0a8'; ctx.fillRect(L - 16, -HV + 12, 3, HV - 22);          // asta di chiusura
+          ctx.fillStyle = '#6b7079'; ctx.fillRect(L - 18, -HV + 8, 7, 6); ctx.fillRect(L - 18, -12, 7, 6);
+          if (i === 0) {
+            const lv = G.van.open ? 1 : G.van.lever || 0;
+            ctx.save(); ctx.translate(L - 14.5, -104); ctx.rotate(-lv * Math.PI / 2);
+            ctx.fillStyle = '#2a2c31'; rr(-3, -3, 26, 6, 3); ctx.fill();                      // la maniglia: si gira di un quarto
+            ctx.fillStyle = 'rgba(255,255,255,.25)'; ctx.fillRect(0, -2.5, 20, 1.2);
+            ctx.restore();
+            ctx.fillStyle = '#c8322a'; ctx.fillRect(10, -108, 22, 8);                          // il fanale sull'anta
+          }
+        });
+      }
+      ctx.globalAlpha = 1;
+    }, ghost ? null : pts);
   });
+  // la rampa in piedi nel vano, poi accompagnata giù: una lastra che gira
+  // attorno al bordo del pianale (vedi vanStep). Stesa, si disegna a terra.
+  if ((G.van.open || G.van.anim) && !G.van.ramp) {
+    const A = G.van.anim, ang = A && A.what === 'ramp' && G.van.rampA != null ? G.van.rampA : RAMP_ANG;
+    const c = Math.cos(ang), sn = Math.sin(ang), Lx = RAMP.w * c, Lz = RAMP.w * sn;
+    // in piedi sta dentro, dietro alle ante; la si tira fino al bordo del pianale
+    const HX = A && A.what === 'ramp' && G.van.rampX != null ? G.van.rampX : DOOR_X - 10;
+    // (in profondità: davanti ai case del vano, dietro a chi la tiene da fuori)
+    // davanti a tutto quello che c'è nel vano (sta sul bordo, fuori dai case)
+    const rfp = boxPts(HX - 2, RAMP.y, HX + Math.max(2, Lx), RAMP.y + RAMP.h);
+    const inVanY = Math.max(-Infinity, ...G.cases.filter(c => !c.hidden && inVan(c)).map(c => frontY(rectPts(c.body.position, c.def.w, c.def.h, c.body.angle))));
+    put(Math.min(Math.max(frontY(rfp), inVanY + 0.5), ...leafY.map(y => y - 0.02)), () => {
+      const P0 = zp({ x: HX, y: RAMP.y }, 0), PU = zp({ x: HX + Lx, y: RAMP.y }, Lz), PV = zp({ x: HX, y: RAMP.y + RAMP.h }, 0);
+      const uX = (PU.x - P0.x) / RAMP.w, uY = (PU.y - P0.y) / RAMP.w, vX = (PV.x - P0.x) / RAMP.h, vY = (PV.y - P0.y) / RAMP.h;
+      // lo spessore: il bordo che scende (4 cm sotto la lastra)
+      const E = [zp({ x: HX + Lx, y: RAMP.y }, Lz), zp({ x: HX + Lx, y: RAMP.y + RAMP.h }, Lz), zp({ x: HX + Lx + 4 * sn, y: RAMP.y + RAMP.h }, Lz - 4 * c), zp({ x: HX + Lx + 4 * sn, y: RAMP.y }, Lz - 4 * c)];
+      ctx.fillStyle = '#5f646c'; ctx.beginPath(); E.forEach((p, k) => k ? ctx.lineTo(p.x, p.y) : ctx.moveTo(p.x, p.y)); ctx.closePath(); ctx.fill();
+      ctx.save(); ctx.transform(uX, uY, vX, vY, P0.x, P0.y);
+      ctx.fillStyle = mats().plate; ctx.fillRect(0, 0, RAMP.w, RAMP.h);
+      const g = ctx.createLinearGradient(0, 0, RAMP.w, 0); g.addColorStop(0, 'rgba(0,0,0,.18)'); g.addColorStop(1, 'rgba(255,255,255,' + (0.05 + 0.15 * sn).toFixed(3) + ')');
+      ctx.fillStyle = g; ctx.fillRect(0, 0, RAMP.w, RAMP.h);
+      ctx.strokeStyle = '#555a62'; ctx.lineWidth = 4; ctx.strokeRect(0, 0, RAMP.w, RAMP.h);
+      // i due fermi in cima (aperti appena si comincia) e la maniglia sul bordo
+      const op = A && A.what === 'ramp' ? clamp(A.t / 0.4, 0, 1) : 0;
+      ctx.fillStyle = '#2a2c31'; [16, RAMP.h - 28].forEach(v => ctx.fillRect(RAMP.w - 10 + op * 8, v, 8, 12));
+      ctx.fillStyle = '#c9ccd1'; ctx.fillRect(RAMP.w - 6, RAMP.h / 2 - 16, 4, 32);
+      ctx.restore();
+    }, rfp);
+  }
   // muri e recinto, a pezzi per l'ordine di disegno; quelli davanti (a sud e
   // a est) tagliati bassi, così le zone e chi ci lavora si vedono
   for (const b of G.statics) {
     if (!b.plugin.draw) continue;
     const bb = b.bounds, fence = bb.min.x < GYM_X - 20, horiz = bb.max.x - bb.min.x > bb.max.y - bb.min.y;
-    const hgt = fence ? 80 : horiz ? (bb.min.y > 800 ? 24 : 110) : bb.min.x > 1800 ? 24 : 50;
+    const hgt = wallH(bb);
     // tra un pezzo e l'altro dello stesso muro non c'è faccia: si vede solo il muro intero
     const outer = (a, c) => (a.x === c.x && (a.x === bb.min.x || a.x === bb.max.x)) || (a.y === c.y && (a.y === bb.min.y || a.y === bb.max.y));
     for (let x = bb.min.x; x < bb.max.x; x += 40) for (let y = bb.min.y; y < bb.max.y; y += 40) {
@@ -3521,7 +3847,7 @@ function sceneSolids (put) {
   // i due generici dei cavi: sono già in palestra (non si movimentano), in fondo oltre il Pit
   for (const ce of decoCases()) put(frontY(rectPts(ce.body.position, ce.def.w, ce.def.h, 0)), () => drawCase(ce));
   // sedie impilate, panchina, tavolino con la moka
-  const CH = boxPts(1640, 170, 1740, 220);
+  const CH = boxPts(CHAIRS.x1, CHAIRS.y1, CHAIRS.x2, CHAIRS.y2);
   put(frontY(CH), () => {
     dropShadow(CH, 60, 0.3);
     prism(CH, 0, 95, '#2b3646', '#1d2530');
@@ -3679,7 +4005,7 @@ function treeTexture () {
 }
 // un punto del disegno dell'albero (unità di schermo) riportato in pianta
 // all'altezza giusta, poi spinto dal sole come le altre ombre
-function treeShadowPt (x, y) { const z = -y / KZ; return { x: TREE.x + RIGHT.x * x + z * 0.35, y: TREE.y + RIGHT.y * x + z * 0.22 }; }
+function treeShadowPt (x, y) { const z = -y / KZ; return { x: TREE.x + RIGHT.x * x + z * SUN.x, y: TREE.y + RIGHT.y * x + z * SUN.y }; }
 function treeShadowLayer () {
   if (TREE_SH) return TREE_SH;
   const B = { x: TREE.x - 200, y: TREE.y - 200, w: 640, h: 560, k: 1.5 };
@@ -3821,11 +4147,24 @@ function drawLocks () {
   VAN_STRAPS.forEach((st, i) => {
     if (!G.straps[i]) return;
     const y0 = VAN.y1 - 8, hh = VAN.y2 - VAN.y1 + 16, cy = (VAN.y1 + VAN.y2) / 2;
+    const sl = G.van.slack || 0, rc = G.van.ratchet || 0;
+    if (sl > 0) {
+      // aperto il cricchetto la cinghia cede: pende sempre di più e si affloscia sul pianale
+      ctx.strokeStyle = '#f2a541'; ctx.lineWidth = 7; ctx.lineCap = 'round'; ctx.globalAlpha = 1 - sl * 0.35;
+      ctx.beginPath();
+      for (let k = 0; k <= 24; k++) {
+        const u = k / 24, y = y0 + hh * u, z = 100 - sl * 92 * Math.sin(Math.PI * u) - sl * 8, q = zp({ x: st.x + sl * 10 * Math.sin(Math.PI * u), y }, Math.max(2, z));
+        k ? ctx.lineTo(q.x, q.y) : ctx.moveTo(q.x, q.y);
+      }
+      ctx.stroke(); ctx.globalAlpha = 1; ctx.lineCap = 'butt';
+      return;
+    }
     ctx.save(); lift(100);
     ctx.fillStyle = '#f2a541'; ctx.fillRect(st.x - 4, y0, 8, hh);
     ctx.fillStyle = 'rgba(0,0,0,.25)'; for (let y = y0 + 4; y < y0 + hh - 2; y += 10) ctx.fillRect(st.x - 4, y, 8, 2);
-    ctx.fillStyle = '#c9ccd1'; rr(st.x - 7, cy - 12, 14, 24, 3); ctx.fill();          // cricchetto
-    ctx.fillStyle = '#55585f'; ctx.fillRect(st.x - 4, cy - 6, 8, 3); ctx.fillRect(st.x - 4, cy + 2, 8, 3);
+    ctx.fillStyle = '#c9ccd1'; rr(st.x - 7, cy - 12, 14, 24, 3); ctx.fill();          // cricchetto: la leva si apre
+    ctx.save(); ctx.translate(st.x, cy + 10); ctx.rotate(rc * 2.6);
+    ctx.fillStyle = '#55585f'; ctx.fillRect(-4, -22, 8, 22); ctx.restore();
     ctx.restore();
   });
 }
@@ -3833,7 +4172,7 @@ function drawCase (ce) {
   const b = ce.body, d = ce.def, w = d.w, h = d.h;
   if (ce.hidden) { prism(rectPts(b.position, w + 14, h + 12, b.angle), 0, caseH(ce), null, '#3f434b'); ctx.save(); lift(caseH(ce)); drawTarp(ce, 0); ctx.restore(); return; }
   const z0 = caseZ(ce), z1 = z0 + caseH(ce), zb = z0 + castorZ(ce), pts = rectPts(b.position, w, h, b.angle);
-  if (!ce.onTrolley) dropShadow(pts.map(p => ({ x: p.x + z0 * 0.35, y: p.y + z0 * 0.22 })), caseH(ce) * 0.5, 0.35);
+  if (!ce.onTrolley) dropShadow(pts.map(p => ({ x: p.x + z0 * SUN.x, y: p.y + z0 * SUN.y })), caseH(ce) * 0.5, 0.35);
   const T = caseTex(ce);
   if (zb > z0) castors(ce, z0);
   caseFaces(pts, zb, z1, T);
@@ -3866,14 +4205,31 @@ function drawCase (ce) {
     });
   }
 }
+// le braccia durante il furgone: un braccio alla maniglia; la rampa tenuta
+// per il bordo, in alto finché è in piedi e poi giù con lei; al cricchetto
+function vanPose (w) {
+  const A = G.van.anim;
+  if (!A || (A.who !== w && A.mate !== w)) return null;
+  if (A.what === 'door') return A.t < 1.05 ? (A.i ? 'sx' : 'dx') : null;
+  if (A.what === 'ramp') {
+    const h = 60 + Math.sin(G.van.rampA || 0) * RAMP.w;   // l'altezza del bordo che si tiene
+    return h > 128 ? 'alza' : h > 98 ? 'porta' : 'avanti';
+  }
+  return 'avanti';
+}
 function drawWorker (w) {
   const p = w.body.position, r = w.r;
   figShadow(p, w === G.player ? 180 : 168, r * 1.05);
   // passo: un saltello; braccia avanti alle maniglie, sotto il case in mano
-  const moving = w.spd > 0.25, ph = Math.sin((w.stride || 0) * 0.28) * (moving ? 1 : 0);
-  const ce = w.grab, arms = !ce ? 'giu' : ce.carrier === w || liftedByTwo(ce) ? 'porta' : 'avanti';
+  // il passo è legato ai cm percorsi con la misura del modello (cycle: due
+  // passi): il piede d'appoggio resta dov'è
+  const fa = figAtlas(w === G.player ? 'topsy' : 'macio'), cyc = fa && fa.A.cycle || 130;
+  if (w.spd > 0.04) w.walkT = G.t;
+  const moving = G.t - (w.walkT || -9) < 0.12, ph = Math.sin((w.stride || 0) * 0.28) * (moving ? 1 : 0);
+  const ce = w.grab;
+  const arms = !ce ? vanPose(w) || 'giu' : ce.carrier === w || liftedByTwo(ce) ? 'porta' : 'avanti';
   const who = w === G.player ? 'topsy' : 'macio';
-  drawFigure(p, who, w === G.player ? 176 : 168, { facing: w.facing, phase: moving ? (w.stride || 0) / 150 : null, back: Math.cos(w.facing) * SA + Math.sin(w.facing) * CA < -0.6, flip: Math.cos(w.facing) * CA - Math.sin(w.facing) * SA < -0.2, arms, step: Math.round(ph), bob: Math.abs(ph) * 0.02, tee: w.tee, skin: w.skin });
+  drawFigure(p, who, w === G.player ? 176 : 168, { facing: w.facing, phase: moving ? (w.stride || 0) / cyc : null, back: Math.cos(w.facing) * SA + Math.sin(w.facing) * CA < -0.6, flip: Math.cos(w.facing) * CA - Math.sin(w.facing) * SA < -0.2, arms, step: Math.round(ph), bob: Math.abs(ph) * 0.02, tee: w.tee, skin: w.skin });
   const hd = worldToScreen(p, 175), sc = G.cam.scale;
   ctx.save(); ctx.setTransform(DPR, 0, 0, DPR, 0, 0);
   if (w === G.macio && w.ai.state === 'phone') { ctx.fillStyle = '#eee9df'; ctx.fillRect(hd.x + 12 * sc, hd.y + 14 * sc, 7 * sc, 12 * sc); }
@@ -4104,6 +4460,9 @@ function camFocus () {
    due dita o i tasti + e −. */
 const ZOOM_MIN = 0.6, ZOOM_MAX = 4.5;
 let baseK = null;
+// si parte più vicini della vista intera del montaggio: le persone e i case
+// si leggono bene (con − e 1:1 si torna alla scala del montaggio)
+const ZOOM0 = touchUI ? 2.1 : 1.6;
 function baseScale () {
   if (baseK && baseK.w === W && baseK.h === H) return baseK.v;
   const top = $('.hud').getBoundingClientRect().bottom, bot = $('#hintbar').getBoundingClientRect().top || H;
@@ -4150,15 +4509,18 @@ function render () {
   drawStatics(); drawTreeShadow();
   drawOrders();
   // in piedi: dal fondo verso chi guarda (y della faccia davanti)
-  const L = [], put = (y, f) => L.push({ y, f });
+  const L = [], put = (y, f, fp) => L.push({ y, f, fp });
   sceneSolids(put);
-  for (const ce of G.cases) if (!ce.onTrolley) put(frontY(rectPts(ce.body.position, ce.def.w, ce.def.h, ce.body.angle)), () => drawCase(ce));
-  if (G.trolley) put(frontY(rectPts(G.trolley.body.position, G.trolley.def.w, G.trolley.def.h, G.trolley.body.angle)), () => { drawTrolley(); G.trolley.load.forEach(drawCase); });
+  // quello che sta nel vano è dietro alle ante ancora chiuse
+  const behindDoors = y => Math.min(y, ...(G.leafY || []).map(l => l - 0.03));
+  for (const ce of G.cases) if (!ce.onTrolley) { const pts = rectPts(ce.body.position, ce.def.w, ce.def.h, ce.body.angle); put(inVan(ce) ? behindDoors(frontY(pts)) : frontY(pts), () => drawCase(ce), pts); }
+  if (G.trolley) { const pts = rectPts(G.trolley.body.position, G.trolley.def.w, G.trolley.def.h, G.trolley.body.angle); put(frontY(pts), () => { drawTrolley(); G.trolley.load.forEach(drawCase); }, pts); }
   else put(dep({ x: VAN.x1 + 187, y: VAN.y1 + 40 }), drawTrolley);
   put(dep({ x: DOOR_X, y: VAN.y2 }) + 1, drawLocks);
-  G.kids.forEach(k => put(dep(k.body.position) + 8, () => drawKid(k)));
+  G.kids.forEach(k => put(dep(k.body.position) + 8, () => drawKid(k), { c: k.body.position, r: 13 }));
   if (G.cart) { const cp = G.cart.body.position; put(dep({ x: cp.x, y: cp.y - 44 }), drawGerry); put(frontY(cartPts()), drawCart); }
-  G.workers.forEach(w => put(dep(w.body.position) + w.r * 0.6, () => drawWorker(w)));
+  G.workers.forEach(w => put(dep(w.body.position) + w.r * 0.6, () => drawWorker(w), { c: w.body.position, r: w.r }));
+  standOrder(L);
   L.sort((a, b) => a.y - b.y).forEach(o => o.f());
   if (G.tarp && G.t - G.tarp < 1.2) { ctx.save(); lift(60); drawTarp(G.cases.find(c => c.def.surprise), (G.t - G.tarp) / 1.2); ctx.restore(); }
   drawPicks();
@@ -4427,6 +4789,7 @@ function jobWord (w) {
   const more = w.jobs.length ? ' +' + w.jobs.length : '';
   if (j.kind === 'help') return 'aiuta con ' + j.ce.def.short + more;
   if (j.kind === 'van') return VAN_LABEL[j.what].toLowerCase() + more;
+  if (j.kind === 'vanHelp') return 'tiene la rampa' + more;
   if (j.kind === 'coffee') return 'caffè';
   if (j.kind === 'clear') return 'si sposta' + more;
   const why = waitWhy(w);

@@ -13,9 +13,9 @@
    Le figure sono già illuminate come la scena: luce morbida dall'alto a
    sinistra dello schermo, più un filo di controluce sui bordi. */
 const EL = 38 * Math.PI / 180, TH = Math.PI / 4, SA = Math.sin(TH), CA = Math.cos(TH);
-const RES = 1.45, SS = 2;                       // pixel per cm nell'atlante; sovracampionamento
+const RES = 1.25, SS = 2;                       // pixel per cm nell'atlante; sovracampionamento
 const FW = 120, TOP = 178, BOT = 40;           // cornice in cm di schermo: larghezza, sopra e sotto i piedi
-const DIRS = 8, WALK = 6;
+const DIRS = 8, WALK = 12;   // 12 fotogrammi per passo doppio: il piede d'appoggio scivola al massimo di un dodicesimo
 const fw = Math.round(FW * RES), fh = Math.round((TOP + BOT) * RES);
 const ren = new THREE.WebGLRenderer({ alpha: true, antialias: true, preserveDrawingBuffer: true });
 ren.setPixelRatio(1); ren.setSize(fw * SS, fh * SS); ren.setClearColor(0x000000, 0);
@@ -68,9 +68,11 @@ function pack (frames) {
   frames.forEach((f, i) => g.drawImage(f.c, pos[i][0], pos[i][1]));
   return { at, cells: frames.map((f, i) => [pos[i][0], pos[i][1], f.c.width, f.c.height, Math.round(f.ax * 10) / 10, Math.round(f.ay * 10) / 10]) };
 }
-const POSES = { topsy: ['giu', 'avanti', 'porta'], macio: ['giu', 'avanti', 'porta'], gerry: ['avanti'], kid: ['giu'], kid2: ['giu'] };
+const POSES = { topsy: ['giu', 'avanti', 'porta', 'dx', 'sx', 'alza'], macio: ['giu', 'avanti', 'porta', 'dx', 'sx', 'alza'], gerry: ['avanti'], kid: ['giu'], kid2: ['giu'] };
 // le mani sui punti, davanti al busto (cm, nel riferimento della figura)
-const HANDS = { avanti: [[-19, 92, 42], [19, 92, 42]], porta: [[-21, 104, 27], [21, 104, 27]] };
+// dx / sx: un braccio teso alla maniglia, l'altro lungo il fianco; alza: le mani in alto (la rampa in piedi)
+const HANDS = { avanti: [[-19, 92, 42], [19, 92, 42]], porta: [[-21, 104, 27], [21, 104, 27]],
+  dx: [[-21, 112, 54], [24, 84, 2]], sx: [[21, 112, 54], [-24, 84, 2]], alza: [[-22, 138, 30], [22, 138, 30]] };
 function render (scene, setPose, root, poses, maskFn, mirror) {
   const out = { frames: [], idx: {} }, masks = maskFn ? [[], []] : null;
   for (const ps of poses) {
@@ -115,6 +117,10 @@ window.render3D = who => new Promise(done => {
     // il passo a velocità di cammino, poi la fase fissata a mano
     for (let i = 0; i < 120; i++) rig.update(1 / 60, { speed: 1.25 });
     const walkA = rig.state.walkA;
+    // quanta strada fa un ciclo intero (due passi) a questa andatura: il gioco
+    // lega i fotogrammi ai cm percorsi con questa misura, così i piedi non pattinano
+    const ph0 = rig.state.phase; for (let i = 0; i < 30; i++) rig.update(1 / 60, { speed: 1.25 });
+    const cycle = 125 * 0.5 / ((rig.state.phase - ph0) / (2 * Math.PI));
     const setPose = (ps, ph) => {
       const moving = ph !== null, st = rig.state;
       st.idleT = 0; st.shiftTgt = 0; st.shift = 0; st.t = 0; st.pitch.x = 0; st.pitch.v = 0; st.roll = 0; st.turnStep = 0; st.crouch = 0; st.run = 0;
@@ -123,7 +129,8 @@ window.render3D = who => new Promise(done => {
       rig.update(1e-5, { speed: moving ? 1.25 : 0, hands, grip: hands ? 1 : 0 });
       if (hands) for (let i = 0; i < 4; i++) rig.update(1e-5, { speed: moving ? 1.25 : 0, hands, grip: 1 });
     };
-    done(finish(who, render(scene, setPose, rig.root, POSES[who])));
+    const R = finish(who, render(scene, setPose, rig.root, POSES[who])); R.cycle = Math.round(cycle * 10) / 10;
+    done(R);
   });
 });
 window.renderManichino = who => {
