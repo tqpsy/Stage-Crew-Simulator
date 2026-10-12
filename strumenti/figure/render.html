@@ -4,6 +4,7 @@
 <script src="three.min.js"></script>
 <script src="topsy3d.js"></script>
 <script src="macio3d.js"></script>
+<script src="gerry3d.js"></script><script src="sissi3d.js"></script>
 <script src="topsy-rig.js"></script>
 <script src="manichini.js"></script>
 <body style="margin:0;background:#888">
@@ -68,7 +69,7 @@ function pack (frames) {
   frames.forEach((f, i) => g.drawImage(f.c, pos[i][0], pos[i][1]));
   return { at, cells: frames.map((f, i) => [pos[i][0], pos[i][1], f.c.width, f.c.height, Math.round(f.ax * 10) / 10, Math.round(f.ay * 10) / 10]) };
 }
-const POSES = { topsy: ['giu', 'avanti', 'porta', 'dx', 'sx', 'alza'], macio: ['giu', 'avanti', 'porta', 'dx', 'sx', 'alza'], gerry: ['avanti'], kid: ['giu'], kid2: ['giu'] };
+const POSES = { topsy: ['giu', 'avanti', 'porta', 'dx', 'sx', 'alza'], macio: ['giu', 'avanti', 'porta', 'dx', 'sx', 'alza'], gerry: ['avanti', 'giu'], sissi: ['giu', 'avanti', 'porta', 'dx', 'sx', 'alza'], kid: ['giu'], kid2: ['giu'] };
 // le mani sui punti, davanti al busto (cm, nel riferimento della figura)
 // dx / sx: un braccio teso alla maniglia, l'altro lungo il fianco; alza: le mani in alto (la rampa in piedi)
 const HANDS = { avanti: [[-19, 92, 42], [19, 92, 42]], porta: [[-21, 104, 27], [21, 104, 27]],
@@ -109,7 +110,7 @@ function finish (name, R) {
   return res;
 }
 // le figure dal loro modello 3D definitivo (stesso rig per tutti)
-const MODELS = { topsy: () => typeof TOPSY3D !== 'undefined' && TOPSY3D, macio: () => typeof MACIO3D !== 'undefined' && MACIO3D };   // const nei file: non stanno su window
+const MODELS = { topsy: () => typeof TOPSY3D !== 'undefined' && TOPSY3D, macio: () => typeof MACIO3D !== 'undefined' && MACIO3D, gerry: () => typeof GERRY3D !== 'undefined' && GERRY3D, sissi: () => typeof SISSI3D !== 'undefined' && SISSI3D };   // const nei file: non stanno su window
 window.render3D = who => new Promise(done => {
   const scene = new THREE.Scene(); lights(scene);
   TopsyRig.create(THREE, MODELS[who](), rig => {
