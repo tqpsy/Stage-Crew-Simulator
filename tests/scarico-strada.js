@@ -59,6 +59,10 @@ const path = require('path');
     check(end.zone === 'pit', (tel ? 'telefono' : 'computer') + ': la borsa stativi non è finita in Pit: ' + end.zone);
     check(maxY > 650, (tel ? 'telefono' : 'computer') + ': non ha fatto il giro disegnato (y massima ' + Math.round(maxY) + ')');
     check(Math.abs(end.zoom - z0) < 1e-6, (tel ? 'telefono' : 'computer') + ': dopo l\'ordine lo zoom non è tornato com\'era');
+    // nella bolla: la strada disegnata e i metri in più (il giro largo costa)
+    const bolla = await p.evaluate(() => { endGame('mano'); return { txt: $('#end').textContent, n: G.stats.traceN, extra: Math.round(traceExtra().m), viaggi: efficiency(true, 'mano').viaggi }; });
+    check(bolla.n === 1 && /Strade disegnate \(1\)/.test(bolla.txt) && bolla.extra >= 3 && new RegExp(bolla.extra + ' m in più').test(bolla.txt), (tel ? 'telefono' : 'computer') + ': la bolla non dice i metri in più della strada disegnata: ' + JSON.stringify({ n: bolla.n, extra: bolla.extra }));
+    check(bolla.viaggi < 100, (tel ? 'telefono' : 'computer') + ': il giro largo non pesa sui viaggi: ' + bolla.viaggi);
     await ctx.close();
   }
   await b.close();
