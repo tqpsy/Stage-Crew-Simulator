@@ -54,14 +54,12 @@ const path = require('path');
     G.straps.forEach((_, i) => releaseStrap(i)); G.cases.forEach(releaseBrake);
     macio('phone'); G.macio.ai.t = -999;
     Matter.Body.setPosition(G.player.body, { x: 700, y: 500 }); Matter.Body.setPosition(G.macio.body, { x: 700, y: 600 });
-    const spots = { corrente: [1225, 210, 0], distro: [1225, 330, 0], ricambio: [1380, 420, 0],
-      segnale: [1455, 720, 0], tavolo: [1320, 710, 0], rack: [1400, 620, 0], valigetta: [1400, 700, 0],
-      stativi: [1530, 230, 0], par: [1560, 310, 0],
-      sub1: [1550, 400, 0], sub2: [1550, 480, 0], top1: [1550, 560, 0], top2: [1550, 620, 0] };
+    // ogni case nella sua zona, nel primo posto libero (le misure della palestra cambiano)
     for (const ce of G.cases) {
-      if (!spots[ce.def.id]) continue;
-      const [x, y, r] = spots[ce.def.id];
-      Matter.Body.setPosition(ce.body, { x, y }); Matter.Body.setAngle(ce.body, r * Math.PI / 2); Matter.Body.setVelocity(ce.body, { x: 0, y: 0 });
+      if (!ce.def.zone) continue;
+      const sp = dropSpots(ce, { zone: ce.def.zone })[0];
+      if (!sp) continue;
+      Matter.Body.setPosition(ce.body, { x: sp.x, y: sp.y }); Matter.Body.setAngle(ce.body, sp.a); Matter.Body.setVelocity(ce.body, { x: 0, y: 0 });
     }
   });
   // finito il lavoro, una pausa breve: la telecamera passa sulle zone e Macio parla

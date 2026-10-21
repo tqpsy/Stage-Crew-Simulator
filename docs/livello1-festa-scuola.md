@@ -894,6 +894,11 @@ che non decidono niente.
   se nel baule ne entra uno solo (Speakon, DMX, jack, XLR) si prende quello
   senza chiedere. Prendendo i cavi così (`PRESA_PRIMA=1`) il montaggio
   minimo è di 161 tocchi.
+- **Conteggio aggiornato (21 ottobre 2026)**: `tests/partita-telefono.js`
+  conta 209 tocchi (390 × 844). I 183 del 5 ottobre erano prima di scaletta e
+  scarico, che ora aggiungono 2 tocchi all'avvio (Vai e Salta lo scarico);
+  gli altri vengono dalle schede e dal tavolo regia arrivati dopo. Il test non
+  fissa un tetto: il numero è un riferimento da tenere d'occhio.
 
 ## Il guasto del microfono: le strade
 
